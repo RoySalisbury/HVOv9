@@ -1,78 +1,63 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
+﻿using System;
 using System.Device.Gpio;
-using Iot.Device.Button;
-using System.Linq.Expressions;
+using HVO.Iot.Devices; // Your namespace for GpioLimitSwitch
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace HVO.GpioTestApp;
-
-public struct PinEventRecord
-{
-    public PinEventRecord(Stopwatch stopwatch, PinEventTypes lastPinEventType)
-    {
-        Stopwatch = stopwatch;
-        LastPinEventType = lastPinEventType;
-    }
-
-    public Stopwatch Stopwatch { get; private set; }
-    public PinEventTypes LastPinEventType { get; private set; }
-
-    public void Update(Stopwatch stopwatch, PinEventTypes lastPinEventType)
-    {
-        Stopwatch = stopwatch;
-        LastPinEventType = lastPinEventType;
-    }
-}
-
-class Program3
-{
-    private static readonly GpioController gpioController = new GpioController();
-    private static readonly ConcurrentDictionary<int, PinEventRecord> pinEventRecords = [];
-    private const int DEBOUNCE_MILLISECONDS = 20;
-
-    static void Main2(string[] args)
-    {
-        using var pin16 = gpioController.OpenPin(16, PinMode.InputPullUp);
-
-        _ = pinEventRecords.TryAdd(pin16.PinNumber, new PinEventRecord(new Stopwatch(), PinEventTypes.None));
-        pin16.ValueChanged += OnPinEvent;
-
-        Console.ReadLine();
-    }
-
-    static void OnPinEvent(object sender, PinValueChangedEventArgs args)
-    {
-        Stopwatch stopwatch = Stopwatch.StartNew();
-
-        pinEventRecords.AddOrUpdate(
-            args.PinNumber,
-            key => new PinEventRecord(stopwatch, args.ChangeType),
-            (key, record) =>
-            {
-                if (stopwatch.ElapsedMilliseconds - record.Stopwatch.ElapsedMilliseconds >= DEBOUNCE_MILLISECONDS &&
-                    (record.LastPinEventType == PinEventTypes.None || record.LastPinEventType != args.ChangeType))
-                {
-                    LogPinEvent(record, stopwatch, args);
-                    return new PinEventRecord(stopwatch, args.ChangeType);
-                }
-                else
-                {
-                    return record;
-                }
-            });
-    }
-
-    private static void LogPinEvent(PinEventRecord pinEventRecord, Stopwatch stopwatch, PinValueChangedEventArgs args)
-    {
-        Console.WriteLine($"LastElapsedMilliseconds: {pinEventRecord.Stopwatch.ElapsedMilliseconds}, LastEvent: {pinEventRecord.LastPinEventType}, CurrentElapsedMilliseconds: {stopwatch.ElapsedMilliseconds}, CurrentEvent: {args.ChangeType}, MS: {(stopwatch.ElapsedMilliseconds - pinEventRecord.Stopwatch.ElapsedMilliseconds)}");
-    }
-}
-
-class Program2
+class Program
 {
     static void Main(string[] args)
     {
-        using var pin16 = new GpioLimitSwitch(null!, 16, debounceTime: TimeSpan.FromMilliseconds(50));
+        // Setup Dependency Injection container
+        var serviceCollection = new ServiceCollection();
+        ConfigureServices(serviceCollection);
+
+        // Build ServiceProvider
+        var serviceProvider = serviceCollection.BuildServiceProvider();
+
+        // Get GpioLimitSwitch from DI
+        var limitSwitch = serviceProvider.GetRequiredService<GpioLimitSwitch>();
+
+        // Subscribe to the LimitSwitchTriggered event
+        limitSwitch.LimitSwitchTriggered += (sender, eventArgs) =>
+        {
+            Console.WriteLine($"Limit switch triggered! Pin: {eventArgs.PinNumber}, ChangeType: {eventArgs.ChangeType}, Time: {eventArgs.EventDateTime}");
+        };
+
+        Console.WriteLine($"Monitoring GPIO pin {limitSwitch.GpioPinNumber}. Press Enter to exit...");
         Console.ReadLine();
+
+        // Dispose when done
+        limitSwitch.Dispose();
+    }
+
+    private static void ConfigureServices(IServiceCollection services)
+    {
+        // Add logging to console
+        services.AddLogging(configure =>
+        {
+            configure.AddConsole();
+            configure.SetMinimumLevel(LogLevel.Debug);
+        });
+
+        // Add GpioController as singleton (or scoped if you want)
+        services.AddSingleton<GpioController>();
+
+        // Add GpioLimitSwitch with parameters
+        services.AddSingleton<GpioLimitSwitch>(sp =>
+        {
+            var gpioController = sp.GetRequiredService<GpioController>();
+            var logger = sp.GetRequiredService<ILogger<GpioLimitSwitch>>();
+
+            // Example GPIO pin number 17, adjust as needed
+            return new GpioLimitSwitch(
+                gpioController: gpioController,
+                gpioPinNumber: 16,
+                isPullup: true,
+                hasExternalResistor: false,
+                shouldDispose: false,
+                debounceTime: TimeSpan.FromMilliseconds(50),
+                logger: logger);
+        });
     }
 }
