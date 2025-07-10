@@ -2,6 +2,8 @@ using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
+using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.HostedServices;
 
 namespace HVO.WebSite.RoofControllerV4;
 
@@ -24,14 +26,15 @@ public class Program
     private static void ConfigureServices(IServiceCollection services, ConfigurationManager Configuration)
     {
         services.AddOptions();
-        //services.Configure<RoofControllerOptions>(Configuration.GetSection(nameof(RoofControllerOptions)));
-        //services.Configure<RoofControllerHostOptions>(Configuration.GetSection(nameof(RoofControllerHostOptions)));
+        services.Configure<RoofControllerOptions>(Configuration.GetSection(nameof(RoofControllerOptions)));
+        services.Configure<RoofControllerHostOptions>(Configuration.GetSection(nameof(RoofControllerHostOptions)));
 
-        //services.AddSingleton<IRoofController, RoofController>();
-        //services.AddHostedService<RoofControllerHost>();
+        services.AddSingleton<System.Device.Gpio.GpioController>();
+        services.AddSingleton<IRoofController, RoofController>();
+        services.AddHostedService<RoofControllerHost>();
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-        services.AddOpenApi();
+        services.AddOpenApi("v4");
 
         services.AddApiVersioning(setup =>
         {

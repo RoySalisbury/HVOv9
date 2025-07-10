@@ -1,6 +1,6 @@
 @HVO.WebSite.RoofControllerV4_HostAddress = http://localhost:5195
 
-GET {{HVO.WebSite.RoofControllerV4_HostAddress}}/weatherforecast/
+GET {{HVO.WebSite.RoofControllerV4_HostAddress}}/api/v4/RoofControl/Status/
 Accept: application/json
 
 ###

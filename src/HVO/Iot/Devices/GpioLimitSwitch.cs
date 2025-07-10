@@ -8,9 +8,8 @@ namespace HVO.Iot.Devices;
 /// <summary>
 /// Represents a GPIO-based limit switch with support for internal/external pull resistors, debounce handling, and logging.
 /// </summary>
-public class GpioLimitSwitch : IDisposable
+public class GpioLimitSwitch : IAsyncDisposable, IDisposable
 {
-    private readonly bool _shouldDispose;
     private readonly ILogger<GpioLimitSwitch>? _logger;
 
     // Records the last event timestamp and type
@@ -25,7 +24,6 @@ public class GpioLimitSwitch : IDisposable
     /// <param name="gpioPinNumber">The GPIO pin number to monitor.</param>
     /// <param name="isPullup">Use pull-up (true) or pull-down (false) resistor.</param>
     /// <param name="hasExternalResistor">Whether the circuit uses an external resistor.</param>
-    /// <param name="shouldDispose">Dispose the GPIO controller when done.</param>
     /// <param name="debounceTime">Optional debounce time.</param>
     /// <param name="logger">Optional logger instance.</param>
     public GpioLimitSwitch(
@@ -33,15 +31,15 @@ public class GpioLimitSwitch : IDisposable
         int gpioPinNumber,
         bool isPullup = true,
         bool hasExternalResistor = false,
-        bool shouldDispose = true,
         TimeSpan debounceTime = default,
         ILogger<GpioLimitSwitch>? logger = null)
     {
+        ArgumentNullException.ThrowIfNull(gpioController);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(gpioPinNumber, 0);
         _logger = logger;
 
         // Initialize the GPIO controller and pin number
-        GpioController = gpioController ?? new GpioController();
+        GpioController = gpioController;
         GpioPinNumber = gpioPinNumber;
         IsPullup = isPullup;
         HasExternalResistor = hasExternalResistor;
@@ -64,7 +62,6 @@ public class GpioLimitSwitch : IDisposable
             throw new ArgumentException($"Pin {GpioPinNumber} cannot be configured as {(IsPullup ? "pull-up" : "pull-down")}. Use an external resistor and set {nameof(HasExternalResistor)}=true");
         }
 
-        _shouldDispose = gpioController == null || shouldDispose;
         try
         {
             // Open the pin in the specified mode and register for pin value change events
@@ -76,23 +73,17 @@ public class GpioLimitSwitch : IDisposable
         catch (Exception ex)
         {
             _logger?.LogCritical(ex, "Failed to initialize GPIO pin {Pin}", GpioPinNumber);
-
-            if (_shouldDispose)
-            {
-                GpioController?.Dispose();
-            }
-
             throw;
         }
     }
 
     // Properties to configure the limit switch
-    public bool HasExternalResistor { get; init; }
-    public bool IsPullup { get; init; }
-    public PinMode GpioPinMode { get; init; }
-    public PinMode EventPinMode { get; init; }
-    public GpioController GpioController { get; init; }
-    public int GpioPinNumber { get; init; }
+    public bool HasExternalResistor { get; private init; }
+    public bool IsPullup { get; private init; }
+    public PinMode GpioPinMode { get; private init; }
+    public PinMode EventPinMode { get; private init; }
+    public GpioController GpioController { get; private init; }
+    public int GpioPinNumber { get; private init; }
     public TimeSpan DebounceTime { get; init; }
 
     // Current pin value read from the GPIO controller
@@ -108,13 +99,12 @@ public class GpioLimitSwitch : IDisposable
     private void PinStateChanged(object sender, PinValueChangedEventArgs e)
     {
         var currentDateTime = DateTimeOffset.Now;
-        var priorEventRecord = _lastEventRecord;
+        var (lastEventTimestamp, lastEventType) = _lastEventRecord;
 
         lock (_objLock)
         {
             // Check for debounce conditions
-            if (currentDateTime - priorEventRecord.lastEventTimestamp < DebounceTime ||
-                (priorEventRecord.lastEventType != PinEventTypes.None && priorEventRecord.lastEventType == e.ChangeType))
+            if (currentDateTime - lastEventTimestamp < DebounceTime || (lastEventType != PinEventTypes.None && lastEventType == e.ChangeType))
             {
                 _logger?.LogDebug("Debounced event on pin {Pin}: {Type}", e.PinNumber, e.ChangeType);
                 return;
@@ -134,40 +124,108 @@ public class GpioLimitSwitch : IDisposable
             currentDateTime));
     }
 
-    // Finalizer to ensure proper disposal
+    /// <summary>
+    /// Finalizer (destructor) to ensure proper cleanup of unmanaged resources when object is garbage collected.
+    /// This is a safety net and should rarely be called as proper disposal should be handled through IDisposable or IAsyncDisposable.
+    /// </summary>
     ~GpioLimitSwitch()
     {
+        // Pass false because we're in the finalizer and cannot access managed objects safely
         Dispose(false);
     }
 
-    // Public Dispose method
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    // Protected virtual Dispose method for cleanup
+    /// <summary>
+    /// Protected virtual disposal method that implements the dispose pattern.
+    /// This can be overridden in derived classes to add additional cleanup logic.
+    /// </summary>
+    /// <param name="disposing">
+    /// True when called from IDisposable.Dispose(), false when called from finalizer.
+    /// When false, only cleanup unmanaged resources as managed objects may have been finalized.
+    /// </param>
     protected virtual void Dispose(bool disposing)
     {
-        if (_disposed) return;
+        if (_disposed) return; // Prevent multiple disposal
 
-        if (disposing)
+        if (disposing)  
         {
-            _logger?.LogInformation("Disposing GpioLimitSwitch for pin {Pin}", GpioPinNumber);
-            GpioController.UnregisterCallbackForPinValueChangedEvent(GpioPinNumber, PinStateChanged);
-
-            if (_shouldDispose)
+            try
             {
-                _logger?.LogDebug("Disposing GpioController instance.");
-                GpioController?.Dispose();
+                // In the synchronous disposal path, we block on the async disposal
+                // This is acceptable here because:
+                // 1. We're already in a blocking disposal path
+                // 2. We need to ensure proper cleanup of GPIO resources
+                // 3. The async disposal handles proper signal settling
+                DisposeAsyncCore().AsTask().GetAwaiter().GetResult();
             }
-            else
+            catch (Exception ex)
             {
-                GpioController.ClosePin(GpioPinNumber);
+                _logger?.LogError(ex, "Error during disposal of GpioLimitSwitch pin {Pin}", GpioPinNumber);
+                throw;
             }
         }
 
         _disposed = true;
+    }
+
+    /// <summary>
+    /// Core async disposal logic shared between sync and async disposal paths.
+    /// This method handles the actual cleanup of GPIO resources with proper timing.
+    /// </summary>
+    /// <returns>A ValueTask representing the async disposal operation.</returns>
+    private async ValueTask DisposeAsyncCore()
+    {
+        if (_disposed) return; // Prevent multiple disposal
+
+        try
+        {
+            _logger?.LogInformation("Disposing GpioLimitSwitch for pin {Pin}", GpioPinNumber);
+
+            // Order of operations is important:
+            // 1. Unregister events to prevent callbacks during cleanup
+            GpioController.UnregisterCallbackForPinValueChangedEvent(GpioPinNumber, PinStateChanged);
+
+            // 2. Wait for GPIO signals to settle
+            await Task.Delay(50).ConfigureAwait(false);
+
+            // 3. Close the pin asynchronously to avoid blocking
+            // Use Task.Run because GpioController methods are synchronous
+            await Task.Run(() => GpioController.ClosePin(GpioPinNumber)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error during async disposal of GpioLimitSwitch pin {Pin}", GpioPinNumber);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously releases all resources used by the GpioLimitSwitch instance.
+    /// This is the preferred disposal method as it allows for proper GPIO signal settling.
+    /// </summary>
+    /// <returns>A ValueTask representing the async disposal operation.</returns>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return; // Prevent multiple disposal
+
+        try
+        {
+            await DisposeAsyncCore().ConfigureAwait(false);
+        }
+        finally
+        {
+            _disposed = true;
+            GC.SuppressFinalize(this); // Prevent finalizer from running as we've cleaned up
+        }
+    }
+
+    /// <summary>
+    /// Synchronously releases all resources used by the GpioLimitSwitch instance.
+    /// This method blocks while waiting for GPIO operations to complete.
+    /// Consider using DisposeAsync for better performance.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true); // Pass true for disposing from IDisposable.Dispose
+        GC.SuppressFinalize(this); // Prevent finalizer from running as we've cleaned up
     }
 }
