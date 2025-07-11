@@ -2,10 +2,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 {
     public record RoofControllerOptions
     {
-        public int RoofClosedLimitSwitchPin { get; set; } = 4;
-        public int RoofOpenedLimitSwitchPin { get; set; } = 5;
+        public int RoofClosedLimitSwitchPin { get; set; } = 21;
+        public int RoofOpenedLimitSwitchPin { get; set; } = 17;
 
-        public TimeSpan LimitSwitchDebounce { get; set; } = TimeSpan.FromSeconds(50);
+        public TimeSpan LimitSwitchDebounce { get; set; } = TimeSpan.FromMilliseconds(50);
 
         public int CloseRoofRelayPin { get; set; } = 23; // FORWARD
         public int OpenRoofRelayPin { get; set; } = 24; // REVERSE

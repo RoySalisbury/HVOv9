@@ -1,5 +1,6 @@
 using System.Device.Gpio;
 using HVO.Iot.Devices;
+using Iot.Device.Common;
 using Microsoft.Extensions.Options;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
@@ -29,7 +30,6 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             this._gpioController = gpioController;
             this._roofOpenLimitSwitch = new GpioLimitSwitch(this._gpioController, this._roofControllerOptions.RoofOpenedLimitSwitchPin, true, false, _roofControllerOptions.LimitSwitchDebounce, this._limitSwitchLogger);
             this._roofClosedLimitSwitch = new GpioLimitSwitch(this._gpioController, this._roofControllerOptions.RoofClosedLimitSwitchPin, true, false, _roofControllerOptions.LimitSwitchDebounce, this._limitSwitchLogger);
-
         }
 
         public bool IsInitialized { get; private set; } = false;
@@ -54,8 +54,8 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 // Setup the cancellation token registration so we know when things are shutting down as soon as possible and can call STOP.
                 cancellationToken.Register(() => this.Stop());
 
-                // Always reset to a known safe state on initialization.
-                this.Stop();
+                // Always reset to a known safe state on initialization. Using the InternalStop will bypass the initialization check.
+                this.InternalStop();
 
                 // Setup the GPIO controller
                 try
@@ -66,10 +66,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 }
                 catch
                 {
-                    this._roofOpenLimitSwitch?.LimitSwitchTriggered -= roofOpenLimitSwitch_LimitSwitchTriggered;
+                    this._roofOpenLimitSwitch.LimitSwitchTriggered -= roofOpenLimitSwitch_LimitSwitchTriggered;
                     this._roofClosedLimitSwitch.LimitSwitchTriggered -= roofClosedLimitSwitch_LimitSwitchTriggered;
 
-                    this.IsInitialized = true;
+                    this.IsInitialized = false;
                     throw;
                 }
 
@@ -80,23 +80,21 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
         private void roofOpenLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
         {
-            this._logger.LogInformation("RoofOpenLimitSwitch: {changeType} - {eventDateTime}", e.ChangeType, e.EventDateTime);
-
             if (e.ChangeType == PinEventTypes.Falling)
             {
                 this.Stop();
-                this.Status = RoofControllerStatus.Open; 
+                this.Status = RoofControllerStatus.Open;
             }
             else
             {
-                this.Status = RoofControllerStatus.Opening;
+                this.Status = RoofControllerStatus.Closed;
             }
+
+            this._logger.LogInformation("RoofOpenLimitSwitch: {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
         }
 
         private void roofClosedLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
         {
-            this._logger.LogInformation("RoofClosedLimitSwitch: {changeType} - {eventDateTime}", e.ChangeType, e.EventDateTime);
-
             if (e.ChangeType == PinEventTypes.Falling)
             {
                 this.Stop();
@@ -104,8 +102,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
             else
             {
-                this.Status = RoofControllerStatus.Closing;
+                this.Status = RoofControllerStatus.Opening;
             }
+
+            this._logger.LogInformation("RoofClosedLimitSwitch: {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
         }
 
         public void Stop()
@@ -128,11 +128,6 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         {
             lock (this._syncLock)
             {
-                if (this.IsInitialized == false)
-                {
-                    throw new Exception("Device not initialized");
-                }
-
                 this.Status = RoofControllerStatus.Stopped;
                 this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Current Status: {this.Status}");
             }
@@ -150,6 +145,23 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     throw new Exception("Device not initialized");
                 }
 
+                // Always stop the current action before starting a new one.
+                this.Stop();
+
+                if (this.Status == RoofControllerStatus.Open)
+                {
+                    // If already open, just return
+                    this._logger.LogInformation($"====Open - {DateTime.Now:O}. Already Open. Current Status: {this.Status}");
+                    return;
+                }
+
+                // Start the motors to open the roof
+                // This is where you would implement the actual GPIO logic to control the motors.
+                // For example:
+                // _gpioController.Write(_roofControllerOptions.RoofOpenPin, PinValue.High);
+
+
+                // Set the status to opening
                 this.Status = RoofControllerStatus.Opening;
                 this._logger.LogInformation($"====Open - {DateTime.Now:O}. Current Status: {this.Status}");
             }
@@ -166,8 +178,23 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     throw new Exception("Device not initialized");
                 }
 
-                this.Status = RoofControllerStatus.Closed;
+                // Always stop the current action before starting a new one.
+                this.Stop();
 
+                if (this.Status == RoofControllerStatus.Closed)
+                {
+                    // If already closed, just return
+                    this._logger.LogInformation($"====Close - {DateTime.Now:O}. Already Closed. Current Status: {this.Status}");
+                    return;
+                }
+
+                // Start the motors to close the roof
+                // This is where you would implement the actual GPIO logic to control the motors.
+                // For example:
+                // _gpioController.Write(_roofControllerOptions.RoofClosePin, PinValue.High);
+
+                // Set the status to closing
+                this.Status = RoofControllerStatus.Closing;
                 this._logger.LogInformation($"====Close - {DateTime.Now:O}. Current Status: {this.Status}");
             }
         }

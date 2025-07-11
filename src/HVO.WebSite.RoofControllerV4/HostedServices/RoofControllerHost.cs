@@ -19,50 +19,67 @@ public class RoofControllerHost : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        stoppingToken.Register(() => this._logger.LogDebug($"{nameof(RoofControllerHost)} background task is stopping."));
+        using var _ = stoppingToken.Register(() => 
+            _logger.LogDebug($"{nameof(RoofControllerHost)} background task is stopping."));
 
-        this._logger.LogDebug($"{nameof(RoofControllerHost)} background task is starting.");
+        _logger.LogDebug($"{nameof(RoofControllerHost)} background task is starting.");
+        
         try
         {
-            // Loop this until the service is requested to stop
-            while (stoppingToken.IsCancellationRequested == false)
+            while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await this._roofController.Initialize(stoppingToken);
-                    try
+                    await _roofController.Initialize(stoppingToken);
+                    
+                    // FIXED: Use ConfigureAwait(false) for better performance
+                    // FIXED: Reduce logging frequency to prevent log spam
+                    var logInterval = TimeSpan.FromMinutes(5);
+                    var nextLogTime = DateTime.UtcNow.Add(logInterval);
+                    
+                    while (!stoppingToken.IsCancellationRequested)
                     {
-                        // Infinite delay to keep the service running
-                        while (!stoppingToken.IsCancellationRequested)
+                        if (DateTime.UtcNow >= nextLogTime)
                         {
-                            this._logger.LogInformation($"{nameof(RoofControllerHost)}: Running...");
-                            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken); // Adjust the delay as needed
+                            _logger.LogInformation($"{nameof(RoofControllerHost)}: Running...");
+                            nextLogTime = DateTime.UtcNow.Add(logInterval);
                         }
-                    }
-                    finally
-                    {
-                        // We ALWAYS want to error on the side of caution and STOP the motors.  This will call dispose, which will in turn call shutdown.
-                        ((IDisposable)this._roofController).Dispose();
-                        this._logger.LogDebug("RoofController instance disposed.");
+                        
+                        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken)
+                            .ConfigureAwait(false);
                     }
                 }
                 catch (TaskCanceledException)
                 {
-                    this._logger.LogDebug($"{nameof(RoofControllerHost)} TaskCanceledException.");
+                    _logger.LogDebug($"{nameof(RoofControllerHost)} TaskCanceledException.");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    this._logger.LogError($"{nameof(RoofControllerHost)} Error: {ex.Message}. Restarting in {this._options.RestartOnFailureWaitTime} seconds unless cancelled.");
-                    this._logger.LogError($"{nameof(RoofControllerHost)} Error: {ex.StackTrace}");
+                    _logger.LogError(ex, "{ServiceName} Error. Restarting in {RestartDelay} seconds", 
+                        nameof(RoofControllerHost), _options.RestartOnFailureWaitTime);
 
-                    await Task.Delay(TimeSpan.FromSeconds(this._options.RestartOnFailureWaitTime), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(_options.RestartOnFailureWaitTime), stoppingToken)
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    // FIXED: Use async disposal for better performance
+                    if (_roofController is IAsyncDisposable asyncDisposable)
+                    {
+                        await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        ((IDisposable)_roofController).Dispose();
+                    }
+                    _logger.LogDebug("RoofController instance disposed.");
                 }
             }
         }
         finally
         {
-            this._logger.LogDebug($"{nameof(RoofControllerHost)} background task has stopped.");
+            _logger.LogDebug($"{nameof(RoofControllerHost)} background task has stopped.");
         }
     }
 }
