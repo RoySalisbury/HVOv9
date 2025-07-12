@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Device.Gpio;
+using System.Device.Gpio.Drivers;
 using HVO.Iot.Devices; // Your namespace for GpioLimitSwitch
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,12 @@ class Program
         ConfigureServices(serviceCollection);
 
         // Build ServiceProvider
+
         var serviceProvider = serviceCollection.BuildServiceProvider();
+
+// #pragma warning disable SDGPIO0001        
+//         var x2 = new LibGpiodV2Driver(0);
+// #pragma warning restore SDGPIO0001
 
         // Get GpioLimitSwitch from DI
         var limitSwitch = serviceProvider.GetRequiredService<GpioLimitSwitch>();
