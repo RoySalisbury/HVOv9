@@ -55,7 +55,6 @@ class Program
                 gpioPinNumber: 16,
                 isPullup: true,
                 hasExternalResistor: false,
-                shouldDispose: false,
                 debounceTime: TimeSpan.FromMilliseconds(50),
                 logger: logger);
         });

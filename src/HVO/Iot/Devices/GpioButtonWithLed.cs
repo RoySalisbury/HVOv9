@@ -1,5 +1,7 @@
 using System.Device.Gpio;
 using Iot.Device.Button;
+using HVO.Iot.Devices.Abstractions;
+using HVO.Iot.Devices.Implementation;
 
 namespace HVO.Iot.Devices;
 
@@ -13,7 +15,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     internal const long DefaultDoublePressTicks = 15000000;
     internal const long DefaultHoldingMilliseconds = 2000;
 
-    private readonly GpioController _gpioController;
+    private readonly IGpioController _gpioController;
     private readonly PinMode _gpioPinMode;
     private readonly PinMode _eventPinMode;
     private readonly int _buttonPin;
@@ -50,11 +52,10 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     /// <param name="isPullUp">Whether to use pull-up (true) or pull-down (false) resistor configuration.</param>
     /// <param name="hasExternalResistor">Whether an external pull resistor is present.</param>
     /// <param name="gpio">Optional GPIO controller instance. If null, a new instance will be created.</param>
-    /// <param name="shouldDispose">Whether to dispose the GPIO controller when this instance is disposed.</param>
     /// <param name="debounceTime">Time to wait between button state changes to filter out bounce.</param>
     public GpioButtonWithLed(int buttonPin, int ledPin, bool isPullUp = true, bool hasExternalResistor = false,
-        GpioController? gpio = null, bool shouldDispose = true, TimeSpan debounceTime = default)
-        : this(buttonPin, ledPin, TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), isPullUp, hasExternalResistor, gpio, shouldDispose, debounceTime)
+        GpioController? gpioController = null, TimeSpan debounceTime = default)
+        : this(buttonPin, ledPin, TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), isPullUp, hasExternalResistor, new Implementation.GpioControllerWrapper(gpioController), debounceTime)
     {
     }
 
@@ -67,8 +68,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     /// <param name="holding">Time to hold button before registering as a long press.</param>
     /// <param name="isPullUp">Whether to use pull-up (true) or pull-down (false) resistor configuration.</param>
     /// <param name="hasExternalResistor">Whether an external pull resistor is present.</param>
-    /// <param name="gpio">Optional GPIO controller instance. If null, a new instance will be created.</param>
-    /// <param name="shouldDispose">Whether to dispose the GPIO controller when this instance is disposed.</param>
+    /// <param name="gpioController">Optional GPIO controller instance. If null, a new instance will be created.</param>
     /// <param name="debounceTime">Time to wait between button state changes to filter out bounce.</param>
     /// <exception cref="ArgumentException">Thrown when button and LED pins are the same or pins don't support required modes.</exception>
     public GpioButtonWithLed(int buttonPin,
@@ -77,8 +77,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         TimeSpan holding,
         bool isPullUp = true,
         bool hasExternalResistor = false,
-        GpioController? gpio = null,
-        bool shouldDispose = true,
+        IGpioController? gpioController = null,
         TimeSpan debounceTime = default)
         : base(doublePress, holding, debounceTime)
     {
@@ -87,8 +86,8 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             throw new ArgumentException("Button pin and LED pin cannot be the same", nameof(ledPin));
         }
 
-        _gpioController = gpio ?? new GpioController();
-        _shouldDispose = gpio == null || shouldDispose;
+        _gpioController = gpioController ?? new GpioControllerWrapper();
+        _shouldDispose = gpioController == null;
         _buttonPin = buttonPin;
         _ledPin = ledPin;
         HasExternalResistor = hasExternalResistor;
@@ -159,7 +158,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 {
                     _ledOptions = value;
                     // Update LED immediately when options change
-                    UpdateLedHardware();
+                    UpdateLedHardwareFromOptions();
                 }
             }
         }
@@ -256,7 +255,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             // Step 5: Initialize LED state (now with correct button state)
             try
             {
-                UpdateLedHardware();
+                UpdateLedHardwareFromOptions();
             }
             catch (Exception ex)
             {
@@ -281,7 +280,38 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         // Fast path: avoid GPIO operations if disposed
         if (_disposed) return;
 
+        var pinValue = _ledState == PushButtonLedState.On ? PinValue.High : PinValue.Low;
+        
+        try
+        {
+            _gpioController.Write(_ledPin, pinValue);
+        }
+        catch (Exception ex)
+        {
+            // Only ignore GPIO errors during disposal
+            if (!_disposed)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to update LED state on pin {_ledPin}", ex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates the LED hardware state based on automatic behavior options.
+    /// This is used when button events occur to update the LED according to the configured options.
+    /// </summary>
+    private void UpdateLedHardwareFromOptions()
+    {
+        // Fast path: avoid GPIO operations if disposed
+        if (_disposed) return;
+
         var shouldTurnOn = ShouldLedBeOn();
+        var newLedState = shouldTurnOn ? PushButtonLedState.On : PushButtonLedState.Off;
+        
+        // Update the LED state field and hardware
+        _ledState = newLedState;
+        
         var pinValue = shouldTurnOn ? PinValue.High : PinValue.Low;
         
         try
@@ -300,12 +330,13 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     }
 
     /// <summary>
-    /// Determines whether the LED should be on based on current state and options.
+    /// Determines whether the LED should be on based on current options and button state.
+    /// This is used for automatic LED behavior controlled by LedOptions.
     /// </summary>
     /// <returns>True if the LED should be on, false otherwise.</returns>
     private bool ShouldLedBeOn()
     {
-        return _ledOptions switch  // ✅ Use the FIELD, not the property!
+        return _ledOptions switch
         {
             PushButtonLedOptions.AlwaysOn => true,
             PushButtonLedOptions.AlwaysOff => false,
@@ -349,9 +380,9 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 {
                     _isPressed = isPressed;
                     
-                    // Always update LED hardware - ShouldLedBeOn() handles the logic
-                    // This ensures LED stays consistent regardless of LedOptions setting
-                    UpdateLedHardware();
+                    // Always update LED hardware - UpdateLedHardwareFromOptions() handles the logic
+                    // This ensures LED stays consistent based on LedOptions setting
+                    UpdateLedHardwareFromOptions();
                 }
             }
 

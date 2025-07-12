@@ -2,6 +2,7 @@ using System;
 using System.Device.Gpio;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using HVO.Iot.Devices.Abstractions;
 
 namespace HVO.Iot.Devices;
 
@@ -52,6 +53,12 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     private PinValue _lastPinValue; // Thread-safe access via locking
     
     /// <summary>
+    /// Flag to track if the pin value has been initialized.
+    /// This prevents confusion with PinValue.Low as the default value.
+    /// </summary>
+    private bool _pinValueInitialized = false;
+    
+    /// <summary>
     /// Thread-safe disposal flag to prevent multiple disposal attempts.
     /// Uses volatile to ensure visibility across threads without locking.
     /// </summary>
@@ -78,6 +85,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GpioLimitSwitch"/> class with comprehensive configuration options.
+    /// This constructor accepts a concrete GpioController and wraps it automatically.
     /// </summary>
     /// <param name="gpioController">The GPIO controller to use for pin operations. Must not be null.</param>
     /// <param name="gpioPinNumber">The GPIO pin number to monitor. Must be greater than 0.</param>
@@ -98,7 +106,39 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     /// <exception cref="ArgumentOutOfRangeException">Thrown when gpioPinNumber is less than or equal to 0.</exception>
     /// <exception cref="ArgumentException">Thrown when the specified pin doesn't support the required mode.</exception>
     public GpioLimitSwitch(
-        GpioController gpioController,
+        GpioController? gpioController,
+        int gpioPinNumber,
+        bool isPullup = true,
+        bool hasExternalResistor = false,
+        TimeSpan debounceTime = default,
+        ILogger<GpioLimitSwitch>? logger = null)
+        : this(new Implementation.GpioControllerWrapper(gpioController), gpioPinNumber, isPullup, hasExternalResistor, debounceTime, logger)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GpioLimitSwitch"/> class with comprehensive configuration options.
+    /// </summary>
+    /// <param name="gpioController">The GPIO controller to use for pin operations. Must not be null.</param>
+    /// <param name="gpioPinNumber">The GPIO pin number to monitor. Must be greater than 0.</param>
+    /// <param name="isPullup">
+    /// If true, configures the pin with internal pull-up resistor (pin reads High when switch is open).
+    /// If false, configures with pull-down resistor (pin reads Low when switch is open).
+    /// </param>
+    /// <param name="hasExternalResistor">
+    /// If true, assumes external pull resistor is present and uses Input mode.
+    /// If false, relies on internal pull resistor configuration.
+    /// </param>
+    /// <param name="debounceTime">
+    /// Minimum time between valid pin state changes. Events occurring within this timeframe
+    /// are filtered out to eliminate mechanical switch bounce. Default is no debouncing.
+    /// </param>
+    /// <param name="logger">Optional logger for recording events and diagnostics.</param>
+    /// <exception cref="ArgumentNullException">Thrown when gpioController is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when gpioPinNumber is less than or equal to 0.</exception>
+    /// <exception cref="ArgumentException">Thrown when the specified pin doesn't support the required mode.</exception>
+    public GpioLimitSwitch(
+        IGpioController gpioController,
         int gpioPinNumber,
         bool isPullup = true,
         bool hasExternalResistor = false,
@@ -153,7 +193,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     /// <summary>
     /// Gets the GPIO controller instance used for pin operations.
     /// </summary>
-    public GpioController GpioController { get; private init; }
+    public IGpioController GpioController { get; private init; }
 
     /// <summary>
     /// Gets the GPIO pin number being monitored.
@@ -183,11 +223,12 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
             lock (_objLock)
             {
                 // Return cached value if available, otherwise perform GPIO read
-                if (_lastPinValue == default)
+                if (!_pinValueInitialized)
                 {
                     try
                     {
                         _lastPinValue = GpioController.Read(GpioPinNumber);
+                        _pinValueInitialized = true;
                     }
                     catch
                     {
@@ -283,6 +324,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
                 lock (_objLock)
                 {
                     _lastPinValue = GpioController.Read(GpioPinNumber);
+                    _pinValueInitialized = true;
                     initState.InitialValueCached = true;
                     _logger?.LogDebug("Cached initial pin {Pin} value: {Value}", GpioPinNumber, _lastPinValue);
                 }
@@ -627,7 +669,8 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
             var lastTicks = Interlocked.Read(ref _lastEventTicks);
 
             // Fast-path debounce check without locking for better performance
-            if (currentTicks - lastTicks < _debounceTicks || 
+            // Skip debounce check for the first event (when lastTicks is 0)
+            if (lastTicks > 0 && currentTicks - lastTicks < _debounceTicks || 
                 (_lastEventType != PinEventTypes.None && _lastEventType == e.ChangeType))
             {
                 _logger?.LogDebug("Debounced event on pin {Pin}: {Type} (filtered - too soon after last event)", 
@@ -642,7 +685,8 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
             lock (_objLock)
             {
                 // Re-check conditions after acquiring lock to handle race conditions
-                if (_disposed || currentTicks - _lastEventTicks < _debounceTicks || 
+                // Skip debounce check for the first event (when _lastEventTicks is 0)
+                if (_disposed || (_lastEventTicks > 0 && currentTicks - _lastEventTicks < _debounceTicks) || 
                     (_lastEventType != PinEventTypes.None && _lastEventType == e.ChangeType))
                 {
                     _logger?.LogDebug("Debounced event on pin {Pin}: {Type} (filtered - race condition detected)", 
@@ -652,6 +696,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
 
                 // Update cached pin value and event record atomically
                 _lastPinValue = newPinValue;
+                _pinValueInitialized = true;
                 _lastEventTicks = currentTicks;
                 _lastEventType = e.ChangeType;
             }
