@@ -5,4 +5,5 @@
   <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
   <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
   <Project Path="HVO/HVO.csproj" />
+  <Project Path="HVO.DataModels/HVO.DataModels.csproj" />
 </Solution>
