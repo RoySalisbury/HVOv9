@@ -1,26 +1,35 @@
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
-using HVO.DataModels.Data;
-using HVO.DataModels.Models;
-using HVO.DataModels.RawModels;
-using Microsoft.EntityFrameworkCore;
+using HVO.WebSite.Playground.Models;
+using HVO.WebSite.Playground.Services;
 
 namespace HVO.WebSite.Playground.Controllers
 {
     /// <summary>
     /// Weather API controller for retrieving current weather conditions and daily highs/lows
     /// </summary>
+    /// <remarks>
+    /// This controller provides access to weather data from the Hualapai Valley Observatory
+    /// Davis Vantage Pro weather console. All temperature values are in Fahrenheit,
+    /// wind speeds in mph, pressure in inches of mercury, and rainfall in inches.
+    /// </remarks>
     [ApiController]
     [ApiVersion("1.0")]
     [Route("api/v{version:apiVersion}/weather")]
+    [Tags("Weather")]
     public class WeatherController : ControllerBase
     {
-        private readonly HvoDbContext _context;
+        private readonly IWeatherService _weatherService;
         private readonly ILogger<WeatherController> _logger;
 
-        public WeatherController(HvoDbContext context, ILogger<WeatherController> logger)
+        /// <summary>
+        /// Initializes a new instance of the WeatherController
+        /// </summary>
+        /// <param name="weatherService">Service for weather data operations</param>
+        /// <param name="logger">Logger for tracking weather API operations</param>
+        public WeatherController(IWeatherService weatherService, ILogger<WeatherController> logger)
         {
-            _context = context;
+            _weatherService = weatherService;
             _logger = logger;
         }
 
@@ -28,226 +37,122 @@ namespace HVO.WebSite.Playground.Controllers
         /// Gets the latest weather record
         /// </summary>
         /// <returns>The most recent weather data</returns>
+        /// <response code="200">Returns the latest weather record with timestamp and machine info</response>
+        /// <response code="404">No weather records found in the database</response>
+        /// <response code="500">Internal server error occurred while retrieving weather data</response>
         [HttpGet("latest")]
-        public async Task<ActionResult<DavisVantageProConsoleRecordsNew>> GetLatestWeatherRecord()
+        [ProducesResponseType(typeof(LatestWeatherResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        [Produces("application/json")]
+        public async Task<ActionResult<LatestWeatherResponse>> GetLatestWeatherRecord()
         {
-            try
-            {
-                _logger.LogInformation("Retrieving latest weather record");
-
-                var latestRecord = await _context.DavisVantageProConsoleRecordsNews
-                    .OrderByDescending(x => x.RecordDateTime)
-                    .FirstOrDefaultAsync();
-
-                if (latestRecord == null)
+            var result = await _weatherService.GetLatestWeatherRecordAsync();
+            
+            return result.Match(
+                success: data => Ok(data),
+                failure: error => error switch
                 {
-                    _logger.LogWarning("No weather records found in database");
-                    return NotFound(new { message = "No weather records found" });
+                    InvalidOperationException => Problem(
+                        title: "Weather Data Not Found",
+                        detail: error.Message,
+                        statusCode: StatusCodes.Status404NotFound
+                    ),
+                    _ => Problem(
+                        title: "Internal Server Error",
+                        detail: "An error occurred while retrieving weather data",
+                        statusCode: StatusCodes.Status500InternalServerError
+                    )
                 }
-
-                _logger.LogInformation("Successfully retrieved latest weather record from {DateTime}", 
-                    latestRecord.RecordDateTime);
-
-                return Ok(new
-                {
-                    timestamp = DateTime.UtcNow,
-                    machineName = Environment.MachineName,
-                    data = latestRecord
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving latest weather record");
-                return StatusCode(500, new { message = "Internal server error retrieving weather data" });
-            }
+            );
         }
 
         /// <summary>
         /// Gets weather highs and lows for a specified date range
         /// </summary>
-        /// <param name="startDate">Start date (defaults to today)</param>
-        /// <param name="endDate">End date (defaults to tomorrow)</param>
-        /// <returns>Weather highs and lows summary</returns>
+        /// <param name="startDate">Start date in ISO format (defaults to today if not provided)</param>
+        /// <param name="endDate">End date in ISO format (defaults to tomorrow if not provided)</param>
+        /// <returns>Weather highs and lows summary for the specified date range</returns>
+        /// <remarks>
+        /// Sample request:
+        /// 
+        ///     GET /api/v1.0/weather/highs-lows?startDate=2025-07-13T00:00:00Z&amp;endDate=2025-07-14T00:00:00Z
+        /// 
+        /// If no dates are provided, defaults to today's date range.
+        /// </remarks>
+        /// <response code="200">Returns weather highs and lows for the specified date range</response>
+        /// <response code="404">No weather data found for the specified date range</response>
+        /// <response code="500">Internal server error occurred while retrieving weather data</response>
         [HttpGet("highs-lows")]
-        public async Task<ActionResult<WeatherRecordHighLowSummary>> GetWeatherHighsLows(
+        [ProducesResponseType(typeof(WeatherHighsLowsResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        [Produces("application/json")]
+        public async Task<ActionResult<WeatherHighsLowsResponse>> GetWeatherHighsLows(
             [FromQuery] DateTimeOffset? startDate = null,
             [FromQuery] DateTimeOffset? endDate = null)
         {
-            try
-            {
-                // Default to today if no dates provided
-                var start = startDate ?? DateTimeOffset.Now.Date;
-                var end = endDate ?? start.AddDays(1);
-
-                _logger.LogInformation("Retrieving weather highs/lows from {StartDate} to {EndDate}", start, end);
-
-                var summary = await _context.GetWeatherRecordHighLowSummary(start, end);
-
-                if (summary == null)
+            var result = await _weatherService.GetWeatherHighsLowsAsync(startDate, endDate);
+            
+            return result.Match(
+                success: data => Ok(data),
+                failure: error => error switch
                 {
-                    _logger.LogWarning("No weather summary found for date range {StartDate} to {EndDate}", start, end);
-                    return NotFound(new { message = "No weather data found for the specified date range" });
+                    InvalidOperationException => Problem(
+                        title: "Weather Data Not Found",
+                        detail: error.Message,
+                        statusCode: StatusCodes.Status404NotFound
+                    ),
+                    _ => Problem(
+                        title: "Internal Server Error",
+                        detail: "An error occurred while retrieving weather highs and lows data",
+                        statusCode: StatusCodes.Status500InternalServerError
+                    )
                 }
-
-                _logger.LogInformation("Successfully retrieved weather highs/lows summary");
-
-                return Ok(new
-                {
-                    timestamp = DateTime.UtcNow,
-                    machineName = Environment.MachineName,
-                    dateRange = new { start, end },
-                    data = summary
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving weather highs/lows");
-                return StatusCode(500, new { message = "Internal server error retrieving weather highs/lows" });
-            }
+            );
         }
 
         /// <summary>
         /// Gets current weather conditions including today's highs and lows
         /// </summary>
-        /// <returns>Current weather with today's extremes</returns>
+        /// <returns>Current weather conditions combined with today's extremes in a single response</returns>
+        /// <remarks>
+        /// This endpoint provides the most comprehensive weather information by combining:
+        /// - Current weather conditions (temperature, humidity, wind, pressure, etc.)
+        /// - Today's high and low values with timestamps
+        /// - All weather parameters including heat index, wind chill, dew point
+        /// - Solar radiation and UV index data
+        /// 
+        /// This is the recommended endpoint for most weather applications.
+        /// </remarks>
+        /// <response code="200">Returns current weather conditions with today's highs and lows</response>
+        /// <response code="404">No current weather data available</response>
+        /// <response code="500">Internal server error occurred while retrieving weather data</response>
         [HttpGet("current")]
-        public async Task<ActionResult> GetCurrentWeatherConditions()
+        [ProducesResponseType(typeof(CurrentWeatherResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        [Produces("application/json")]
+        public async Task<ActionResult<CurrentWeatherResponse>> GetCurrentWeatherConditions()
         {
-            try
-            {
-                _logger.LogInformation("Retrieving current weather conditions with today's highs/lows");
-
-                // Get latest weather record
-                var latestRecord = await _context.DavisVantageProConsoleRecordsNews
-                    .OrderByDescending(x => x.RecordDateTime)
-                    .FirstOrDefaultAsync();
-
-                if (latestRecord == null)
+            var result = await _weatherService.GetCurrentWeatherConditionsAsync();
+            
+            return result.Match(
+                success: data => Ok(data),
+                failure: error => error switch
                 {
-                    _logger.LogWarning("No current weather records found");
-                    return NotFound(new { message = "No current weather data available" });
+                    InvalidOperationException => Problem(
+                        title: "Current Weather Data Not Found",
+                        detail: error.Message,
+                        statusCode: StatusCodes.Status404NotFound
+                    ),
+                    _ => Problem(
+                        title: "Internal Server Error",
+                        detail: "An error occurred while retrieving current weather conditions",
+                        statusCode: StatusCodes.Status500InternalServerError
+                    )
                 }
-
-                // Get today's highs and lows
-                var today = DateTimeOffset.Now.Date;
-                var tomorrow = today.AddDays(1);
-                var todaysHighsLows = await _context.GetWeatherRecordHighLowSummary(today, tomorrow);
-
-                var response = new
-                {
-                    timestamp = DateTime.UtcNow,
-                    machineName = Environment.MachineName,
-                    current = new
-                    {
-                        recordDateTime = latestRecord.RecordDateTime,
-                        outsideTemperature = latestRecord.OutsideTemperature,
-                        outsideHumidity = latestRecord.OutsideHumidity,
-                        insideTemperature = latestRecord.InsideTemperature,
-                        insideHumidity = latestRecord.InsideHumidity,
-                        windSpeed = latestRecord.WindSpeed,
-                        windDirection = latestRecord.WindDirection,
-                        barometer = latestRecord.Barometer,
-                        barometerTrend = latestRecord.BarometerTrend,
-                        rainRate = latestRecord.RainRate,
-                        dailyRainAmount = latestRecord.DailyRainAmount,
-                        monthlyRainAmount = latestRecord.MonthlyRainAmount,
-                        yearlyRainAmount = latestRecord.YearlyRainAmount,
-                        uvIndex = latestRecord.UvIndex,
-                        solarRadiation = latestRecord.SolarRadiation,
-                        outsideHeatIndex = latestRecord.OutsideHeatIndex,
-                        outsideWindChill = latestRecord.OutsideWindChill,
-                        outsideDewpoint = latestRecord.OutsideDewpoint,
-                        sunriseTime = latestRecord.SunriseTime,
-                        sunsetTime = latestRecord.SunsetTime
-                    },
-                    todaysExtremes = todaysHighsLows != null ? new
-                    {
-                        outsideTemperature = new
-                        {
-                            high = todaysHighsLows.OutsideTemperatureHigh,
-                            highTime = todaysHighsLows.OutsideTemperatureHighDateTime,
-                            low = todaysHighsLows.OutsideTemperatureLow,
-                            lowTime = todaysHighsLows.OutsideTemperatureLowDateTime
-                        },
-                        insideTemperature = new
-                        {
-                            high = todaysHighsLows.InsideTemperatureHigh,
-                            highTime = todaysHighsLows.InsideTemperatureHighDateTime,
-                            low = todaysHighsLows.InsideTemperatureLow,
-                            lowTime = todaysHighsLows.InsideTemperatureLowDateTime
-                        },
-                        outsideHumidity = new
-                        {
-                            high = todaysHighsLows.OutsideHumidityHigh,
-                            highTime = todaysHighsLows.OutsideHumidityHighDateTime,
-                            low = todaysHighsLows.OutsideHumidityLow,
-                            lowTime = todaysHighsLows.OutsideHumidityLowDateTime
-                        },
-                        insideHumidity = new
-                        {
-                            high = todaysHighsLows.InsideHumidityHigh,
-                            highTime = todaysHighsLows.InsideHumidityHighDateTime,
-                            low = todaysHighsLows.InsideHumidityLow,
-                            lowTime = todaysHighsLows.InsideHumidityLowDateTime
-                        },
-                        windSpeed = new
-                        {
-                            high = todaysHighsLows.WindSpeedHigh,
-                            highTime = todaysHighsLows.WindSpeedHighDateTime,
-                            highDirection = todaysHighsLows.WindSpeedHighDirection,
-                            low = todaysHighsLows.WindSpeedLow,
-                            lowTime = todaysHighsLows.WindSpeedLowDateTime,
-                            lowDirection = todaysHighsLows.WindSpeedLowDirection
-                        },
-                        barometer = new
-                        {
-                            high = todaysHighsLows.BarometerHigh,
-                            highTime = todaysHighsLows.BarometerHighDateTime,
-                            low = todaysHighsLows.BarometerLow,
-                            lowTime = todaysHighsLows.BarometerLowDateTime
-                        },
-                        heatIndex = new
-                        {
-                            high = todaysHighsLows.OutsideHeatIndexHigh,
-                            highTime = todaysHighsLows.OutsideHeatIndexHighDateTime,
-                            low = todaysHighsLows.OutsideHeatIndexLow,
-                            lowTime = todaysHighsLows.OutsideHeatIndexLowDateTime
-                        },
-                        windChill = new
-                        {
-                            high = todaysHighsLows.OutsideWindChillHigh,
-                            highTime = todaysHighsLows.OutsideWindChillHighDateTime,
-                            low = todaysHighsLows.OutsideWindChillLow,
-                            lowTime = todaysHighsLows.OutsideWindChillLowDateTime
-                        },
-                        dewPoint = new
-                        {
-                            high = todaysHighsLows.OutsideDewpointHigh,
-                            highTime = todaysHighsLows.OutsideDewpointHighDateTime,
-                            low = todaysHighsLows.OutsideDewpointLow,
-                            lowTime = todaysHighsLows.OutsideDewpointLowDateTime
-                        },
-                        solarRadiation = new
-                        {
-                            high = todaysHighsLows.SolarRadiationHigh,
-                            highTime = todaysHighsLows.SolarRadiationHighDateTime
-                        },
-                        uvIndex = new
-                        {
-                            high = todaysHighsLows.UVIndexHigh,
-                            highTime = todaysHighsLows.UVIndexHighDateTime
-                        }
-                    } : null
-                };
-
-                _logger.LogInformation("Successfully retrieved current weather conditions with today's extremes");
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving current weather conditions");
-                return StatusCode(500, new { message = "Internal server error retrieving current weather conditions" });
-            }
+            );
         }
     }
 }
