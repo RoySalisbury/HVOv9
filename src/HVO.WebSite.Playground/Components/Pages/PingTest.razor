@@ -1,0 +1,237 @@
+@page "/ping-test"
+@using System.Net.Http
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject ILogger<PingTest> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Ping API Test</PageTitle>
+
+<div class="container mt-4">
+    <h1>🏓 Ping API Test</h1>
+    <p class="lead">Test the API endpoint using Blazor Server with C# code-behind.</p>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">API Endpoint Test</h5>
+                    <p class="card-text">
+                        Click the button below to call the <code>/api/v1.0/ping</code> endpoint and see the response.
+                    </p>
+                    
+                    <button class="btn btn-primary btn-lg" @onclick="CallPingApi" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Testing...</span>
+                        }
+                        else
+                        {
+                            <span>🏓 Test Ping API</span>
+                        }
+                    </button>
+                    
+                    @if (showResult || showError)
+                    {
+                        <button class="btn btn-secondary ms-2" @onclick="ClearResult">Clear Result</button>
+                    }
+                </div>
+            </div>
+            
+            @if (showResult && apiResponse != null)
+            {
+                <div class="card mt-4 border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">✅ API Response</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Status:</dt>
+                            <dd class="col-sm-9">@statusCode @statusText</dd>
+                            
+                            <dt class="col-sm-3">Message:</dt>
+                            <dd class="col-sm-9">@apiResponse.Message</dd>
+                            
+                            <dt class="col-sm-3">Version:</dt>
+                            <dd class="col-sm-9">@apiResponse.Version</dd>
+                            
+                            <dt class="col-sm-3">Timestamp:</dt>
+                            <dd class="col-sm-9">@apiResponse.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff UTC")</dd>
+                            
+                            <dt class="col-sm-3">Machine:</dt>
+                            <dd class="col-sm-9">@apiResponse.MachineName</dd>
+                        </dl>
+                    </div>
+                    <div class="card-footer">
+                        <h6>Raw JSON Response:</h6>
+                        <pre class="bg-light p-3 border rounded"><code>@rawJsonResponse</code></pre>
+                    </div>
+                </div>
+            }
+            
+            @if (showError && !string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="card mt-4 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0">❌ Error</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            <strong>Error:</strong> @errorMessage
+                        </p>
+                        @if (statusCode > 0)
+                        {
+                            <p class="card-text">
+                                <strong>Status:</strong> @statusCode @statusText
+                            </p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">About This Test</h5>
+                    <p class="card-text">
+                        This page demonstrates:
+                    </p>
+                    <ul class="list-unstyled">
+                        <li>✅ Blazor Server components</li>
+                        <li>✅ API versioning</li>
+                        <li>✅ HttpClient with IHttpClientFactory</li>
+                        <li>✅ Error handling</li>
+                        <li>✅ Bootstrap 5 styling</li>
+                        <li>✅ Real-time UI updates</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isLoading = false;
+    private bool showResult = false;
+    private bool showError = false;
+    private string errorMessage = string.Empty;
+    private string rawJsonResponse = string.Empty;
+    private int statusCode = 0;
+    private string statusText = string.Empty;
+    private PingResponse? apiResponse = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Component initialization
+        await base.OnInitializedAsync();
+    }
+
+    private async Task CallPingApi()
+    {
+        // Reset state
+        isLoading = true;
+        showResult = false;
+        showError = false;
+        errorMessage = string.Empty;
+        rawJsonResponse = string.Empty;
+        apiResponse = null;
+        statusCode = 0;
+        statusText = string.Empty;
+        
+        // Update UI
+        StateHasChanged();
+
+        try
+        {
+            // Create HttpClient from factory
+            var httpClient = HttpClientFactory.CreateClient("LocalApi");
+            
+            // Call the API
+            var response = await httpClient.GetAsync("/api/v1.0/ping");
+            statusCode = (int)response.StatusCode;
+            statusText = response.ReasonPhrase ?? string.Empty;
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Read and parse the response
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                rawJsonResponse = FormatJson(jsonContent);
+                
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                
+                apiResponse = JsonSerializer.Deserialize<PingResponse>(jsonContent, options);
+                showResult = true;
+                
+                Logger.LogInformation("Successfully called Ping API");
+            }
+            else
+            {
+                errorMessage = $"HTTP {statusCode}: {statusText}";
+                showError = true;
+                Logger.LogWarning("Ping API call failed with status {StatusCode}", statusCode);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Network error: {ex.Message}";
+            showError = true;
+            Logger.LogError(ex, "Network error calling Ping API");
+        }
+        catch (JsonException ex)
+        {
+            errorMessage = $"JSON parsing error: {ex.Message}";
+            showError = true;
+            Logger.LogError(ex, "JSON parsing error");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unexpected error: {ex.Message}";
+            showError = true;
+            Logger.LogError(ex, "Unexpected error calling Ping API");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearResult()
+    {
+        showResult = false;
+        showError = false;
+        errorMessage = string.Empty;
+        rawJsonResponse = string.Empty;
+        apiResponse = null;
+        statusCode = 0;
+        statusText = string.Empty;
+        StateHasChanged();
+    }
+
+    private string FormatJson(string json)
+    {
+        try
+        {
+            var jsonDoc = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(jsonDoc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+
+    // Response model matching the API
+    public class PingResponse
+    {
+        public string Message { get; set; } = string.Empty;
+        public string Version { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public string MachineName { get; set; } = string.Empty;
+    }
+}
