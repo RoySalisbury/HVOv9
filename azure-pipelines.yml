@@ -69,7 +69,7 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults/Debug -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults/Debug'
         publishTestResults: true
 
     - task: PowerShell@2
@@ -131,7 +131,7 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults/Release -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults/Release'
         publishTestResults: true
 
     - task: PowerShell@2
