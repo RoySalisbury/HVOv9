@@ -69,15 +69,37 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
+        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults/Debug -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
         publishTestResults: true
+
+    - task: PowerShell@2
+      displayName: 'Debug - List Coverage Files (Debug)'
+      inputs:
+        targetType: 'inline'
+        script: |
+          Write-Host "Searching for coverage files in Debug test results..." -ForegroundColor Yellow
+          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Debug" -Recurse | Where-Object { $_.Name -like "*coverage*" } | ForEach-Object { Write-Host "Found: $($_.FullName)" -ForegroundColor Green }
+          Write-Host "All files in Debug test results:" -ForegroundColor Yellow
+          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Debug" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+      condition: always()
 
     - task: PublishCodeCoverageResults@1
       displayName: 'Publish Code Coverage - Debug'
       inputs:
         codeCoverageTool: 'Cobertura'
-        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Debug/**/coverage.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+        failIfCoverageEmpty: false
       condition: succeededOrFailed()
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish Code Coverage - Debug (Alternative Pattern)'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Debug/**/*.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+        failIfCoverageEmpty: false
+      condition: failed()
 
   - job: Release_Build_And_Test
     displayName: 'Release Build and Test'
@@ -110,15 +132,37 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
+        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults/Release -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
         publishTestResults: true
+
+    - task: PowerShell@2
+      displayName: 'Debug - List Coverage Files (Release)'
+      inputs:
+        targetType: 'inline'
+        script: |
+          Write-Host "Searching for coverage files in Release test results..." -ForegroundColor Yellow
+          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Release" -Recurse | Where-Object { $_.Name -like "*coverage*" } | ForEach-Object { Write-Host "Found: $($_.FullName)" -ForegroundColor Green }
+          Write-Host "All files in Release test results:" -ForegroundColor Yellow
+          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Release" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+      condition: always()
 
     - task: PublishCodeCoverageResults@1
       displayName: 'Publish Code Coverage - Release'
       inputs:
         codeCoverageTool: 'Cobertura'
-        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Release/**/coverage.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+        failIfCoverageEmpty: false
       condition: succeededOrFailed()
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish Code Coverage - Release (Alternative Pattern)'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Release/**/*.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+        failIfCoverageEmpty: false
+      condition: failed()
 
     - task: DotNetCoreCLI@2
       displayName: 'Publish Playground App - Release'
