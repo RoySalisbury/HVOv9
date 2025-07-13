@@ -69,8 +69,16 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Debug --no-build --verbosity normal --logger trx'
+        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
         publishTestResults: true
+
+    - task: PublishCodeCoverageResults@2
+      displayName: 'Publish Code Coverage - Debug'
+      inputs:
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+        failIfCoverageEmpty: false
+      condition: succeededOrFailed()
 
   - job: Release_Build_And_Test
     displayName: 'Release Build and Test'
@@ -103,8 +111,16 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Release --no-build --verbosity normal --logger trx'
+        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
         publishTestResults: true
+
+    - task: PublishCodeCoverageResults@2
+      displayName: 'Publish Code Coverage - Release'
+      inputs:
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+        failIfCoverageEmpty: false
+      condition: succeededOrFailed()
 
     - task: DotNetCoreCLI@2
       displayName: 'Publish Playground App - Release'
