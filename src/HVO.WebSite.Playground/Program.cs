@@ -1,6 +1,7 @@
 using HVO.WebSite.Playground.Components;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
+using HVO.DataModels.Extensions;
 
 namespace HVO.WebSite.Playground
 {
@@ -17,6 +18,9 @@ namespace HVO.WebSite.Playground
             // Add MVC and API services
             builder.Services.AddControllersWithViews();
             builder.Services.AddControllers();
+
+            // Add HVO Data Services with Entity Framework
+            builder.Services.AddHvoDataServices(builder.Configuration);
 
             // Configure HttpClient for Blazor Server components
             builder.Services.AddHttpClient("LocalApi", client =>
