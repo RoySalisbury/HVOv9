@@ -9,8 +9,10 @@ HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a 
 - .NET 9.0 (Latest LTS)
 - ASP.NET Core for web applications
 - Blazor Server for interactive web UI
+- Entity Framework Core for data access
 - IoT device integration with GPIO controls
-- xUnit for unit testing
+- xUnit with FluentAssertions for unit testing
+- Moq for service mocking and test isolation
 - Azure DevOps for CI/CD
 
 ## HVOv9 Coding Standards
@@ -51,7 +53,9 @@ namespace HVO.ProjectName
 ### 5. Error Handling
 - Use structured logging with `ILogger<T>`
 - Implement proper exception handling with specific exception types
-- Use `Result<T>` pattern for operations that can fail
+- **Use `Result<T>` pattern for operations that can fail** - Located in `HVO/Result.cs`
+- Use `InvalidOperationException` for 404 scenarios in API controllers
+- Implement global exception handling middleware (`HvoServiceExceptionHandler`)
 - Log errors with appropriate log levels (Error, Warning, Information)
 
 ### 6. Testing Standards
@@ -59,7 +63,11 @@ namespace HVO.ProjectName
 - Follow AAA pattern (Arrange, Act, Assert)
 - Use `WebApplicationFactory<T>` for integration tests
 - Mock external dependencies using Moq or similar
+- **Use service mocking instead of database seeding for integration tests**
+- **Create enhanced TestWebApplicationFactory with proper service replacement**
+- Use FluentAssertions for readable test assertions
 - Test file naming: `{ClassUnderTest}Tests.cs`
+- **Suppress CS1030 warnings in test projects for clean builds**
 
 ### 7. Web Development
 - Use Blazor Server for interactive components with `@rendermode InteractiveServer`
@@ -87,20 +95,67 @@ namespace HVO.ProjectName
 - Use `Span<T>` and `Memory<T>` for high-performance scenarios
 - Dispose of resources properly
 
+## HVOv9-Specific Patterns
+
+### 1. Result<T> Pattern Usage
+- All service methods that can fail should return `Result<T>`
+- Use `Result<T>.Success(value)` for successful operations
+- Use `Result<T>.Failure(exception)` for failed operations
+- Controllers should handle Result<T> and convert to appropriate HTTP responses
+- Use `InvalidOperationException` for 404/NotFound scenarios
+
+### 2. API Response Models
+- Create dedicated response models for all API endpoints
+- Include `Timestamp`, `MachineName`, and relevant data in responses
+- Use consistent naming: `LatestWeatherResponse`, `CurrentWeatherResponse`, etc.
+- Implement proper JSON serialization attributes when needed
+
+### 3. Integration Test Patterns
+- Use `TestWebApplicationFactory` with service mocking instead of database seeding
+- Mock all external dependencies including database services
+- Create test data builders for consistent test data generation
+- Group tests by functionality using `#region` blocks
+- Test both success and failure scenarios for all endpoints
+
+### 4. Service Layer Architecture
+- Create interfaces for all services (`IWeatherService`, etc.)
+- Implement business logic in service classes, not controllers
+- Use dependency injection for all service dependencies
+- Return `Result<T>` from all service methods that can fail
+- Log important operations and errors appropriately
+
+### 5. Exception Handling Middleware
+- Use `HvoServiceExceptionHandler` for global exception handling
+- Convert `InvalidOperationException` to 404 responses
+- Provide consistent `ProblemDetails` responses for errors
+- Log exceptions with appropriate context and severity
+
 ## File Organization
 ```
 /src
   /HVO                           # Core library
+    /Result.cs                  # Result<T> pattern implementation
+    /ComponentModel/            # Component model extensions
     /Iot/Devices/               # IoT device abstractions and implementations
+  /HVO.DataModels/              # Entity Framework models and context
+    /Data/                      # Database context and configurations
+    /Models/                    # Entity models
+    /RawModels/                 # Raw device data models
+    /Repositories/              # Repository pattern implementations
   /HVO.ProjectName/             # Specific applications
     /Controllers/               # API/MVC controllers
     /Components/                # Blazor components
       /Pages/                   # Routable pages
       /Layout/                  # Layout components
     /Services/                  # Business logic services
-    /Models/                    # Data models
-    /.github/                   # Project-specific copilot instructions
+    /Models/                    # API response models and DTOs
+    /Middleware/                # Custom middleware (exception handling)
   /HVO.ProjectName.Tests/       # Unit and integration tests
+    /Controllers/               # Controller unit tests
+    /Services/                  # Service layer tests
+    /Integration/               # Integration tests with TestWebApplicationFactory
+    /Core/                      # Core pattern tests (Result<T>, etc.)
+    /TestHelpers/               # Test utilities and factories
 ```
 
 ## Documentation Standards
