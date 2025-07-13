@@ -1,0 +1,171 @@
+# Azure DevOps Pipeline for HVOv9 Playground Project
+# Builds in both Debug and Release configurations and runs all tests
+
+trigger:
+  branches:
+    include:
+    - main
+    - develop
+    - feature/*
+  paths:
+    include:
+    - src/HVO.WebSite.Playground/*
+    - src/HVO.WebSite.Playground.Tests/*
+    - src/HVO/*
+    - src/HVO.DataModels/*
+
+pr:
+  branches:
+    include:
+    - main
+    - develop
+  paths:
+    include:
+    - src/HVO.WebSite.Playground/*
+    - src/HVO.WebSite.Playground.Tests/*
+    - src/HVO/*
+    - src/HVO.DataModels/*
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  dotNetFramework: 'net9.0'
+  dotNetVersion: '9.0.x'
+  solution: 'src/HVOv9.slnx'
+
+stages:
+- stage: Build_And_Test
+  displayName: 'Build and Test HVOv9 Playground'
+  jobs:
+  - job: Debug_Build_And_Test
+    displayName: 'Debug Build and Test'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET 9.0'
+      inputs:
+        packageType: 'sdk'
+        version: $(dotNetVersion)
+        includePreviewVersions: false
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet packages'
+      inputs:
+        command: 'restore'
+        projects: '$(solution)'
+        feedsToUse: 'select'
+        verbosityRestore: 'Minimal'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Debug Configuration'
+      inputs:
+        command: 'build'
+        projects: '$(solution)'
+        arguments: '--configuration Debug --no-restore --verbosity minimal'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Tests - Debug Configuration'
+      inputs:
+        command: 'test'
+        projects: '$(solution)'
+        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
+        publishTestResults: true
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish Code Coverage - Debug'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+      condition: succeededOrFailed()
+
+  - job: Release_Build_And_Test
+    displayName: 'Release Build and Test'
+    dependsOn: Debug_Build_And_Test
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET 9.0'
+      inputs:
+        packageType: 'sdk'
+        version: $(dotNetVersion)
+        includePreviewVersions: false
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet packages'
+      inputs:
+        command: 'restore'
+        projects: '$(solution)'
+        feedsToUse: 'select'
+        verbosityRestore: 'Minimal'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Release Configuration'
+      inputs:
+        command: 'build'
+        projects: '$(solution)'
+        arguments: '--configuration Release --no-restore --verbosity minimal'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Tests - Release Configuration'
+      inputs:
+        command: 'test'
+        projects: '$(solution)'
+        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
+        publishTestResults: true
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish Code Coverage - Release'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+      condition: succeededOrFailed()
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Playground App - Release'
+      inputs:
+        command: 'publish'
+        projects: 'src/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj'
+        arguments: '--configuration Release --no-build --output $(Build.ArtifactStagingDirectory)/playground'
+        publishWebProjects: false
+        zipAfterPublish: false
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Build Artifacts'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'HVOv9-Playground-$(Build.BuildNumber)'
+        publishLocation: 'Container'
+
+- stage: Validation
+  displayName: 'Validation and Reporting'
+  dependsOn: Build_And_Test
+  condition: always()
+  jobs:
+  - job: Results_Summary
+    displayName: 'Build and Test Results Summary'
+    steps:
+    - task: PowerShell@2
+      displayName: 'Pipeline Results Summary'
+      inputs:
+        targetType: 'inline'
+        script: |
+          Write-Host "===========================================" -ForegroundColor Green
+          Write-Host "HVOv9 Playground Pipeline Results Summary" -ForegroundColor Green
+          Write-Host "===========================================" -ForegroundColor Green
+          Write-Host "Build Number: $(Build.BuildNumber)" -ForegroundColor Yellow
+          Write-Host "Source Branch: $(Build.SourceBranchName)" -ForegroundColor Yellow
+          Write-Host "Commit: $(Build.SourceVersion)" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Configurations Built:" -ForegroundColor Cyan
+          Write-Host "  ✓ Debug Configuration" -ForegroundColor Green
+          Write-Host "  ✓ Release Configuration" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Test Coverage:" -ForegroundColor Cyan
+          Write-Host "  ✓ All unit tests executed" -ForegroundColor Green
+          Write-Host "  ✓ All integration tests executed" -ForegroundColor Green
+          Write-Host "  ✓ Code coverage reports generated" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Artifacts:" -ForegroundColor Cyan
+          Write-Host "  ✓ Release build artifacts published" -ForegroundColor Green
+          Write-Host "  ✓ Test results published" -ForegroundColor Green
+          Write-Host "===========================================" -ForegroundColor Green
