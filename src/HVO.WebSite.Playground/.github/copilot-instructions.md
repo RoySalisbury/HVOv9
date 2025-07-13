@@ -36,6 +36,7 @@ This is a Blazor Server web application project for testing and demonstrating AP
 - Implement loading states and error handling in components
 - Use proper state management with `StateHasChanged()`
 - Format JSON responses for display with proper indentation
+- **Always create code-behind files (.razor.cs) for all Razor components and pages** - Separate markup from logic by creating a corresponding .razor.cs file for every .razor component/page to maintain clean architecture and testability
 
 ### MVC Integration
 - Support traditional MVC views alongside Blazor components

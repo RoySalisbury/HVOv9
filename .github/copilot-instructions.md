@@ -63,6 +63,7 @@ namespace HVO.ProjectName
 
 ### 7. Web Development
 - Use Blazor Server for interactive components with `@rendermode InteractiveServer`
+- **Always create code-behind files (.razor.cs) for all Razor components and pages** - Separate markup from logic for better maintainability and testability
 - Implement API versioning with URL segments (`/api/v1.0/endpoint`)
 - Use `IHttpClientFactory` for HTTP client management
 - Follow REST conventions for API endpoints

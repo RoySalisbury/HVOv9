@@ -1,4 +1,3 @@
-using HVO.WebSite.Playground.Components;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using HVO.DataModels.Extensions;
@@ -64,7 +63,7 @@ namespace HVO.WebSite.Playground
             // Map API controllers
             app.MapControllers();
 
-            app.MapRazorComponents<App>()
+            app.MapRazorComponents<Components.App>()
                 .AddInteractiveServerRenderMode();
 
             app.Run();
