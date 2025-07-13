@@ -78,24 +78,23 @@ stages:
         targetType: 'inline'
         script: |
           Write-Host "Searching for coverage files in Debug test results..." -ForegroundColor Yellow
-          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Debug" -Recurse | Where-Object { $_.Name -like "*coverage*" } | ForEach-Object { Write-Host "Found: $($_.FullName)" -ForegroundColor Green }
+          $debugPath = "$(Agent.TempDirectory)/TestResults/Debug"
+          Get-ChildItem -Path $debugPath -Recurse | Where-Object { $_.Name -like "*coverage*" } | ForEach-Object { Write-Host "Found: $($_.FullName)" -ForegroundColor Green }
           Write-Host "All files in Debug test results:" -ForegroundColor Yellow
-          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Debug" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+          Get-ChildItem -Path $debugPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
       condition: always()
 
-    - task: PublishCodeCoverageResults@1
+    - task: PublishCodeCoverageResults@2
       displayName: 'Publish Code Coverage - Debug'
       inputs:
-        codeCoverageTool: 'Cobertura'
         summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Debug/**/coverage.cobertura.xml'
         pathToSources: '$(Build.SourcesDirectory)'
         failIfCoverageEmpty: false
       condition: succeededOrFailed()
 
-    - task: PublishCodeCoverageResults@1
+    - task: PublishCodeCoverageResults@2
       displayName: 'Publish Code Coverage - Debug (Alternative Pattern)'
       inputs:
-        codeCoverageTool: 'Cobertura'
         summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Debug/**/*.cobertura.xml'
         pathToSources: '$(Build.SourcesDirectory)'
         failIfCoverageEmpty: false
@@ -141,24 +140,23 @@ stages:
         targetType: 'inline'
         script: |
           Write-Host "Searching for coverage files in Release test results..." -ForegroundColor Yellow
-          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Release" -Recurse | Where-Object { $_.Name -like "*coverage*" } | ForEach-Object { Write-Host "Found: $($_.FullName)" -ForegroundColor Green }
+          $releasePath = "$(Agent.TempDirectory)/TestResults/Release"
+          Get-ChildItem -Path $releasePath -Recurse | Where-Object { $_.Name -like "*coverage*" } | ForEach-Object { Write-Host "Found: $($_.FullName)" -ForegroundColor Green }
           Write-Host "All files in Release test results:" -ForegroundColor Yellow
-          Get-ChildItem -Path "$(Agent.TempDirectory)/TestResults/Release" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+          Get-ChildItem -Path $releasePath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
       condition: always()
 
-    - task: PublishCodeCoverageResults@1
+    - task: PublishCodeCoverageResults@2
       displayName: 'Publish Code Coverage - Release'
       inputs:
-        codeCoverageTool: 'Cobertura'
         summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Release/**/coverage.cobertura.xml'
         pathToSources: '$(Build.SourcesDirectory)'
         failIfCoverageEmpty: false
       condition: succeededOrFailed()
 
-    - task: PublishCodeCoverageResults@1
+    - task: PublishCodeCoverageResults@2
       displayName: 'Publish Code Coverage - Release (Alternative Pattern)'
       inputs:
-        codeCoverageTool: 'Cobertura'
         summaryFileLocation: '$(Agent.TempDirectory)/TestResults/Release/**/*.cobertura.xml'
         pathToSources: '$(Build.SourcesDirectory)'
         failIfCoverageEmpty: false
