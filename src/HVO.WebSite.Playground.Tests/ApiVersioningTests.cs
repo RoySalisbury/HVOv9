@@ -24,7 +24,7 @@ public class ApiVersioningTests : IClassFixture<TestWebApplicationFactory>
     public async Task GetPing_WithUrlSegmentVersioning_ReturnsSuccess()
     {
         // Act
-        var response = await _client.GetAsync("/api/v1.0/ping");
+        var response = await _client.GetAsync("/api/v1.0/ping/health");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -39,7 +39,7 @@ public class ApiVersioningTests : IClassFixture<TestWebApplicationFactory>
     public async Task GetPing_WithUrlSegmentVersioning_ReturnsCorrectJsonStructure()
     {
         // Act
-        var response = await _client.GetAsync("/api/v1.0/ping");
+        var response = await _client.GetAsync("/api/v1.0/ping/health");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -62,7 +62,7 @@ public class ApiVersioningTests : IClassFixture<TestWebApplicationFactory>
     public async Task GetPing_WithInvalidVersion_ReturnsNotFound()
     {
         // Act
-        var response = await _client.GetAsync("/api/v2.0/ping");
+        var response = await _client.GetAsync("/api/v2.0/ping/health");
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -72,7 +72,7 @@ public class ApiVersioningTests : IClassFixture<TestWebApplicationFactory>
     public async Task GetPing_WithoutVersion_ReturnsNotFound()
     {
         // Act
-        var response = await _client.GetAsync("/api/ping");
+        var response = await _client.GetAsync("/api/ping/health");
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
 using HVO.WebSite.Playground.Controllers;
+using HVO.WebSite.Playground.Models;
 
 namespace HVO.WebSite.Playground.Tests.Controllers;
 
@@ -21,78 +22,67 @@ public class PingControllerTests
     }
 
     [Fact]
-    public void Get_ShouldReturnOkResult_WithPingResponse()
+    public void HealthCheck_ShouldReturnOkResult_WithPingResponse()
     {
         // Act
-        var result = _controller.Get();
+        var result = _controller.HealthCheck();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         
         var okResult = result as OkObjectResult;
         okResult!.Value.Should().NotBeNull();
+        okResult.Value.Should().BeOfType<PingResponse>();
         
-        // Verify the response structure contains expected properties
-        var responseType = okResult.Value!.GetType();
-        responseType.GetProperty("Message").Should().NotBeNull();
-        responseType.GetProperty("Version").Should().NotBeNull();
-        responseType.GetProperty("Timestamp").Should().NotBeNull();
-        responseType.GetProperty("MachineName").Should().NotBeNull();
+        // Verify the response contains expected properties
+        var response = okResult.Value as PingResponse;
+        response!.Message.Should().NotBeNullOrEmpty();
+        response.Version.Should().NotBeNullOrEmpty();
+        response.MachineName.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
-    public void Get_ShouldReturnSuccessStatus()
+    public void HealthCheck_ShouldReturnSuccessStatus()
     {
         // Act
-        var result = _controller.Get();
+        var result = _controller.HealthCheck();
 
         // Assert
         var okResult = result as OkObjectResult;
-        var response = okResult!.Value!;
+        var response = okResult!.Value as PingResponse;
         
-        // Use reflection to check the Message property
-        var messageProperty = response.GetType().GetProperty("Message");
-        messageProperty.Should().NotBeNull();
-        var messageValue = messageProperty!.GetValue(response) as string;
-        
-        messageValue.Should().Be("Pong! API is working perfectly.");
+        response!.Message.Should().Be("Pong! API is working perfectly.");
     }
 
     [Fact]
-    public void Get_ShouldReturnCurrentMachineName()
+    public void HealthCheck_ShouldReturnCurrentMachineName()
     {
         // Act
-        var result = _controller.Get();
+        var result = _controller.HealthCheck();
 
         // Assert
         var okResult = result as OkObjectResult;
-        var response = okResult!.Value!;
+        var response = okResult!.Value as PingResponse;
         
-        var machineNameProperty = response.GetType().GetProperty("MachineName");
-        var machineNameValue = machineNameProperty!.GetValue(response) as string;
-        
-        machineNameValue.Should().NotBeNullOrEmpty();
-        machineNameValue.Should().Be(Environment.MachineName);
+        response!.MachineName.Should().NotBeNullOrEmpty();
+        response.MachineName.Should().Be(Environment.MachineName);
     }
 
     [Fact]
-    public void Get_ShouldReturnRecentTimestamp()
+    public void HealthCheck_ShouldReturnRecentTimestamp()
     {
         // Arrange
         var beforeCall = DateTime.UtcNow;
 
         // Act
-        var result = _controller.Get();
+        var result = _controller.HealthCheck();
 
         // Assert
         var afterCall = DateTime.UtcNow;
         var okResult = result as OkObjectResult;
-        var response = okResult!.Value!;
+        var response = okResult!.Value as PingResponse;
         
-        var timestampProperty = response.GetType().GetProperty("Timestamp");
-        var timestampValue = (DateTime)timestampProperty!.GetValue(response)!;
-        
-        timestampValue.Should().BeAfter(beforeCall.AddSeconds(-1));
-        timestampValue.Should().BeBefore(afterCall.AddSeconds(1));
+        response!.Timestamp.Should().BeAfter(beforeCall.AddSeconds(-1));
+        response.Timestamp.Should().BeBefore(afterCall.AddSeconds(1));
     }
 }
