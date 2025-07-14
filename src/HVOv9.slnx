@@ -3,6 +3,7 @@
   <Project Path="HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj" />
   <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
   <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
+  <Project Path="HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
   <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
   <Project Path="HVO/HVO.csproj" />
   <Project Path="HVO.DataModels/HVO.DataModels.csproj" />
