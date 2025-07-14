@@ -16,7 +16,7 @@ This is a Blazor Server web application project for testing and demonstrating AP
 
 ## Architecture Guidelines
 - Use Server-side Blazor components for interactive UI with `@rendermode InteractiveServer`
-- Implement API versioning with URL segments (e.g., `/api/v1.0/ping`)
+- Implement API versioning with URL segments (e.g., `/api/v1.0/weather`)
 - Use IHttpClientFactory for HTTP client management with named clients
 - Follow dependency injection patterns throughout the application
 - Use proper error handling and structured logging with ILogger
@@ -29,7 +29,6 @@ This is a Blazor Server web application project for testing and demonstrating AP
 - Use `[ApiController]` and `[Route]` attributes
 - Implement versioning with `[ApiVersion("1.0")]`
 - Return structured JSON responses with consistent format
-- Include timestamp and machine name for debugging
 
 ### Blazor Component Patterns
 - Use `@inject` for dependency injection of IHttpClientFactory and ILogger
@@ -58,7 +57,7 @@ This is a Blazor Server web application project for testing and demonstrating AP
 - Use async/await patterns for all asynchronous operations
 - Implement proper disposal patterns for resources
 - Use meaningful variable and method names
-- Include XML documentation for public APIs
+- XML documentation comments are optional but recommended for complex public APIs
 - Use structured logging with appropriate log levels
 
 ## Development Workflow
