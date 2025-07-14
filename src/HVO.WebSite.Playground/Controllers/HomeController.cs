@@ -27,12 +27,13 @@ public class HomeController : Controller
         return View();
     }
 
+    
     /// <summary>
-    /// Displays the ping test page for API testing
+    /// Displays the Health Check MVC test page
     /// </summary>
-    /// <returns>The ping test view</returns>
-    public IActionResult PingTest()
+    /// <returns>The Health Check MVC view</returns>
+    public IActionResult HealthCheckMVC()
     {
-        return View();
+        return View("HealthCheckMVC");
     }
 }

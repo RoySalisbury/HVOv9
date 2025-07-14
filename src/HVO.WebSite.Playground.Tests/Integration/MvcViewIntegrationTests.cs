@@ -41,27 +41,17 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         content.Should().Contain("HVO");
         content.Should().Contain("Playground");
     }
+    
 
     [Fact]
-    public async Task Get_HomePingTest_ShouldReturnSuccessAndCorrectContentType()
+    public async Task Get_HomeHealthCheckMVC_ShouldContainExpectedContent()
     {
         // Act
-        var response = await _client.GetAsync("/Home/PingTest");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        response.Content.Headers.ContentType?.ToString().Should().Contain("text/html");
-    }
-
-    [Fact]
-    public async Task Get_HomePingTest_ShouldContainExpectedContent()
-    {
-        // Act
-        var response = await _client.GetAsync("/Home/PingTest");
+        var response = await _client.GetAsync("/Home/HealthCheckMVC");
         var content = await response.Content.ReadAsStringAsync();
 
         // Assert
-        content.Should().Contain("Ping API Test");
+        content.Should().Contain("Health Check API Test");
         content.Should().Contain("MVC");
         content.Should().Contain("JavaScript");
     }
@@ -78,10 +68,10 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
-    public async Task Get_BlazorPingTest_ShouldReturnSuccessAndCorrectContentType()
+    public async Task Get_BlazorHealthCheckTest_ShouldReturnSuccessAndCorrectContentType()
     {
         // Act
-        var response = await _client.GetAsync("/ping-test");
+        var response = await _client.GetAsync("/health-check-blazor");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -89,21 +79,21 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
-    public async Task Get_BlazorPingTest_ShouldContainExpectedContent()
+    public async Task Get_BlazorHealthCheckTest_ShouldContainExpectedContent()
     {
         // Act
-        var response = await _client.GetAsync("/ping-test");
+        var response = await _client.GetAsync("/health-check-blazor");
         var content = await response.Content.ReadAsStringAsync();
 
         // Assert
-        content.Should().Contain("Ping API Test");
+        content.Should().Contain("Health Check API Test");
         content.Should().Contain("Blazor");
     }
 
     [Theory]
     [InlineData("/")]
-    [InlineData("/Home/PingTest")]
-    [InlineData("/ping-test")]
+    [InlineData("/Home/HealthCheckMVC")]
+    [InlineData("/health-check-blazor")]
     public async Task Get_AllPages_ShouldHaveValidHtmlStructure(string url)
     {
         // Act
@@ -121,8 +111,8 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
 
     [Theory]
     [InlineData("/")]
-    [InlineData("/Home/PingTest")]
-    [InlineData("/ping-test")]
+    [InlineData("/Home/HealthCheckMVC")]
+    [InlineData("/health-check-blazor")]
     public async Task Get_AllPages_ShouldHaveBootstrapStyling(string url)
     {
         // Act
