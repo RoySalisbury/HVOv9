@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
+using Microsoft.OpenApi.Models;
+using HVO.WebSite.Playground.Models;
 
 namespace HVO.WebSite.Playground.Controllers;
 
@@ -9,6 +11,7 @@ namespace HVO.WebSite.Playground.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
+[Tags("Health Check")]
 public class PingController : ControllerBase
 {
     private readonly ILogger<PingController> _logger;
@@ -26,10 +29,15 @@ public class PingController : ControllerBase
     /// Health check endpoint that returns a simple response to verify API connectivity
     /// </summary>
     /// <returns>A response indicating the API is working with timestamp and machine info</returns>
-    [HttpGet]
-    public IActionResult Get()
+    /// <response code="200">API is operational and responding normally</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpGet("health")]
+    [Produces("application/json")]
+    [ProducesResponseType<PingResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+    public IActionResult HealthCheck()
     {
-        var response = new
+        var response = new PingResponse
         {
             Message = "Pong! API is working perfectly.",
             Version = "1.0",
@@ -37,7 +45,7 @@ public class PingController : ControllerBase
             MachineName = Environment.MachineName
         };
 
-        _logger.LogInformation("Ping API endpoint was called at {Timestamp}", DateTime.UtcNow);
+        _logger.LogInformation("Health check API endpoint was called at {Timestamp}", DateTime.UtcNow);
 
         return Ok(response);
     }

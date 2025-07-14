@@ -12,7 +12,7 @@
                 <div class="card-body">
                     <h5 class="card-title">API Endpoint Test</h5>
                     <p class="card-text">
-                        Click the button below to call the <code>/api/v1.0/ping</code> endpoint and see the response.
+                        Click the button below to call the <code>/api/v1.0/ping/health</code> endpoint and see the response.
                     </p>
                     
                     <button id="testApiBtn" class="btn btn-primary btn-lg">
@@ -124,7 +124,7 @@
                 clearResults();
 
                 // Make API call using fetch
-                fetch('/api/v1.0/ping', {
+                fetch('/api/v1.0/ping/health', {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',

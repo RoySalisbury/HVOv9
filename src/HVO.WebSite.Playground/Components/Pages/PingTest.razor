@@ -17,7 +17,7 @@
                 <div class="card-body">
                     <h5 class="card-title">API Endpoint Test</h5>
                     <p class="card-text">
-                        Click the button below to call the <code>/api/v1.0/ping</code> endpoint and see the response.
+                        Click the button below to call the <code>/api/v1.0/ping/health</code> endpoint and see the response.
                     </p>
                     
                     <button class="btn btn-primary btn-lg" @onclick="CallPingApi" disabled="@isLoading">
@@ -149,7 +149,7 @@
             var httpClient = HttpClientFactory.CreateClient("LocalApi");
             
             // Call the API
-            var response = await httpClient.GetAsync("/api/v1.0/ping");
+            var response = await httpClient.GetAsync("/api/v1.0/ping/health");
             statusCode = (int)response.StatusCode;
             statusText = response.ReasonPhrase ?? string.Empty;
 

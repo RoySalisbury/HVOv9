@@ -177,6 +177,43 @@ namespace HVO.ProjectName
 - Follow OWASP security guidelines
 - Validate and sanitize user inputs
 
+## Azure DevOps Integration
+- Use Azure DevOps for CI/CD pipelines and work item tracking
+- Azure DevOps CLI is available for work item management
+
+### Work Item Creation Best Practices
+- Use `--fields` parameter to specify Description and Acceptance Criteria separately
+- Field format: `"Description=<content>" "Acceptance Criteria=<content>"`
+- Priority field: `"Microsoft.VSTS.Common.Priority=3"` (1=Critical, 2=High, 3=Medium, 4=Low)
+- Leave `--assigned-to` blank on initial creation unless specifically requested
+
+### Work Item Lifecycle Management
+- **Bug States**: New → Active → Resolved → Closed
+- Always assign work items when beginning development: `--assigned-to "user@domain.com"`
+- Update state progression:
+  - **New**: Initial creation state
+  - **Active**: When development begins (`--state "Active" --fields "System.Reason=Development Started"`)
+  - **Resolved**: When fix is complete and PR created (`--state "Resolved" --fields "System.Reason=Fixed"`)
+  - **Closed**: When changes are deployed and verified in production
+- Update work items throughout the development process to maintain accurate project status
+
+### Content Formatting for Azure DevOps
+- **Use HTML formatting instead of Markdown** for work item descriptions and acceptance criteria
+- Markdown syntax may be HTML-encoded (quotes become `&quot;`) when submitted via CLI
+- HTML formatting renders properly in Azure DevOps web interface
+- Use HTML tags: `<h2>`, `<h3>`, `<ul>`, `<li>`, `<code>`, `<strong>`, `<p>`
+- Example structure:
+  ```html
+  <h2>Issue Description</h2>
+  <p>Description content with <code>code examples</code></p>
+  <h3>Subsection</h3>
+  <ul>
+    <li>List item with <strong>emphasis</strong></li>
+    <li>Code reference: <code>[HttpGet("endpoint")]</code></li>
+  </ul>
+  ```
+- For acceptance criteria, use simple `<li>` elements instead of checkboxes for better readability
+
 ## Deployment
 - Support containerization with Docker when appropriate
 - Use environment variables for deployment-specific configuration
