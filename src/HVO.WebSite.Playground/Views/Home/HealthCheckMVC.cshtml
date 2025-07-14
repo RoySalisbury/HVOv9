@@ -4,11 +4,6 @@
 
 <div class="container mt-4">
     <h1>🏥 Health Check API Test (MVC)</h1>
-    <p class="lead">Test the health check endpoint using traditional MVC with JavaScript.</p> ViewData["Title"] = "Health Check API Test";
-}
-
-<div class="container mt-4">
-    <h1>� Health Check API Test (MVC)</h1>
     <p class="lead">Test the health check endpoint using traditional MVC with JavaScript.</p>
     
     <div class="row">
@@ -21,7 +16,7 @@
                     </p>
                     
                     <button id="testApiBtn" class="btn btn-primary btn-lg">
-                        <span id="btnIcon">�</span>
+                        <span id="btnIcon">🧪</span>
                         <span id="btnText">Test Health Check API</span>
                     </button>
                     
@@ -90,7 +85,7 @@
                     
                     <h6>Compare with Blazor</h6>
                     <p class="small text-muted">
-                        Try the <a href="/ping-test">Blazor version</a> to see the difference
+                        Try the <a href="/health-check-blazor">Blazor version</a> to see the difference
                         between client-side JavaScript and server-side C# approaches.
                     </p>
                 </div>
@@ -109,14 +104,14 @@
 
             testApiBtn.addEventListener('click', function() {
                 if (isLoading) return;
-                callPingApi();
+                callHealthCheckApi();
             });
 
             clearBtn.addEventListener('click', function() {
                 clearResults();
             });
 
-            function callPingApi() {
+            function callHealthCheckApi() {
                 // Set loading state
                 isLoading = true;
                 updateButtonState(true);
@@ -161,7 +156,7 @@
                     text.textContent = 'Testing...';
                 } else {
                     testApiBtn.disabled = false;
-                    icon.textContent = '�';
+                    icon.textContent = '🧪';
                     text.textContent = 'Test Health Check API';
                 }
             }
