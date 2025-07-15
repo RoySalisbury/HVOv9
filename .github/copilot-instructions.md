@@ -106,7 +106,6 @@ namespace HVO.ProjectName
 
 ### 2. API Response Models
 - Create dedicated response models for all API endpoints
-- Include `Timestamp`, `MachineName`, and relevant data in responses
 - Use consistent naming: `LatestWeatherResponse`, `CurrentWeatherResponse`, etc.
 - Implement proper JSON serialization attributes when needed
 
@@ -159,7 +158,8 @@ namespace HVO.ProjectName
 ```
 
 ## Documentation Standards
-- Use XML documentation comments for public APIs
+- XML documentation comments are optional but recommended for complex public APIs
+- Focus on clear, meaningful code that is self-documenting through good naming
 - Include README.md files for complex projects
 - Document configuration options and environment setup
 - Provide usage examples for public APIs
@@ -199,7 +199,6 @@ namespace HVO.ProjectName
 
 ### Content Formatting for Azure DevOps
 - **Use HTML formatting instead of Markdown** for work item descriptions and acceptance criteria
-- Markdown syntax may be HTML-encoded (quotes become `&quot;`) when submitted via CLI
 - HTML formatting renders properly in Azure DevOps web interface
 - Use HTML tags: `<h2>`, `<h3>`, `<ul>`, `<li>`, `<code>`, `<strong>`, `<p>`
 - Example structure:
