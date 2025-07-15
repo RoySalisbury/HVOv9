@@ -5,8 +5,6 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Components.Web;
 using HVO.WebSite.Playground.Middleware;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace HVO.WebSite.Playground
 {
@@ -71,11 +69,6 @@ namespace HVO.WebSite.Playground
             // Add HVO Data Services with Entity Framework
             builder.Services.AddHvoDataServices(builder.Configuration);
 
-            // Add health checks
-            builder.Services.AddHealthChecks()
-                .AddDbContextCheck<HVO.DataModels.Data.HvoDbContext>("database", tags: new[] { "ready", "db" })
-                .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Application is running"), tags: new[] { "ready" });
-
             // Add application services
             builder.Services.AddScoped<HVO.WebSite.Playground.Services.IWeatherService, HVO.WebSite.Playground.Services.WeatherService>();
 
@@ -123,36 +116,6 @@ namespace HVO.WebSite.Playground
             app.UseAntiforgery();
 
             app.MapStaticAssets();
-
-            // Map health check endpoints
-            app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions()
-            {
-                ResponseWriter = async (context, report) =>
-                {
-                    context.Response.ContentType = "application/json";
-                    var response = new
-                    {
-                        status = report.Status.ToString(),
-                        checks = report.Entries.Select(x => new
-                        {
-                            name = x.Key,
-                            status = x.Value.Status.ToString(),
-                            exception = x.Value.Exception?.Message,
-                            duration = x.Value.Duration.ToString()
-                        }),
-                        duration = report.TotalDuration.ToString()
-                    };
-                    await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response));
-                }
-            });
-            app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions()
-            {
-                Predicate = check => check.Tags.Contains("ready")
-            });
-            app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions()
-            {
-                Predicate = _ => false
-            });
 
             // Map MVC controllers
             app.MapControllerRoute(

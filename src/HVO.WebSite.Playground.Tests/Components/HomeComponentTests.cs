@@ -40,7 +40,7 @@ public class HomeComponentTests : TestContext
         var mvcCard = component.Find("h5.card-title");
         mvcCard.TextContent.Should().Contain("MVC Approach");
         
-        var mvcButton = component.Find("a[href='/Home/HealthCheckMVC']");
+        var mvcButton = component.Find("a[href='/Home/PingTest']");
         mvcButton.Should().NotBeNull();
         mvcButton.TextContent.Should().Contain("Test with MVC");
         mvcButton.ClassList.Should().Contain("btn-primary");
@@ -59,7 +59,7 @@ public class HomeComponentTests : TestContext
         var blazorCard = blazorCards.FirstOrDefault(c => c.TextContent.Contains("Blazor Approach"));
         blazorCard.Should().NotBeNull();
         
-        var blazorButton = component.Find("a[href='/health-check-blazor']");
+        var blazorButton = component.Find("a[href='/ping-test']");
         blazorButton.Should().NotBeNull();
         blazorButton.TextContent.Should().Contain("Test with Blazor");
         blazorButton.ClassList.Should().Contain("btn-success");

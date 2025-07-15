@@ -26,12 +26,12 @@
                             </a>
                         </div>
                         <div class="nav-item px-3">
-                            <a class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "HealthCheckMVC" ? "active" : "")" asp-area="" asp-controller="Home" asp-action="HealthCheckMVC">
+                            <a class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "PingTest" ? "active" : "")" asp-area="" asp-controller="Home" asp-action="PingTest">
                                 <span class="bi bi-wifi-nav-menu" aria-hidden="true"></span> Ping Test (MVC)
                             </a>
                         </div>
                         <div class="nav-item px-3">
-                            <a class="nav-link" href="/health-check-blazor">
+                            <a class="nav-link" href="/ping-test">
                                 <span class="bi bi-wifi-nav-menu" aria-hidden="true"></span> Ping Test (Blazor)
                             </a>
                         </div>

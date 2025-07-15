@@ -34,16 +34,16 @@ public class HomeControllerTests
     }
 
     [Fact]
-    public void HealthCheckMVC_ShouldReturnViewResult()
+    public void PingTest_ShouldReturnViewResult()
     {
         // Act
-        var result = _controller.HealthCheckMVC();
+        var result = _controller.PingTest();
 
         // Assert
         result.Should().BeOfType<ViewResult>();
         
         var viewResult = result as ViewResult;
-        viewResult!.ViewName.Should().Be("HealthCheckMVC"); // Named view
+        viewResult!.ViewName.Should().BeNullOrEmpty(); // Default view name
     }
 
     [Fact] 
