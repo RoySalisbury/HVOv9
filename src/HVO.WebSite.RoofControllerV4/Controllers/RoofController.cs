@@ -4,13 +4,16 @@ using Asp.Versioning;
 using System.Device.Gpio;
 using System.Device.Gpio.Drivers;
 using HVO.WebSite.RoofControllerV4.Logic;
-using HVO.WebSite.RoofControllerV4.Models;
 
 namespace HVO.WebSite.RoofControllerV4.Controllers
 {
+    /// <summary>
+    /// Roof Controller API v4.0 - Controls the observatory roof operations
+    /// </summary>
     [ApiController, ApiVersion("4.0"), Produces("application/json")]
     [Route("api/v{version:apiVersion}/RoofControl")]
-    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    [Tags("Roof Control")]
     public class RoofController : ControllerBase
     {
         private readonly ILogger<RoofController> _logger;
@@ -22,37 +25,35 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
             this._roofController = roofController;
         }
 
+        /// <summary>
+        /// Gets the current status of the roof controller
+        /// </summary>
+        /// <returns>Current roof controller status</returns>
+        /// <response code="200">Returns the current roof status</response>
+        /// <response code="500">Internal server error occurred</response>
         [HttpGet, Route("Status", Name = nameof(GetRoofStatus))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<RoofControllerStatusResponse> GetRoofStatus()
+        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        public ActionResult<RoofControllerStatus> GetRoofStatus()
         {
-            var response = new RoofControllerStatusResponse
-            {
-                Status = this._roofController.Status,
-                IsInitialized = this._roofController.IsInitialized
-            };
-            return Ok(response);
+            return Ok(this._roofController.Status);
         }
 
+        /// <summary>
+        /// Opens the observatory roof
+        /// </summary>
+        /// <returns>Updated roof controller status after opening operation</returns>
+        /// <response code="200">Roof opening operation completed successfully</response>
+        /// <response code="500">Internal server error or service state issue occurred</response>
         [HttpGet, Route("Open", Name = nameof(DoRoofOpen))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatusResponse> DoRoofOpen()
+        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        public ActionResult<RoofControllerStatus> DoRoofOpen()
         {
             var result = this._roofController.Open();
             
             return result.Match(
-                success: status => 
-                {
-                    var response = new RoofControllerStatusResponse
-                    {
-                        Status = status,
-                        IsInitialized = this._roofController.IsInitialized
-                    };
-                    return Ok(response);
-                },
+                success: status => Ok(status),
                 failure: error => error switch
                 {
                     // Service state issues should return 500
@@ -70,24 +71,21 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
             );
         }
 
+        /// <summary>
+        /// Closes the observatory roof
+        /// </summary>
+        /// <returns>Updated roof controller status after closing operation</returns>
+        /// <response code="200">Roof closing operation completed successfully</response>
+        /// <response code="500">Internal server error or service state issue occurred</response>
         [HttpGet, Route("Close", Name = nameof(DoRoofClose))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatusResponse> DoRoofClose()
+        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        public ActionResult<RoofControllerStatus> DoRoofClose()
         {
             var result = this._roofController.Close();
             
             return result.Match(
-                success: status => 
-                {
-                    var response = new RoofControllerStatusResponse
-                    {
-                        Status = status,
-                        IsInitialized = this._roofController.IsInitialized
-                    };
-                    return Ok(response);
-                },
+                success: status => Ok(status),
                 failure: error => error switch
                 {
                     // Service state issues should return 500
@@ -105,24 +103,21 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
             );
         }
 
+        /// <summary>
+        /// Stops the current roof operation
+        /// </summary>
+        /// <returns>Updated roof controller status after stop operation</returns>
+        /// <response code="200">Roof stop operation completed successfully</response>
+        /// <response code="500">Internal server error or service state issue occurred</response>
         [HttpGet, Route("Stop", Name = nameof(DoRoofStop))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatusResponse> DoRoofStop()
+        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        public ActionResult<RoofControllerStatus> DoRoofStop()
         {
             var result = this._roofController.Stop();
             
             return result.Match(
-                success: status => 
-                {
-                    var response = new RoofControllerStatusResponse
-                    {
-                        Status = status,
-                        IsInitialized = this._roofController.IsInitialized
-                    };
-                    return Ok(response);
-                },
+                success: status => Ok(status),
                 failure: error => error switch
                 {
                     // Service state issues should return 500

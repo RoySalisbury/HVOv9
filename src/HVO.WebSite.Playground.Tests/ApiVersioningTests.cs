@@ -21,25 +21,25 @@ public class ApiVersioningTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task GetPing_WithUrlSegmentVersioning_ReturnsSuccess()
+    public async Task GetWeather_WithUrlSegmentVersioning_ReturnsSuccess()
     {
         // Act
-        var response = await _client.GetAsync("/api/v1.0/ping/health");
+        var response = await _client.GetAsync("/api/v1.0/weather/latest");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         
         var content = await response.Content.ReadAsStringAsync();
         Assert.NotNull(content);
-        Assert.Contains("Pong", content);
-        Assert.Contains("1.0", content);
+        Assert.Contains("timestamp", content);
+        Assert.Contains("data", content);
     }
 
     [Fact]
-    public async Task GetPing_WithUrlSegmentVersioning_ReturnsCorrectJsonStructure()
+    public async Task GetWeather_WithUrlSegmentVersioning_ReturnsCorrectJsonStructure()
     {
         // Act
-        var response = await _client.GetAsync("/api/v1.0/ping/health");
+        var response = await _client.GetAsync("/api/v1.0/weather/latest");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -48,31 +48,31 @@ public class ApiVersioningTests : IClassFixture<TestWebApplicationFactory>
         using var jsonDoc = JsonDocument.Parse(content);
         var root = jsonDoc.RootElement;
         
-        Assert.True(root.TryGetProperty("message", out var messageElement));
-        Assert.Equal("Pong! API is working perfectly.", messageElement.GetString());
-        
-        Assert.True(root.TryGetProperty("version", out var versionElement));
-        Assert.Equal("1.0", versionElement.GetString());
-        
         Assert.True(root.TryGetProperty("timestamp", out var timestampElement));
         Assert.True(DateTime.TryParse(timestampElement.GetString(), out _));
+        
+        Assert.True(root.TryGetProperty("machineName", out var machineNameElement));
+        Assert.NotNull(machineNameElement.GetString());
+        
+        Assert.True(root.TryGetProperty("data", out var dataElement));
+        Assert.NotEqual(JsonValueKind.Null, dataElement.ValueKind);
     }
 
     [Fact]
-    public async Task GetPing_WithInvalidVersion_ReturnsNotFound()
+    public async Task GetWeather_WithInvalidVersion_ReturnsNotFound()
     {
         // Act
-        var response = await _client.GetAsync("/api/v2.0/ping/health");
+        var response = await _client.GetAsync("/api/v2.0/weather/latest");
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetPing_WithoutVersion_ReturnsNotFound()
+    public async Task GetWeather_WithoutVersion_ReturnsNotFound()
     {
         // Act
-        var response = await _client.GetAsync("/api/ping/health");
+        var response = await _client.GetAsync("/api/weather/latest");
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

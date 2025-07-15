@@ -28,10 +28,10 @@ public class HomeController : Controller
     }
 
     /// <summary>
-    /// Displays the ping test page for API testing
+    /// Displays the health check test page for API testing
     /// </summary>
-    /// <returns>The ping test view</returns>
-    public IActionResult PingTest()
+    /// <returns>The health check test view</returns>
+    public IActionResult HealthCheckMVC()
     {
         return View();
     }

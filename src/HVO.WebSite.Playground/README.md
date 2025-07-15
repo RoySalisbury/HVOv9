@@ -1,4 +1,4 @@
-# HVO.WebSite.Playground2
+# HVO.WebSite.Playground
 
 A Blazor Server web application for testing API endpoints with both Blazor components and traditional MVC views, demonstrating different UI approaches with the same API.
 
@@ -6,7 +6,7 @@ A Blazor Server web application for testing API endpoints with both Blazor compo
 
 - **Blazor Server Components**: Interactive UI with C# code-behind
 - **Traditional MVC Views**: Classic web development with JavaScript
-- **API Versioning**: RESTful API with URL segment versioning (`/api/v1.0/ping`)
+- **API Versioning**: RESTful API with URL segment versioning
 - **HttpClient Integration**: Proper HttpClient configuration with IHttpClientFactory
 - **Bootstrap 5**: Modern, responsive UI design
 - **Real-time Updates**: Server-side Blazor with SignalR
@@ -16,20 +16,20 @@ A Blazor Server web application for testing API endpoints with both Blazor compo
 ## Project Structure
 
 ```
-HVO.WebSite.Playground2/
+HVO.WebSite.Playground/
 ├── Components/
 │   ├── Layout/                 # Application layout components
 │   ├── Pages/                  # Blazor pages
-│   │   ├── PingTest.razor      # Blazor API testing page
+│   │   ├── HealthCheckTest.razor # Blazor API testing page
 │   │   └── ...                 # Other Blazor pages
 │   └── _Imports.razor          # Global imports
 ├── Controllers/
 │   ├── HomeController.cs       # MVC controller for views
-│   └── PingController.cs       # API controller
+│   └── WeatherController.cs    # API controller
 ├── Views/
 │   ├── Home/
 │   │   ├── Index.cshtml        # Landing page with comparison
-│   │   └── PingTest.cshtml     # MVC API testing page
+│   │   └── HealthCheckMVC.cshtml # MVC API testing page
 │   └── Shared/
 │       └── _Layout.cshtml      # MVC layout
 ├── wwwroot/                    # Static files
@@ -62,37 +62,27 @@ Navigate to the application root to see a comparison page:
 - **URL**: `http://localhost:5136/`
 - **Features**: Side-by-side comparison of MVC vs Blazor approaches
 
-#### Direct API Access
-Test the API endpoint directly:
-```bash
-curl http://localhost:5136/api/v1.0/ping
-```
-
 #### MVC UI Testing
-1. Navigate to `http://localhost:5136/Home/PingTest`
-2. Click the "🏓 Test Ping API" button
+1. Navigate to `http://localhost:5136/Home/HealthCheckMVC`
+2. Click the "� Test Health Check API" button
 3. View the response with traditional JavaScript/DOM manipulation
 
 #### Blazor UI Testing
-1. Navigate to `http://localhost:5136/ping-test`
-2. Click the "🏓 Test Ping API" button
+1. Navigate to `http://localhost:5136/health-check-blazor`
+2. Click the "� Test Health Check API" button
 3. View the response with real-time C# updates via SignalR
 
 ## API Endpoints
 
-### Ping API
-- **URL**: `/api/v1.0/ping`
+### Weather API
+- **URL**: `/api/v1.0/weather/latest`
 - **Method**: `GET`
-- **Response**: JSON object with message, version, timestamp, and machine name
+- **Response**: JSON object with latest weather data
 
-```json
-{
-  "message": "Pong! API is working perfectly.",
-  "version": "1.0",
-  "timestamp": "2025-07-12T23:01:59.5442477Z",
-  "machineName": "devPi5"
-}
-```
+### Health Check API
+- **URL**: `/health`
+- **Method**: `GET`
+- **Response**: JSON object with database connectivity status
 
 ## Technologies Used
 
