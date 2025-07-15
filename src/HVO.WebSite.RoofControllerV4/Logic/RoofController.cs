@@ -2,6 +2,7 @@ using System.Device.Gpio;
 using HVO.Iot.Devices;
 using Iot.Device.Common;
 using Microsoft.Extensions.Options;
+using HVO;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
 {
@@ -37,18 +38,18 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         public RoofControllerStatus Status { get; private set; } = RoofControllerStatus.NotInitialized;
 
 
-        public Task<bool> Initialize(CancellationToken cancellationToken)
+        public Task<Result<bool>> Initialize(CancellationToken cancellationToken)
         {
             if (this._disposed)
             {
-                throw new ObjectDisposedException(nameof(RoofController));
+                return Task.FromResult(Result<bool>.Failure(new ObjectDisposedException(nameof(RoofController))));
             }
 
             lock (this._syncLock)
             {
                 if (this.IsInitialized)
                 {
-                    throw new Exception("Already Initialized");
+                    return Task.FromResult(Result<bool>.Failure(new InvalidOperationException("Already Initialized")));
                 }
 
                 // Setup the cancellation token registration so we know when things are shutting down as soon as possible and can call STOP.
@@ -64,17 +65,17 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     this._roofClosedLimitSwitch.LimitSwitchTriggered += roofClosedLimitSwitch_LimitSwitchTriggered;
 
                 }
-                catch
+                catch (Exception ex)
                 {
                     this._roofOpenLimitSwitch.LimitSwitchTriggered -= roofOpenLimitSwitch_LimitSwitchTriggered;
                     this._roofClosedLimitSwitch.LimitSwitchTriggered -= roofClosedLimitSwitch_LimitSwitchTriggered;
 
                     this.IsInitialized = false;
-                    throw;
+                    return Task.FromResult(Result<bool>.Failure(ex));
                 }
 
                 this.IsInitialized = true;
-                return Task.FromResult(this.IsInitialized);
+                return Task.FromResult(Result<bool>.Success(this.IsInitialized));
             }
         }
 
@@ -108,19 +109,27 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             this._logger.LogInformation("RoofClosedLimitSwitch: {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
         }
 
-        public void Stop()
+        public Result<RoofControllerStatus> Stop()
         {
-            ThrowIfDisposed();
-
-            lock (this._syncLock)
+            try
             {
-                if (this.IsInitialized == false)
-                {
-                    throw new Exception("Device not initialized");
-                }
+                ThrowIfDisposed();
 
-                this.InternalStop();
-                this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Current Status: {this.Status}");
+                lock (this._syncLock)
+                {
+                    if (this.IsInitialized == false)
+                    {
+                        return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
+                    }
+
+                    this.InternalStop();
+                    this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Current Status: {this.Status}");
+                    return Result<RoofControllerStatus>.Success(this.Status);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Result<RoofControllerStatus>.Failure(ex);
             }
         }
 
@@ -134,68 +143,91 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
         }
 
-        public void Open()
+        public Result<RoofControllerStatus> Open()
         {
-            ThrowIfDisposed();
-
-            lock (this._syncLock)
+            try
             {
-                if (this.IsInitialized == false)
+                ThrowIfDisposed();
+
+                lock (this._syncLock)
                 {
-                    throw new Exception("Device not initialized");
+                    if (this.IsInitialized == false)
+                    {
+                        return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
+                    }
+
+                    // Always stop the current action before starting a new one.
+                    var stopResult = this.Stop();
+                    if (!stopResult.IsSuccessful)
+                    {
+                        return stopResult;
+                    }
+
+                    if (this.Status == RoofControllerStatus.Open)
+                    {
+                        // If already open, just return
+                        this._logger.LogInformation($"====Open - {DateTime.Now:O}. Already Open. Current Status: {this.Status}");
+                        return Result<RoofControllerStatus>.Success(this.Status);
+                    }
+
+                    // Start the motors to open the roof
+                    // This is where you would implement the actual GPIO logic to control the motors.
+                    // For example:
+                    // _gpioController.Write(_roofControllerOptions.RoofOpenPin, PinValue.High);
+
+                    // Set the status to opening
+                    this.Status = RoofControllerStatus.Opening;
+                    this._logger.LogInformation($"====Open - {DateTime.Now:O}. Current Status: {this.Status}");
+                    return Result<RoofControllerStatus>.Success(this.Status);
                 }
-
-                // Always stop the current action before starting a new one.
-                this.Stop();
-
-                if (this.Status == RoofControllerStatus.Open)
-                {
-                    // If already open, just return
-                    this._logger.LogInformation($"====Open - {DateTime.Now:O}. Already Open. Current Status: {this.Status}");
-                    return;
-                }
-
-                // Start the motors to open the roof
-                // This is where you would implement the actual GPIO logic to control the motors.
-                // For example:
-                // _gpioController.Write(_roofControllerOptions.RoofOpenPin, PinValue.High);
-
-
-                // Set the status to opening
-                this.Status = RoofControllerStatus.Opening;
-                this._logger.LogInformation($"====Open - {DateTime.Now:O}. Current Status: {this.Status}");
+            }
+            catch (Exception ex)
+            {
+                return Result<RoofControllerStatus>.Failure(ex);
             }
         }
 
-        public void Close()
+        public Result<RoofControllerStatus> Close()
         {
-            ThrowIfDisposed();
-
-            lock (this._syncLock)
+            try
             {
-                if (this.IsInitialized == false)
+                ThrowIfDisposed();
+
+                lock (this._syncLock)
                 {
-                    throw new Exception("Device not initialized");
+                    if (this.IsInitialized == false)
+                    {
+                        return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
+                    }
+
+                    // Always stop the current action before starting a new one.
+                    var stopResult = this.Stop();
+                    if (!stopResult.IsSuccessful)
+                    {
+                        return stopResult;
+                    }
+
+                    if (this.Status == RoofControllerStatus.Closed)
+                    {
+                        // If already closed, just return
+                        this._logger.LogInformation($"====Close - {DateTime.Now:O}. Already Closed. Current Status: {this.Status}");
+                        return Result<RoofControllerStatus>.Success(this.Status);
+                    }
+
+                    // Start the motors to close the roof
+                    // This is where you would implement the actual GPIO logic to control the motors.
+                    // For example:
+                    // _gpioController.Write(_roofControllerOptions.RoofClosePin, PinValue.High);
+
+                    // Set the status to closing
+                    this.Status = RoofControllerStatus.Closing;
+                    this._logger.LogInformation($"====Close - {DateTime.Now:O}. Current Status: {this.Status}");
+                    return Result<RoofControllerStatus>.Success(this.Status);
                 }
-
-                // Always stop the current action before starting a new one.
-                this.Stop();
-
-                if (this.Status == RoofControllerStatus.Closed)
-                {
-                    // If already closed, just return
-                    this._logger.LogInformation($"====Close - {DateTime.Now:O}. Already Closed. Current Status: {this.Status}");
-                    return;
-                }
-
-                // Start the motors to close the roof
-                // This is where you would implement the actual GPIO logic to control the motors.
-                // For example:
-                // _gpioController.Write(_roofControllerOptions.RoofClosePin, PinValue.High);
-
-                // Set the status to closing
-                this.Status = RoofControllerStatus.Closing;
-                this._logger.LogInformation($"====Close - {DateTime.Now:O}. Current Status: {this.Status}");
+            }
+            catch (Exception ex)
+            {
+                return Result<RoofControllerStatus>.Failure(ex);
             }
         }
 

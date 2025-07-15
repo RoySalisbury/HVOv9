@@ -4,6 +4,7 @@ using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using HVO.WebSite.RoofControllerV4.Logic;
 using HVO.WebSite.RoofControllerV4.HostedServices;
+using HVO.WebSite.RoofControllerV4.Middleware;
 
 namespace HVO.WebSite.RoofControllerV4;
 
@@ -30,6 +31,9 @@ public class Program
         services.AddSingleton<System.Device.Gpio.GpioController>();
         services.AddSingleton<IRoofController, RoofController>();
         services.AddHostedService<RoofControllerHost>();
+
+        // Add exception handling middleware
+        services.AddExceptionHandler<HvoServiceExceptionHandler>();
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         services.AddOpenApi("v4");
@@ -59,6 +63,9 @@ public class Program
 
     private static void Configure(WebApplication app)
     {
+        // Add exception handling middleware
+        app.UseExceptionHandler();
+
         app.MapOpenApi();
 
         if (app.Environment.IsDevelopment())
@@ -70,7 +77,6 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAuthorization();
-
 
         app.MapControllers();
 

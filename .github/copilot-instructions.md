@@ -54,7 +54,8 @@ namespace HVO.ProjectName
 - Use structured logging with `ILogger<T>`
 - Implement proper exception handling with specific exception types
 - **Use `Result<T>` pattern for operations that can fail** - Located in `HVO/Result.cs`
-- Use `InvalidOperationException` for 404 scenarios in API controllers
+- **Use `InvalidOperationException` for true "not found" scenarios only** - Controllers should handle these explicitly
+- **Service state issues should use `InvalidOperationException` but return 500 via controller handling**
 - Implement global exception handling middleware (`HvoServiceExceptionHandler`)
 - Log errors with appropriate log levels (Error, Warning, Information)
 
@@ -115,17 +116,22 @@ namespace HVO.ProjectName
 - Create test data builders for consistent test data generation
 - Group tests by functionality using `#region` blocks
 - Test both success and failure scenarios for all endpoints
+- **Test controller error handling patterns with Result<T> failures**
 
 ### 4. Service Layer Architecture
 - Create interfaces for all services (`IWeatherService`, etc.)
 - Implement business logic in service classes, not controllers
 - Use dependency injection for all service dependencies
 - Return `Result<T>` from all service methods that can fail
+- **Use `InvalidOperationException` for true "not found" scenarios only**
+- **Service state issues should use `InvalidOperationException` but be handled as 500 errors**
 - Log important operations and errors appropriately
 
 ### 5. Exception Handling Middleware
 - Use `HvoServiceExceptionHandler` for global exception handling
-- Convert `InvalidOperationException` to 404 responses
+- **Controllers should handle Result<T> failures explicitly** using pattern matching
+- **Only use InvalidOperationException for 404 responses when it's truly a "not found" scenario**
+- **Service state issues (e.g., "not initialized") should return 500 Internal Server Error**
 - Provide consistent `ProblemDetails` responses for errors
 - Log exceptions with appropriate context and severity
 

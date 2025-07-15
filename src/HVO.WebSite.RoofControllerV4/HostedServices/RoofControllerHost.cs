@@ -30,7 +30,12 @@ public class RoofControllerHost : BackgroundService
             {
                 try
                 {
-                    await _roofController.Initialize(stoppingToken);
+                    var initResult = await _roofController.Initialize(stoppingToken);
+                    if (!initResult.IsSuccessful)
+                    {
+                        _logger.LogError("Failed to initialize roof controller: {Error}", initResult.Error?.Message ?? "Unknown error");
+                        continue;
+                    }
                     
                     // FIXED: Use ConfigureAwait(false) for better performance
                     // FIXED: Reduce logging frequency to prevent log spam
