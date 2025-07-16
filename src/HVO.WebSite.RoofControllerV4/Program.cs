@@ -52,12 +52,13 @@ public class Program
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
+        services.AddHostedService<RoofControllerHost>();
+
         // Only register GPIO services in non-development environments
         if (!Environment.IsDevelopment())
         {
             services.AddSingleton<System.Device.Gpio.GpioController>();
             services.AddSingleton<IRoofController, RoofController>();
-            services.AddHostedService<RoofControllerHost>();
         }
         else
         {

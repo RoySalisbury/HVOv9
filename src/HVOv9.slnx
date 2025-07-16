@@ -6,5 +6,12 @@
   <Project Path="HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
   <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
   <Project Path="HVO/HVO.csproj" />
+  <Folder Name="/_misc/">
+    <File Path="../.github/copilot-instructions.md" />
+    <File Path="../.gitignore" />
+    <File Path="../acceptance_criteria.md" />
+    <File Path="../azure-pipelines.yml" />
+    <File Path="../README.md" />
+  </Folder>
   <Project Path="HVO.DataModels/HVO.DataModels.csproj" />
 </Solution>
