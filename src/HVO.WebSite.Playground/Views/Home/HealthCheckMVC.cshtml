@@ -164,7 +164,7 @@
             function displaySuccessResult(data, statusCode, statusText) {
                 // Populate result fields
                 document.getElementById('statusInfo').textContent = data.status || 'Unknown';
-                document.getElementById('durationInfo').textContent = data.duration || 'N/A';
+                document.getElementById('durationInfo').textContent = data.totalDuration || 'N/A';
                 
                 // Display individual health checks
                 const checksContainer = document.getElementById('checksInfo');

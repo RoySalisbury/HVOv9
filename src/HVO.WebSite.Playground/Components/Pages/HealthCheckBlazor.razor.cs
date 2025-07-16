@@ -160,7 +160,7 @@ public partial class HealthCheckBlazor
     {
         public string Status { get; set; } = string.Empty;
         public List<HealthCheckResult> Checks { get; set; } = new();
-        public string Duration { get; set; } = string.Empty;
+        public string TotalDuration { get; set; } = string.Empty;
     }
 
     public class HealthCheckResult
