@@ -14,7 +14,7 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-        ConfigureServices(builder.Services, builder.Configuration);
+        ConfigureServices(builder.Services, builder.Configuration, builder.Environment);
 
         var app = builder.Build();
         Configure(app);
@@ -23,7 +23,7 @@ public class Program
     }
 
 
-    private static void ConfigureServices(IServiceCollection services, ConfigurationManager Configuration)
+    private static void ConfigureServices(IServiceCollection services, ConfigurationManager Configuration, IWebHostEnvironment Environment)
     {
         // ============================================================================
         // ASP.NET CORE BUILT-IN FUNCTIONALITY GUIDELINES
@@ -48,9 +48,25 @@ public class Program
         services.Configure<RoofControllerOptions>(Configuration.GetSection(nameof(RoofControllerOptions)));
         services.Configure<RoofControllerHostOptions>(Configuration.GetSection(nameof(RoofControllerHostOptions)));
 
-        services.AddSingleton<System.Device.Gpio.GpioController>();
-        services.AddSingleton<IRoofController, RoofController>();
-        services.AddHostedService<RoofControllerHost>();
+        // Add Razor Components for Blazor Server
+        services.AddRazorComponents()
+            .AddInteractiveServerComponents();
+
+        // Only register GPIO services in non-development environments
+        if (!Environment.IsDevelopment())
+        {
+            services.AddSingleton<System.Device.Gpio.GpioController>();
+            services.AddSingleton<IRoofController, RoofController>();
+            services.AddHostedService<RoofControllerHost>();
+        }
+        else
+        {
+            // Register mock services for development
+            services.AddSingleton<IRoofController, MockRoofController>();
+        }
+
+        // Add weather service
+        services.AddScoped<HVO.WebSite.RoofControllerV4.Services.IWeatherService, HVO.WebSite.RoofControllerV4.Services.WeatherService>();
 
         // Add exception handling middleware
         // NOTE: Use built-in exception handling instead of custom error controllers
@@ -107,6 +123,15 @@ public class Program
 
         services.AddControllers()
             .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+        // Add MVC with Views for Blazor support
+        services.AddControllersWithViews();
+
+        // Add HttpClient for API calls
+        services.AddHttpClient();
+
+        // Add HttpContextAccessor for Blazor components
+        services.AddHttpContextAccessor();
     }
 
     private static void Configure(WebApplication app)
@@ -142,6 +167,8 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+        app.UseRouting();
+        app.UseAntiforgery();
 
         app.UseAuthorization();
 
@@ -192,6 +219,10 @@ public class Program
         });
 
         app.MapControllers();
+
+        // Map Razor components for Blazor Server
+        app.MapRazorComponents<Components.App>()
+            .AddInteractiveServerRenderMode();
 
         // ============================================================================
         // COMMENTED OUT CODE - Examples of other built-in ASP.NET Core functionality

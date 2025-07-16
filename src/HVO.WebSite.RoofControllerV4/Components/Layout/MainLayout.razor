@@ -1,0 +1,34 @@
+@namespace HVO.WebSite.RoofControllerV4.Components.Layout
+@inherits LayoutComponentBase
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+                <div class="container">
+                    <a class="navbar-brand" href="/">
+                        <i class="fas fa-home"></i> HVO Roof Controller
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav ms-auto">
+                            <li class="nav-item">
+                                <a class="nav-link" href="/blazor-sample">
+                                    <i class="fas fa-cloud-sun"></i> Weather Station
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            @Body
+        </div>
+    </div>
+</div>
