@@ -24,6 +24,11 @@
                             else if (weatherData != null)
                             {
                                 <span>Last Updated: @weatherData.LastUpdated.ToString("HH:mm:ss")</span>
+                                <br />
+                                <small class="text-muted">
+                                    <i class="fas fa-wifi me-1"></i>
+                                    Connected to HVO Weather API
+                                </small>
                             }
                         </div>
                     </div>
@@ -45,6 +50,24 @@
                                 <div class="mt-2">
                                     <small>Inside: @weatherData.InsideTemperature°F</small>
                                 </div>
+                                @if (weatherData.TodaysHighTemp.HasValue && weatherData.TodaysLowTemp.HasValue)
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-info">
+                                            <i class="fas fa-arrow-up text-danger me-1"></i>@weatherData.TodaysHighTemp°F
+                                            @if (weatherData.TodaysHighTempTime.HasValue)
+                                            {
+                                                <span class="text-muted">(@weatherData.TodaysHighTempTime.Value.ToString("HH:mm"))</span>
+                                            }
+                                            <br />
+                                            <i class="fas fa-arrow-down text-primary me-1"></i>@weatherData.TodaysLowTemp°F
+                                            @if (weatherData.TodaysLowTempTime.HasValue)
+                                            {
+                                                <span class="text-muted">(@weatherData.TodaysLowTempTime.Value.ToString("HH:mm"))</span>
+                                            }
+                                        </small>
+                                    </div>
+                                }
                             </div>
                         </div>
 
@@ -61,6 +84,15 @@
                                 <div class="mt-2">
                                     <small>Inside: @weatherData.InsideHumidity%</small>
                                 </div>
+                                @if (weatherData.TodaysHighHumidity.HasValue && weatherData.TodaysLowHumidity.HasValue)
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-info">
+                                            High: @weatherData.TodaysHighHumidity%
+                                            Low: @weatherData.TodaysLowHumidity%
+                                        </small>
+                                    </div>
+                                }
                             </div>
                         </div>
 
@@ -77,6 +109,14 @@
                                 <div class="mt-2">
                                     <small>Direction: @weatherData.WindDirectionText (@weatherData.WindDirection°)</small>
                                 </div>
+                                @if (weatherData.TodaysHighWindSpeed.HasValue)
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-info">
+                                            Max: @weatherData.TodaysHighWindSpeed mph
+                                        </small>
+                                    </div>
+                                }
                             </div>
                         </div>
 
@@ -93,6 +133,15 @@
                                 <div class="mt-2">
                                     <small>inHg</small>
                                 </div>
+                                @if (weatherData.TodaysHighBarometer.HasValue && weatherData.TodaysLowBarometer.HasValue)
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-info">
+                                            High: @weatherData.TodaysHighBarometer"
+                                            Low: @weatherData.TodaysLowBarometer"
+                                        </small>
+                                    </div>
+                                }
                             </div>
                         </div>
 
@@ -159,6 +208,70 @@
                             </div>
                         </div>
                     </div>
+
+                    @if (weatherData.TodaysHighTemp.HasValue || weatherData.TodaysLowTemp.HasValue)
+                    {
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="weather-card p-3">
+                                    <h6 class="mb-3">
+                                        <i class="fas fa-chart-line me-2"></i>
+                                        Today's Extremes
+                                    </h6>
+                                    <div class="row">
+                                        @if (weatherData.TodaysHighTemp.HasValue && weatherData.TodaysLowTemp.HasValue)
+                                        {
+                                            <div class="col-md-3">
+                                                <small>
+                                                    <strong>Temperature</strong><br />
+                                                    <span class="text-danger">High: @weatherData.TodaysHighTemp°F</span>
+                                                    @if (weatherData.TodaysHighTempTime.HasValue)
+                                                    {
+                                                        <span class="text-muted">(@weatherData.TodaysHighTempTime.Value.ToString("HH:mm"))</span>
+                                                    }
+                                                    <br />
+                                                    <span class="text-primary">Low: @weatherData.TodaysLowTemp°F</span>
+                                                    @if (weatherData.TodaysLowTempTime.HasValue)
+                                                    {
+                                                        <span class="text-muted">(@weatherData.TodaysLowTempTime.Value.ToString("HH:mm"))</span>
+                                                    }
+                                                </small>
+                                            </div>
+                                        }
+                                        @if (weatherData.TodaysHighHumidity.HasValue && weatherData.TodaysLowHumidity.HasValue)
+                                        {
+                                            <div class="col-md-3">
+                                                <small>
+                                                    <strong>Humidity</strong><br />
+                                                    High: @weatherData.TodaysHighHumidity%<br />
+                                                    Low: @weatherData.TodaysLowHumidity%
+                                                </small>
+                                            </div>
+                                        }
+                                        @if (weatherData.TodaysHighWindSpeed.HasValue)
+                                        {
+                                            <div class="col-md-3">
+                                                <small>
+                                                    <strong>Wind Speed</strong><br />
+                                                    Max: @weatherData.TodaysHighWindSpeed mph
+                                                </small>
+                                            </div>
+                                        }
+                                        @if (weatherData.TodaysHighBarometer.HasValue && weatherData.TodaysLowBarometer.HasValue)
+                                        {
+                                            <div class="col-md-3">
+                                                <small>
+                                                    <strong>Barometer</strong><br />
+                                                    High: @weatherData.TodaysHighBarometer"<br />
+                                                    Low: @weatherData.TodaysLowBarometer"
+                                                </small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
                 }
                 else if (isLoading)
                 {

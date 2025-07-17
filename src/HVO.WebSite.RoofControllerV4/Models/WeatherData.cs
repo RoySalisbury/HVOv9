@@ -21,4 +21,15 @@ public class WeatherData
     public TimeOnly? SunsetTime { get; set; }
     public string WeatherCondition { get; set; } = "Clear";
     public string WindDirectionText { get; set; } = "N";
+
+    // Today's extremes
+    public decimal? TodaysHighTemp { get; set; }
+    public decimal? TodaysLowTemp { get; set; }
+    public TimeOnly? TodaysHighTempTime { get; set; }
+    public TimeOnly? TodaysLowTempTime { get; set; }
+    public byte? TodaysHighHumidity { get; set; }
+    public byte? TodaysLowHumidity { get; set; }
+    public byte? TodaysHighWindSpeed { get; set; }
+    public decimal? TodaysHighBarometer { get; set; }
+    public decimal? TodaysLowBarometer { get; set; }
 }
