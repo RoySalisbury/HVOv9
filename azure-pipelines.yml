@@ -69,16 +69,8 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Debug --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
+        arguments: '--configuration Debug --no-build --verbosity normal --logger trx'
         publishTestResults: true
-
-    - task: PublishCodeCoverageResults@2
-      displayName: 'Publish Code Coverage - Debug'
-      inputs:
-        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-        pathToSources: '$(Build.SourcesDirectory)'
-        failIfCoverageEmpty: false
-      condition: succeededOrFailed()
 
   - job: Release_Build_And_Test
     displayName: 'Release Build and Test'
@@ -111,16 +103,8 @@ stages:
       inputs:
         command: 'test'
         projects: '$(solution)'
-        arguments: '--configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"'
+        arguments: '--configuration Release --no-build --verbosity normal --logger trx'
         publishTestResults: true
-
-    - task: PublishCodeCoverageResults@2
-      displayName: 'Publish Code Coverage - Release'
-      inputs:
-        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-        pathToSources: '$(Build.SourcesDirectory)'
-        failIfCoverageEmpty: false
-      condition: succeededOrFailed()
 
     - task: DotNetCoreCLI@2
       displayName: 'Publish Playground App - Release'
@@ -162,10 +146,9 @@ stages:
           Write-Host "  ✓ Debug Configuration" -ForegroundColor Green
           Write-Host "  ✓ Release Configuration" -ForegroundColor Green
           Write-Host ""
-          Write-Host "Test Coverage:" -ForegroundColor Cyan
+          Write-Host "Testing:" -ForegroundColor Cyan
           Write-Host "  ✓ All unit tests executed" -ForegroundColor Green
           Write-Host "  ✓ All integration tests executed" -ForegroundColor Green
-          Write-Host "  ✓ Code coverage reports generated" -ForegroundColor Green
           Write-Host ""
           Write-Host "Artifacts:" -ForegroundColor Cyan
           Write-Host "  ✓ Release build artifacts published" -ForegroundColor Green
