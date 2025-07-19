@@ -4,13 +4,13 @@ using Microsoft.Extensions.Options;
 
 namespace HVO.WebSite.RoofControllerV4.HostedServices;
 
-public class RoofControllerHost : BackgroundService
+public class RoofControllerServiceHost : BackgroundService
 {
-    private readonly ILogger<RoofControllerHost> _logger;
-    private readonly IRoofController _roofController;
-    private readonly RoofControllerHostOptions _options;
+    private readonly ILogger<RoofControllerServiceHost> _logger;
+    private readonly IRoofControllerService _roofController;
+    private readonly RoofControllerServiceHostOptions _options;
 
-    public RoofControllerHost(ILogger<RoofControllerHost> logger, IOptions<RoofControllerHostOptions> options, IRoofController roofController)
+    public RoofControllerServiceHost(ILogger<RoofControllerServiceHost> logger, IOptions<RoofControllerServiceHostOptions> options, IRoofControllerService roofController)
     {
         _logger = logger;
         _roofController = roofController;
@@ -20,9 +20,9 @@ public class RoofControllerHost : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var _ = stoppingToken.Register(() => 
-            _logger.LogDebug($"{nameof(RoofControllerHost)} background task is stopping."));
+            _logger.LogDebug($"{nameof(RoofControllerServiceHost)} background task is stopping."));
 
-        _logger.LogDebug($"{nameof(RoofControllerHost)} background task is starting.");
+        _logger.LogDebug($"{nameof(RoofControllerServiceHost)} background task is starting.");
         
         try
         {
@@ -46,7 +46,7 @@ public class RoofControllerHost : BackgroundService
                     {
                         if (DateTime.UtcNow >= nextLogTime)
                         {
-                            _logger.LogInformation($"{nameof(RoofControllerHost)}: Running...");
+                            _logger.LogInformation($"{nameof(RoofControllerServiceHost)}: Running...");
                             nextLogTime = DateTime.UtcNow.Add(logInterval);
                         }
                         
@@ -56,13 +56,13 @@ public class RoofControllerHost : BackgroundService
                 }
                 catch (TaskCanceledException)
                 {
-                    _logger.LogDebug($"{nameof(RoofControllerHost)} TaskCanceledException.");
+                    _logger.LogDebug($"{nameof(RoofControllerServiceHost)} TaskCanceledException.");
                     break;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "{ServiceName} Error. Restarting in {RestartDelay} seconds", 
-                        nameof(RoofControllerHost), _options.RestartOnFailureWaitTime);
+                        nameof(RoofControllerServiceHost), _options.RestartOnFailureWaitTime);
 
                     await Task.Delay(TimeSpan.FromSeconds(_options.RestartOnFailureWaitTime), stoppingToken)
                         .ConfigureAwait(false);
@@ -84,7 +84,7 @@ public class RoofControllerHost : BackgroundService
         }
         finally
         {
-            _logger.LogDebug($"{nameof(RoofControllerHost)} background task has stopped.");
+            _logger.LogDebug($"{nameof(RoofControllerServiceHost)} background task has stopped.");
         }
     }
 }

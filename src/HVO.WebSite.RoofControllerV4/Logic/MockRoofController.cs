@@ -7,7 +7,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
     /// Mock implementation of IRoofController for development environments
     /// Simulates realistic timing and status transitions for UI testing
     /// </summary>
-    public class MockRoofController : IRoofController, IDisposable
+    public class MockRoofController : IRoofControllerService, IDisposable
     {
         private readonly ILogger<MockRoofController> _logger;
         private System.Timers.Timer? _operationTimer;

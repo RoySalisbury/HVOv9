@@ -11,7 +11,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
     /// <summary>
     /// Provides operations for controlling observatory roof movement and monitoring status.
     /// </summary>
-    public interface IRoofController
+    public interface IRoofControllerService
     {
         /// <summary>
         /// Gets a value indicating whether the roof controller has been initialized and is ready for operation.

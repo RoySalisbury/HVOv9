@@ -360,10 +360,10 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
     #region Interface Compliance Tests
 
     [TestMethod]
-    public void MockRoofController_ImplementsIRoofController()
+    public void MockRoofController_ImplementsIRoofControllerService()
     {
         // Assert
-        _mockRoofController.Should().BeAssignableTo<IRoofController>();
+        _mockRoofController.Should().BeAssignableTo<IRoofControllerService>();
     }
 
     [TestMethod]

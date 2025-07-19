@@ -48,20 +48,20 @@ public class Program
 
         services.AddOptions();
         services.Configure<RoofControllerOptions>(Configuration.GetSection(nameof(RoofControllerOptions)));
-        services.Configure<RoofControllerHostOptions>(Configuration.GetSection(nameof(RoofControllerHostOptions)));
+        services.Configure<RoofControllerServiceHostOptions>(Configuration.GetSection(nameof(RoofControllerServiceHostOptions)));
 
         // Add Razor Components for Blazor Server
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
-        services.AddHostedService<RoofControllerHost>();
+        services.AddHostedService<RoofControllerServiceHost>();
 
         // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
         services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
         
         // Use the real RoofController - it will work with both real and mock GPIO
         // Safety watchdog will handle stopping operations after timeout
-        services.AddSingleton<IRoofController, RoofController>();
+        services.AddSingleton<IRoofControllerService, RoofControllerService>();
 
         // Add weather service
         services.AddScoped<HVO.WebSite.RoofControllerV4.Services.IWeatherService, HVO.WebSite.RoofControllerV4.Services.WeatherService>();

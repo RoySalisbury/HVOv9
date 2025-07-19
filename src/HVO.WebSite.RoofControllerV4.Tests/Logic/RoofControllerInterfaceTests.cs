@@ -8,7 +8,7 @@ using HVO.WebSite.RoofControllerV4.Logic;
 namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
 
 /// <summary>
-/// Tests for IRoofController interface implementations.
+/// Tests for IRoofControllerService interface implementations.
 /// Since RoofController has complex GPIO dependencies, we focus on testing
 /// the MockRoofController which implements the same interface contract.
 /// </summary>
@@ -246,20 +246,20 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
     #region Interface Compliance Tests
 
     [TestMethod]
-    public void MockRoofController_ImplementsIRoofControllerInterface()
+    public void MockRoofController_ImplementsIRoofControllerServiceInterface()
     {
         // Arrange & Act
         _roofController = new MockRoofController(_mockLogger.Object);
 
         // Assert
-        _roofController.Should().BeAssignableTo<IRoofController>();
+        _roofController.Should().BeAssignableTo<IRoofControllerService>();
     }
 
     [TestMethod]
-    public void IRoofControllerInterface_HasAllRequiredMembers()
+    public void IRoofControllerServiceInterface_HasAllRequiredMembers()
     {
         // Arrange
-        var interfaceType = typeof(IRoofController);
+        var interfaceType = typeof(IRoofControllerService);
 
         // Act & Assert
         interfaceType.GetProperty("IsInitialized").Should().NotBeNull();

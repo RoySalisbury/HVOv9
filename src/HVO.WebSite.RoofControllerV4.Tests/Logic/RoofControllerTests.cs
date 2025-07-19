@@ -13,19 +13,19 @@ using HVO.Iot.Devices;
 namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
 
 /// <summary>
-/// Comprehensive tests for RoofController covering all operations, logic paths, and scenarios.
+/// Comprehensive tests for RoofControllerService covering all operations, logic paths, and scenarios.
 /// </summary>
 [TestClass]
-public class RoofControllerTests
+public class RoofControllerServiceTests
 {
-    private readonly Mock<ILogger<RoofController>> _mockLogger;
+    private readonly Mock<ILogger<RoofControllerService>> _mockLogger;
     private readonly RoofControllerOptions _options;
     private readonly MockGpioController _mockGpioController;
-    private readonly RoofController _roofController;
+    private readonly RoofControllerService _roofController;
 
-    public RoofControllerTests()
+    public RoofControllerServiceTests()
     {
-        _mockLogger = new Mock<ILogger<RoofController>>();
+        _mockLogger = new Mock<ILogger<RoofControllerService>>();
         _options = new RoofControllerOptions
         {
             SafetyWatchdogTimeout = TimeSpan.FromSeconds(2), // Short timeout for testing
@@ -45,7 +45,7 @@ public class RoofControllerTests
         _mockGpioController = new MockGpioController();
         var optionsWrapper = Options.Create(_options);
         
-        _roofController = new RoofController(_mockLogger.Object, optionsWrapper, _mockGpioController);
+        _roofController = new RoofControllerService(_mockLogger.Object, optionsWrapper, _mockGpioController);
     }
 
     [TestCleanup]
@@ -60,12 +60,12 @@ public class RoofControllerTests
     public void Constructor_WithValidParameters_CreatesInstance()
     {
         // Arrange
-        var logger = new Mock<ILogger<RoofController>>();
+        var logger = new Mock<ILogger<RoofControllerService>>();
         var options = Options.Create(new RoofControllerOptions());
         var gpioController = new MockGpioController();
 
         // Act
-        var controller = new RoofController(logger.Object, options, gpioController);
+        var controller = new RoofControllerService(logger.Object, options, gpioController);
 
         // Assert
         controller.Should().NotBeNull();
@@ -85,7 +85,7 @@ public class RoofControllerTests
         var gpioController = new MockGpioController();
 
         // Act & Assert
-        var action = () => new RoofController(null!, options, gpioController);
+        var action = () => new RoofControllerService(null!, options, gpioController);
         action.Should().Throw<ArgumentNullException>();
 
         // Cleanup
@@ -96,11 +96,11 @@ public class RoofControllerTests
     public void Constructor_WithNullOptions_ThrowsArgumentNullException()
     {
         // Arrange
-        var logger = new Mock<ILogger<RoofController>>();
+        var logger = new Mock<ILogger<RoofControllerService>>();
         var gpioController = new MockGpioController();
 
         // Act & Assert
-        var action = () => new RoofController(logger.Object, null!, gpioController);
+        var action = () => new RoofControllerService(logger.Object, null!, gpioController);
         action.Should().Throw<ArgumentNullException>();
 
         // Cleanup
@@ -111,11 +111,11 @@ public class RoofControllerTests
     public void Constructor_WithNullGpioController_ThrowsArgumentNullException()
     {
         // Arrange
-        var logger = new Mock<ILogger<RoofController>>();
+        var logger = new Mock<ILogger<RoofControllerService>>();
         var options = Options.Create(new RoofControllerOptions());
 
         // Act & Assert
-        var action = () => new RoofController(logger.Object, options, null!);
+        var action = () => new RoofControllerService(logger.Object, options, null!);
         action.Should().Throw<ArgumentNullException>();
     }
 
@@ -822,11 +822,11 @@ public class RoofControllerTests
         {
             SafetyWatchdogTimeout = TimeSpan.FromMilliseconds(500) // Very short for testing
         };
-        var logger = new Mock<ILogger<RoofController>>();
+        var logger = new Mock<ILogger<RoofControllerService>>();
         var gpioController = new MockGpioController();
         var optionsWrapper = Options.Create(customOptions);
         
-        using var controller = new RoofController(logger.Object, optionsWrapper, gpioController);
+        using var controller = new RoofControllerService(logger.Object, optionsWrapper, gpioController);
         await controller.Initialize(CancellationToken.None);
 
         // Act

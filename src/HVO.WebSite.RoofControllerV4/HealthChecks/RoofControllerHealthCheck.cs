@@ -8,10 +8,10 @@ namespace HVO.WebSite.RoofControllerV4.HealthChecks
     /// </summary>
     public class RoofControllerHealthCheck : IHealthCheck
     {
-        private readonly IRoofController _roofController;
+        private readonly IRoofControllerService _roofController;
         private readonly ILogger<RoofControllerHealthCheck> _logger;
 
-        public RoofControllerHealthCheck(IRoofController roofController, ILogger<RoofControllerHealthCheck> logger)
+        public RoofControllerHealthCheck(IRoofControllerService roofController, ILogger<RoofControllerHealthCheck> logger)
         {
             _roofController = roofController;
             _logger = logger;

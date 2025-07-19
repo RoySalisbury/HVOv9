@@ -7,13 +7,13 @@ using HVO;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
 {
-    public sealed class RoofController : IRoofController, IAsyncDisposable, IDisposable
+    public sealed class RoofControllerService : IRoofControllerService, IAsyncDisposable, IDisposable
     {
         private static PinValue RelayOff = PinValue.Low;
         private static PinValue RelayOn = PinValue.High;
 
 
-        private readonly ILogger<RoofController> _logger;
+        private readonly ILogger<RoofControllerService> _logger;
         private readonly RoofControllerOptions _roofControllerOptions;
 
         private IGpioController _gpioController;
@@ -35,7 +35,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         private DateTime _operationStartTime;
         // Removed separate _watchdogLock - use _syncLock for all state to prevent races
 
-        public RoofController(ILogger<RoofController> logger, IOptions<RoofControllerOptions> roofControllerOptions, IGpioController gpioController)
+        public RoofControllerService(ILogger<RoofControllerService> logger, IOptions<RoofControllerOptions> roofControllerOptions, IGpioController gpioController)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(roofControllerOptions);
@@ -192,7 +192,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         {
             if (this._disposed)
             {
-                return Task.FromResult(Result<bool>.Failure(new ObjectDisposedException(nameof(RoofController))));
+                return Task.FromResult(Result<bool>.Failure(new ObjectDisposedException(nameof(RoofControllerService))));
             }
 
             lock (this._syncLock)
@@ -663,7 +663,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// Finalizer (destructor) ensures cleanup of resources if Dispose is not called.
         /// Should rarely be needed as proper disposal should occur through IAsyncDisposable.
         /// </summary>
-        ~RoofController()
+        ~RoofControllerService()
         {
             // Pass false because we're in the finalizer
             Dispose(false);
