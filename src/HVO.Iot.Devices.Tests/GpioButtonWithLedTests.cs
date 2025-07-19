@@ -127,10 +127,10 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.IsNotNull(_buttonWithLed);
-            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
-            Assert.AreEqual(PushButtonLedOptions.FollowPressedState, _buttonWithLed.LedOptions);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
             Assert.IsFalse(_buttonWithLed.HasExternalResistor);
-            Assert.AreEqual(TimeSpan.Zero, _buttonWithLed.DebounceTime);
+            Assert.AreEqual(_buttonWithLed.DebounceTime, TimeSpan.Zero);
         }
 
         [TestMethod]
@@ -153,7 +153,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed = CreateButtonWithLed(debounceTime: debounceTime);
 
             // Assert
-            Assert.AreEqual(debounceTime, _buttonWithLed.DebounceTime);
+            Assert.AreEqual(_buttonWithLed.DebounceTime, debounceTime);
         }
 
         [TestMethod]
@@ -232,7 +232,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed = CreateButtonWithLed();
 
             // Assert
-            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
         }
 
         [TestMethod]
@@ -245,7 +245,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedState = PushButtonLedState.On;
 
             // Assert
-            Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.On);
             _mockGpioController!.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
         }
 
@@ -260,7 +260,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedState = PushButtonLedState.Off;
 
             // Assert
-            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
             _mockGpioController!.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
         }
 
@@ -275,7 +275,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedState = PushButtonLedState.Off; // Same as initial value
 
             // Assert
-            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
             _mockGpioController.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
         }
 
@@ -291,7 +291,7 @@ namespace HVO.Iot.Devices.Tests
             var stateAfterDisposal = _buttonWithLed.LedState;
 
             // Assert
-            Assert.AreEqual(PushButtonLedState.Off, stateAfterDisposal);
+            Assert.AreEqual(stateAfterDisposal, PushButtonLedState.Off);
         }
 
         [TestMethod]
@@ -303,7 +303,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Act & Assert - Should not throw, just ignore
             _buttonWithLed.LedState = PushButtonLedState.On;
-            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
         }
 
         #endregion
@@ -317,7 +317,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed = CreateButtonWithLed();
 
             // Assert
-            Assert.AreEqual(PushButtonLedOptions.FollowPressedState, _buttonWithLed.LedOptions);
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
         }
 
         [TestMethod]
@@ -331,7 +331,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
 
             // Assert
-            Assert.AreEqual(PushButtonLedOptions.AlwaysOn, _buttonWithLed.LedOptions);
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.AlwaysOn);
             _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
         }
 
@@ -347,7 +347,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOff;
 
             // Assert
-            Assert.AreEqual(PushButtonLedOptions.AlwaysOff, _buttonWithLed.LedOptions);
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.AlwaysOff);
             _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
         }
 
@@ -362,7 +362,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState; // Same as initial
 
             // Assert
-            Assert.AreEqual(PushButtonLedOptions.FollowPressedState, _buttonWithLed.LedOptions);
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
             _mockGpioController.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
         }
 
@@ -375,7 +375,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Act & Assert - Should not throw, just ignore
             _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
-            Assert.AreEqual(PushButtonLedOptions.FollowPressedState, _buttonWithLed.LedOptions); // Should remain unchanged
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState); // Should remain unchanged
         }
 
         #endregion
@@ -621,8 +621,8 @@ namespace HVO.Iot.Devices.Tests
             var onValue = PushButtonLedState.On;
 
             // Assert
-            Assert.AreEqual(0, (int)offValue);
-            Assert.AreEqual(1, (int)onValue);
+            Assert.AreEqual((int)offValue, 0);
+            Assert.AreEqual((int)onValue, 1);
         }
 
         [TestMethod]
@@ -634,9 +634,9 @@ namespace HVO.Iot.Devices.Tests
             var followPressed = PushButtonLedOptions.FollowPressedState;
 
             // Assert
-            Assert.AreEqual(0, (int)alwaysOff);
-            Assert.AreEqual(1, (int)alwaysOn);
-            Assert.AreEqual(2, (int)followPressed);
+            Assert.AreEqual((int)alwaysOff, 0);
+            Assert.AreEqual((int)alwaysOn, 1);
+            Assert.AreEqual((int)followPressed, 2);
         }
 
         #endregion
@@ -684,6 +684,138 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             _mockGpioController.Verify(x => x.Read(TestPin), Times.AtLeastOnce);
+        }
+
+        #endregion
+
+        #region Null LED Pin Tests
+
+        /// <summary>
+        /// Creates a button without LED (null LED pin) using the mock GPIO controller
+        /// </summary>
+        private GpioButtonWithLed CreateButtonWithoutLed(bool isPullUp = true, bool hasExternalResistor = false, TimeSpan debounceTime = default)
+        {
+            return new GpioButtonWithLed(
+                ButtonPin,
+                null, // No LED pin
+                TimeSpan.FromTicks(15000000), // DefaultDoublePressTicks
+                TimeSpan.FromMilliseconds(2000), // DefaultHoldingMilliseconds
+                isPullUp: isPullUp,
+                hasExternalResistor: hasExternalResistor,
+                gpioController: _mockGpioController!.Object,
+                debounceTime: debounceTime);
+        }
+
+        [TestMethod]
+        public void Constructor_WithNullLedPin_ShouldInitializeWithNotUsedState()
+        {
+            // Act
+            _buttonWithLed = CreateButtonWithoutLed();
+
+            // Assert
+            Assert.IsNotNull(_buttonWithLed);
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.NotUsed);
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
+        }
+
+        [TestMethod]
+        public void Constructor_WithNullLedPin_ShouldNotOpenLedPin()
+        {
+            // Act
+            _buttonWithLed = CreateButtonWithoutLed();
+
+            // Assert
+            _mockGpioController!.Verify(x => x.OpenPin(ButtonPin, It.IsAny<PinMode>()), Times.Once);
+            _mockGpioController.Verify(x => x.OpenPin(LedPin, PinMode.Output), Times.Never);
+            _mockGpioController.Verify(x => x.Write(LedPin, It.IsAny<PinValue>()), Times.Never);
+        }
+
+        [TestMethod]
+        public void LedState_WithNullLedPin_SettingNonNotUsedStateShouldBeIgnored()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithoutLed();
+
+            // Act
+            _buttonWithLed.LedState = PushButtonLedState.On;
+
+            // Assert
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.NotUsed);
+            _mockGpioController!.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
+        }
+
+        [TestMethod]
+        public void LedState_WithNullLedPin_SettingNotUsedStateShouldBeAllowed()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithoutLed();
+
+            // Act
+            _buttonWithLed.LedState = PushButtonLedState.NotUsed;
+
+            // Assert
+            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.NotUsed);
+        }
+
+        [TestMethod]
+        public void LedOptions_WithNullLedPin_ChangingShouldNotCauseHardwareAccess()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithoutLed();
+
+            // Act
+            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
+            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOff;
+
+            // Assert
+            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.AlwaysOff);
+            _mockGpioController!.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
+        }
+
+        [TestMethod]
+        public void ButtonPress_WithNullLedPin_ShouldNotCauseHardwareAccess()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithoutLed();
+            _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState;
+
+            // Act
+            SimulateButtonStateChange(PinEventTypes.Falling, isPressed: true);
+
+            // Assert
+            _mockGpioController!.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
+        }
+
+        [TestMethod]
+        public void Constructor_SamePinForButtonAndLed_ShouldThrowArgumentException()
+        {
+            // Act & Assert
+            var exception = Assert.ThrowsException<ArgumentException>(() =>
+            {
+                new GpioButtonWithLed(
+                    ButtonPin,
+                    ButtonPin, // Same pin for LED
+                    TimeSpan.FromTicks(15000000),
+                    TimeSpan.FromMilliseconds(2000),
+                    gpioController: _mockGpioController!.Object);
+            });
+
+            Assert.AreEqual(exception.ParamName, "ledPin");
+            Assert.IsTrue(exception.Message.Contains("Button pin and LED pin cannot be the same"));
+        }
+
+        [TestMethod]
+        public void Dispose_WithNullLedPin_ShouldNotTryToCloseLedPin()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithoutLed();
+
+            // Act
+            _buttonWithLed.Dispose();
+
+            // Assert
+            _mockGpioController!.Verify(x => x.ClosePin(ButtonPin), Times.Once);
+            _mockGpioController.Verify(x => x.ClosePin(LedPin), Times.Never);
         }
 
         #endregion

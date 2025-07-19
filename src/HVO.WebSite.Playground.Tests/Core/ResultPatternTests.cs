@@ -7,11 +7,11 @@ namespace HVO.WebSite.Playground.Tests.Core;
 /// Unit tests for the Result pattern implementation
 /// Ensures the Result&lt;T&gt; type works correctly in our service layer
 /// </summary>
-public class ResultPatternTests
+[TestClass]public class ResultPatternTests
 {
     #region Success Path Tests
 
-    [Fact]
+    [TestMethod]
     public void Result_WithSuccessValue_ShouldBeSuccessful()
     {
         // Arrange
@@ -27,7 +27,7 @@ public class ResultPatternTests
         result.Error.Should().BeNull();
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_WithImplicitSuccess_ShouldBeSuccessful()
     {
         // Arrange & Act
@@ -42,7 +42,7 @@ public class ResultPatternTests
 
     #region Failure Path Tests
 
-    [Fact]
+    [TestMethod]
     public void Result_WithException_ShouldBeFailure()
     {
         // Arrange
@@ -57,7 +57,7 @@ public class ResultPatternTests
         result.Error.Should().Be(exception);
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_WithImplicitException_ShouldBeFailure()
     {
         // Arrange
@@ -71,7 +71,7 @@ public class ResultPatternTests
         result.Error.Should().Be(exception);
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_AccessingValueOnFailure_ShouldThrowOriginalException()
     {
         // Arrange
@@ -79,7 +79,7 @@ public class ResultPatternTests
         var result = Result<string>.Failure(originalException);
 
         // Act & Assert
-        var thrownException = Assert.Throws<InvalidOperationException>(() => result.Value);
+        var thrownException = Assert.ThrowsException<InvalidOperationException>(() => result.Value);
         thrownException.Should().Be(originalException);
     }
 
@@ -87,7 +87,7 @@ public class ResultPatternTests
 
     #region Match Method Tests
 
-    [Fact]
+    [TestMethod]
     public void Result_Match_WithSuccess_ShouldCallSuccessFunction()
     {
         // Arrange
@@ -107,7 +107,7 @@ public class ResultPatternTests
         output.Should().Be("Success: 42");
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_Match_WithFailure_ShouldCallFailureFunction()
     {
         // Arrange
@@ -132,7 +132,7 @@ public class ResultPatternTests
 
     #region Operator Tests
 
-    [Fact]
+    [TestMethod]
     public void Result_ExplicitCastToValue_WithSuccess_ShouldReturnValue()
     {
         // Arrange
@@ -145,7 +145,7 @@ public class ResultPatternTests
         value.Should().Be("test");
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_ExplicitCastToValue_WithFailure_ShouldThrowException()
     {
         // Arrange
@@ -153,11 +153,11 @@ public class ResultPatternTests
         var result = Result<string>.Failure(exception);
 
         // Act & Assert
-        var thrownException = Assert.Throws<InvalidOperationException>(() => (string)result);
+        var thrownException = Assert.ThrowsException<InvalidOperationException>(() => (string)result);
         thrownException.Should().Be(exception);
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_ExplicitCastToException_ShouldReturnError()
     {
         // Arrange
@@ -171,7 +171,7 @@ public class ResultPatternTests
         error.Should().Be(exception);
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_ExplicitCastToException_WithSuccess_ShouldReturnNull()
     {
         // Arrange
@@ -188,7 +188,7 @@ public class ResultPatternTests
 
     #region Real-World Usage Tests
 
-    [Fact]
+    [TestMethod]
     public void Result_InServiceLayerPattern_ShouldWorkCorrectly()
     {
         // Arrange - Simulate service method that might fail
@@ -212,7 +212,7 @@ public class ResultPatternTests
         failureResult.Error!.Message.Should().Be("Weather service unavailable");
     }
 
-    [Fact]
+    [TestMethod]
     public void Result_InControllerPattern_ShouldEnableCleanErrorHandling()
     {
         // Arrange - Simulate controller using Result pattern

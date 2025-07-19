@@ -6,6 +6,8 @@ using HVO.WebSite.RoofControllerV4.Logic;
 using HVO.WebSite.RoofControllerV4.HostedServices;
 using HVO.WebSite.RoofControllerV4.Middleware;
 using HVO.WebSite.RoofControllerV4.HealthChecks;
+using HVO.Iot.Devices.Abstractions;
+using HVO.Iot.Devices.Implementation;
 
 namespace HVO.WebSite.RoofControllerV4;
 
@@ -57,7 +59,7 @@ public class Program
         // Only register GPIO services in non-development environments
         if (!Environment.IsDevelopment())
         {
-            services.AddSingleton<System.Device.Gpio.GpioController>();
+            services.AddSingleton<IGpioController, GpioControllerWrapper>();
             services.AddSingleton<IRoofController, RoofController>();
         }
         else

@@ -17,7 +17,7 @@ HVOv9 is a modern .NET 9.0-based platform that provides:
 - **ASP.NET Core** - Web applications and APIs
 - **Blazor Server** - Interactive web UI with `@rendermode InteractiveServer`
 - **Entity Framework Core** - Data access and modeling
-- **xUnit & FluentAssertions** - Testing framework
+- **MSTest** - Comprehensive testing framework with dependency injection support
 - **IoT Device Integration** - GPIO controls and hardware interfaces
 - **Azure DevOps** - CI/CD pipeline
 
@@ -188,11 +188,22 @@ dotnet test --configuration Release
 ```
 
 ### Test Coverage
-- **134 total tests** across the solution
-- **56 web application tests** (Controllers, Services, Integration, Core patterns)
-- **78 IoT device tests** (GPIO components, hardware interfaces)
+- **140+ total tests** across the solution
+- **MSTest framework** with dependency injection support
+- **Unit tests** for individual components and services
+- **Integration tests** for web APIs and IoT devices
+- **Mock GPIO controllers** for hardware-independent testing
 - **Comprehensive API contract validation** with integration tests
-- **Service mocking** for isolated unit testing
+
+### Testing Framework
+The solution uses **MSTest** exclusively for consistency and maintainability:
+- `[TestClass]` for test class definition
+- `[TestMethod]` for individual test methods
+- `[DataRow]` for parameterized tests
+- `[TestInitialize]` and `[TestCleanup]` for setup/teardown
+- Dependency injection integration for IoT testing scenarios
+
+See `MSTest_Standardization.md` for complete testing guidelines and migration details.
 
 ## Coding Standards
 

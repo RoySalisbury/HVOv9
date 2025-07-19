@@ -2,31 +2,38 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HVO.WebSite.Playground.Tests.TestHelpers;
 using FluentAssertions;
-using Xunit.Abstractions;
 
 namespace HVO.WebSite.Playground.Tests.Integration
 {
     /// <summary>
     /// Integration tests for health check endpoints
     /// </summary>
-    public class HealthChecksTests : IClassFixture<TestWebApplicationFactory>
+    [TestClass]
+    public class HealthChecksTests
     {
-        private readonly TestWebApplicationFactory _factory;
-        private readonly HttpClient _client;
-        private readonly ITestOutputHelper _testOutputHelper;
+        private TestWebApplicationFactory _factory = null!;
+        private HttpClient _client = null!;
 
-        public HealthChecksTests(TestWebApplicationFactory factory, ITestOutputHelper testOutputHelper)
+        [TestInitialize]
+        public void TestInitialize()
         {
-            _factory = factory;
+            _factory = new TestWebApplicationFactory();
             _client = _factory.CreateClient();
-            _testOutputHelper = testOutputHelper;
+        }
+
+        [TestCleanup]
+        public void TestCleanup()
+        {
+            _client?.Dispose();
+            _factory?.Dispose();
         }
 
         #region Health Check Endpoint Tests
 
-        [Fact]
+        [TestMethod]
         public async Task Health_Endpoint_Returns_Success()
         {
             // Act
@@ -36,7 +43,7 @@ namespace HVO.WebSite.Playground.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Health_Endpoint_Returns_Json_Response()
         {
             // Act
@@ -55,7 +62,7 @@ namespace HVO.WebSite.Playground.Tests.Integration
             content.Should().NotBeNullOrEmpty();
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Health_Endpoint_Contains_Database_Check()
         {
             // Act
@@ -80,7 +87,7 @@ namespace HVO.WebSite.Playground.Tests.Integration
             }
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Health_Ready_Endpoint_Returns_Success()
         {
             // Act
@@ -90,7 +97,7 @@ namespace HVO.WebSite.Playground.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Health_Live_Endpoint_Returns_Success()
         {
             // Act

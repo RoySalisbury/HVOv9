@@ -6,7 +6,7 @@ using HVO.WebSite.Playground.Services;
 using HVO.WebSite.Playground.Tests.TestHelpers;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace HVO.WebSite.Playground.Tests.Services;
 
@@ -14,7 +14,7 @@ namespace HVO.WebSite.Playground.Tests.Services;
 /// Unit tests for the WeatherService class
 /// Tests business logic independently from HTTP concerns
 /// </summary>
-public class WeatherServiceTests : IDisposable
+[TestClass]public class WeatherServiceTests : IDisposable
 {
     private readonly HvoDbContext _context;
     private readonly Mock<ILogger<WeatherService>> _mockLogger;
@@ -30,7 +30,7 @@ public class WeatherServiceTests : IDisposable
 
     #region Latest Weather Record Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecordAsync_WithValidData_ReturnsSuccessResult()
     {
         // Arrange
@@ -47,7 +47,7 @@ public class WeatherServiceTests : IDisposable
         result.Value.Data.Id.Should().Be(testRecord.Id);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecordAsync_WithNoData_ReturnsFailureResult()
     {
         // Arrange - empty database
@@ -61,7 +61,7 @@ public class WeatherServiceTests : IDisposable
         result.Error!.Message.Should().Contain("No weather records found");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecordAsync_WithMultipleRecords_ReturnsLatestRecord()
     {
         // Arrange
@@ -90,7 +90,7 @@ public class WeatherServiceTests : IDisposable
 
     #region Weather Highs/Lows Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLowsAsync_WithValidDateRange_ReturnsExpectedFailure()
     {
         // Arrange
@@ -110,7 +110,7 @@ public class WeatherServiceTests : IDisposable
 
     #region Current Weather Conditions Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditionsAsync_WithValidData_ReturnsExpectedFailure()
     {
         // Arrange
@@ -127,7 +127,7 @@ public class WeatherServiceTests : IDisposable
         result.Error!.Message.Should().Contain("FromSqlQueryRootExpression");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditionsAsync_WithNoCurrentRecord_ReturnsFailureResult()
     {
         // Arrange - Start with empty database

@@ -4,13 +4,13 @@ using Moq;
 using Moq.Protected;
 using System.Net;
 using System.Text.Json;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HVO.WebSite.RoofControllerV4.Models;
 using HVO.WebSite.RoofControllerV4.Services;
 
 namespace HVO.WebSite.RoofControllerV4.Tests.Services;
 
-public class WeatherServiceTests
+[TestClass]public class WeatherServiceTests
 {
     private readonly Mock<HttpMessageHandler> _mockMessageHandler;
     private readonly Mock<ILogger<WeatherService>> _mockLogger;
@@ -25,7 +25,7 @@ public class WeatherServiceTests
         _weatherService = new WeatherService(_httpClient, _mockLogger.Object);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherAsync_ReturnsWeatherData_WhenApiSucceeds()
     {
         // Arrange
@@ -114,7 +114,7 @@ public class WeatherServiceTests
         result.TodaysLowTemp.Should().Be(65.0m);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherAsync_ReturnsFallbackData_WhenApiReturnsError()
     {
         // Arrange
@@ -150,7 +150,7 @@ public class WeatherServiceTests
         result.WindDirectionText.Should().Be("S");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherAsync_ReturnsFallbackData_WhenApiThrowsException()
     {
         // Arrange
@@ -170,7 +170,7 @@ public class WeatherServiceTests
         result.WeatherCondition.Should().Be("API Unavailable");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherAsync_ReturnsFallbackData_WhenApiReturnsNullData()
     {
         // Arrange
@@ -203,16 +203,16 @@ public class WeatherServiceTests
         result.WeatherCondition.Should().Be("API Unavailable");
     }
 
-    [Theory]
-    [InlineData(0, "Cloudy")]
-    [InlineData(100, "Cloudy")]
-    [InlineData(200, "Cloudy")]
-    [InlineData(201, "Partly Cloudy")]
-    [InlineData(300, "Partly Cloudy")]
-    [InlineData(500, "Partly Cloudy")]
-    [InlineData(501, "Sunny")]
-    [InlineData(800, "Sunny")]
-    public async Task GetCurrentWeatherAsync_MapsWeatherConditionCorrectly(decimal solarRadiation, string expectedCondition)
+    [TestMethod]
+    [DataRow(0, "Cloudy")]
+    [DataRow(100, "Cloudy")]
+    [DataRow(200, "Cloudy")]
+    [DataRow(201, "Partly Cloudy")]
+    [DataRow(300, "Partly Cloudy")]
+    [DataRow(500, "Partly Cloudy")]
+    [DataRow(501, "Sunny")]
+    [DataRow(800, "Sunny")]
+    public async Task GetCurrentWeatherAsync_MapsWeatherConditionCorrectly(double solarRadiation, string expectedCondition)
     {
         // Arrange
         var apiResponse = new CurrentWeatherApiResponse
@@ -222,7 +222,7 @@ public class WeatherServiceTests
             Current = new CurrentWeatherApiData
             {
                 RecordDateTime = DateTimeOffset.Now,
-                SolarRadiation = solarRadiation,
+                SolarRadiation = (decimal)solarRadiation,
                 RainRate = 0 // No rain
             }
         };
@@ -248,7 +248,7 @@ public class WeatherServiceTests
         result.WeatherCondition.Should().Be(expectedCondition);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherAsync_ReturnsRainyCondition_WhenRainRateIsPositive()
     {
         // Arrange
@@ -285,16 +285,16 @@ public class WeatherServiceTests
         result.WeatherCondition.Should().Be("Rainy");
     }
 
-    [Theory]
-    [InlineData(0, "N")]
-    [InlineData(22.5, "NNE")]
-    [InlineData(45, "NE")]
-    [InlineData(67.5, "ENE")]
-    [InlineData(90, "E")]
-    [InlineData(180, "S")]
-    [InlineData(270, "W")]
-    [InlineData(360, "N")]
-    public async Task GetCurrentWeatherAsync_MapsWindDirectionCorrectly(decimal windDirection, string expectedDirection)
+    [TestMethod]
+    [DataRow(0, "N")]
+    [DataRow(22.5, "NNE")]
+    [DataRow(45, "NE")]
+    [DataRow(67.5, "ENE")]
+    [DataRow(90, "E")]
+    [DataRow(180, "S")]
+    [DataRow(270, "W")]
+    [DataRow(360, "N")]
+    public async Task GetCurrentWeatherAsync_MapsWindDirectionCorrectly(double windDirection, string expectedDirection)
     {
         // Arrange
         var apiResponse = new CurrentWeatherApiResponse
@@ -304,7 +304,7 @@ public class WeatherServiceTests
             Current = new CurrentWeatherApiData
             {
                 RecordDateTime = DateTimeOffset.Now,
-                WindDirection = windDirection
+                WindDirection = (decimal)windDirection
             }
         };
 

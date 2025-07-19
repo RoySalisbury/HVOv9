@@ -15,7 +15,7 @@ namespace HVO.WebSite.Playground.Tests.Controllers;
 /// Unit tests for the WeatherController class
 /// Tests HTTP layer independently from business logic
 /// </summary>
-public class WeatherControllerTests
+[TestClass]public class WeatherControllerTests
 {
     private readonly Mock<IWeatherService> _mockWeatherService;
     private readonly Mock<ILogger<WeatherController>> _mockLogger;
@@ -30,7 +30,7 @@ public class WeatherControllerTests
 
     #region GetLatestWeatherRecord Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecord_WithSuccessfulService_ReturnsOkResult()
     {
         // Arrange
@@ -52,7 +52,7 @@ public class WeatherControllerTests
         _mockWeatherService.Verify(x => x.GetLatestWeatherRecordAsync(), Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecord_WithInvalidOperationException_ReturnsNotFound()
     {
         // Arrange
@@ -75,7 +75,7 @@ public class WeatherControllerTests
         problemDetails.Detail.Should().Be(exception.Message);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecord_WithGeneralException_ReturnsInternalServerError()
     {
         // Arrange
@@ -102,7 +102,7 @@ public class WeatherControllerTests
 
     #region GetWeatherHighsLows Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLows_WithSuccessfulService_ReturnsOkResult()
     {
         // Arrange
@@ -126,7 +126,7 @@ public class WeatherControllerTests
         _mockWeatherService.Verify(x => x.GetWeatherHighsLowsAsync(startDate, endDate), Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLows_WithNullDates_PassesNullToService()
     {
         // Arrange
@@ -146,7 +146,7 @@ public class WeatherControllerTests
         _mockWeatherService.Verify(x => x.GetWeatherHighsLowsAsync(null, null), Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLows_WithInvalidOperationException_ReturnsNotFound()
     {
         // Arrange
@@ -169,7 +169,7 @@ public class WeatherControllerTests
         problemDetails.Detail.Should().Be(exception.Message);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLows_WithGeneralException_ReturnsInternalServerError()
     {
         // Arrange
@@ -196,7 +196,7 @@ public class WeatherControllerTests
 
     #region GetCurrentWeatherConditions Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditions_WithSuccessfulService_ReturnsOkResult()
     {
         // Arrange
@@ -218,7 +218,7 @@ public class WeatherControllerTests
         _mockWeatherService.Verify(x => x.GetCurrentWeatherConditionsAsync(), Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditions_WithInvalidOperationException_ReturnsNotFound()
     {
         // Arrange
@@ -241,7 +241,7 @@ public class WeatherControllerTests
         problemDetails.Detail.Should().Be(exception.Message);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditions_WithGeneralException_ReturnsInternalServerError()
     {
         // Arrange
@@ -268,7 +268,7 @@ public class WeatherControllerTests
 
     #region Error Handling Pattern Tests
 
-    [Fact]
+    [TestMethod]
     public async Task AllEndpoints_UseConsistentErrorHandlingPattern()
     {
         // Arrange
@@ -305,7 +305,7 @@ public class WeatherControllerTests
 
     #region Result Pattern Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task AllEndpoints_ProperlyUseResultPatternMatch()
     {
         // This test verifies that the controller properly uses the Result pattern's Match method

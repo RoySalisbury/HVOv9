@@ -2,18 +2,18 @@ using FluentAssertions;
 using HVO.DataModels.Models;
 using HVO.DataModels.RawModels;
 using HVO.WebSite.Playground.Models;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace HVO.WebSite.Playground.Tests.Models;
 
 /// <summary>
 /// Unit tests for Weather API Models
 /// </summary>
-public class WeatherApiModelsTests
+[TestClass]public class WeatherApiModelsTests
 {
     #region LatestWeatherResponse Tests
 
-    [Fact]
+    [TestMethod]
     public void LatestWeatherResponse_ShouldInitializeWithDefaultValues()
     {
         // Act
@@ -26,7 +26,7 @@ public class WeatherApiModelsTests
         response.Data.Should().BeOfType<DavisVantageProConsoleRecordsNew>();
     }
 
-    [Fact]
+    [TestMethod]
     public void LatestWeatherResponse_ShouldAllowSettingProperties()
     {
         // Arrange
@@ -59,7 +59,7 @@ public class WeatherApiModelsTests
 
     #region WeatherHighsLowsResponse Tests
 
-    [Fact]
+    [TestMethod]
     public void WeatherHighsLowsResponse_ShouldInitializeWithDefaultValues()
     {
         // Act
@@ -74,7 +74,7 @@ public class WeatherApiModelsTests
         response.Data.Should().BeOfType<WeatherRecordHighLowSummary>();
     }
 
-    [Fact]
+    [TestMethod]
     public void WeatherHighsLowsResponse_ShouldAllowSettingProperties()
     {
         // Arrange
@@ -113,7 +113,7 @@ public class WeatherApiModelsTests
 
     #region Property Validation Tests
 
-    [Fact]
+    [TestMethod]
     public void LatestWeatherResponse_Properties_ShouldBeGettableAndSettable()
     {
         // Arrange
@@ -133,7 +133,7 @@ public class WeatherApiModelsTests
         response.Data.Should().Be(testData);
     }
 
-    [Fact]
+    [TestMethod]
     public void WeatherHighsLowsResponse_Properties_ShouldBeGettableAndSettable()
     {
         // Arrange
@@ -161,7 +161,7 @@ public class WeatherApiModelsTests
 
     #region Edge Cases and Validation
 
-    [Fact]
+    [TestMethod]
     public void LatestWeatherResponse_WithNullMachineName_ShouldHandleGracefully()
     {
         // Arrange & Act
@@ -174,7 +174,7 @@ public class WeatherApiModelsTests
         response.MachineName.Should().BeNull();
     }
 
-    [Fact]
+    [TestMethod]
     public void WeatherHighsLowsResponse_WithNullMachineName_ShouldHandleGracefully()
     {
         // Arrange & Act
@@ -187,7 +187,7 @@ public class WeatherApiModelsTests
         response.MachineName.Should().BeNull();
     }
 
-    [Fact]
+    [TestMethod]
     public void LatestWeatherResponse_WithComplexWeatherData_ShouldMaintainDataIntegrity()
     {
         // Arrange

@@ -241,6 +241,15 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
         }
     }
 
+    public bool IsTriggered
+    {
+        get
+        {
+            // Check if the pin is currently in the triggered state based on pull configuration
+            return IsPullup ? CurrentPinValue == PinValue.Low : CurrentPinValue == PinValue.High;
+        }
+    }
+
     /// <summary>
     /// Returns a string representation of the limit switch configuration.
     /// </summary>

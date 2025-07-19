@@ -7,18 +7,27 @@ namespace HVO.WebSite.Playground.Tests.Integration;
 /// <summary>
 /// Integration tests for MVC views and pages
 /// </summary>
-public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+[TestClass]
+public class MvcViewIntegrationTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private WebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
-    public MvcViewIntegrationTests(WebApplicationFactory<Program> factory)
+    [TestInitialize]
+    public void Initialize()
     {
-        _factory = factory;
+        _factory = new WebApplicationFactory<Program>();
         _client = _factory.CreateClient();
     }
 
-    [Fact]
+    [TestCleanup]
+    public void Cleanup()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+    }
+
+    [TestMethod]
     public async Task Get_HomeIndex_ShouldReturnSuccessAndCorrectContentType()
     {
         // Act
@@ -29,7 +38,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         response.Content.Headers.ContentType?.ToString().Should().Contain("text/html");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_HomeIndex_ShouldContainExpectedContent()
     {
         // Act
@@ -42,7 +51,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         content.Should().Contain("Playground");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_HomeHealthCheckMVC_ShouldReturnSuccessAndCorrectContentType()
     {
         // Act
@@ -53,7 +62,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         response.Content.Headers.ContentType?.ToString().Should().Contain("text/html");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_HomeHealthCheckMVC_ShouldContainExpectedContent()
     {
         // Act
@@ -66,7 +75,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         content.Should().Contain("JavaScript");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_BlazorHome_ShouldReturnSuccessAndCorrectContentType()
     {
         // Act
@@ -77,7 +86,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         response.Content.Headers.ContentType?.ToString().Should().Contain("text/html");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_BlazorHealthCheckTest_ShouldReturnSuccessAndCorrectContentType()
     {
         // Act
@@ -88,7 +97,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         response.Content.Headers.ContentType?.ToString().Should().Contain("text/html");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_BlazorHealthCheckTest_ShouldContainExpectedContent()
     {
         // Act
@@ -100,10 +109,10 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         content.Should().Contain("Blazor");
     }
 
-    [Theory]
-    [InlineData("/")]
-    [InlineData("/Home/HealthCheckMVC")]
-    [InlineData("/health-check-blazor")]
+    [TestMethod]
+    [DataRow("/")]
+    [DataRow("/Home/HealthCheckMVC")]
+    [DataRow("/health-check-blazor")]
     public async Task Get_AllPages_ShouldHaveValidHtmlStructure(string url)
     {
         // Act
@@ -119,10 +128,10 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         content.Should().Contain("</html>");
     }
 
-    [Theory]
-    [InlineData("/")]
-    [InlineData("/Home/HealthCheckMVC")]
-    [InlineData("/health-check-blazor")]
+    [TestMethod]
+    [DataRow("/")]
+    [DataRow("/Home/HealthCheckMVC")]
+    [DataRow("/health-check-blazor")]
     public async Task Get_AllPages_ShouldHaveBootstrapStyling(string url)
     {
         // Act
@@ -133,7 +142,7 @@ public class MvcViewIntegrationTests : IClassFixture<WebApplicationFactory<Progr
         content.Should().Contain("bootstrap");
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Get_NonExistentPage_ShouldReturn404()
     {
         // Act

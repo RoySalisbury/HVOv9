@@ -8,10 +8,15 @@ public enum PushButtonLedState
     /// <summary>
     /// LED is turned off.
     /// </summary>
-    Off,
+    Off = 0,
     
     /// <summary>
     /// LED is turned on.
     /// </summary>
-    On
+    On = 1,
+    
+    /// <summary>
+    /// LED is not used (no LED pin configured).
+    /// </summary>
+    NotUsed = 2
 }

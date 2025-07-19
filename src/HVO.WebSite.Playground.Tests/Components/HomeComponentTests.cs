@@ -2,6 +2,7 @@ using Bunit;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using HVO.WebSite.Playground.Components.Pages;
 
@@ -10,9 +11,10 @@ namespace HVO.WebSite.Playground.Tests.Components;
 /// <summary>
 /// Unit tests for Home Blazor component
 /// </summary>
-public class HomeComponentTests : TestContext
+[TestClass]
+public class HomeComponentTests : Bunit.TestContext
 {
-    [Fact]
+    [TestMethod]
     public void HomeComponent_ShouldRenderCorrectly()
     {
         // Act
@@ -30,7 +32,7 @@ public class HomeComponentTests : TestContext
         leadParagraph.TextContent.Should().Contain("Test API endpoints with both MVC and Blazor approaches");
     }
 
-    [Fact]
+    [TestMethod]
     public void HomeComponent_ShouldHaveMvcCard()
     {
         // Act
@@ -46,7 +48,7 @@ public class HomeComponentTests : TestContext
         mvcButton.ClassList.Should().Contain("btn-primary");
     }
 
-    [Fact]
+    [TestMethod]
     public void HomeComponent_ShouldHaveBlazorCard()
     {
         // Act
@@ -65,7 +67,7 @@ public class HomeComponentTests : TestContext
         blazorButton.ClassList.Should().Contain("btn-success");
     }
 
-    [Fact]
+    [TestMethod]
     public void HomeComponent_ShouldHaveFeaturesComparison()
     {
         // Act
@@ -81,7 +83,7 @@ public class HomeComponentTests : TestContext
         featureLists.Should().HaveCountGreaterThan(0);
     }
 
-    [Fact]
+    [TestMethod]
     public void HomeComponent_ShouldHaveResponsiveLayout()
     {
         // Act

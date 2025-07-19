@@ -5,14 +5,14 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace HVO.WebSite.Playground.Tests.Middleware;
 
 /// <summary>
 /// Unit tests for HvoServiceExceptionHandler middleware
 /// </summary>
-public class HvoServiceExceptionHandlerTests
+[TestClass]public class HvoServiceExceptionHandlerTests
 {
     private readonly Mock<IProblemDetailsService> _mockProblemDetailsService;
     private readonly Mock<ILogger<HvoServiceExceptionHandler>> _mockLogger;
@@ -29,7 +29,7 @@ public class HvoServiceExceptionHandlerTests
 
     #region TryHandleAsync Tests
 
-    [Fact]
+    [TestMethod]
     public async Task TryHandleAsync_WithArgumentException_ShouldSetBadRequestStatus()
     {
         // Arrange
@@ -56,7 +56,7 @@ public class HvoServiceExceptionHandlerTests
         )), Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryHandleAsync_WithGenericException_ShouldSetInternalServerErrorStatus()
     {
         // Arrange
@@ -81,7 +81,7 @@ public class HvoServiceExceptionHandlerTests
         )), Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryHandleAsync_ShouldLogErrorWithProblemDetails()
     {
         // Arrange
@@ -106,7 +106,7 @@ public class HvoServiceExceptionHandlerTests
             Times.Once);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryHandleAsync_WhenProblemDetailsServiceReturnsFalse_ShouldReturnFalse()
     {
         // Arrange
@@ -124,7 +124,7 @@ public class HvoServiceExceptionHandlerTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryHandleAsync_WithCancellationToken_ShouldPassTokenToProblemDetailsService()
     {
         // Arrange
@@ -142,12 +142,12 @@ public class HvoServiceExceptionHandlerTests
         _mockProblemDetailsService.Verify(x => x.TryWriteAsync(It.IsAny<ProblemDetailsContext>()), Times.Once);
     }
 
-    [Theory]
-    [InlineData(typeof(ArgumentException), StatusCodes.Status400BadRequest)]
-    [InlineData(typeof(ArgumentNullException), StatusCodes.Status400BadRequest)]
-    [InlineData(typeof(InvalidOperationException), StatusCodes.Status500InternalServerError)]
-    [InlineData(typeof(Exception), StatusCodes.Status500InternalServerError)]
-    [InlineData(typeof(NotImplementedException), StatusCodes.Status500InternalServerError)]
+    [TestMethod]
+    [DataRow(typeof(ArgumentException), StatusCodes.Status400BadRequest)]
+    [DataRow(typeof(ArgumentNullException), StatusCodes.Status400BadRequest)]
+    [DataRow(typeof(InvalidOperationException), StatusCodes.Status500InternalServerError)]
+    [DataRow(typeof(Exception), StatusCodes.Status500InternalServerError)]
+    [DataRow(typeof(NotImplementedException), StatusCodes.Status500InternalServerError)]
     public async Task TryHandleAsync_WithVariousExceptionTypes_ShouldSetCorrectStatusCode(Type exceptionType, int expectedStatusCode)
     {
         // Arrange

@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Device.Gpio;
@@ -122,11 +122,11 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.IsNotNull(_limitSwitch);
-            Assert.AreEqual(TestPin, _limitSwitch.GpioPinNumber);
+            Assert.AreEqual(_limitSwitch.GpioPinNumber, TestPin);
             Assert.IsTrue(_limitSwitch.IsPullup);
             Assert.IsFalse(_limitSwitch.HasExternalResistor);
-            Assert.AreEqual(TimeSpan.Zero, _limitSwitch.DebounceTime);
-            Assert.AreEqual(PinValue.High, _limitSwitch.CurrentPinValue);
+            Assert.AreEqual(_limitSwitch.DebounceTime, TimeSpan.Zero);
+            Assert.AreEqual(_limitSwitch.CurrentPinValue, PinValue.High);
         }
 
         [TestMethod]
@@ -161,7 +161,7 @@ namespace HVO.Iot.Devices.Tests
             _limitSwitch = CreateLimitSwitch(debounceTime: debounceTime);
 
             // Assert
-            Assert.AreEqual(debounceTime, _limitSwitch.DebounceTime);
+            Assert.AreEqual(_limitSwitch.DebounceTime, debounceTime);
         }
 
         [TestMethod]
@@ -255,7 +255,7 @@ namespace HVO.Iot.Devices.Tests
             var result = _limitSwitch.CurrentPinValue;
 
             // Assert
-            Assert.AreEqual(PinValue.Low, result);
+            Assert.AreEqual(result, PinValue.Low);
         }
 
         [TestMethod]
@@ -269,7 +269,7 @@ namespace HVO.Iot.Devices.Tests
             var secondRead = _limitSwitch.CurrentPinValue;
 
             // Assert
-            Assert.AreEqual(firstRead, secondRead);
+            Assert.AreEqual(secondRead, firstRead);
             _mockGpioController!.Verify(x => x.Read(TestPin), Times.Once); // Should only read once due to caching
         }
 
@@ -300,7 +300,7 @@ namespace HVO.Iot.Devices.Tests
             var result = _limitSwitch.CurrentPinValue;
 
             // Assert - should return the cached value from construction
-            Assert.AreEqual(PinValue.High, result);
+            Assert.AreEqual(result, PinValue.High);
         }
 
         [TestMethod]
@@ -315,8 +315,8 @@ namespace HVO.Iot.Devices.Tests
             var updatedValue = _limitSwitch.CurrentPinValue;
 
             // Assert
-            Assert.AreEqual(PinValue.High, initialValue);
-            Assert.AreEqual(PinValue.Low, updatedValue);
+            Assert.AreEqual(initialValue, PinValue.High);
+            Assert.AreEqual(updatedValue, PinValue.Low);
         }
 
         #endregion
@@ -376,13 +376,13 @@ namespace HVO.Iot.Devices.Tests
 
             // Act
             SimulatePinStateChange(PinEventTypes.Falling);
-            Assert.AreEqual(1, eventCount);
+            Assert.AreEqual(eventCount, 1);
 
             _limitSwitch.LimitSwitchTriggered -= EventHandler;
             SimulatePinStateChange(PinEventTypes.Rising);
 
             // Assert
-            Assert.AreEqual(1, eventCount); // Should still be 1 after unsubscription
+            Assert.AreEqual(eventCount, 1); // Should still be 1 after unsubscription
         }
 
         [TestMethod]
@@ -399,9 +399,9 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.IsNotNull(capturedArgs);
-            Assert.AreEqual(PinEventTypes.Rising, capturedArgs.ChangeType);
-            Assert.AreEqual(TestPin, capturedArgs.PinNumber);
-            Assert.AreEqual(PinMode.InputPullUp, capturedArgs.PinMode);
+            Assert.AreEqual(capturedArgs.ChangeType, PinEventTypes.Rising);
+            Assert.AreEqual(capturedArgs.PinNumber, TestPin);
+            Assert.AreEqual(capturedArgs.PinMode, PinMode.InputPullUp);
             Assert.IsTrue(capturedArgs.EventDateTime <= DateTimeOffset.Now);
         }
 
@@ -439,9 +439,9 @@ namespace HVO.Iot.Devices.Tests
             SimulatePinStateChange(PinEventTypes.Falling);
 
             // Assert
-            Assert.AreEqual(2, events.Count);
-            Assert.AreEqual(PinEventTypes.Rising, events[0]);
-            Assert.AreEqual(PinEventTypes.Falling, events[1]);
+            Assert.AreEqual(events.Count, 2);
+            Assert.AreEqual(events[0], PinEventTypes.Rising);
+            Assert.AreEqual(events[1], PinEventTypes.Falling);
         }
 
         [TestMethod]
@@ -503,7 +503,7 @@ namespace HVO.Iot.Devices.Tests
             _limitSwitch.Dispose();
 
             // Assert
-            Assert.AreEqual(PinValue.Low, _limitSwitch.CurrentPinValue);
+            Assert.AreEqual(_limitSwitch.CurrentPinValue, PinValue.Low);
             
             // Verify proper cleanup was called
             _mockGpioController!.Verify(x => x.UnregisterCallbackForPinValueChangedEvent(
@@ -534,7 +534,7 @@ namespace HVO.Iot.Devices.Tests
             await _limitSwitch.DisposeAsync();
 
             // Assert
-            Assert.AreEqual(PinValue.Low, _limitSwitch.CurrentPinValue);
+            Assert.AreEqual(_limitSwitch.CurrentPinValue, PinValue.Low);
             _mockGpioController!.Verify(x => x.UnregisterCallbackForPinValueChangedEvent(
                 TestPin, It.IsAny<PinChangeEventHandler>()), Times.Once);
         }
@@ -581,10 +581,10 @@ namespace HVO.Iot.Devices.Tests
             _limitSwitch = CreateLimitSwitch(isPullup: false, hasExternalResistor: true, debounceTime: debounceTime);
 
             // Assert
-            Assert.AreEqual(TestPin, _limitSwitch.GpioPinNumber);
+            Assert.AreEqual(_limitSwitch.GpioPinNumber, TestPin);
             Assert.IsFalse(_limitSwitch.IsPullup);
             Assert.IsTrue(_limitSwitch.HasExternalResistor);
-            Assert.AreEqual(debounceTime, _limitSwitch.DebounceTime);
+            Assert.AreEqual(_limitSwitch.DebounceTime, debounceTime);
             Assert.IsNotNull(_limitSwitch.GpioController);
         }
 
@@ -806,7 +806,7 @@ namespace HVO.Iot.Devices.Tests
             // Assert
             // The CurrentPinValue should return the cached value from initialization
             // During initialization, the first value (Low) was consumed and cached
-            Assert.AreEqual(PinValue.Low, _limitSwitch.CurrentPinValue);
+            Assert.AreEqual(_limitSwitch.CurrentPinValue, PinValue.Low);
             
             // Verify the sequence was used
             _mockGpioController.Verify(x => x.Read(TestPin), Times.AtLeastOnce);
@@ -851,7 +851,7 @@ namespace HVO.Iot.Devices.Tests
             capturedHandler.Invoke(_mockGpioController.Object, eventArgs);
             
             // Should not throw and should update the pin value
-            Assert.AreEqual(PinValue.High, _limitSwitch.CurrentPinValue);
+            Assert.AreEqual(_limitSwitch.CurrentPinValue, PinValue.High);
         }
 
         #endregion

@@ -9,7 +9,7 @@ namespace HVO.WebSite.Playground.Tests.Controllers;
 /// <summary>
 /// Unit tests for HomeController MVC endpoints
 /// </summary>
-public class HomeControllerTests
+[TestClass]public class HomeControllerTests
 {
     private readonly Mock<ILogger<HomeController>> _loggerMock;
     private readonly HomeController _controller;
@@ -20,7 +20,7 @@ public class HomeControllerTests
         _controller = new HomeController(_loggerMock.Object);
     }
 
-    [Fact]
+    [TestMethod]
     public void Index_ShouldReturnViewResult()
     {
         // Act
@@ -33,7 +33,7 @@ public class HomeControllerTests
         viewResult!.ViewName.Should().BeNullOrEmpty(); // Default view name
     }
 
-    [Fact]
+    [TestMethod]
     public void HealthCheckMVC_ShouldReturnViewResult()
     {
         // Act
@@ -46,7 +46,7 @@ public class HomeControllerTests
         viewResult!.ViewName.Should().BeNullOrEmpty(); // Default view name
     }
 
-    [Fact] 
+    [TestMethod] 
     public void Controller_ShouldHaveCorrectLogger()
     {
         // Assert

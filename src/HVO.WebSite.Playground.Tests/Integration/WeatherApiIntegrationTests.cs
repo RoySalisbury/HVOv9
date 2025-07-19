@@ -19,15 +19,17 @@ namespace HVO.WebSite.Playground.Tests.Integration;
 /// Integration tests for the Weather API endpoints
 /// Tests the full HTTP request/response cycle with real dependencies
 /// </summary>
-public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactory>
+[TestClass]
+public class WeatherApiIntegrationTests
 {
-    private readonly TestWebApplicationFactory _factory;
-    private readonly HttpClient _client;
-    private readonly Mock<IWeatherService> _mockWeatherService;
+    private TestWebApplicationFactory _factory = null!;
+    private HttpClient _client = null!;
+    private Mock<IWeatherService> _mockWeatherService = null!;
 
-    public WeatherApiIntegrationTests(TestWebApplicationFactory factory)
+    [TestInitialize]
+    public void Initialize()
     {
-        _factory = factory;
+        _factory = new TestWebApplicationFactory();
         _client = _factory.CreateClient();
         
         // Get the mocked service from the factory for configuration
@@ -35,9 +37,16 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
         _mockWeatherService = Mock.Get(scope.ServiceProvider.GetRequiredService<IWeatherService>());
     }
 
+    [TestCleanup]
+    public void Cleanup()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+    }
+
     #region Latest Weather Record Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecord_WithData_ReturnsSuccessResponse()
     {
         // Arrange
@@ -66,7 +75,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
         weatherResponse.MachineName.Should().NotBeNullOrEmpty();
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetLatestWeatherRecord_WithoutData_ReturnsNotFound()
     {
         // Arrange - Mock service returns failure with InvalidOperationException for 404
@@ -88,7 +97,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
 
     #region Weather Highs/Lows Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLows_WithDateRange_ReturnsSuccessResponse()
     {
         // Arrange
@@ -131,7 +140,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
         weatherResponse.DateRange.Start.Date.Should().Be(testDate.Date);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetWeatherHighsLows_WithoutDateParameters_UsesDefaultRange()
     {
         // Arrange
@@ -169,7 +178,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
 
     #region Current Weather Conditions Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditions_WithData_ReturnsSuccessResponse()
     {
         // Arrange
@@ -202,7 +211,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
         weatherResponse.Current.OutsideTemperature.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetCurrentWeatherConditions_WithoutData_ReturnsNotFound()
     {
         // Arrange - Mock service returns failure with InvalidOperationException for 404
@@ -224,7 +233,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
 
     #region API Documentation Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task WeatherEndpoints_IncludeProperContentTypeHeaders()
     {
         // Arrange - Set up mock responses for all endpoints
@@ -275,7 +284,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task WeatherEndpoints_ReturnValidJsonStructure()
     {
         // Arrange - Set up mock responses
@@ -328,7 +337,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
 
     #region Error Handling Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task WeatherEndpoints_ReturnConsistentErrorFormat()
     {
         // Arrange - Mock service returns InvalidOperationException for 404 errors
@@ -359,7 +368,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task WeatherEndpoints_HandleInvalidDateParameters()
     {
         // Arrange - Mock service returns success for highs/lows endpoint
@@ -385,7 +394,7 @@ public class WeatherApiIntegrationTests : IClassFixture<TestWebApplicationFactor
 
     #region API Versioning Integration Tests
 
-    [Fact]
+    [TestMethod]
     public async Task WeatherEndpoints_SupportApiVersioning()
     {
         // Arrange - Mock service returns success
