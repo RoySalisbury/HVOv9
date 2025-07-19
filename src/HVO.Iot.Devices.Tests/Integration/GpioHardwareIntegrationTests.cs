@@ -26,7 +26,9 @@ public class GpioHardwareIntegrationTests : IDisposable
     
     // Configuration: Set to true to test against real Raspberry Pi GPIO hardware
     // Set to false to test against mock implementation
-    private static readonly bool UseRealHardware = Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true";
+    // Default to false for safety - only enable real hardware on supported platforms
+    private static readonly bool UseRealHardware = Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true" && 
+        System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
     
     private const int TestOutputPin = 18; // GPIO18 for LED or similar output device
     private const int TestInputPin = 24;  // GPIO24 for button or similar input device

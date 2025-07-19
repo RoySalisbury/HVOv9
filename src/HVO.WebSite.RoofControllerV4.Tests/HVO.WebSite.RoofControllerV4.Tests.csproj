@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HVO.WebSite.RoofControllerV4\HVO.WebSite.RoofControllerV4.csproj" />
+    <ProjectReference Include="..\HVO.Iot.Devices\HVO.Iot.Devices.csproj" />
   </ItemGroup>
 
 </Project>

@@ -19,7 +19,8 @@ public static class GpioTestConfiguration
     /// <returns>The configured service collection for method chaining.</returns>
     public static IServiceCollection AddMockGpioController(this IServiceCollection services)
     {
-        services.AddSingleton<IGpioController, MockGpioController>();
+        // Create GpioControllerWrapper with MockGpioController to avoid circular dependency
+        services.AddSingleton<IGpioController>(provider => new GpioControllerWrapper(new MockGpioController(), useRealHardware: false));
         services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Trace));
         return services;
     }
@@ -32,7 +33,8 @@ public static class GpioTestConfiguration
     /// <returns>The configured service collection for method chaining.</returns>
     public static IServiceCollection AddRealGpioController(this IServiceCollection services)
     {
-        services.AddSingleton<IGpioController, GpioControllerWrapper>();
+        // Create GpioControllerWrapper without dependencies to avoid circular dependency
+        services.AddSingleton<IGpioController>(provider => new GpioControllerWrapper(null, useRealHardware: true));
         services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Trace));
         return services;
     }

@@ -70,13 +70,24 @@ namespace HVO.ProjectName
 - Test file naming: `{ClassUnderTest}Tests.cs`
 - **Suppress CS1030 warnings in test projects for clean builds**
 
-### 7. Web Development
+### 7. Blazor Component Development (Following Microsoft Best Practices)
 - Use Blazor Server for interactive components with `@rendermode InteractiveServer`
 - **Always create code-behind files (.razor.cs) for all Razor components and pages** - Separate markup from logic for better maintainability and testability
+- **Use Blazor Scoped CSS (.razor.css) for component-specific styling** - Automatically scoped to prevent style conflicts
+- **Use Blazor Scoped JavaScript (.razor.js) for component-specific client-side behavior** - Isolated JavaScript modules
+- **NO inline CSS in Razor markup** - All styling must be in scoped CSS files
+- **NO inline JavaScript in Razor markup** - All client-side code must be in scoped JS files or code-behind
+- **Component File Structure Pattern**:
+  ```
+  ComponentName.razor      # Markup only - no <style> or <script> blocks
+  ComponentName.razor.cs   # C# logic and event handlers
+  ComponentName.razor.css  # Scoped styles (automatically scoped by Blazor)
+  ComponentName.razor.js   # Scoped JavaScript (optional, for client interop)
+  ```
 - Implement API versioning with URL segments (`/api/v1.0/endpoint`)
 - Use `IHttpClientFactory` for HTTP client management
 - Follow REST conventions for API endpoints
-- Use Bootstrap 5 for responsive UI design
+- Use Bootstrap 5 for responsive UI design with component-specific customizations in scoped CSS
 
 ### 8. IoT Device Integration
 - Implement proper disposal patterns (`IDisposable`, `IAsyncDisposable`)
@@ -149,9 +160,13 @@ namespace HVO.ProjectName
     /Repositories/              # Repository pattern implementations
   /HVO.ProjectName/             # Specific applications
     /Controllers/               # API/MVC controllers
-    /Components/                # Blazor components
-      /Pages/                   # Routable pages
-      /Layout/                  # Layout components
+    /Components/                # Blazor components with proper file structure
+      /Pages/                   # Routable pages with .razor, .razor.cs, .razor.css, .razor.js
+        ComponentName.razor     # Markup only - no <style> or <script> blocks
+        ComponentName.razor.cs  # C# code-behind logic
+        ComponentName.razor.css # Scoped CSS (automatically scoped by Blazor)
+        ComponentName.razor.js  # Scoped JavaScript (optional, for client interop)
+      /Layout/                  # Layout components following same structure
     /Services/                  # Business logic services
     /Models/                    # API response models and DTOs
     /Middleware/                # Custom middleware (exception handling)
@@ -162,6 +177,26 @@ namespace HVO.ProjectName
     /Core/                      # Core pattern tests (Result<T>, etc.)
     /TestHelpers/               # Test utilities and factories
 ```
+
+## Blazor Component Best Practices
+
+### Component File Structure (Microsoft Recommended)
+- **Separation of Concerns**: Each component should have distinct files for markup, logic, styling, and client-side behavior
+- **Scoped CSS**: Use `.razor.css` files for component-specific styling that won't affect other components
+- **Scoped JavaScript**: Use `.razor.js` files for component-specific client-side code with automatic isolation
+- **Code-Behind**: Use `.razor.cs` files for all C# logic to keep markup clean and testable
+
+### Styling Standards
+- **Scoped CSS Only**: Never use inline `<style>` blocks in Razor markup
+- **Automatic Scoping**: Blazor automatically generates unique CSS selectors for scoped CSS
+- **Bootstrap Integration**: Use Bootstrap classes with component-specific customizations in scoped CSS
+- **No Global CSS for Components**: Component-specific styles must be in scoped CSS files
+
+### JavaScript Standards
+- **Scoped JavaScript Only**: Never use inline `<script>` blocks in Razor markup
+- **Module Isolation**: Scoped JS files are automatically treated as ES6 modules
+- **Component Lifecycle**: Use scoped JS for component-specific DOM manipulation and client interop
+- **Automatic Loading**: Blazor automatically loads and unloads scoped JS with component lifecycle
 
 ## Documentation Standards
 - XML documentation comments are optional but recommended for complex public APIs

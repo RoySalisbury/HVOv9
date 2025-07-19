@@ -24,6 +24,12 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         RoofControllerStatus Status { get; }
 
         /// <summary>
+        /// Gets a value indicating whether the roof is currently moving (opening or closing).
+        /// This property returns true when the roof is actively in motion and not at a limit switch position.
+        /// </summary>
+        bool IsMoving { get; }
+
+        /// <summary>
         /// Initializes the roof controller hardware and prepares it for operation.
         /// </summary>
         /// <param name="cancellationToken">Token to monitor for cancellation requests.</param>

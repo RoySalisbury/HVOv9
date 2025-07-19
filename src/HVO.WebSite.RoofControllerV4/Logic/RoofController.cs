@@ -181,6 +181,12 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
         public RoofControllerStatus Status { get; private set; } = RoofControllerStatus.NotInitialized;
 
+        /// <summary>
+        /// Gets a value indicating whether the roof is currently moving (opening or closing).
+        /// This property returns true when the roof is actively in motion and not at a limit switch position.
+        /// </summary>
+        public bool IsMoving => Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing;
+
 
         public Task<Result<bool>> Initialize(CancellationToken cancellationToken)
         {

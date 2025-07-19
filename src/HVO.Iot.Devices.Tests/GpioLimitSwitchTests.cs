@@ -25,7 +25,9 @@ namespace HVO.Iot.Devices.Tests
 
         // Configuration: Set to true to test against real Raspberry Pi GPIO hardware
         // Set to false to test against mock implementation
-        private static readonly bool UseRealHardware = Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true";
+        // Default to false for safety - only enable real hardware on supported platforms
+        private static readonly bool UseRealHardware = Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true" && 
+            System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
 
         [TestInitialize]
         public void Setup()
@@ -44,7 +46,11 @@ namespace HVO.Iot.Devices.Tests
                 _logger = _serviceProvider.GetRequiredService<ILogger<GpioLimitSwitch>>();
                 
                 // Get reference to the mock controller for direct testing
-                _mockGpioController = _gpioController as MockGpioController;
+                // Since we're now using GpioControllerWrapper, we need to access the underlying controller
+                if (_gpioController is GpioControllerWrapper wrapper)
+                {
+                    _mockGpioController = wrapper.UnderlyingController as MockGpioController;
+                }
             }
         }
 

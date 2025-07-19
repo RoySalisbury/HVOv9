@@ -30,7 +30,16 @@ public class MockGpioControllerTests : IDisposable
         _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
         
         // Keep a reference to the concrete type for mock-specific methods
-        _mockController = (MockGpioController)_gpioController;
+        // Since we're now using GpioControllerWrapper, we need to access the underlying controller
+        if (_gpioController is GpioControllerWrapper wrapper)
+        {
+            _mockController = wrapper.UnderlyingController as MockGpioController
+                ?? throw new InvalidOperationException("Expected MockGpioController but got a different implementation");
+        }
+        else
+        {
+            throw new InvalidOperationException("Expected GpioControllerWrapper but got a different implementation");
+        }
     }
 
     [TestCleanup]

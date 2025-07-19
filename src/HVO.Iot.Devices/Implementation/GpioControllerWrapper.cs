@@ -15,6 +15,11 @@ public class GpioControllerWrapper : IGpioController
     private bool _disposed;
 
     /// <summary>
+    /// Gets the underlying GPIO controller instance for testing purposes.
+    /// </summary>
+    public IGpioController UnderlyingController => _gpioController;
+
+    /// <summary>
     /// Initializes a new instance of the GpioControllerWrapper class.
     /// </summary>
     /// <param name="gpioController">The underlying GPIO controller to wrap. If null, will auto-select based on environment.</param>

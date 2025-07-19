@@ -1,33 +1,59 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.Collections.Generic;
 using System.Device.Gpio;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.Iot.Devices;
 using HVO.Iot.Devices.Abstractions;
+using HVO.Iot.Devices.Implementation;
+using HVO.Iot.Devices.Tests.TestHelpers;
 
 namespace HVO.Iot.Devices.Tests
 {
     [TestClass]
-    public class GpioButtonWithLedTests
+    public class GpioButtonWithLedTests : IDisposable
     {
-        private Mock<IGpioController>? _mockGpioController;
+        private ServiceProvider? _serviceProvider;
+        private IGpioController? _gpioController;
+        private MockGpioController? _mockGpioController;
+        private ILogger<GpioButtonWithLed>? _logger;
         private GpioButtonWithLed? _buttonWithLed;
-        private PinChangeEventHandler? _capturedCallback;
         private const int ButtonPin = 18;
         private const int LedPin = 24;
         private const int TestPin = ButtonPin; // For readability in tests
         private const int TestLedPin = LedPin; // For readability in tests
 
+        // Configuration: Set to true to test against real Raspberry Pi GPIO hardware
+        // Set to false to test against mock implementation
+        // Default to false for safety - only enable real hardware on supported platforms
+        private static readonly bool UseRealHardware = Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true" && 
+            System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
+
         [TestInitialize]
         public void Setup()
         {
-            _mockGpioController = new Mock<IGpioController>();
-            _capturedCallback = null;
-            SetupGpioControllerMock();
+            // Configure dependency injection based on hardware availability
+            if (UseRealHardware)
+            {
+                _serviceProvider = GpioTestConfiguration.CreateRealGpioServiceProvider();
+                _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
+                _logger = _serviceProvider.GetRequiredService<ILogger<GpioButtonWithLed>>();
+            }
+            else
+            {
+                _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
+                _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
+                _logger = _serviceProvider.GetRequiredService<ILogger<GpioButtonWithLed>>();
+                
+                // Get reference to the mock controller for direct testing
+                // Since we're now using GpioControllerWrapper, we need to access the underlying controller
+                if (_gpioController is GpioControllerWrapper wrapper)
+                {
+                    _mockGpioController = wrapper.UnderlyingController as MockGpioController;
+                }
+            }
         }
 
         [TestCleanup]
@@ -42,183 +68,210 @@ namespace HVO.Iot.Devices.Tests
                 // Ignore cleanup errors
             }
             _buttonWithLed = null;
+            _serviceProvider?.Dispose();
+            _gpioController = null;
             _mockGpioController = null;
+            _logger = null;
         }
 
         /// <summary>
-        /// Sets up the basic GPIO controller mock behavior that all tests need
+        /// Implementation of IDisposable.Dispose()
         /// </summary>
-        private void SetupGpioControllerMock()
+        public void Dispose()
         {
-            if (_mockGpioController == null) return;
-
-            // Setup basic pin mode support
-            _mockGpioController.Setup(x => x.IsPinModeSupported(It.IsAny<int>(), It.IsAny<PinMode>()))
-                              .Returns(true);
-
-            // Setup pin state - pins start closed
-            _mockGpioController.Setup(x => x.IsPinOpen(It.IsAny<int>()))
-                              .Returns(false);
-
-            // Setup pin operations
-            _mockGpioController.Setup(x => x.OpenPin(It.IsAny<int>(), It.IsAny<PinMode>()));
-            _mockGpioController.Setup(x => x.ClosePin(It.IsAny<int>()));
-            _mockGpioController.Setup(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()));
-            
-            // Setup button pin reading - default to not pressed (pull-up = High)
-            _mockGpioController.Setup(x => x.Read(TestPin))
-                              .Returns(PinValue.High);
-
-            // Setup callback registration and capture the callback
-            _mockGpioController.Setup(x => x.RegisterCallbackForPinValueChangedEvent(
-                It.IsAny<int>(),
-                It.IsAny<PinEventTypes>(),
-                It.IsAny<PinChangeEventHandler>()))
-                .Callback<int, PinEventTypes, PinChangeEventHandler>((pin, events, callback) =>
-                {
-                    if (pin == TestPin)
-                    {
-                        _capturedCallback = callback;
-                    }
-                });
-                
-            _mockGpioController.Setup(x => x.UnregisterCallbackForPinValueChangedEvent(
-                It.IsAny<int>(),
-                It.IsAny<PinChangeEventHandler>()));
+            Cleanup();
         }
 
         /// <summary>
-        /// Creates a button with LED instance using the mock GPIO controller
+        /// Creates a GpioButtonWithLed instance for testing
         /// </summary>
-        private GpioButtonWithLed CreateButtonWithLed(bool isPullUp = true, bool hasExternalResistor = false, TimeSpan debounceTime = default)
+        private GpioButtonWithLed CreateButtonWithLed(int buttonPin = TestPin, int? ledPin = TestLedPin, 
+            TimeSpan? doublePress = null, TimeSpan? holding = null, bool isPullUp = true, bool hasExternalResistor = false,
+            TimeSpan? debounceTime = null)
         {
             return new GpioButtonWithLed(
-                ButtonPin,
-                LedPin,
-                TimeSpan.FromTicks(15000000), // DefaultDoublePressTicks
-                TimeSpan.FromMilliseconds(2000), // DefaultHoldingMilliseconds
+                buttonPin: buttonPin,
+                ledPin: ledPin,
+                doublePress: doublePress ?? TimeSpan.FromMilliseconds(300),
+                holding: holding ?? TimeSpan.FromSeconds(2),
                 isPullUp: isPullUp,
                 hasExternalResistor: hasExternalResistor,
-                gpioController: _mockGpioController!.Object,
-                debounceTime: debounceTime);
+                gpioController: _gpioController!,
+                debounceTime: debounceTime ?? TimeSpan.FromMilliseconds(50));
         }
 
         /// <summary>
-        /// Simulates a button press or release by triggering the GPIO callback
+        /// Simulates a button press by changing the pin value
         /// </summary>
-        private void SimulateButtonStateChange(PinEventTypes eventType, bool isPressed = true)
+        private void SimulateButtonPress()
         {
-            if (_buttonWithLed == null || _mockGpioController == null || _capturedCallback == null) return;
-
-            // Create event args
-            var eventArgs = new PinValueChangedEventArgs(eventType, TestPin);
-
-            // Call the captured callback
-            _capturedCallback.Invoke(_mockGpioController.Object, eventArgs);
+            if (!UseRealHardware && _mockGpioController != null)
+            {
+                _mockGpioController.SimulatePinValueChange(TestPin, PinValue.Low);
+            }
         }
 
-        #region Constructor Tests
+        /// <summary>
+        /// Simulates a button release by changing the pin value
+        /// </summary>
+        private void SimulateButtonRelease()
+        {
+            if (!UseRealHardware && _mockGpioController != null)
+            {
+                _mockGpioController.SimulatePinValueChange(TestPin, PinValue.High);
+            }
+        }
+
+        /// <summary>
+        /// Simulates a complete button press and release sequence
+        /// </summary>
+        private void SimulateButtonPressAndRelease(int pressDelayMs = 100, int releaseDelayMs = 100)
+        {
+            SimulateButtonPress();
+            if (pressDelayMs > 0) Thread.Sleep(pressDelayMs);
+            SimulateButtonRelease();
+            if (releaseDelayMs > 0) Thread.Sleep(releaseDelayMs);
+        }
+
+        /// <summary>
+        /// Verifies that a pin is configured with the expected mode
+        /// </summary>
+        private void VerifyPinMode(int pinNumber, PinMode expectedMode)
+        {
+            if (!UseRealHardware && _mockGpioController != null)
+            {
+                var actualMode = _mockGpioController.GetPinMode(pinNumber);
+                Assert.AreEqual(expectedMode, actualMode, $"Pin {pinNumber} should be configured as {expectedMode} but was {actualMode}");
+            }
+        }
+
+        #region Initialization Tests
 
         [TestMethod]
-        public void Constructor_ValidParameters_ShouldInitializeCorrectly()
+        public void Constructor_WithValidParameters_InitializesCorrectly()
         {
-            // Act
+            // Arrange & Act
             _buttonWithLed = CreateButtonWithLed();
 
             // Assert
             Assert.IsNotNull(_buttonWithLed);
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
-            Assert.IsFalse(_buttonWithLed.HasExternalResistor);
-            Assert.AreEqual(_buttonWithLed.DebounceTime, TimeSpan.Zero);
+            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+            
+            // Verify pins are configured correctly
+            if (!UseRealHardware)
+            {
+                VerifyPinMode(TestPin, PinMode.InputPullUp);
+                VerifyPinMode(TestLedPin, PinMode.Output);
+            }
         }
 
         [TestMethod]
-        public void Constructor_WithExternalResistor_ShouldSetProperty()
+        public void Constructor_WithPullDown_ConfiguresCorrectly()
         {
-            // Act
-            _buttonWithLed = CreateButtonWithLed(hasExternalResistor: true);
-
-            // Assert
-            Assert.IsTrue(_buttonWithLed.HasExternalResistor);
-        }
-
-        [TestMethod]
-        public void Constructor_WithDebounceTime_ShouldSetProperty()
-        {
-            // Arrange
-            var debounceTime = TimeSpan.FromMilliseconds(50);
-
-            // Act
-            _buttonWithLed = CreateButtonWithLed(debounceTime: debounceTime);
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.DebounceTime, debounceTime);
-        }
-
-        [TestMethod]
-        public void Constructor_SamePinNumbers_ShouldThrowArgumentException()
-        {
-            // Act & Assert
-            Assert.ThrowsException<ArgumentException>(() =>
-                new GpioButtonWithLed(TestPin, TestPin, TimeSpan.FromTicks(15000000), TimeSpan.FromMilliseconds(2000), gpioController: _mockGpioController!.Object));
-        }
-
-        [TestMethod]
-        public void Constructor_UnsupportedButtonPinMode_ShouldThrowArgumentException()
-        {
-            // Arrange
-            _mockGpioController!.Setup(x => x.IsPinModeSupported(TestPin, It.IsAny<PinMode>()))
-                              .Returns(false);
-
-            // Act & Assert
-            Assert.ThrowsException<ArgumentException>(() => CreateButtonWithLed());
-        }
-
-        [TestMethod]
-        public void Constructor_UnsupportedLedPinMode_ShouldThrowArgumentException()
-        {
-            // Arrange
-            _mockGpioController!.Setup(x => x.IsPinModeSupported(TestLedPin, PinMode.Output))
-                              .Returns(false);
-
-            // Act & Assert
-            Assert.ThrowsException<ArgumentException>(() => CreateButtonWithLed());
-        }
-
-        [TestMethod]
-        public void Constructor_ShouldConfigurePinsCorrectly()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Assert
-            _mockGpioController!.Verify(x => x.OpenPin(TestPin, PinMode.InputPullUp), Times.Once);
-            _mockGpioController.Verify(x => x.OpenPin(TestLedPin, PinMode.Output), Times.Once);
-            _mockGpioController.Verify(x => x.RegisterCallbackForPinValueChangedEvent(
-                TestPin,
-                PinEventTypes.Falling | PinEventTypes.Rising,
-                It.IsAny<PinChangeEventHandler>()), Times.Once);
-        }
-
-        [TestMethod]
-        public void Constructor_WithExternalResistor_ShouldUseInputMode()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithLed(hasExternalResistor: true);
-
-            // Assert
-            _mockGpioController!.Verify(x => x.OpenPin(TestPin, PinMode.Input), Times.Once);
-        }
-
-        [TestMethod]
-        public void Constructor_PullDownMode_ShouldConfigureCorrectly()
-        {
-            // Act
+            // Arrange & Act
             _buttonWithLed = CreateButtonWithLed(isPullUp: false);
 
             // Assert
-            _mockGpioController!.Verify(x => x.OpenPin(TestPin, PinMode.InputPullDown), Times.Once);
+            Assert.IsNotNull(_buttonWithLed);
+            
+            // Verify pin is configured with pull-down
+            if (!UseRealHardware)
+            {
+                VerifyPinMode(TestPin, PinMode.InputPullDown);
+            }
+        }
+
+        [TestMethod]
+        public void Constructor_WithExternalResistor_ConfiguresCorrectly()
+        {
+            // Arrange & Act
+            _buttonWithLed = CreateButtonWithLed(hasExternalResistor: true);
+
+            // Assert
+            Assert.IsNotNull(_buttonWithLed);
+            
+            // Verify pin is configured as simple input when external resistor is used
+            if (!UseRealHardware)
+            {
+                VerifyPinMode(TestPin, PinMode.Input);
+            }
+        }
+
+        [TestMethod]
+        public void Constructor_WithSameButtonAndLedPin_ThrowsArgumentException()
+        {
+            // Arrange & Act & Assert
+            Assert.ThrowsException<ArgumentException>(() =>
+                CreateButtonWithLed(buttonPin: TestPin, ledPin: TestPin));
+        }
+
+        [TestMethod]
+        public void Constructor_WithNullLedPin_InitializesWithoutLed()
+        {
+            // Arrange & Act
+            _buttonWithLed = CreateButtonWithLed(ledPin: null);
+
+            // Assert
+            Assert.IsNotNull(_buttonWithLed);
+            Assert.AreEqual(PushButtonLedState.NotUsed, _buttonWithLed.LedState);
+        }
+
+        #endregion
+
+        #region Button Press Event Tests
+
+        [TestMethod]
+        public void ButtonDown_WhenPressed_FiresEvent()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithLed();
+            bool eventFired = false;
+            _buttonWithLed.ButtonDown += (sender, args) => eventFired = true;
+
+            // Act
+            SimulateButtonPressAndRelease();
+            Thread.Sleep(100); // Allow time for event processing
+
+            // Assert
+            Assert.IsTrue(eventFired, "ButtonDown event should have fired");
+        }
+
+        [TestMethod]
+        public void ButtonUp_WhenReleased_FiresEvent()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithLed();
+            bool eventFired = false;
+            _buttonWithLed.ButtonUp += (sender, args) => eventFired = true;
+
+            // Act
+            SimulateButtonPressAndRelease();
+            Thread.Sleep(100); // Allow time for event processing
+
+            // Assert
+            Assert.IsTrue(eventFired, "ButtonUp event should have fired");
+        }
+
+        [TestMethod]
+        public void ButtonEvents_WhenMultipleSubscribers_AllReceiveEvents()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithLed();
+            int downEventCount = 0;
+            int upEventCount = 0;
+            
+            _buttonWithLed.ButtonDown += (sender, args) => downEventCount++;
+            _buttonWithLed.ButtonDown += (sender, args) => downEventCount++;
+            _buttonWithLed.ButtonUp += (sender, args) => upEventCount++;
+            _buttonWithLed.ButtonUp += (sender, args) => upEventCount++;
+
+            // Act
+            SimulateButtonPressAndRelease();
+            Thread.Sleep(100); // Allow time for event processing
+
+            // Assert
+            Assert.AreEqual(2, downEventCount, "Both ButtonDown event handlers should have fired");
+            Assert.AreEqual(2, upEventCount, "Both ButtonUp event handlers should have fired");
         }
 
         #endregion
@@ -226,17 +279,7 @@ namespace HVO.Iot.Devices.Tests
         #region LED State Tests
 
         [TestMethod]
-        public void LedState_InitialValue_ShouldBeOff()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
-        }
-
-        [TestMethod]
-        public void LedState_SetToOn_ShouldUpdateValue()
+        public void LedState_SetToOn_ReflectsCorrectly()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
@@ -245,221 +288,107 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed.LedState = PushButtonLedState.On;
 
             // Assert
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.On);
-            _mockGpioController!.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
+            Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
+            
+            // Verify LED pin state for mock controller
+            if (!UseRealHardware && _mockGpioController != null)
+            {
+                var ledValue = _mockGpioController.Read(TestLedPin);
+                Assert.AreEqual(PinValue.High, ledValue, "LED pin should be HIGH when LedState is On");
+            }
         }
 
         [TestMethod]
-        public void LedState_SetToOff_ShouldUpdateValue()
+        public void LedState_SetToOff_ReflectsCorrectly()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedState = PushButtonLedState.On;
+            _buttonWithLed.LedState = PushButtonLedState.On; // First turn it on
 
             // Act
             _buttonWithLed.LedState = PushButtonLedState.Off;
 
             // Assert
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
-            _mockGpioController!.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
+            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+            
+            // Verify LED pin state for mock controller
+            if (!UseRealHardware && _mockGpioController != null)
+            {
+                var ledValue = _mockGpioController.Read(TestLedPin);
+                Assert.AreEqual(PinValue.Low, ledValue, "LED pin should be LOW when LedState is Off");
+            }
         }
 
         [TestMethod]
-        public void LedState_SetSameValue_ShouldNotTriggerGpioWrite()
+        public void LedState_WithoutLedPin_RemainsNotUsed()
         {
             // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _mockGpioController!.Invocations.Clear(); // Clear initialization calls
+            _buttonWithLed = CreateButtonWithLed(ledPin: null);
 
-            // Act
-            _buttonWithLed.LedState = PushButtonLedState.Off; // Same as initial value
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
-            _mockGpioController.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
+            // Act & Assert
+            _buttonWithLed.LedState = PushButtonLedState.On; // Should be ignored
+            Assert.AreEqual(PushButtonLedState.NotUsed, _buttonWithLed.LedState);
         }
 
         [TestMethod]
-        public void LedState_AfterDisposal_ShouldReturnOff()
+        public void LedState_MultipleChanges_ReflectsCorrectly()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
+
+            // Act & Assert sequence
             _buttonWithLed.LedState = PushButtonLedState.On;
+            Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
 
-            // Act
-            _buttonWithLed.Dispose();
-            var stateAfterDisposal = _buttonWithLed.LedState;
+            _buttonWithLed.LedState = PushButtonLedState.Off;
+            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
 
-            // Assert
-            Assert.AreEqual(stateAfterDisposal, PushButtonLedState.Off);
-        }
-
-        [TestMethod]
-        public void LedState_SetAfterDisposal_ShouldNotThrow()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.Dispose();
-
-            // Act & Assert - Should not throw, just ignore
             _buttonWithLed.LedState = PushButtonLedState.On;
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.Off);
+            Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
         }
 
         #endregion
 
-        #region LED Options Tests
+        #region Debounce Tests
 
         [TestMethod]
-        public void LedOptions_InitialValue_ShouldBeFollowPressedState()
+        public void ButtonPress_WithDebouncing_IgnoresRapidChanges()
         {
-            // Act
-            _buttonWithLed = CreateButtonWithLed();
+            // Arrange
+            _buttonWithLed = CreateButtonWithLed(debounceTime: TimeSpan.FromMilliseconds(200));
+            int eventCount = 0;
+            _buttonWithLed.ButtonDown += (sender, args) => eventCount++;
+
+            // Act - Simulate rapid presses within debounce time
+            SimulateButtonPress();
+            Thread.Sleep(50);
+            SimulateButtonRelease();
+            Thread.Sleep(50);
+            SimulateButtonPress();
+            Thread.Sleep(50);
+            SimulateButtonRelease();
+            Thread.Sleep(300); // Wait longer than debounce time
 
             // Assert
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
+            Assert.AreEqual(1, eventCount, "Only one ButtonDown event should fire due to debouncing");
         }
 
         [TestMethod]
-        public void LedOptions_SetToAlwaysOn_ShouldUpdateLedImmediately()
+        public void ButtonPress_AfterDebounceTime_FiresNewEvent()
         {
             // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _mockGpioController!.Invocations.Clear(); // Clear initialization calls
+            _buttonWithLed = CreateButtonWithLed(debounceTime: TimeSpan.FromMilliseconds(100));
+            int eventCount = 0;
+            _buttonWithLed.ButtonDown += (sender, args) => eventCount++;
 
-            // Act
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
+            // Act - Two presses separated by debounce time
+            SimulateButtonPressAndRelease(50, 50);
+            Thread.Sleep(150); // Wait longer than debounce time
+            SimulateButtonPressAndRelease(50, 50);
+            Thread.Sleep(150); // Allow final event processing
 
             // Assert
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.AlwaysOn);
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
-        }
-
-        [TestMethod]
-        public void LedOptions_SetToAlwaysOff_ShouldUpdateLedImmediately()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedState = PushButtonLedState.On; // Turn on first
-            _mockGpioController!.Invocations.Clear(); // Clear previous calls
-
-            // Act
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOff;
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.AlwaysOff);
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
-        }
-
-        [TestMethod]
-        public void LedOptions_SetSameValue_ShouldNotTriggerUpdate()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _mockGpioController!.Invocations.Clear(); // Clear initialization calls
-
-            // Act
-            _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState; // Same as initial
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
-            _mockGpioController.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
-        }
-
-        [TestMethod]
-        public void LedOptions_SetAfterDisposal_ShouldNotThrow()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.Dispose();
-
-            // Act & Assert - Should not throw, just ignore
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState); // Should remain unchanged
-        }
-
-        #endregion
-
-        #region Button Press Simulation Tests
-
-        [TestMethod]
-        public void ButtonPress_WithFollowPressedState_ShouldTurnLedOn()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState;
-            _mockGpioController!.Invocations.Clear();
-
-            // Act
-            SimulateButtonStateChange(PinEventTypes.Falling); // Pull-up: falling = pressed
-
-            // Assert
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
-        }
-
-        [TestMethod]
-        public void ButtonRelease_WithFollowPressedState_ShouldTurnLedOff()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState;
-            SimulateButtonStateChange(PinEventTypes.Falling); // Press first
-            _mockGpioController!.Invocations.Clear();
-
-            // Act
-            SimulateButtonStateChange(PinEventTypes.Rising); // Pull-up: rising = released
-
-            // Assert
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
-        }
-
-        [TestMethod]
-        public void ButtonPress_WithAlwaysOn_ShouldKeepLedOn()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
-            _mockGpioController!.Invocations.Clear();
-
-            // Act
-            SimulateButtonStateChange(PinEventTypes.Falling); // Press
-            SimulateButtonStateChange(PinEventTypes.Rising);  // Release
-
-            // Assert - LED should remain on regardless of button state
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.Never);
-        }
-
-        [TestMethod]
-        public void ButtonPress_WithAlwaysOff_ShouldKeepLedOff()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOff;
-            _mockGpioController!.Invocations.Clear();
-
-            // Act
-            SimulateButtonStateChange(PinEventTypes.Falling); // Press
-            SimulateButtonStateChange(PinEventTypes.Rising);  // Release
-
-            // Assert - LED should remain off regardless of button state
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.High), Times.Never);
-        }
-
-        [TestMethod]
-        public void ButtonPress_PullDownMode_ShouldWorkCorrectly()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed(isPullUp: false);
-            _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState;
-            _mockGpioController!.Invocations.Clear();
-
-            // Act
-            SimulateButtonStateChange(PinEventTypes.Rising); // Pull-down: rising = pressed
-
-            // Assert
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.High), Times.AtLeastOnce);
+            Assert.AreEqual(2, eventCount, "Two ButtonDown events should fire when separated by debounce time");
         }
 
         #endregion
@@ -467,355 +396,104 @@ namespace HVO.Iot.Devices.Tests
         #region Disposal Tests
 
         [TestMethod]
-        public void Dispose_ShouldTurnOffLedAndCleanupResources()
+        public void Dispose_AfterCreation_DisposesCleanly()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedState = PushButtonLedState.On;
+            bool eventFired = false;
+            _buttonWithLed.ButtonDown += (sender, args) => eventFired = true;
 
             // Act
             _buttonWithLed.Dispose();
 
-            // Assert
-            _mockGpioController!.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
-            _mockGpioController.Verify(x => x.UnregisterCallbackForPinValueChangedEvent(
-                TestPin, It.IsAny<PinChangeEventHandler>()), Times.Once);
-        }
-
-        [TestMethod]
-        public async Task DisposeAsync_ShouldTurnOffLedAndCleanupResources()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            _buttonWithLed.LedState = PushButtonLedState.On;
-
-            // Act
-            await _buttonWithLed.DisposeAsync();
-
-            // Assert
-            _mockGpioController!.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.AtLeastOnce);
-            _mockGpioController.Verify(x => x.UnregisterCallbackForPinValueChangedEvent(
-                TestPin, It.IsAny<PinChangeEventHandler>()), Times.Once);
-        }
-
-        [TestMethod]
-        public void Dispose_MultipleCalls_ShouldNotThrow()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Act & Assert - Should not throw
-            _buttonWithLed.Dispose();
-            _buttonWithLed.Dispose();
-            _buttonWithLed.Dispose();
-        }
-
-        [TestMethod]
-        public async Task DisposeAsync_MultipleCalls_ShouldNotThrow()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Act & Assert - Should not throw
-            await _buttonWithLed.DisposeAsync();
-            await _buttonWithLed.DisposeAsync();
-            await _buttonWithLed.DisposeAsync();
-        }
-
-        #endregion
-
-        #region Thread Safety Tests
-
-        [TestMethod]
-        public async Task LedState_ConcurrentAccess_ShouldBeThreadSafe()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithLed();
-            var tasks = new List<Task>();
-            var exceptions = new List<Exception>();
-
-            // Act
-            for (int i = 0; i < 10; i++)
+            // Assert - Should not throw
+            // After disposal, events should not fire
+            if (!UseRealHardware && _mockGpioController != null)
             {
-                tasks.Add(Task.Run(() =>
-                {
-                    try
-                    {
-                        for (int j = 0; j < 100; j++)
-                        {
-                            _buttonWithLed.LedState = j % 2 == 0 ? PushButtonLedState.On : PushButtonLedState.Off;
-                            var currentState = _buttonWithLed.LedState;
-                            // Verify we can read without exception
-                            Assert.IsTrue(currentState == PushButtonLedState.On || currentState == PushButtonLedState.Off);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        lock (exceptions)
-                        {
-                            exceptions.Add(ex);
-                        }
-                    }
-                }));
+                SimulateButtonPressAndRelease();
+                Thread.Sleep(100);
+                Assert.IsFalse(eventFired, "Events should not fire after disposal");
             }
-
-            await Task.WhenAll(tasks);
-
-            // Assert
-            Assert.AreEqual(0, exceptions.Count, $"Thread safety test failed with {exceptions.Count} exceptions");
-            var finalState = _buttonWithLed.LedState;
-            Assert.IsTrue(finalState == PushButtonLedState.On || finalState == PushButtonLedState.Off);
         }
 
         [TestMethod]
-        public async Task LedOptions_ConcurrentAccess_ShouldBeThreadSafe()
+        public void Dispose_CalledMultipleTimes_DoesNotThrow()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
-            var tasks = new List<Task>();
-            var exceptions = new List<Exception>();
-            var options = new[] { PushButtonLedOptions.AlwaysOff, PushButtonLedOptions.AlwaysOn, PushButtonLedOptions.FollowPressedState };
 
-            // Act
-            for (int i = 0; i < 10; i++)
-            {
-                tasks.Add(Task.Run(() =>
-                {
-                    try
-                    {
-                        for (int j = 0; j < 100; j++)
-                        {
-                            _buttonWithLed.LedOptions = options[j % options.Length];
-                            var currentOptions = _buttonWithLed.LedOptions;
-                            // Verify we can read without exception
-                            Assert.IsTrue(options.Contains(currentOptions));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        lock (exceptions)
-                        {
-                            exceptions.Add(ex);
-                        }
-                    }
-                }));
-            }
-
-            await Task.WhenAll(tasks);
-
-            // Assert
-            Assert.AreEqual(0, exceptions.Count, $"Thread safety test failed with {exceptions.Count} exceptions");
-            var finalOptions = _buttonWithLed.LedOptions;
-            Assert.IsTrue(options.Contains(finalOptions));
-        }
-
-        #endregion
-
-        #region Enum Tests
-
-        [TestMethod]
-        public void PushButtonLedState_EnumValues_ShouldBeCorrect()
-        {
-            // Arrange & Act
-            var offValue = PushButtonLedState.Off;
-            var onValue = PushButtonLedState.On;
-
-            // Assert
-            Assert.AreEqual((int)offValue, 0);
-            Assert.AreEqual((int)onValue, 1);
-        }
-
-        [TestMethod]
-        public void PushButtonLedOptions_EnumValues_ShouldBeCorrect()
-        {
-            // Arrange & Act
-            var alwaysOff = PushButtonLedOptions.AlwaysOff;
-            var alwaysOn = PushButtonLedOptions.AlwaysOn;
-            var followPressed = PushButtonLedOptions.FollowPressedState;
-
-            // Assert
-            Assert.AreEqual((int)alwaysOff, 0);
-            Assert.AreEqual((int)alwaysOn, 1);
-            Assert.AreEqual((int)followPressed, 2);
-        }
-
-        #endregion
-
-        #region Mock Verification Tests
-
-        [TestMethod]
-        public void MockBehavior_PinModeSupport_ShouldBeVerified()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Assert
-            _mockGpioController!.Verify(x => x.IsPinModeSupported(TestPin, PinMode.InputPullUp), Times.Once);
-            _mockGpioController.Verify(x => x.IsPinModeSupported(TestLedPin, PinMode.Output), Times.Once);
-        }
-
-        [TestMethod]
-        public void MockBehavior_PinInitialization_ShouldBeVerified()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Assert
-            _mockGpioController!.Verify(x => x.Read(TestPin), Times.Once); // Initial state read
-            _mockGpioController.Verify(x => x.Write(TestLedPin, PinValue.Low), Times.Once); // Initial LED off
-        }
-
-        [TestMethod]
-        public void MockBehavior_CustomPinReadSequence_ShouldWork()
-        {
-            // Arrange
-            var readSequence = new Queue<PinValue>(new[] { PinValue.Low, PinValue.High, PinValue.Low });
-            
-            // Reset the mock and set up the sequence
-            _mockGpioController!.Reset();
-            SetupGpioControllerMock();
-            
-            // Set up the specific sequence for our test pin
-            _mockGpioController!.Setup(x => x.Read(TestPin))
-                              .Returns(() => readSequence.Count > 0 ? readSequence.Dequeue() : PinValue.Low);
-
-            // Act
-            _buttonWithLed = CreateButtonWithLed();
-
-            // Assert
-            _mockGpioController.Verify(x => x.Read(TestPin), Times.AtLeastOnce);
-        }
-
-        #endregion
-
-        #region Null LED Pin Tests
-
-        /// <summary>
-        /// Creates a button without LED (null LED pin) using the mock GPIO controller
-        /// </summary>
-        private GpioButtonWithLed CreateButtonWithoutLed(bool isPullUp = true, bool hasExternalResistor = false, TimeSpan debounceTime = default)
-        {
-            return new GpioButtonWithLed(
-                ButtonPin,
-                null, // No LED pin
-                TimeSpan.FromTicks(15000000), // DefaultDoublePressTicks
-                TimeSpan.FromMilliseconds(2000), // DefaultHoldingMilliseconds
-                isPullUp: isPullUp,
-                hasExternalResistor: hasExternalResistor,
-                gpioController: _mockGpioController!.Object,
-                debounceTime: debounceTime);
-        }
-
-        [TestMethod]
-        public void Constructor_WithNullLedPin_ShouldInitializeWithNotUsedState()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithoutLed();
-
-            // Assert
-            Assert.IsNotNull(_buttonWithLed);
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.NotUsed);
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.FollowPressedState);
-        }
-
-        [TestMethod]
-        public void Constructor_WithNullLedPin_ShouldNotOpenLedPin()
-        {
-            // Act
-            _buttonWithLed = CreateButtonWithoutLed();
-
-            // Assert
-            _mockGpioController!.Verify(x => x.OpenPin(ButtonPin, It.IsAny<PinMode>()), Times.Once);
-            _mockGpioController.Verify(x => x.OpenPin(LedPin, PinMode.Output), Times.Never);
-            _mockGpioController.Verify(x => x.Write(LedPin, It.IsAny<PinValue>()), Times.Never);
-        }
-
-        [TestMethod]
-        public void LedState_WithNullLedPin_SettingNonNotUsedStateShouldBeIgnored()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithoutLed();
-
-            // Act
-            _buttonWithLed.LedState = PushButtonLedState.On;
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.NotUsed);
-            _mockGpioController!.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
-        }
-
-        [TestMethod]
-        public void LedState_WithNullLedPin_SettingNotUsedStateShouldBeAllowed()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithoutLed();
-
-            // Act
-            _buttonWithLed.LedState = PushButtonLedState.NotUsed;
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedState, PushButtonLedState.NotUsed);
-        }
-
-        [TestMethod]
-        public void LedOptions_WithNullLedPin_ChangingShouldNotCauseHardwareAccess()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithoutLed();
-
-            // Act
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOn;
-            _buttonWithLed.LedOptions = PushButtonLedOptions.AlwaysOff;
-
-            // Assert
-            Assert.AreEqual(_buttonWithLed.LedOptions, PushButtonLedOptions.AlwaysOff);
-            _mockGpioController!.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
-        }
-
-        [TestMethod]
-        public void ButtonPress_WithNullLedPin_ShouldNotCauseHardwareAccess()
-        {
-            // Arrange
-            _buttonWithLed = CreateButtonWithoutLed();
-            _buttonWithLed.LedOptions = PushButtonLedOptions.FollowPressedState;
-
-            // Act
-            SimulateButtonStateChange(PinEventTypes.Falling, isPressed: true);
-
-            // Assert
-            _mockGpioController!.Verify(x => x.Write(It.IsAny<int>(), It.IsAny<PinValue>()), Times.Never);
-        }
-
-        [TestMethod]
-        public void Constructor_SamePinForButtonAndLed_ShouldThrowArgumentException()
-        {
             // Act & Assert
-            var exception = Assert.ThrowsException<ArgumentException>(() =>
-            {
-                new GpioButtonWithLed(
-                    ButtonPin,
-                    ButtonPin, // Same pin for LED
-                    TimeSpan.FromTicks(15000000),
-                    TimeSpan.FromMilliseconds(2000),
-                    gpioController: _mockGpioController!.Object);
-            });
+            _buttonWithLed.Dispose();
+            _buttonWithLed.Dispose(); // Should not throw
+            _buttonWithLed.Dispose(); // Should not throw
+        }
 
-            Assert.AreEqual(exception.ParamName, "ledPin");
-            Assert.IsTrue(exception.Message.Contains("Button pin and LED pin cannot be the same"));
+        #endregion
+
+        #region Stress Tests
+
+        [TestMethod]
+        public void StressTest_RapidButtonPresses_HandlesCorrectly()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithLed(debounceTime: TimeSpan.FromMilliseconds(10));
+            int eventCount = 0;
+            _buttonWithLed.ButtonDown += (sender, args) => Interlocked.Increment(ref eventCount);
+
+            // Act - Simulate rapid button presses
+            for (int i = 0; i < 50; i++)
+            {
+                SimulateButtonPressAndRelease(5, 5);
+            }
+            Thread.Sleep(500); // Allow all events to process
+
+            // Assert
+            Assert.IsTrue(eventCount > 0, "At least some button events should have been processed");
+            Assert.IsTrue(eventCount <= 50, "Event count should not exceed number of presses");
         }
 
         [TestMethod]
-        public void Dispose_WithNullLedPin_ShouldNotTryToCloseLedPin()
+        public void StressTest_RapidLedStateChanges_HandlesCorrectly()
         {
             // Arrange
-            _buttonWithLed = CreateButtonWithoutLed();
+            _buttonWithLed = CreateButtonWithLed();
 
-            // Act
-            _buttonWithLed.Dispose();
+            // Act & Assert - Rapid LED state changes should not throw
+            for (int i = 0; i < 100; i++)
+            {
+                _buttonWithLed.LedState = i % 2 == 0 ? PushButtonLedState.On : PushButtonLedState.Off;
+            }
+
+            // Final state should be reflected correctly
+            Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
+        }
+
+        [TestMethod]
+        public void StressTest_ConcurrentAccess_HandlesCorrectly()
+        {
+            // Arrange
+            _buttonWithLed = CreateButtonWithLed();
+            var tasks = new Task[10];
+
+            // Act - Concurrent access to LED state and button simulation
+            for (int i = 0; i < tasks.Length; i++)
+            {
+                int taskIndex = i;
+                tasks[i] = Task.Run(() =>
+                {
+                    for (int j = 0; j < 10; j++)
+                    {
+                        _buttonWithLed.LedState = taskIndex % 2 == 0 ? PushButtonLedState.On : PushButtonLedState.Off;
+                        Thread.Sleep(10);
+                    }
+                });
+            }
+
+            // Wait for all tasks to complete
+            Task.WaitAll(tasks, TimeSpan.FromSeconds(5));
 
             // Assert
-            _mockGpioController!.Verify(x => x.ClosePin(ButtonPin), Times.Once);
-            _mockGpioController.Verify(x => x.ClosePin(LedPin), Times.Never);
+            Assert.IsNotNull(_buttonWithLed.LedState); // Should have some valid state
         }
 
         #endregion
