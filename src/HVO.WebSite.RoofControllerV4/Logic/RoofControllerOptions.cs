@@ -2,6 +2,12 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 {
     public record RoofControllerOptions
     {
+        /// <summary>
+        /// Determines whether to use the simulated event roof controller for testing/development,
+        /// or the real hardware roof controller for production.
+        /// </summary>
+        public bool UseSimulatedEvents { get; set; } = false;
+
         public int RoofClosedLimitSwitchPin { get; set; } = 21;
         public int RoofOpenedLimitSwitchPin { get; set; } = 17;
 

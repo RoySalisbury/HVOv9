@@ -7,32 +7,32 @@ using HVO;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
 {
-    public sealed class RoofControllerService : IRoofControllerService, IAsyncDisposable, IDisposable
+    public class RoofControllerService : IRoofControllerService, IAsyncDisposable, IDisposable
     {
-        private static PinValue RelayOff = PinValue.Low;
-        private static PinValue RelayOn = PinValue.High;
+        protected static PinValue RelayOff = PinValue.Low;
+        protected static PinValue RelayOn = PinValue.High;
 
 
-        private readonly ILogger<RoofControllerService> _logger;
-        private readonly RoofControllerOptions _roofControllerOptions;
+        protected readonly ILogger<RoofControllerService> _logger;
+        protected readonly RoofControllerOptions _roofControllerOptions;
 
-        private IGpioController _gpioController;
-        private readonly bool _ownsGpioController;
-        private readonly ILogger<GpioLimitSwitch> _limitSwitchLogger;
-        private readonly GpioLimitSwitch _roofOpenLimitSwitch;
-        private readonly GpioLimitSwitch _roofClosedLimitSwitch;
+        protected IGpioController _gpioController;
+        protected readonly bool _ownsGpioController;
+        protected readonly ILogger<GpioLimitSwitch> _limitSwitchLogger;
+        protected readonly GpioLimitSwitch _roofOpenLimitSwitch;
+        protected readonly GpioLimitSwitch _roofClosedLimitSwitch;
 
-        private readonly GpioButtonWithLed _roofOpenButton;
-        private readonly GpioButtonWithLed _roofCloseButton;    
-        private readonly GpioButtonWithLed _roofStopButton;    
+        protected readonly GpioButtonWithLed _roofOpenButton;
+        protected readonly GpioButtonWithLed _roofCloseButton;    
+        protected readonly GpioButtonWithLed _roofStopButton;    
 
-        private readonly object _syncLock = new object();
-        private volatile bool _disposed;  // Make volatile for thread-safe checking
-        private string _lastCommand = string.Empty;
+        protected readonly object _syncLock = new object();
+        protected volatile bool _disposed;  // Make volatile for thread-safe checking
+        protected string _lastCommand = string.Empty;
 
         // Safety watchdog fields - use single lock for atomicity
-        private System.Timers.Timer? _safetyWatchdogTimer;
-        private DateTime _operationStartTime;
+        protected System.Timers.Timer? _safetyWatchdogTimer;
+        protected DateTime _operationStartTime;
         // Removed separate _watchdogLock - use _syncLock for all state to prevent races
 
         public RoofControllerService(ILogger<RoofControllerService> logger, IOptions<RoofControllerOptions> roofControllerOptions, IGpioController gpioController)
@@ -99,7 +99,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// <summary>
         /// Initializes the safety watchdog timer that prevents runaway operations.
         /// </summary>
-        private void InitializeSafetyWatchdog()
+        protected virtual void InitializeSafetyWatchdog()
         {
             lock (_syncLock)
             {
@@ -118,7 +118,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// <summary>
         /// Starts the safety watchdog timer for the current operation.
         /// </summary>
-        private void StartSafetyWatchdog()
+        protected virtual void StartSafetyWatchdog()
         {
             lock (_syncLock)
             {
@@ -134,7 +134,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// <summary>
         /// Stops the safety watchdog timer.
         /// </summary>
-        private void StopSafetyWatchdog()
+        protected virtual void StopSafetyWatchdog()
         {
             lock (_syncLock)
             {
@@ -151,7 +151,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// Safety watchdog timer elapsed event handler - emergency stops the roof.
         /// Thread-safe with proper disposal checking and atomic hardware operations.
         /// </summary>
-        private void SafetyWatchdog_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
+        protected virtual void SafetyWatchdog_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
         {
             _logger.LogWarning("SAFETY WATCHDOG TRIGGERED: Roof operation exceeded maximum allowed time of {timeout} seconds. Emergency stopping roof.", 
                 _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
@@ -177,18 +177,18 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        public bool IsInitialized { get; private set; } = false;
+        public virtual bool IsInitialized { get; protected set; } = false;
 
-        public RoofControllerStatus Status { get; private set; } = RoofControllerStatus.NotInitialized;
+        public virtual RoofControllerStatus Status { get; protected set; } = RoofControllerStatus.NotInitialized;
 
         /// <summary>
         /// Gets a value indicating whether the roof is currently moving (opening or closing).
         /// This property returns true when the roof is actively in motion and not at a limit switch position.
         /// </summary>
-        public bool IsMoving => Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing;
+        public virtual bool IsMoving => Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing;
 
 
-        public Task<Result<bool>> Initialize(CancellationToken cancellationToken)
+        public virtual Task<Result<bool>> Initialize(CancellationToken cancellationToken)
         {
             if (this._disposed)
             {
@@ -293,7 +293,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         }
 
 
-        private void roofStopButton_OnButtonDown(object? sender, EventArgs e)
+        protected virtual void roofStopButton_OnButtonDown(object? sender, EventArgs e)
         {
             // Thread-safe button handling
             try
@@ -306,7 +306,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }   
 
-        private void roofCloseButton_OnButtonUp(object? sender, EventArgs e)
+        protected virtual void roofCloseButton_OnButtonUp(object? sender, EventArgs e)
         {
             // Thread-safe button handling
             try
@@ -319,7 +319,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }   
 
-        private void roofCloseButton_OnButtonDown(object? sender, EventArgs e)
+        protected virtual void roofCloseButton_OnButtonDown(object? sender, EventArgs e)
         {
             // Thread-safe button handling
             try
@@ -332,7 +332,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }   
 
-        private void roofOpenButton_OnButtonUp(object? sender, EventArgs e)
+        protected virtual void roofOpenButton_OnButtonUp(object? sender, EventArgs e)
         {
             // Thread-safe button handling
             try
@@ -345,7 +345,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }   
 
-        private void roofOpenButton_OnButtonDown(object? sender, EventArgs e)
+        protected virtual void roofOpenButton_OnButtonDown(object? sender, EventArgs e)
         {
             // Thread-safe button handling
             try
@@ -359,7 +359,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         }   
         
 
-        private void roofOpenLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
+        protected virtual void roofOpenLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
         {
             // Thread-safe event handling - limit switches can trigger from hardware interrupts
             lock (this._syncLock)
@@ -384,7 +384,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        private void roofClosedLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
+        protected virtual void roofClosedLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
         {
             // Thread-safe event handling - limit switches can trigger from hardware interrupts
             lock (this._syncLock)
@@ -409,7 +409,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        private void UpdateRoofStatus()
+        protected virtual void UpdateRoofStatus()
         {
             lock (this._syncLock)
             {
@@ -455,7 +455,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        public Result<RoofControllerStatus> Stop()
+        public virtual Result<RoofControllerStatus> Stop()
         {
             try
             {
@@ -495,7 +495,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// <param name="openRelay">State for open relay</param>
         /// <param name="closeRelay">State for close relay</param>
         /// <param name="keypadRelay">State for keypad enable relay</param>
-        private void SetRelayStatesAtomically(PinValue stopRelay, PinValue openRelay, PinValue closeRelay, PinValue keypadRelay)
+        protected virtual void SetRelayStatesAtomically(PinValue stopRelay, PinValue openRelay, PinValue closeRelay, PinValue keypadRelay)
         {
             if (_gpioController == null || _roofControllerOptions == null)
                 return;
@@ -527,7 +527,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        private void InternalStop()
+        protected virtual void InternalStop()
         {
             lock (this._syncLock)
             {
@@ -548,7 +548,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        public Result<RoofControllerStatus> Open()
+        public virtual Result<RoofControllerStatus> Open()
         {
             try
             {
@@ -603,7 +603,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        public Result<RoofControllerStatus> Close()
+        public virtual Result<RoofControllerStatus> Close()
         {
             try
             {
@@ -674,7 +674,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// This is the primary disposal logic used by both sync and async disposal paths.
         /// </summary>
         /// <returns>A ValueTask representing the async disposal operation.</returns>
-        private async ValueTask DisposeAsyncCore()
+        protected virtual async ValueTask DisposeAsyncCore()
         {
             if (_disposed) return;
 
@@ -886,7 +886,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// True when called from IDisposable.Dispose, false when called from finalizer.
         /// When false, only cleanup unmanaged resources.
         /// </param>
-        private void Dispose(bool disposing)
+        protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;
 
@@ -924,7 +924,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// Uses volatile read for thread safety.
         /// </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the instance has been disposed.</exception>
-        private void ThrowIfDisposed()
+        protected virtual void ThrowIfDisposed()
         {
             if (_disposed)
                 throw new ObjectDisposedException(GetType().Name);
@@ -934,6 +934,6 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// Thread-safe check if the controller is disposed without throwing.
         /// </summary>
         /// <returns>True if disposed, false otherwise</returns>
-        private bool IsDisposed => _disposed;
+        protected virtual bool IsDisposed => _disposed;
     }
 }

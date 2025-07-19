@@ -78,6 +78,18 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     private PinEventTypes _lastEventType = PinEventTypes.None;
 
     /// <summary>
+    /// Indicates whether the limit switch is in simulation mode.
+    /// When true, the IsTriggered property uses the simulated state instead of the actual GPIO pin.
+    /// </summary>
+    private bool _simulationMode = false;
+    
+    /// <summary>
+    /// The simulated triggered state when in simulation mode.
+    /// This value is used by IsTriggered when _simulationMode is true.
+    /// </summary>
+    private bool _simulatedTriggeredState = false;
+
+    /// <summary>
     /// Pre-calculated debounce threshold in Stopwatch ticks for optimal performance.
     /// Avoids repeated calculations during event processing.
     /// </summary>
@@ -238,10 +250,21 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the limit switch is currently triggered.
+    /// In normal mode, this is determined by the current pin value and pull-up/pull-down configuration.
+    /// In simulation mode, this returns the simulated triggered state.
+    /// </summary>
     public bool IsTriggered
     {
         get
         {
+            // In simulation mode, return the simulated state
+            if (_simulationMode)
+            {
+                return _simulatedTriggeredState;
+            }
+            
             // Check if the pin is currently in the triggered state based on pull configuration
             return IsPullup ? CurrentPinValue == PinValue.Low : CurrentPinValue == PinValue.High;
         }
@@ -259,6 +282,121 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     /// The event provides detailed information about the pin change including timing and pin mode.
     /// </summary>
     public event EventHandler<LimitSwitchTriggeredEventArgs>? LimitSwitchTriggered;
+
+    #region Simulation Support
+
+    /// <summary>
+    /// Gets a value indicating whether the limit switch is currently in simulation mode.
+    /// When true, the IsTriggered property uses simulated state instead of actual GPIO pin values.
+    /// </summary>
+    public bool IsSimulationMode => _simulationMode;
+
+    /// <summary>
+    /// Enables simulation mode and sets the simulated triggered state.
+    /// When in simulation mode, the IsTriggered property returns the simulated state instead of reading the GPIO pin.
+    /// </summary>
+    /// <param name="simulatedTriggeredState">The simulated triggered state to use.</param>
+    public void SetSimulationMode(bool simulatedTriggeredState)
+    {
+        lock (_objLock)
+        {
+            _simulationMode = true;
+            _simulatedTriggeredState = simulatedTriggeredState;
+            _logger?.LogDebug("Simulation mode enabled - Pin {Pin} simulated triggered state: {State}", 
+                GpioPinNumber, simulatedTriggeredState);
+        }
+    }
+
+    /// <summary>
+    /// Updates the simulated triggered state when in simulation mode.
+    /// This method has no effect if simulation mode is not enabled.
+    /// </summary>
+    /// <param name="simulatedTriggeredState">The new simulated triggered state.</param>
+    public void UpdateSimulatedState(bool simulatedTriggeredState)
+    {
+        lock (_objLock)
+        {
+            if (_simulationMode)
+            {
+                _simulatedTriggeredState = simulatedTriggeredState;
+                _logger?.LogDebug("Simulation state updated - Pin {Pin} simulated triggered state: {State}", 
+                    GpioPinNumber, simulatedTriggeredState);
+            }
+            else
+            {
+                _logger?.LogWarning("Cannot update simulated state - Pin {Pin} is not in simulation mode", GpioPinNumber);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Disables simulation mode and returns to normal GPIO pin reading.
+    /// </summary>
+    public void DisableSimulationMode()
+    {
+        lock (_objLock)
+        {
+            _simulationMode = false;
+            _simulatedTriggeredState = false;
+            _logger?.LogDebug("Simulation mode disabled - Pin {Pin} returning to normal GPIO operation", GpioPinNumber);
+        }
+    }
+
+    /// <summary>
+    /// Simulates a limit switch trigger event by updating the simulated state and firing the appropriate event.
+    /// This method enables simulation mode if not already enabled.
+    /// </summary>
+    /// <param name="isTriggered">Whether the limit switch should be simulated as triggered.</param>
+    public void SimulateTrigger(bool isTriggered)
+    {
+        lock (_objLock)
+        {
+            // Enable simulation mode if not already enabled
+            if (!_simulationMode)
+            {
+                _simulationMode = true;
+                _logger?.LogDebug("Auto-enabled simulation mode for Pin {Pin}", GpioPinNumber);
+            }
+
+            var previousState = _simulatedTriggeredState;
+            _simulatedTriggeredState = isTriggered;
+
+            // Fire the event if the state changed
+            if (previousState != isTriggered)
+            {
+                var pinEventType = isTriggered 
+                    ? (IsPullup ? PinEventTypes.Falling : PinEventTypes.Rising)  // Triggered
+                    : (IsPullup ? PinEventTypes.Rising : PinEventTypes.Falling); // Released
+
+                var eventArgs = new LimitSwitchTriggeredEventArgs(
+                    pinEventType,
+                    GpioPinNumber,
+                    EventPinMode,
+                    DateTimeOffset.Now);
+
+                _logger?.LogInformation("Simulating limit switch event - Pin {Pin} {EventType} (Triggered: {IsTriggered})", 
+                    GpioPinNumber, pinEventType, isTriggered);
+
+                // Fire the event outside the lock to prevent potential deadlocks
+                var handler = LimitSwitchTriggered;
+                if (handler != null)
+                {
+                    // Release the lock before calling the event handler
+                    Monitor.Exit(_objLock);
+                    try
+                    {
+                        handler(this, eventArgs);
+                    }
+                    finally
+                    {
+                        Monitor.Enter(_objLock);
+                    }
+                }
+            }
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Validates GPIO pin capabilities and initializes the hardware configuration.

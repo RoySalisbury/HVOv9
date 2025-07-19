@@ -443,3 +443,130 @@
         padding: 1rem;
     }
 }
+
+/* Simulation Controls Styling */
+.simulation-controls {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 2px solid rgba(13, 110, 253, 0.2);
+}
+
+.simulation-btn {
+    min-width: 180px;
+    min-height: 60px;
+    font-weight: 600;
+    border-radius: 10px;
+    border-width: 2px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.simulation-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.simulation-btn:active {
+    transform: translateY(0);
+}
+
+/* Pressed state styling */
+.simulation-btn.btn-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border-color: #28a745;
+    box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);
+    animation: pulseGreen 2s infinite;
+}
+
+.simulation-btn.btn-danger {
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+    border-color: #dc3545;
+    box-shadow: 0 0 20px rgba(220, 53, 69, 0.4);
+    animation: pulseRed 2s infinite;
+}
+
+.simulation-btn.btn-warning {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    border-color: #ffc107;
+    color: #212529;
+    box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
+    animation: pulseYellow 2s infinite;
+}
+
+.simulation-btn.btn-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border-color: #0d6efd;
+    box-shadow: 0 0 20px rgba(13, 110, 253, 0.4);
+    animation: pulseBlue 2s infinite;
+}
+
+.simulation-btn.btn-secondary {
+    background: linear-gradient(135deg, #6c757d, #495057);
+    border-color: #6c757d;
+    box-shadow: 0 0 20px rgba(108, 117, 125, 0.4);
+    animation: pulseGray 2s infinite;
+}
+
+/* Outline versions (not pressed) */
+.simulation-btn.btn-outline-success:hover {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.simulation-btn.btn-outline-danger:hover {
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+}
+
+.simulation-btn.btn-outline-warning:hover {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    color: #212529;
+}
+
+.simulation-btn.btn-outline-primary:hover {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+}
+
+.simulation-btn.btn-outline-secondary:hover {
+    background: linear-gradient(135deg, #6c757d, #495057);
+}
+
+/* Pulse animations for pressed states */
+@keyframes pulseGreen {
+    0%, 100% { box-shadow: 0 0 20px rgba(40, 167, 69, 0.4); }
+    50% { box-shadow: 0 0 30px rgba(40, 167, 69, 0.8); }
+}
+
+@keyframes pulseRed {
+    0%, 100% { box-shadow: 0 0 20px rgba(220, 53, 69, 0.4); }
+    50% { box-shadow: 0 0 30px rgba(220, 53, 69, 0.8); }
+}
+
+@keyframes pulseYellow {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.4); }
+    50% { box-shadow: 0 0 30px rgba(255, 193, 7, 0.8); }
+}
+
+@keyframes pulseBlue {
+    0%, 100% { box-shadow: 0 0 20px rgba(13, 110, 253, 0.4); }
+    50% { box-shadow: 0 0 30px rgba(13, 110, 253, 0.8); }
+}
+
+@keyframes pulseGray {
+    0%, 100% { box-shadow: 0 0 20px rgba(108, 117, 125, 0.4); }
+    50% { box-shadow: 0 0 30px rgba(108, 117, 125, 0.8); }
+}
+
+/* Responsive adjustments for simulation controls */
+@media (max-width: 768px) {
+    .simulation-btn {
+        min-width: 150px;
+        min-height: 50px;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .simulation-controls {
+        padding: 1rem;
+    }
+}

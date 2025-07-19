@@ -36,6 +36,8 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
             RoofControllerStatus.Open,
             RoofControllerStatus.Opening,
             RoofControllerStatus.Stopped,
+            RoofControllerStatus.PartiallyOpen,
+            RoofControllerStatus.PartiallyClose,
             RoofControllerStatus.Error
         };
 
@@ -44,7 +46,7 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
 
         // Assert
         allEnumValues.Should().BeEquivalentTo(expectedValues);
-        allEnumValues.Should().HaveCount(8);
+        allEnumValues.Should().HaveCount(10);
     }
 
     #endregion

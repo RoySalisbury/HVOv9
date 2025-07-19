@@ -774,8 +774,8 @@ public class RoofControllerServiceTests
 
         // Assert
         stopResult.IsSuccessful.Should().BeTrue();
-        stopResult.Value.Should().Be(RoofControllerStatus.Stopped);
-        _roofController.Status.Should().Be(RoofControllerStatus.Stopped);
+        stopResult.Value.Should().Be(RoofControllerStatus.PartiallyOpen);
+        _roofController.Status.Should().Be(RoofControllerStatus.PartiallyOpen);
         _mockGpioController.Read(_options.StopRoofRelayPin).Should().Be(PinValue.High);
     }
 

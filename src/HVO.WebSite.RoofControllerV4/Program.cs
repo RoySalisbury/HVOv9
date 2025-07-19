@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Asp.Versioning;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using HVO.WebSite.RoofControllerV4.Logic;
@@ -59,9 +60,24 @@ public class Program
         // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
         services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
         
-        // Use the real RoofController - it will work with both real and mock GPIO
-        // Safety watchdog will handle stopping operations after timeout
-        services.AddSingleton<IRoofControllerService, RoofControllerService>();
+        // Register RoofController based on configuration
+        services.AddSingleton<IRoofControllerService>(serviceProvider =>
+        {
+            var logger = serviceProvider.GetRequiredService<ILogger<RoofControllerService>>();
+            var roofControllerOptions = serviceProvider.GetRequiredService<IOptions<RoofControllerOptions>>();
+            var gpioController = serviceProvider.GetRequiredService<IGpioController>();
+
+            if (roofControllerOptions.Value.UseSimulatedEvents)
+            {
+                logger.LogInformation("Using RoofControllerServiceWithSimulatedEvents for development/testing");
+                return new RoofControllerServiceWithSimulatedEvents(logger, roofControllerOptions, gpioController);
+            }
+            else
+            {
+                logger.LogInformation("Using RoofControllerService for production hardware");
+                return new RoofControllerService(logger, roofControllerOptions, gpioController);
+            }
+        });
 
         // Add weather service
         services.AddScoped<HVO.WebSite.RoofControllerV4.Services.IWeatherService, HVO.WebSite.RoofControllerV4.Services.WeatherService>();

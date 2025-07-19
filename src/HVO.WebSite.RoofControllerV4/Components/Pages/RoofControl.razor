@@ -52,44 +52,16 @@
                         </div>
                     </div>
                     
-                    <!-- Enhanced Operation Time Display -->
-                    @if (OperationStartTime.HasValue && IsMoving)
+                    <!-- Progress Bar for Operation -->
+                    @if (IsMoving)
                     {
-                        <div class="operation-timer">
-                            <div class="row text-center">
-                                <div class="col-md-4">
-                                    <p class="mb-1">
-                                        <strong>Operation Time</strong><br/>
-                                        <span class="text-primary fs-5">@GetOperationTimeDisplay()</span>
-                                    </p>
-                                </div>
-                                <div class="col-md-4">
-                                    <!-- Safety watchdog information -->
-                                    @if (IsMoving)
-                                    {
-                                        <p class="mb-1">
-                                            <strong>Safety Watchdog</strong><br/>
-                                            <span class="text-info fs-5">@GetSafetyWatchdogTimeRemaining().ToString(@"mm\:ss")</span>
-                                        </p>
-                                    }
-                                </div>
-                                <div class="col-md-4">
-                                    <p class="mb-1">
-                                        <strong>Safety Watchdog</strong><br/>
-                                        <span class="text-info fs-5">@GetSafetyWatchdogTimeRemaining().ToString(@"mm\:ss")</span>
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <!-- Progress Bar for Operation -->
-                            <div class="progress mt-3" style="height: 8px;">
-                                <div class="progress-bar @GetProgressBarClass()" 
-                                     role="progressbar" 
-                                     style="width: @GetOperationProgressPercentage()%"
-                                     aria-valuenow="@GetOperationProgressPercentage()" 
-                                     aria-valuemin="0" 
-                                     aria-valuemax="100">
-                                </div>
+                        <div class="progress mt-3" style="height: 8px;">
+                            <div class="progress-bar @GetProgressBarClass()" 
+                                 role="progressbar" 
+                                 style="width: @GetOperationProgressPercentage()%"
+                                 aria-valuenow="@GetOperationProgressPercentage()" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
                             </div>
                         </div>
                     }
@@ -245,6 +217,145 @@
             </div>
         </div>
     </div>
+
+    <!-- Simulation Controls Section (only shown when UseSimulatedEvents is enabled) -->
+    @if (ShowSimulationControls)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white text-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-cpu me-2"></i>
+                            Simulation Controls (Development Mode)
+                        </h5>
+                        <small class="text-light">Toggle buttons stay pressed until clicked again</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="simulation-controls">
+                            <!-- Button Simulations -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h6 class="mb-3">
+                                        <i class="bi bi-controller me-1"></i>
+                                        Hardware Button Simulation
+                                    </h6>
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                                        <button class="btn @(IsOpenButtonPressed ? "btn-success" : "btn-outline-success") btn-lg simulation-btn"
+                                                type="button"
+                                                @onclick="ToggleOpenButton"
+                                                disabled="@(!IsInitialized)">
+                                            <i class="bi bi-arrow-up-circle me-2"></i>
+                                            Open Button @(IsOpenButtonPressed ? "(PRESSED)" : "(Released)")
+                                        </button>
+                                        
+                                        <button class="btn @(IsStopButtonPressed ? "btn-danger" : "btn-outline-danger") btn-lg simulation-btn"
+                                                type="button"
+                                                @onclick="ToggleStopButton"
+                                                disabled="@(!IsInitialized)">
+                                            <i class="bi bi-stop-circle me-2"></i>
+                                            Stop Button @(IsStopButtonPressed ? "(PRESSED)" : "(Released)")
+                                        </button>
+                                        
+                                        <button class="btn @(IsCloseButtonPressed ? "btn-warning" : "btn-outline-warning") btn-lg simulation-btn"
+                                                type="button"
+                                                @onclick="ToggleCloseButton"
+                                                disabled="@(!IsInitialized)">
+                                            <i class="bi bi-arrow-down-circle me-2"></i>
+                                            Close Button @(IsCloseButtonPressed ? "(PRESSED)" : "(Released)")
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Limit Switch Simulations -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <h6 class="mb-3">
+                                        <i class="bi bi-toggles me-1"></i>
+                                        Limit Switch Simulation (Roof Position Feedback)
+                                    </h6>
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                                        <button class="btn @(IsOpenLimitSwitchTriggered ? "btn-primary" : "btn-outline-primary") btn-lg simulation-btn"
+                                                type="button"
+                                                @onclick="ToggleOpenLimitSwitch"
+                                                disabled="@(!IsInitialized)">
+                                            <i class="bi bi-toggle-@(IsOpenLimitSwitchTriggered ? "on" : "off") me-2"></i>
+                                            @if (IsOpenLimitSwitchTriggered)
+                                            {
+                                                <span>🟢 ROOF FULLY OPEN</span>
+                                            }
+                                            else
+                                            {
+                                                <span>⚪ Open Position (Not Detected)</span>
+                                            }
+                                        </button>
+                                        
+                                        <button class="btn @(IsClosedLimitSwitchTriggered ? "btn-secondary" : "btn-outline-secondary") btn-lg simulation-btn"
+                                                type="button"
+                                                @onclick="ToggleClosedLimitSwitch"
+                                                disabled="@(!IsInitialized)">
+                                            <i class="bi bi-toggle-@(IsClosedLimitSwitchTriggered ? "on" : "off") me-2"></i>
+                                            @if (IsClosedLimitSwitchTriggered)
+                                            {
+                                                <span>🔴 ROOF FULLY CLOSED</span>
+                                            }
+                                            else
+                                            {
+                                                <span>⚪ Closed Position (Not Detected)</span>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Simulation Instructions -->
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="alert alert-info mb-0">
+                                        <h6 class="alert-heading">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            Simulation Instructions & Operational Logic
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <strong>Hardware Button Simulation:</strong>
+                                                <ul class="list-unstyled mb-3 mt-1">
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Buttons stay pressed until toggled again</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Stop button is momentary (auto-releases)</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Use for testing button input events</li>
+                                                </ul>
+                                                <strong>Operational Logic:</strong>
+                                                <ul class="list-unstyled mb-0">
+                                                    <li><i class="bi bi-arrow-right text-primary me-1"></i>Open button disabled when roof is open</li>
+                                                    <li><i class="bi bi-arrow-right text-primary me-1"></i>Close button disabled when roof is closed</li>
+                                                    <li><i class="bi bi-arrow-right text-primary me-1"></i>Limit switches control operational state</li>
+                                                </ul>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>Limit Switch Position Feedback:</strong>
+                                                <ul class="list-unstyled mb-3 mt-1">
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>🟢 = Roof fully at that position</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>⚪ = Position not detected</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Only one position can be active</li>
+                                                </ul>
+                                                <strong>Testing Workflow:</strong>
+                                                <ul class="list-unstyled mb-0">
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>1. Start open/close operation</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>2. Trigger appropriate limit switch</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>3. Watch buttons update automatically</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 <!-- Toast Container for Notifications -->

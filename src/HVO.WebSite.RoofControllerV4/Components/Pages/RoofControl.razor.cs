@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Microsoft.Extensions.Options;
 using HVO.WebSite.RoofControllerV4.Logic;
 using HVO;
 using System.Timers;
@@ -18,13 +19,13 @@ public partial class RoofControl : ComponentBase, IDisposable
     [Inject] private IRoofControllerService RoofController { get; set; } = default!;
     [Inject] private ILogger<RoofControl> Logger { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+    [Inject] private IOptions<RoofControllerOptions> RoofControllerOptions { get; set; } = default!;
 
     #endregion
 
     #region Private Fields
 
     private System.Timers.Timer? _statusUpdateTimer;
-    private DateTime? _operationStartTime;
     private readonly List<NotificationMessage> _notifications = new();
     private bool _isDisposed = false;
 
@@ -43,11 +44,6 @@ public partial class RoofControl : ComponentBase, IDisposable
     public bool IsInitialized { get; private set; } = false;
 
     /// <summary>
-    /// Gets the time when the current operation started.
-    /// </summary>
-    public DateTime? OperationStartTime => _operationStartTime;
-
-    /// <summary>
     /// Gets a value indicating whether the roof is currently moving.
     /// </summary>
     public bool IsMoving => CurrentStatus == RoofControllerStatus.Opening || CurrentStatus == RoofControllerStatus.Closing;
@@ -64,12 +60,30 @@ public partial class RoofControl : ComponentBase, IDisposable
     { 
         get 
         {
-            // Only disable Open button if not initialized, currently moving, or if we're already opening/opened
-            // Allow opening even from "Open" status in case user wants to continue/retry operation
-            var disabled = !IsInitialized || IsMoving || CurrentStatus == RoofControllerStatus.Opening;
-            Logger.LogDebug("IsOpenDisabled: {Disabled} (Initialized: {Initialized}, Moving: {Moving}, Status: {Status})", 
-                disabled, IsInitialized, IsMoving, CurrentStatus);
-            return disabled;
+            // Base conditions: not initialized, currently moving, or already opening
+            var baseDisabled = !IsInitialized || IsMoving || CurrentStatus == RoofControllerStatus.Opening;
+            
+            // In simulation mode, also consider limit switch states
+            if (ShowSimulationControls)
+            {
+                // Disable open if the open limit switch is already triggered (roof is already open)
+                var limitSwitchDisabled = IsOpenLimitSwitchTriggered;
+                var disabled = baseDisabled || limitSwitchDisabled;
+                
+                Logger.LogDebug("IsOpenDisabled: {Disabled} (Base: {BaseDisabled}, LimitSwitch: {LimitSwitchDisabled}, " +
+                    "Initialized: {Initialized}, Moving: {Moving}, Status: {Status}, OpenLimitTriggered: {OpenLimit})", 
+                    disabled, baseDisabled, limitSwitchDisabled, IsInitialized, IsMoving, CurrentStatus, IsOpenLimitSwitchTriggered);
+                
+                return disabled;
+            }
+            else
+            {
+                // In real hardware mode, use original logic
+                Logger.LogDebug("IsOpenDisabled: {Disabled} (Initialized: {Initialized}, Moving: {Moving}, Status: {Status})", 
+                    baseDisabled, IsInitialized, IsMoving, CurrentStatus);
+                
+                return baseDisabled;
+            }
         }
     }
 
@@ -80,12 +94,30 @@ public partial class RoofControl : ComponentBase, IDisposable
     { 
         get 
         {
-            // Only disable Close button if not initialized, currently moving, or if we're already closing/closed
-            // Allow closing even from "Closed" status in case user wants to continue/retry operation
-            var disabled = !IsInitialized || IsMoving || CurrentStatus == RoofControllerStatus.Closing;
-            Logger.LogDebug("IsCloseDisabled: {Disabled} (Initialized: {Initialized}, Moving: {Moving}, Status: {Status})", 
-                disabled, IsInitialized, IsMoving, CurrentStatus);
-            return disabled;
+            // Base conditions: not initialized, currently moving, or already closing
+            var baseDisabled = !IsInitialized || IsMoving || CurrentStatus == RoofControllerStatus.Closing;
+            
+            // In simulation mode, also consider limit switch states
+            if (ShowSimulationControls)
+            {
+                // Disable close if the closed limit switch is already triggered (roof is already closed)
+                var limitSwitchDisabled = IsClosedLimitSwitchTriggered;
+                var disabled = baseDisabled || limitSwitchDisabled;
+                
+                Logger.LogDebug("IsCloseDisabled: {Disabled} (Base: {BaseDisabled}, LimitSwitch: {LimitSwitchDisabled}, " +
+                    "Initialized: {Initialized}, Moving: {Moving}, Status: {Status}, ClosedLimitTriggered: {ClosedLimit})", 
+                    disabled, baseDisabled, limitSwitchDisabled, IsInitialized, IsMoving, CurrentStatus, IsClosedLimitSwitchTriggered);
+                
+                return disabled;
+            }
+            else
+            {
+                // In real hardware mode, use original logic
+                Logger.LogDebug("IsCloseDisabled: {Disabled} (Initialized: {Initialized}, Moving: {Moving}, Status: {Status})", 
+                    baseDisabled, IsInitialized, IsMoving, CurrentStatus);
+                
+                return baseDisabled;
+            }
         }
     }
 
@@ -98,6 +130,52 @@ public partial class RoofControl : ComponentBase, IDisposable
     /// Gets the list of current notification messages.
     /// </summary>
     public IReadOnlyList<NotificationMessage> Notifications => _notifications.AsReadOnly();
+
+    /// <summary>
+    /// Gets a value indicating whether simulation controls should be shown.
+    /// </summary>
+    public bool ShowSimulationControls => RoofControllerOptions.Value.UseSimulatedEvents;
+
+    #endregion
+
+    #region Simulation State Properties
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulated open button is pressed.
+    /// </summary>
+    public bool IsOpenButtonPressed { get; private set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulated close button is pressed.
+    /// </summary>
+    public bool IsCloseButtonPressed { get; private set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulated stop button is pressed.
+    /// </summary>
+    public bool IsStopButtonPressed { get; private set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulated open limit switch is triggered.
+    /// </summary>
+    public bool IsOpenLimitSwitchTriggered { get; private set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulated closed limit switch is triggered.
+    /// </summary>
+    public bool IsClosedLimitSwitchTriggered { get; private set; } = false;
+
+    /// <summary>
+    /// Gets a value indicating whether the simulation timer is currently running.
+    /// </summary>
+    public bool IsSimulationTimerRunning => 
+        (RoofController as RoofControllerServiceWithSimulatedEvents)?.IsSimulationTimerRunning ?? false;
+
+    /// <summary>
+    /// Gets the remaining time for the simulation timer.
+    /// </summary>
+    public double SimulationTimeRemaining =>
+        (RoofController as RoofControllerServiceWithSimulatedEvents)?.SimulationTimeRemaining ?? 0;
 
     #endregion
 
@@ -196,7 +274,6 @@ public partial class RoofControl : ComponentBase, IDisposable
             
             if (result.IsSuccessful)
             {
-                _operationStartTime = DateTime.UtcNow;
                 AddNotification("Operation", "Roof opening initiated", NotificationType.Success);
                 Logger.LogInformation("Roof opening operation started successfully");
             }
@@ -231,7 +308,6 @@ public partial class RoofControl : ComponentBase, IDisposable
             
             if (result.IsSuccessful)
             {
-                _operationStartTime = DateTime.UtcNow;
                 AddNotification("Operation", "Roof closing initiated", NotificationType.Success);
                 Logger.LogInformation("Roof closing operation started successfully");
             }
@@ -266,7 +342,6 @@ public partial class RoofControl : ComponentBase, IDisposable
             
             if (result.IsSuccessful)
             {
-                _operationStartTime = null;
                 AddNotification("Emergency Stop", "All roof movement stopped", NotificationType.Warning);
                 Logger.LogInformation("Emergency stop operation completed successfully");
             }
@@ -284,11 +359,11 @@ public partial class RoofControl : ComponentBase, IDisposable
             Logger.LogError(ex, "Exception during roof stop operation");
             AddNotification("Error", $"Exception during stop operation: {ex.Message}", NotificationType.Error);
         }
-        }
+    }
 
-        #endregion
+    #endregion
 
-        #region Status and UI Helper Methods    /// <summary>
+    #region Status and UI Helper Methods    /// <summary>
     /// Updates the current status from the roof controller.
     /// </summary>
     private async Task UpdateStatusAsync()
@@ -300,6 +375,12 @@ public partial class RoofControl : ComponentBase, IDisposable
             
             CurrentStatus = RoofController.Status;
             IsInitialized = RoofController.IsInitialized;
+
+            // Synchronize limit switch states with roof operational state (if using simulation)
+            if (ShowSimulationControls)
+            {
+                SynchronizeLimitSwitchStates();
+            }
 
             // Log status changes for debugging
             if (previousStatus != CurrentStatus)
@@ -320,6 +401,197 @@ public partial class RoofControl : ComponentBase, IDisposable
         }
 
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Synchronizes the limit switch simulation states with the actual roof operational state.
+    /// </summary>
+    private void SynchronizeLimitSwitchStates()
+    {
+        try
+        {
+            var previousOpenState = IsOpenLimitSwitchTriggered;
+            var previousClosedState = IsClosedLimitSwitchTriggered;
+
+            // Try to get the actual limit switch states from the roof controller
+            var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+            if (simulatedService != null)
+            {
+                // In simulation mode, handle movement states specially
+                if (CurrentStatus == RoofControllerStatus.Opening || CurrentStatus == RoofControllerStatus.Closing)
+                {
+                    // During movement, ensure both limit switches are not triggered in the simulation
+                    // This allows the user to manually trigger them when the roof reaches the end position
+                    var actualOpenTriggered = GetActualOpenLimitSwitchState();
+                    var actualClosedTriggered = GetActualClosedLimitSwitchState();
+                    
+                    // If either limit switch is currently triggered during movement, clear it
+                    if (actualOpenTriggered)
+                    {
+                        simulatedService.SimulateOpenLimitSwitchReleased();
+                        Logger.LogDebug("Cleared open limit switch during movement - Status: {Status}", CurrentStatus);
+                    }
+                    if (actualClosedTriggered)
+                    {
+                        simulatedService.SimulateClosedLimitSwitchReleased();
+                        Logger.LogDebug("Cleared closed limit switch during movement - Status: {Status}", CurrentStatus);
+                    }
+                    
+                    // Update UI to reflect movement state (both switches not triggered)
+                    IsOpenLimitSwitchTriggered = false;
+                    IsClosedLimitSwitchTriggered = false;
+                    
+                    Logger.LogDebug("Movement state synchronized - Both limit switches cleared for roof movement. Status: {Status}", CurrentStatus);
+                }
+                else
+                {
+                    // For non-movement states, read the actual simulated hardware state
+                    // This allows the UI to reflect what the user has manually set via simulation buttons
+                    var actualOpenTriggered = GetActualOpenLimitSwitchState();
+                    var actualClosedTriggered = GetActualClosedLimitSwitchState();
+                    
+                    // Update UI state to match actual hardware state
+                    IsOpenLimitSwitchTriggered = actualOpenTriggered;
+                    IsClosedLimitSwitchTriggered = actualClosedTriggered;
+                    
+                    Logger.LogDebug("Synchronized limit switch states from hardware - Open: {OpenState}, Closed: {ClosedState}, Status: {Status}", 
+                        actualOpenTriggered, actualClosedTriggered, CurrentStatus);
+                }
+                
+                Logger.LogDebug("Synchronizing limit switch states - Before: Open={PrevOpen}, Closed={PrevClosed} | After: Open={NewOpen}, Closed={NewClosed} | Status={Status}", 
+                    previousOpenState, previousClosedState, IsOpenLimitSwitchTriggered, IsClosedLimitSwitchTriggered, CurrentStatus);
+            }
+            else
+            {
+                Logger.LogDebug("Not in simulation mode - using operational status for synchronization. Status: {Status}", CurrentStatus);
+                
+                // In real hardware mode, synchronize with operational status
+                switch (CurrentStatus)
+                {
+                    case RoofControllerStatus.Open:
+                        IsOpenLimitSwitchTriggered = true;
+                        IsClosedLimitSwitchTriggered = false;
+                        break;
+                        
+                    case RoofControllerStatus.Closed:
+                        IsOpenLimitSwitchTriggered = false;
+                        IsClosedLimitSwitchTriggered = true;
+                        break;
+                        
+                    case RoofControllerStatus.PartiallyOpen:
+                    case RoofControllerStatus.PartiallyClose:
+                    case RoofControllerStatus.Stopped:
+                        IsOpenLimitSwitchTriggered = false;
+                        IsClosedLimitSwitchTriggered = false;
+                        break;
+                        
+                    case RoofControllerStatus.Opening:
+                    case RoofControllerStatus.Closing:
+                        // During movement, limit switches should not be triggered yet
+                        // The user will manually trigger them when the roof reaches the end position
+                        IsOpenLimitSwitchTriggered = false;
+                        IsClosedLimitSwitchTriggered = false;
+                        break;
+                        
+                    case RoofControllerStatus.Error:
+                        // Error state - maintain current limit switch states
+                        break;
+                        
+                    default:
+                        // For unknown states, clear both limit switches
+                        IsOpenLimitSwitchTriggered = false;
+                        IsClosedLimitSwitchTriggered = false;
+                        break;
+                }
+            }
+
+            // Log synchronization events for debugging
+            if (previousOpenState != IsOpenLimitSwitchTriggered)
+            {
+                Logger.LogDebug("Open limit switch synchronized: {PreviousState} → {NewState} (Roof Status: {Status})", 
+                    previousOpenState, IsOpenLimitSwitchTriggered, CurrentStatus);
+            }
+            
+            if (previousClosedState != IsClosedLimitSwitchTriggered)
+            {
+                Logger.LogDebug("Closed limit switch synchronized: {PreviousState} → {NewState} (Roof Status: {Status})", 
+                    previousClosedState, IsClosedLimitSwitchTriggered, CurrentStatus);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error synchronizing limit switch states");
+        }
+    }
+
+    /// <summary>
+    /// Gets the actual open limit switch state from the roof controller.
+    /// </summary>
+    private bool GetActualOpenLimitSwitchState()
+    {
+        try
+        {
+            // Access the protected _roofOpenLimitSwitch field using reflection
+            var type = RoofController.GetType();
+            System.Reflection.FieldInfo? field = null;
+            
+            // Try to find the field in the current type first, then base types
+            var currentType = type;
+            while (currentType != null && field == null)
+            {
+                field = currentType.GetField("_roofOpenLimitSwitch", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                currentType = currentType.BaseType;
+            }
+                
+            if (field?.GetValue(RoofController) is HVO.Iot.Devices.GpioLimitSwitch limitSwitch)
+            {
+                Logger.LogDebug("Reading open limit switch state: IsTriggered={IsTriggered}", limitSwitch.IsTriggered);
+                return limitSwitch.IsTriggered;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug("Could not get actual open limit switch state: {Error}", ex.Message);
+        }
+        
+        // Fallback: Use current operational status
+        return CurrentStatus == RoofControllerStatus.Open;
+    }
+
+    /// <summary>
+    /// Gets the actual closed limit switch state from the roof controller.
+    /// </summary>
+    private bool GetActualClosedLimitSwitchState()
+    {
+        try
+        {
+            // Access the protected _roofClosedLimitSwitch field using reflection
+            var type = RoofController.GetType();
+            System.Reflection.FieldInfo? field = null;
+            
+            // Try to find the field in the current type first, then base types
+            var currentType = type;
+            while (currentType != null && field == null)
+            {
+                field = currentType.GetField("_roofClosedLimitSwitch", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                currentType = currentType.BaseType;
+            }
+                
+            if (field?.GetValue(RoofController) is HVO.Iot.Devices.GpioLimitSwitch limitSwitch)
+            {
+                Logger.LogDebug("Reading closed limit switch state: IsTriggered={IsTriggered}", limitSwitch.IsTriggered);
+                return limitSwitch.IsTriggered;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug("Could not get actual closed limit switch state: {Error}", ex.Message);
+        }
+        
+        // Fallback: Use current operational status
+        return CurrentStatus == RoofControllerStatus.Closed;
     }
 
     /// <summary>
@@ -345,17 +617,6 @@ public partial class RoofControl : ComponentBase, IDisposable
         {
             Logger.LogError(ex, "Error during status simulation");
         }
-    }
-
-    /// <summary>
-    /// Gets the operation time display string.
-    /// </summary>
-    public string GetOperationTimeDisplay()
-    {
-        if (!_operationStartTime.HasValue) return "00:00";
-        
-        var elapsed = DateTime.UtcNow - _operationStartTime.Value;
-        return elapsed.ToString(@"mm\:ss");
     }
 
     /// <summary>
@@ -566,39 +827,12 @@ public partial class RoofControl : ComponentBase, IDisposable
     }
 
     /// <summary>
-    /// Gets the remaining time for the safety watchdog timer.
-    /// </summary>
-    public TimeSpan GetSafetyWatchdogTimeRemaining()
-    {
-        if (!IsMoving || !OperationStartTime.HasValue)
-        {
-            return TimeSpan.FromSeconds(90); // Default watchdog timeout
-        }
-
-        var elapsed = DateTime.UtcNow - OperationStartTime.Value;
-        var remaining = TimeSpan.FromSeconds(90) - elapsed;
-        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
-    }
-
-    /// <summary>
     /// Gets the CSS class for the operation progress bar.
     /// </summary>
     public string GetProgressBarClass()
     {
-        var remaining = GetSafetyWatchdogTimeRemaining();
-        
-        if (remaining.TotalSeconds > 60)
-        {
-            return "progress-bar-success";
-        }
-        else if (remaining.TotalSeconds > 30)
-        {
-            return "progress-bar-warning";
-        }
-        else
-        {
-            return "progress-bar-danger";
-        }
+        // Simplified progress bar without timing
+        return IsMoving ? "progress-bar-warning" : "progress-bar-success";
     }
 
     /// <summary>
@@ -606,16 +840,8 @@ public partial class RoofControl : ComponentBase, IDisposable
     /// </summary>
     public int GetOperationProgressPercentage()
     {
-        if (!IsMoving || !OperationStartTime.HasValue)
-        {
-            return 0;
-        }
-
-        var elapsed = DateTime.UtcNow - OperationStartTime.Value;
-        var totalSeconds = 90.0; // Safety watchdog timeout
-        var percentage = (elapsed.TotalSeconds / totalSeconds) * 100;
-        
-        return Math.Min(100, Math.Max(0, (int)percentage));
+        // Simplified progress without timing
+        return IsMoving ? 50 : 0;
     }
 
     /// <summary>
@@ -634,6 +860,218 @@ public partial class RoofControl : ComponentBase, IDisposable
         else
         {
             return "Checking...";
+        }
+    }
+
+    #endregion
+
+    #region Simulation Control Methods
+
+    /// <summary>
+    /// Toggles the simulated open button state and triggers the appropriate event.
+    /// </summary>
+    private void ToggleOpenButton()
+    {
+        if (!ShowSimulationControls) return;
+
+        try
+        {
+            var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+            if (simulatedService == null)
+            {
+                Logger.LogWarning("Cannot trigger simulation - service is not the simulated version");
+                AddNotification("Simulation", "Simulation controls only work with simulated service", NotificationType.Warning);
+                return;
+            }
+
+            IsOpenButtonPressed = !IsOpenButtonPressed;
+            
+            if (IsOpenButtonPressed)
+            {
+                simulatedService.SimulateOpenButtonDown();
+                AddNotification("Simulation", "Open button pressed (simulated)", NotificationType.Info);
+            }
+            else
+            {
+                simulatedService.SimulateOpenButtonUp();
+                AddNotification("Simulation", "Open button released (simulated)", NotificationType.Info);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling open button simulation");
+            AddNotification("Error", $"Simulation error: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Toggles the simulated close button state and triggers the appropriate event.
+    /// </summary>
+    private void ToggleCloseButton()
+    {
+        if (!ShowSimulationControls) return;
+
+        try
+        {
+            var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+            if (simulatedService == null)
+            {
+                Logger.LogWarning("Cannot trigger simulation - service is not the simulated version");
+                AddNotification("Simulation", "Simulation controls only work with simulated service", NotificationType.Warning);
+                return;
+            }
+
+            IsCloseButtonPressed = !IsCloseButtonPressed;
+            
+            if (IsCloseButtonPressed)
+            {
+                simulatedService.SimulateCloseButtonDown();
+                AddNotification("Simulation", "Close button pressed (simulated)", NotificationType.Info);
+            }
+            else
+            {
+                simulatedService.SimulateCloseButtonUp();
+                AddNotification("Simulation", "Close button released (simulated)", NotificationType.Info);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling close button simulation");
+            AddNotification("Error", $"Simulation error: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Toggles the simulated stop button state and triggers the appropriate event.
+    /// </summary>
+    private void ToggleStopButton()
+    {
+        if (!ShowSimulationControls) return;
+
+        try
+        {
+            var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+            if (simulatedService == null)
+            {
+                Logger.LogWarning("Cannot trigger simulation - service is not the simulated version");
+                AddNotification("Simulation", "Simulation controls only work with simulated service", NotificationType.Warning);
+                return;
+            }
+
+            IsStopButtonPressed = !IsStopButtonPressed;
+            
+            if (IsStopButtonPressed)
+            {
+                simulatedService.SimulateStopButtonDown();
+                AddNotification("Simulation", "Stop button pressed (simulated)", NotificationType.Info);
+            }
+            
+            // Note: Stop button doesn't have a "release" simulation - it's momentary
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling stop button simulation");
+            AddNotification("Error", $"Simulation error: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Toggles the simulated open limit switch state and triggers the appropriate event.
+    /// </summary>
+    private void ToggleOpenLimitSwitch()
+    {
+        if (!ShowSimulationControls) return;
+
+        try
+        {
+            var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+            if (simulatedService == null)
+            {
+                Logger.LogWarning("Cannot trigger simulation - service is not the simulated version");
+                AddNotification("Simulation", "Simulation controls only work with simulated service", NotificationType.Warning);
+                return;
+            }
+
+            IsOpenLimitSwitchTriggered = !IsOpenLimitSwitchTriggered;
+            
+            if (IsOpenLimitSwitchTriggered)
+            {
+                // If we're triggering the open limit switch, also clear the closed one
+                if (IsClosedLimitSwitchTriggered)
+                {
+                    IsClosedLimitSwitchTriggered = false;
+                    simulatedService.SimulateClosedLimitSwitchReleased();
+                    Logger.LogDebug("Auto-released closed limit switch when open limit was triggered");
+                }
+                
+                simulatedService.SimulateOpenLimitSwitchTriggered();
+                AddNotification("Simulation", "Open limit switch triggered - Roof is now OPEN", NotificationType.Success);
+            }
+            else
+            {
+                simulatedService.SimulateOpenLimitSwitchReleased();
+                AddNotification("Simulation", "Open limit switch released - Roof no longer at open position", NotificationType.Info);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling open limit switch simulation");
+            AddNotification("Error", $"Simulation error: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Toggles the simulated closed limit switch state and triggers the appropriate event.
+    /// </summary>
+    private void ToggleClosedLimitSwitch()
+    {
+        if (!ShowSimulationControls) return;
+
+        try
+        {
+            var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+            if (simulatedService == null)
+            {
+                Logger.LogWarning("Cannot trigger simulation - service is not the simulated version");
+                AddNotification("Simulation", "Simulation controls only work with simulated service", NotificationType.Warning);
+                return;
+            }
+
+            IsClosedLimitSwitchTriggered = !IsClosedLimitSwitchTriggered;
+            
+            if (IsClosedLimitSwitchTriggered)
+            {
+                // If we're triggering the closed limit switch, also clear the open one
+                if (IsOpenLimitSwitchTriggered)
+                {
+                    IsOpenLimitSwitchTriggered = false;
+                    simulatedService.SimulateOpenLimitSwitchReleased();
+                    Logger.LogDebug("Auto-released open limit switch when closed limit was triggered");
+                }
+                
+                simulatedService.SimulateClosedLimitSwitchTriggered();
+                AddNotification("Simulation", "Closed limit switch triggered - Roof is now CLOSED", NotificationType.Success);
+            }
+            else
+            {
+                simulatedService.SimulateClosedLimitSwitchReleased();
+                AddNotification("Simulation", "Closed limit switch released - Roof no longer at closed position", NotificationType.Info);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling closed limit switch simulation");
+            AddNotification("Error", $"Simulation error: {ex.Message}", NotificationType.Error);
         }
     }
 
