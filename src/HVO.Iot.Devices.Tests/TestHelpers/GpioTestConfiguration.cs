@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Implementation;
 
@@ -19,6 +20,7 @@ public static class GpioTestConfiguration
     public static IServiceCollection AddMockGpioController(this IServiceCollection services)
     {
         services.AddSingleton<IGpioController, MockGpioController>();
+        services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Trace));
         return services;
     }
 
@@ -31,6 +33,7 @@ public static class GpioTestConfiguration
     public static IServiceCollection AddRealGpioController(this IServiceCollection services)
     {
         services.AddSingleton<IGpioController, GpioControllerWrapper>();
+        services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Trace));
         return services;
     }
 
