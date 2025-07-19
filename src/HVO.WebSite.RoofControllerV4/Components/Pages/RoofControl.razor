@@ -1,0 +1,266 @@
+@page "/roof-control"
+@using HVO.WebSite.RoofControllerV4.Logic
+@using Microsoft.AspNetCore.Components.Web
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>Observatory Roof Control - HVOv9</PageTitle>
+
+<div class="roof-control-container">
+    <!-- Header Section with Enhanced Status Display -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white text-center">
+                    <h2 class="mb-0">
+                        <i class="bi bi-house-door me-2"></i>
+                        Hualapai Valley Observatory v9 - Roof Control System
+                    </h2>
+                    <small class="text-light">Advanced Observatory Automation Platform</small>
+                </div>
+                <div class="card-body text-center">
+                    <div class="status-display mb-3">
+                        <h3 class="status-text @GetStatusCssClass()">
+                            Status: @CurrentStatus
+                        </h3>
+                        <div class="status-indicators mb-3">
+                            <span class="badge @GetStatusBadgeClass() fs-6 me-2">@CurrentStatus</span>
+                            @if (IsInitialized)
+                            {
+                                <span class="badge bg-success fs-6 me-2">
+                                    <i class="bi bi-check-circle me-1"></i>Initialized
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger fs-6 me-2">
+                                    <i class="bi bi-x-circle me-1"></i>Not Initialized
+                                </span>
+                            }
+                            
+                            <!-- Health Check Indicator -->
+                            <span class="badge @GetHealthCheckBadgeClass() fs-6 me-2">
+                                <i class="bi bi-heart me-1"></i>System Health
+                            </span>
+                            
+                            <!-- Safety Watchdog Status -->
+                            @if (IsMoving)
+                            {
+                                <span class="badge bg-warning text-dark fs-6">
+                                    <i class="bi bi-shield-check me-1"></i>Safety Active
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- Enhanced Operation Time Display -->
+                    @if (OperationStartTime.HasValue && IsMoving)
+                    {
+                        <div class="operation-timer">
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <p class="mb-1">
+                                        <strong>Operation Time</strong><br/>
+                                        <span class="text-primary fs-5">@GetOperationTimeDisplay()</span>
+                                    </p>
+                                </div>
+                                <div class="col-md-4">
+                                    <!-- Safety watchdog information -->
+                                    @if (IsMoving)
+                                    {
+                                        <p class="mb-1">
+                                            <strong>Safety Watchdog</strong><br/>
+                                            <span class="text-info fs-5">@GetSafetyWatchdogTimeRemaining().ToString(@"mm\:ss")</span>
+                                        </p>
+                                    }
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="mb-1">
+                                        <strong>Safety Watchdog</strong><br/>
+                                        <span class="text-info fs-5">@GetSafetyWatchdogTimeRemaining().ToString(@"mm\:ss")</span>
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- Progress Bar for Operation -->
+                            <div class="progress mt-3" style="height: 8px;">
+                                <div class="progress-bar @GetProgressBarClass()" 
+                                     role="progressbar" 
+                                     style="width: @GetOperationProgressPercentage()%"
+                                     aria-valuenow="@GetOperationProgressPercentage()" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Buttons Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="control-buttons">
+                        <div class="d-grid gap-3 d-md-flex justify-content-md-center">
+                            <button class="btn btn-success btn-lg control-btn @(IsOpenDisabled ? "disabled" : "")" 
+                                    type="button" 
+                                    disabled="@IsOpenDisabled"
+                                    @onclick="OpenRoof">
+                                <i class="bi bi-arrow-up-circle me-2"></i>
+                                Open Roof
+                            </button>
+                            
+                            <button class="btn btn-danger btn-lg control-btn @(IsStopDisabled ? "disabled" : "")" 
+                                    type="button" 
+                                    disabled="@IsStopDisabled"
+                                    @onclick="StopRoof">
+                                <i class="bi bi-stop-circle me-2"></i>
+                                Emergency Stop
+                            </button>
+                            
+                            <button class="btn btn-warning btn-lg control-btn @(IsCloseDisabled ? "disabled" : "")" 
+                                    type="button" 
+                                    disabled="@IsCloseDisabled"
+                                    @onclick="CloseRoof">
+                                <i class="bi bi-arrow-down-circle me-2"></i>
+                                Close Roof
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roof Animation Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white text-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-eye me-2"></i>
+                        Observatory Visual Status
+                    </h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="observatory-animation">
+                        <div class="observatory-container">
+                            <!-- Observatory Base -->
+                            <div class="observatory-base"></div>
+                            
+                            <!-- Roof Halves -->
+                            <div class="roof-half roof-left @GetRoofAnimationClass()" 
+                                 style="transform: @GetLeftRoofTransform();"></div>
+                            <div class="roof-half roof-right @GetRoofAnimationClass()" 
+                                 style="transform: @GetRightRoofTransform();"></div>
+                            
+                            <!-- Telescope (visible when open) -->
+                            <div class="telescope @(IsRoofOpen ? "visible" : "hidden")">
+                                <div class="telescope-mount"></div>
+                                <div class="telescope-tube"></div>
+                            </div>
+                            
+                            <!-- Status Indicator -->
+                            <div class="status-indicator @GetStatusIndicatorClass()"></div>
+                        </div>
+                        
+                        <!-- Animation Legend -->
+                        <div class="animation-legend mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Visual representation of roof position and movement
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Safety Information -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark text-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-exclamation me-2"></i>
+                        Advanced Safety System Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="safety-info">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-clock me-1"></i>Automatic Safety Features:</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>10-second limit switch activation</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>90-second safety watchdog timer</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Emergency stop available anytime</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Real-time status monitoring</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Health check system monitoring</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Concurrent operation protection</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-exclamation-triangle me-1"></i>Important Notes:</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-info-circle text-info me-1"></i>Only one operation at a time</li>
+                                    <li><i class="bi bi-info-circle text-info me-1"></i>Monitor weather conditions</li>
+                                    <li><i class="bi bi-info-circle text-info me-1"></i>Use emergency stop if needed</li>
+                                    <li><i class="bi bi-info-circle text-info me-1"></i>Watchdog auto-stops long operations</li>
+                                    <li><i class="bi bi-info-circle text-info me-1"></i>System validates before each operation</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- System Status Panel -->
+                        @if (IsInitialized)
+                        {
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-info mb-0">
+                                        <h6 class="alert-heading">
+                                            <i class="bi bi-cpu me-1"></i>System Status
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <strong>Controller:</strong> @(IsInitialized ? "Ready" : "Initializing...")
+                                            </div>
+                                            <div class="col-md-4">
+                                                <strong>Safety Watchdog:</strong> @(IsMoving ? "Active" : "Standby")
+                                            </div>
+                                            <div class="col-md-4">
+                                                <strong>Health Check:</strong> @GetHealthCheckStatus()
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container for Notifications -->
+<div class="toast-container position-fixed top-0 end-0 p-3">
+    @foreach (var notification in Notifications)
+    {
+        <div class="toast show @GetToastClass(notification.Type)" role="alert">
+            <div class="toast-header">
+                <i class="@GetToastIcon(notification.Type) me-2"></i>
+                <strong class="me-auto">@notification.Title</strong>
+                <small>@notification.Timestamp.ToString("HH:mm:ss")</small>
+                <button type="button" class="btn-close" @onclick="() => RemoveNotification(notification)"></button>
+            </div>
+            <div class="toast-body">
+                @notification.Message
+            </div>
+        </div>
+    }
+</div>

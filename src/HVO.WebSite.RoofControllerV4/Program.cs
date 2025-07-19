@@ -59,7 +59,8 @@ public class Program
         // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
         services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
         
-        // Always use the real RoofController - it will work with both real and mock GPIO
+        // Use the real RoofController - it will work with both real and mock GPIO
+        // Safety watchdog will handle stopping operations after timeout
         services.AddSingleton<IRoofController, RoofController>();
 
         // Add weather service

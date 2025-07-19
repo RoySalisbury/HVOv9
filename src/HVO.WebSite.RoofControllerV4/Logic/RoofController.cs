@@ -27,7 +27,13 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         private readonly GpioButtonWithLed _roofStopButton;    
 
         private readonly object _syncLock = new object();
-        private bool _disposed;
+        private volatile bool _disposed;  // Make volatile for thread-safe checking
+        private string _lastCommand = string.Empty;
+
+        // Safety watchdog fields - use single lock for atomicity
+        private System.Timers.Timer? _safetyWatchdogTimer;
+        private DateTime _operationStartTime;
+        // Removed separate _watchdogLock - use _syncLock for all state to prevent races
 
         public RoofController(ILogger<RoofController> logger, IOptions<RoofControllerOptions> roofControllerOptions, IGpioController gpioController)
         {
@@ -90,6 +96,87 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
+        /// <summary>
+        /// Initializes the safety watchdog timer that prevents runaway operations.
+        /// </summary>
+        private void InitializeSafetyWatchdog()
+        {
+            lock (_syncLock)
+            {
+                if (_safetyWatchdogTimer != null)
+                {
+                    _safetyWatchdogTimer.Stop();
+                    _safetyWatchdogTimer.Dispose();
+                }
+
+                _safetyWatchdogTimer = new System.Timers.Timer(_roofControllerOptions.SafetyWatchdogTimeout.TotalMilliseconds);
+                _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
+                _safetyWatchdogTimer.AutoReset = false; // One-time trigger
+            }
+        }
+
+        /// <summary>
+        /// Starts the safety watchdog timer for the current operation.
+        /// </summary>
+        private void StartSafetyWatchdog()
+        {
+            lock (_syncLock)
+            {
+                if (_safetyWatchdogTimer != null)
+                {
+                    _operationStartTime = DateTime.Now;
+                    _safetyWatchdogTimer.Start();
+                    _logger.LogInformation("Safety watchdog started for {timeout} seconds", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Stops the safety watchdog timer.
+        /// </summary>
+        private void StopSafetyWatchdog()
+        {
+            lock (_syncLock)
+            {
+                if (_safetyWatchdogTimer != null)
+                {
+                    _safetyWatchdogTimer.Stop();
+                    var elapsed = DateTime.Now - _operationStartTime;
+                    _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Safety watchdog timer elapsed event handler - emergency stops the roof.
+        /// Thread-safe with proper disposal checking and atomic hardware operations.
+        /// </summary>
+        private void SafetyWatchdog_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
+        {
+            _logger.LogWarning("SAFETY WATCHDOG TRIGGERED: Roof operation exceeded maximum allowed time of {timeout} seconds. Emergency stopping roof.", 
+                _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
+            
+            try
+            {
+                // Emergency stop - bypass normal checks but check disposal
+                lock (_syncLock)
+                {
+                    // Check if we're disposed - if so, don't perform any GPIO operations
+                    if (IsDisposed)
+                        return;
+                        
+                    InternalStop();
+                    Status = RoofControllerStatus.Error;
+                    _lastCommand = "SafetyStop";
+                    _logger.LogError("Roof stopped by safety watchdog - manual intervention may be required");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to stop roof during safety watchdog trigger");
+            }
+        }
+
         public bool IsInitialized { get; private set; } = false;
 
         public RoofControllerStatus Status { get; private set; } = RoofControllerStatus.NotInitialized;
@@ -111,6 +198,9 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                 // Setup the cancellation token registration so we know when things are shutting down as soon as possible and can call STOP.
                 cancellationToken.Register(() => this.Stop());
+
+                // Initialize the safety watchdog timer
+                this.InitializeSafetyWatchdog();
 
                 // Always reset to a known safe state on initialization. Using the InternalStop will bypass the initialization check.
                 this.InternalStop();
@@ -199,58 +289,164 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
         private void roofStopButton_OnButtonDown(object? sender, EventArgs e)
         {
-            this.Stop();
+            // Thread-safe button handling
+            try
+            {
+                this.Stop();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling stop button press");
+            }
         }   
 
         private void roofCloseButton_OnButtonUp(object? sender, EventArgs e)
         {
-            this.Stop();
+            // Thread-safe button handling
+            try
+            {
+                this.Stop();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling close button release");
+            }
         }   
 
         private void roofCloseButton_OnButtonDown(object? sender, EventArgs e)
         {
-            this.Close();
+            // Thread-safe button handling
+            try
+            {
+                this.Close();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling close button press");
+            }
         }   
 
         private void roofOpenButton_OnButtonUp(object? sender, EventArgs e)
         {
-            this.Stop();
+            // Thread-safe button handling
+            try
+            {
+                this.Stop();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling open button release");
+            }
         }   
 
         private void roofOpenButton_OnButtonDown(object? sender, EventArgs e)
         {
-            this.Open();
+            // Thread-safe button handling
+            try
+            {
+                this.Open();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling open button press");
+            }
         }   
         
 
         private void roofOpenLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
         {
-            if (e.ChangeType == PinEventTypes.Falling)
+            // Thread-safe event handling - limit switches can trigger from hardware interrupts
+            lock (this._syncLock)
             {
-                this.Stop();
-                this.Status = RoofControllerStatus.Open;
+                // Only stop the roof when the limit switch becomes triggered (contacted)
+                // For InputPullUp mode: Falling = switch contacted (High to Low)
+                // We should stop when the switch is actually contacted, not when released
+                if (e.ChangeType == PinEventTypes.Falling && this._roofOpenLimitSwitch.IsTriggered)
+                {
+                    this.StopSafetyWatchdog();
+                    // Call InternalStop directly to avoid recursion and ensure thread safety
+                    this.InternalStop();
+                    this._lastCommand = "LimitStop";
+                    this._logger.LogInformation("RoofOpenLimitSwitch contacted - stopping roof. {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
+                }
+                else
+                {
+                    // Switch released - just update status, don't stop
+                    this.UpdateRoofStatus();
+                    this._logger.LogInformation("RoofOpenLimitSwitch released. {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
+                }
             }
-            else
-            {
-                this.Status = RoofControllerStatus.Closed;
-            }
-
-            this._logger.LogInformation("RoofOpenLimitSwitch: {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
         }
 
         private void roofClosedLimitSwitch_LimitSwitchTriggered(object? sender, LimitSwitchTriggeredEventArgs e)
         {
-            if (e.ChangeType == PinEventTypes.Falling)
+            // Thread-safe event handling - limit switches can trigger from hardware interrupts
+            lock (this._syncLock)
             {
-                this.Stop();
-                this.Status = RoofControllerStatus.Closed;
+                // Only stop the roof when the limit switch becomes triggered (contacted)
+                // For InputPullUp mode: Falling = switch contacted (High to Low)
+                // We should stop when the switch is actually contacted, not when released
+                if (e.ChangeType == PinEventTypes.Falling && this._roofClosedLimitSwitch.IsTriggered)
+                {
+                    this.StopSafetyWatchdog();
+                    // Call InternalStop directly to avoid recursion and ensure thread safety
+                    this.InternalStop();
+                    this._lastCommand = "LimitStop";
+                    this._logger.LogInformation("RoofClosedLimitSwitch contacted - stopping roof. {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
+                }
+                else
+                {
+                    // Switch released - just update status, don't stop
+                    this.UpdateRoofStatus();
+                    this._logger.LogInformation("RoofClosedLimitSwitch released. {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
+                }
             }
-            else
-            {
-                this.Status = RoofControllerStatus.Opening;
-            }
+        }
 
-            this._logger.LogInformation("RoofClosedLimitSwitch: {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
+        private void UpdateRoofStatus()
+        {
+            lock (this._syncLock)
+            {
+                var openTriggered = this._roofOpenLimitSwitch?.IsTriggered ?? false;
+                var closedTriggered = this._roofClosedLimitSwitch?.IsTriggered ?? false;
+
+                if (openTriggered && !closedTriggered)
+                {
+                    this.Status = RoofControllerStatus.Open;
+                }
+                else if (!openTriggered && closedTriggered)
+                {
+                    this.Status = RoofControllerStatus.Closed;
+                }
+                else if (!openTriggered && !closedTriggered)
+                {
+                    // Roof is between positions - determine based on current status and last command
+                    if (this.Status == RoofControllerStatus.Opening || _lastCommand == "Open")
+                    {
+                        // Roof was opening but stopped before reaching limit switch - partially open
+                        this.Status = RoofControllerStatus.PartiallyOpen;
+                    }
+                    else if (this.Status == RoofControllerStatus.Closing || _lastCommand == "Close")
+                    {
+                        // Roof was closing but stopped before reaching limit switch - partially closed  
+                        this.Status = RoofControllerStatus.PartiallyClose;
+                    }
+                    else
+                    {
+                        // Unknown state - default to stopped
+                        this.Status = RoofControllerStatus.Stopped;
+                    }
+                }
+                else if (openTriggered && closedTriggered)
+                {
+                    // Error state - both switches triggered simultaneously
+                    this.Status = RoofControllerStatus.Error;
+                    this._logger.LogError("Both limit switches are triggered simultaneously - this indicates a hardware problem");
+                }
+
+                this._logger.LogDebug("UpdateRoofStatus: OpenTriggered={openTriggered}, ClosedTriggered={closedTriggered}, LastCommand={lastCommand}, Status={status}", 
+                    openTriggered, closedTriggered, _lastCommand, this.Status);
+            }
         }
 
         public Result<RoofControllerStatus> Stop()
@@ -266,7 +462,15 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
                     }
 
+                    // Preserve the previous command for status determination, only set to "Stop" if it was empty/unknown
+                    if (string.IsNullOrEmpty(this._lastCommand) || this._lastCommand == "Initialize")
+                    {
+                        this._lastCommand = "Stop";
+                    }
+                    // If _lastCommand was "Open" or "Close", keep it for proper status determination in UpdateRoofStatus()
+                    
                     this.InternalStop();
+                    this.StopSafetyWatchdog();
                     this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
@@ -277,79 +481,63 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
+        /// <summary>
+        /// Safely sets all GPIO relay pins to the specified states atomically.
+        /// This prevents hardware from being in inconsistent states due to exceptions.
+        /// </summary>
+        /// <param name="stopRelay">State for stop relay</param>
+        /// <param name="openRelay">State for open relay</param>
+        /// <param name="closeRelay">State for close relay</param>
+        /// <param name="keypadRelay">State for keypad enable relay</param>
+        private void SetRelayStatesAtomically(PinValue stopRelay, PinValue openRelay, PinValue closeRelay, PinValue keypadRelay)
+        {
+            if (_gpioController == null || _roofControllerOptions == null)
+                return;
+
+            // Collect all pin operations to perform atomically
+            var pinOperations = new List<(int pin, PinValue value, string name)>
+            {
+                (_roofControllerOptions.StopRoofRelayPin, stopRelay, "Stop"),
+                (_roofControllerOptions.OpenRoofRelayPin, openRelay, "Open"),
+                (_roofControllerOptions.CloseRoofRelayPin, closeRelay, "Close"),
+                (_roofControllerOptions.KeypadEnableRelayPin, keypadRelay, "Keypad")
+            };
+
+            // Apply all operations or log failures individually to prevent partial states
+            foreach (var (pin, value, name) in pinOperations)
+            {
+                try
+                {
+                    if (_gpioController.IsPinOpen(pin))
+                    {
+                        _gpioController.Write(pin, value);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to set {RelayName} relay pin {Pin} to {Value}", name, pin, value);
+                    // Continue with other pins rather than failing completely
+                }
+            }
+        }
+
         private void InternalStop()
         {
             lock (this._syncLock)
             {
-                this.Status = RoofControllerStatus.Stopped;
+                // DON'T set status to Stopped here - let UpdateRoofStatus determine the correct status
                 this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Current Status: {this.Status}");
 
-                // Set all relays to safe state for STOP operation
-                if (_gpioController != null && _roofControllerOptions != null)
-                {
-                    try
-                    {
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.StopRoofRelayPin))
-                        {
-                            _gpioController.Write(_roofControllerOptions.StopRoofRelayPin, RelayOn); // Stop relay ON to halt movement
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to set stop roof relay during stop");
-                    }
+                // Set all relays to safe state for STOP operation atomically
+                SetRelayStatesAtomically(
+                    stopRelay: RelayOn,    // Stop relay ON to halt movement
+                    openRelay: RelayOff,   // Open relay OFF
+                    closeRelay: RelayOff,  // Close relay OFF
+                    keypadRelay: RelayOn   // Enable keypad
+                );
 
-                    try
-                    {
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.OpenRoofRelayPin))
-                        {
-                            _gpioController.Write(_roofControllerOptions.OpenRoofRelayPin, RelayOff); // Open relay OFF
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to set open roof relay during stop");
-                    }
-
-                    try
-                    {
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.CloseRoofRelayPin))
-                        {
-                            _gpioController.Write(_roofControllerOptions.CloseRoofRelayPin, RelayOff); // Close relay OFF
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to set close roof relay during stop");
-                    }
-
-                    try
-                    {
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.KeypadEnableRelayPin))
-                        {
-                            _gpioController.Write(_roofControllerOptions.KeypadEnableRelayPin, RelayOn); // Enable keypad
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to set keypad enable relay during stop");
-                    }
-                }
-
-                //Determine the state of the roof based on limit switches and/or relay pins
-                if (this._roofOpenLimitSwitch.IsTriggered)
-                {
-                    this.Status = RoofControllerStatus.Open;
-                }
-                else if (this._roofClosedLimitSwitch.IsTriggered)
-                {
-                    this.Status = RoofControllerStatus.Closed;
-                }
-                else
-                {
-                    // If neither limit switch is triggered, we assume the roof is stopped but not in a known state
-                    this.Status = RoofControllerStatus.Stopped;
-                }
+                // Update status based on limit switch states and last command
+                this.UpdateRoofStatus();
                 this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Final Status: {this.Status}");
             }
         }
@@ -367,6 +555,9 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
                     }
 
+                    // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
+                    this._lastCommand = "Open";
+
                     // Always stop the current action before starting a new one.
                     var stopResult = this.Stop();
                     if (!stopResult.IsSuccessful)
@@ -383,21 +574,18 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         return Result<RoofControllerStatus>.Success(this.Status);
                     }
 
-                    // Start the motors to open the roof
-                    if (_gpioController != null && _roofControllerOptions != null)
-                    {
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.StopRoofRelayPin))
-                            _gpioController.Write(_roofControllerOptions.StopRoofRelayPin, RelayOff);
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.OpenRoofRelayPin))
-                            _gpioController.Write(_roofControllerOptions.OpenRoofRelayPin, RelayOn);
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.CloseRoofRelayPin))
-                            _gpioController.Write(_roofControllerOptions.CloseRoofRelayPin, RelayOff);
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.KeypadEnableRelayPin))
-                            _gpioController.Write(_roofControllerOptions.KeypadEnableRelayPin, RelayOff);
-                    }
+                    // Start the motors to open the roof atomically
+                    SetRelayStatesAtomically(
+                        stopRelay: RelayOff,   // Stop relay OFF
+                        openRelay: RelayOn,    // Open relay ON
+                        closeRelay: RelayOff,  // Close relay OFF
+                        keypadRelay: RelayOff  // Disable keypad during operation
+                    );
 
                     // Set the status to opening
                     this.Status = RoofControllerStatus.Opening;
+                    // _lastCommand already set earlier before calling Stop()
+                    this.StartSafetyWatchdog();
                     this._logger.LogInformation($"====Open - {DateTime.Now:O}. Current Status: {this.Status}");
 
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -422,6 +610,9 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
                     }
 
+                    // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
+                    this._lastCommand = "Close";
+
                     // Always stop the current action before starting a new one.
                     var stopResult = this.Stop();
                     if (!stopResult.IsSuccessful)
@@ -438,21 +629,18 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         return Result<RoofControllerStatus>.Success(this.Status);
                     }
 
-                    // Start the motors to close the roof
-                    if (_gpioController != null && _roofControllerOptions != null)
-                    {
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.StopRoofRelayPin))
-                            _gpioController.Write(_roofControllerOptions.StopRoofRelayPin, RelayOff);
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.OpenRoofRelayPin))
-                            _gpioController.Write(_roofControllerOptions.OpenRoofRelayPin, RelayOff);
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.CloseRoofRelayPin))
-                            _gpioController.Write(_roofControllerOptions.CloseRoofRelayPin, RelayOn);
-                        if (_gpioController.IsPinOpen(_roofControllerOptions.KeypadEnableRelayPin))
-                            _gpioController.Write(_roofControllerOptions.KeypadEnableRelayPin, RelayOff);
-                    }
+                    // Start the motors to close the roof atomically
+                    SetRelayStatesAtomically(
+                        stopRelay: RelayOff,   // Stop relay OFF
+                        openRelay: RelayOff,   // Open relay OFF
+                        closeRelay: RelayOn,   // Close relay ON
+                        keypadRelay: RelayOff  // Disable keypad during operation
+                    );
 
                     // Set the status to closing
                     this.Status = RoofControllerStatus.Closing;
+                    // _lastCommand already set earlier before calling Stop()
+                    this.StartSafetyWatchdog();
                     this._logger.LogInformation($"====Close - {DateTime.Now:O}. Current Status: {this.Status}");
 
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -489,9 +677,28 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 // 1. Stop any ongoing operations first
                 InternalStop();
 
+                // 2. Stop and dispose the safety watchdog timer
+                try
+                {
+                    lock (_syncLock)
+                    {
+                        if (_safetyWatchdogTimer != null)
+                        {
+                            _safetyWatchdogTimer.Stop();
+                            _safetyWatchdogTimer.Elapsed -= SafetyWatchdog_Elapsed;
+                            _safetyWatchdogTimer.Dispose();
+                            _safetyWatchdogTimer = null;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error disposing safety watchdog timer");
+                }
+
                 if (IsInitialized)
                 {
-                    // 2. Clean up the open limit switch
+                    // 3. Clean up the open limit switch
                     if (_roofOpenLimitSwitch != null)
                     {
                         try
@@ -506,7 +713,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         }
                     }
 
-                    // 3. Clean up the closed limit switch
+                    // 4. Clean up the closed limit switch
                     if (_roofClosedLimitSwitch != null)
                     {
                         try
@@ -521,7 +728,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         }
                     }
 
-                    // 4. Clean up the buttons
+                    // 5. Clean up the buttons
                     // Unregister event handlers before disposal to prevent potential callbacks     
                     if (_roofOpenButton != null)
                     {
@@ -564,7 +771,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         }
                     }
 
-                    // 5. Clean up GPIO pins (but not the controller itself if we don't own it)
+                    // 6. Clean up GPIO pins (but not the controller itself if we don't own it)
                     if (_gpioController != null)
                     {
                         try
@@ -708,6 +915,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
         /// <summary>
         /// Helper method to throw ObjectDisposedException if this instance has been disposed.
+        /// Uses volatile read for thread safety.
         /// </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the instance has been disposed.</exception>
         private void ThrowIfDisposed()
@@ -715,5 +923,11 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             if (_disposed)
                 throw new ObjectDisposedException(GetType().Name);
         }
+
+        /// <summary>
+        /// Thread-safe check if the controller is disposed without throwing.
+        /// </summary>
+        /// <returns>True if disposed, false otherwise</returns>
+        private bool IsDisposed => _disposed;
     }
 }

@@ -1,0 +1,445 @@
+/* Scoped CSS for RoofControl Component */
+
+/* Container Enhancements */
+.roof-control-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.card {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.card-header {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border-bottom: none;
+    padding: 1.5rem;
+}
+
+.card-body {
+    padding: 2rem;
+}
+
+/* Status Display Enhancements */
+.status-display {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 2rem;
+    color: white;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Status Text Colors */
+.status-text {
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.status-text.status-unknown { color: #6f42c1; }
+.status-text.status-opening { color: #198754; animation: pulse 2s infinite; }
+.status-text.status-closing { color: #fd7e14; animation: pulse 2s infinite; }
+.status-text.status-open { color: #20c997; }
+.status-text.status-closed { color: #0d6efd; }
+.status-text.status-stopped { color: #6c757d; }
+.status-text.status-error { color: #dc3545; animation: blink 1s infinite; }
+
+/* Status Indicators */
+.status-indicators {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+/* Operation Timer Display */
+.operation-timer {
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 10px;
+    padding: 15px;
+    margin-top: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+}
+
+/* Enhanced Progress Bar */
+.progress {
+    height: 12px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.progress-bar-success {
+    background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.progress-bar-warning {
+    background: linear-gradient(90deg, #ffc107, #fd7e14);
+}
+
+.progress-bar-danger {
+    background: linear-gradient(90deg, #dc3545, #e91e63);
+    animation: pulse 1s infinite;
+}
+
+/* Control Buttons */
+.control-buttons {
+    text-align: center;
+}
+
+.control-btn {
+    min-width: 180px;
+    min-height: 80px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    border-radius: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+.control-btn:hover:not(.disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.control-btn:active:not(.disabled) {
+    transform: translateY(0);
+}
+
+.control-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545, #e91e63);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    color: #212529;
+}
+
+/* Observatory Animation */
+.observatory-animation {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 300px;
+    background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
+    border-radius: 15px;
+    position: relative;
+    overflow: hidden;
+}
+
+.observatory-container {
+    position: relative;
+    width: 250px;
+    height: 200px;
+}
+
+.observatory-base {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 180px;
+    height: 100px;
+    background: linear-gradient(to bottom, #708090, #2F4F4F);
+    border-radius: 10px 10px 0 0;
+    border: 3px solid #1C1C1C;
+}
+
+.roof-half {
+    position: absolute;
+    top: 40px;
+    width: 100px;
+    height: 80px;
+    background: linear-gradient(to bottom, #B22222, #8B0000);
+    border: 2px solid #1C1C1C;
+    border-radius: 15px 15px 5px 5px;
+    transition: transform 0.5s ease-in-out;
+    z-index: 2;
+}
+
+.roof-left {
+    left: 35px;
+    transform-origin: right center;
+}
+
+.roof-right {
+    right: 35px;
+    transform-origin: left center;
+}
+
+.roof-half.opening {
+    animation: roofOpening 1s ease-in-out infinite alternate;
+}
+
+.roof-half.closing {
+    animation: roofClosing 1s ease-in-out infinite alternate;
+}
+
+.telescope {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    transition: opacity 0.5s ease;
+    z-index: 1;
+}
+
+.telescope.visible {
+    opacity: 1;
+}
+
+.telescope.hidden {
+    opacity: 0;
+}
+
+.telescope-mount {
+    width: 40px;
+    height: 60px;
+    background: linear-gradient(to bottom, #4682B4, #2F4F4F);
+    border-radius: 0 0 20px 20px;
+    margin: 0 auto;
+    border: 2px solid #1C1C1C;
+}
+
+.telescope-tube {
+    width: 80px;
+    height: 15px;
+    background: linear-gradient(to right, #696969, #2F4F4F);
+    border-radius: 10px;
+    margin: -10px auto 0;
+    border: 1px solid #1C1C1C;
+    transform: rotate(-20deg);
+}
+
+/* Status Indicator */
+.status-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator.status-open { 
+    background-color: #28a745; 
+    box-shadow: 0 0 15px rgba(40, 167, 69, 0.6);
+}
+.status-indicator.status-closed { 
+    background-color: #007bff; 
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.6);
+}
+.status-indicator.status-opening { 
+    background-color: #28a745; 
+    animation: pulse 1s infinite;
+}
+.status-indicator.status-closing { 
+    background-color: #ffc107; 
+    animation: pulse 1s infinite;
+}
+.status-indicator.status-stopped { 
+    background-color: #6c757d; 
+}
+.status-indicator.status-error { 
+    background-color: #dc3545; 
+    animation: blink 0.5s infinite;
+}
+.status-indicator.status-unknown { 
+    background-color: #6f42c1; 
+}
+
+/* Safety Information */
+.safety-info {
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 10px;
+    padding: 1.5rem;
+}
+
+.safety-info h6 {
+    color: #856404;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.safety-info ul {
+    margin-bottom: 0;
+}
+
+.safety-info li {
+    margin-bottom: 0.5rem;
+    padding-left: 0.5rem;
+}
+
+/* Animations */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+@keyframes roofOpening {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-10px); }
+}
+
+@keyframes roofClosing {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(5px); }
+}
+
+/* Enhanced Badge Styling */
+.badge {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Health Check Indicators */
+.alert-info {
+    background: linear-gradient(135deg, rgba(13, 202, 240, 0.1), rgba(13, 110, 253, 0.1));
+    border: 1px solid rgba(13, 202, 240, 0.3);
+    border-radius: 10px;
+}
+
+/* Toast Notifications */
+.toast {
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.toast-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #dc3545, #e91e63);
+    color: white;
+}
+
+.toast-warning {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    color: #212529;
+}
+
+.toast-info {
+    background: linear-gradient(135deg, #17a2b8, #6f42c1);
+    color: white;
+}
+
+/* Animation Legend */
+.animation-legend {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .roof-control-container {
+        padding: 10px;
+    }
+    
+    .control-btn {
+        min-width: 100%;
+        min-height: 50px;
+        font-size: 1rem;
+        margin-bottom: 10px;
+    }
+    
+    .observatory-container {
+        width: 200px;
+        height: 160px;
+    }
+    
+    .roof-half {
+        width: 80px;
+        height: 60px;
+    }
+    
+    .roof-left {
+        left: 30px;
+    }
+    
+    .roof-right {
+        right: 30px;
+    }
+    
+    .observatory-base {
+        width: 140px;
+        height: 80px;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .operation-timer {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .control-btn {
+        min-width: 150px;
+        min-height: 50px;
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .observatory-container {
+        width: 180px;
+        height: 140px;
+    }
+    
+    .roof-control-container {
+        padding: 0.5rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .operation-timer {
+        padding: 1rem;
+    }
+    
+    .status-display {
+        padding: 1rem;
+    }
+}

@@ -41,6 +41,18 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         Stopped = 6,
 
         /// <summary>
+        /// The roof is partially open (stopped between fully closed and fully open positions).
+        /// This occurs when an opening operation is interrupted before reaching the open limit switch.
+        /// </summary>
+        PartiallyOpen = 7,
+
+        /// <summary>
+        /// The roof is partially closed (stopped between fully open and fully closed positions).
+        /// This occurs when a closing operation is interrupted before reaching the closed limit switch.
+        /// </summary>
+        PartiallyClose = 8,
+
+        /// <summary>
         /// An error condition has been detected in the roof controller system.
         /// </summary>
         Error = 99
