@@ -2,6 +2,8 @@
 using System.Device.Gpio;
 using System.Device.Gpio.Drivers;
 using HVO.Iot.Devices; // Your namespace for GpioLimitSwitch
+using HVO.Iot.Devices.Abstractions;
+using HVO.Iot.Devices.Implementation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -46,16 +48,16 @@ class Program
             configure.SetMinimumLevel(LogLevel.Debug);
         });
 
-        // Add GpioController as singleton (or scoped if you want)
-        services.AddSingleton<GpioController>();
+        // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
+        services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
 
         // Add GpioLimitSwitch with parameters
         services.AddSingleton<GpioLimitSwitch>(sp =>
         {
-            var gpioController = sp.GetRequiredService<GpioController>();
+            var gpioController = sp.GetRequiredService<IGpioController>();
             var logger = sp.GetRequiredService<ILogger<GpioLimitSwitch>>();
 
-            // Example GPIO pin number 17, adjust as needed
+            // Example GPIO pin number 16, adjust as needed
             return new GpioLimitSwitch(
                 gpioController: gpioController,
                 gpioPinNumber: 16,

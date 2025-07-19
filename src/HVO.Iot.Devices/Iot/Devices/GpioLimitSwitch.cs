@@ -85,9 +85,8 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GpioLimitSwitch"/> class with comprehensive configuration options.
-    /// This constructor accepts a concrete GpioController and wraps it automatically.
+    /// This constructor automatically selects the appropriate GPIO controller based on environment.
     /// </summary>
-    /// <param name="gpioController">The GPIO controller to use for pin operations. Must not be null.</param>
     /// <param name="gpioPinNumber">The GPIO pin number to monitor. Must be greater than 0.</param>
     /// <param name="isPullup">
     /// If true, configures the pin with internal pull-up resistor (pin reads High when switch is open).
@@ -102,17 +101,15 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     /// are filtered out to eliminate mechanical switch bounce. Default is no debouncing.
     /// </param>
     /// <param name="logger">Optional logger for recording events and diagnostics.</param>
-    /// <exception cref="ArgumentNullException">Thrown when gpioController is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when gpioPinNumber is less than or equal to 0.</exception>
     /// <exception cref="ArgumentException">Thrown when the specified pin doesn't support the required mode.</exception>
     public GpioLimitSwitch(
-        GpioController? gpioController,
         int gpioPinNumber,
         bool isPullup = true,
         bool hasExternalResistor = false,
         TimeSpan debounceTime = default,
         ILogger<GpioLimitSwitch>? logger = null)
-        : this(new Implementation.GpioControllerWrapper(gpioController), gpioPinNumber, isPullup, hasExternalResistor, debounceTime, logger)
+        : this(Implementation.GpioControllerWrapper.CreateAutoSelecting(), gpioPinNumber, isPullup, hasExternalResistor, debounceTime, logger)
     {
     }
 

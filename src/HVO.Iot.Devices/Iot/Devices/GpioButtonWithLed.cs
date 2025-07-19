@@ -51,11 +51,10 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     /// <param name="ledPin">The GPIO pin number for the LED output.</param>
     /// <param name="isPullUp">Whether to use pull-up (true) or pull-down (false) resistor configuration.</param>
     /// <param name="hasExternalResistor">Whether an external pull resistor is present.</param>
-    /// <param name="gpioController">Optional GPIO controller instance. If null, a new instance will be created.</param>
     /// <param name="debounceTime">Time to wait between button state changes to filter out bounce.</param>
     public GpioButtonWithLed(int buttonPin, int? ledPin, bool isPullUp = true, bool hasExternalResistor = false,
-        GpioController? gpioController = null, TimeSpan debounceTime = default)
-        : this(buttonPin, ledPin, TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), isPullUp, hasExternalResistor, new Implementation.GpioControllerWrapper(gpioController), debounceTime)
+        TimeSpan debounceTime = default)
+        : this(buttonPin, ledPin, TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), isPullUp, hasExternalResistor, Implementation.GpioControllerWrapper.CreateAutoSelecting(), debounceTime)
     {
     }
 

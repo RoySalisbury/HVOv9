@@ -56,17 +56,11 @@ public class Program
 
         services.AddHostedService<RoofControllerHost>();
 
-        // Only register GPIO services in non-development environments
-        if (!Environment.IsDevelopment())
-        {
-            services.AddSingleton<IGpioController, GpioControllerWrapper>();
-            services.AddSingleton<IRoofController, RoofController>();
-        }
-        else
-        {
-            // Register mock services for development
-            services.AddSingleton<IRoofController, MockRoofController>();
-        }
+        // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
+        services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
+        
+        // Always use the real RoofController - it will work with both real and mock GPIO
+        services.AddSingleton<IRoofController, RoofController>();
 
         // Add weather service
         services.AddScoped<HVO.WebSite.RoofControllerV4.Services.IWeatherService, HVO.WebSite.RoofControllerV4.Services.WeatherService>();
