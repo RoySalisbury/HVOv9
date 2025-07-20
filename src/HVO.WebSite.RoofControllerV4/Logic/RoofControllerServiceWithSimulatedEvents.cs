@@ -103,7 +103,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     return 0;
 
                 var elapsed = DateTime.Now - _operationStartTime;
-                var remaining = TimeSpan.FromSeconds(15) - elapsed;
+                var remaining = _roofControllerOptions.SimulationTimeout - elapsed;
                 return Math.Max(0, remaining.TotalSeconds);
             }
         }
@@ -125,12 +125,15 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 _expectedCompletionStatus = expectedStatus;
                 _operationStartTime = DateTime.Now;
 
-                _simulationTimer = new System.Timers.Timer(15000); // 15 seconds
+                // Use the configured simulation timeout (defaults to 80% of safety watchdog timeout)
+                var simulationTimeoutMs = _roofControllerOptions.SimulationTimeout.TotalMilliseconds;
+                _simulationTimer = new System.Timers.Timer(simulationTimeoutMs);
                 _simulationTimer.AutoReset = false;
                 _simulationTimer.Elapsed += OnSimulationTimerElapsed;
                 _simulationTimer.Start();
 
-                _logger.LogInformation("Simulation timer started - roof will automatically reach {expectedStatus} position in 15 seconds", expectedStatus);
+                _logger.LogInformation("Simulation timer started - roof will automatically reach {expectedStatus} position in {timeoutSeconds} seconds", 
+                    expectedStatus, _roofControllerOptions.SimulationTimeout.TotalSeconds);
             }
             catch (Exception ex)
             {

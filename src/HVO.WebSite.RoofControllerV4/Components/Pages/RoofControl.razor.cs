@@ -177,6 +177,21 @@ public partial class RoofControl : ComponentBase, IDisposable
     public double SimulationTimeRemaining =>
         (RoofController as RoofControllerServiceWithSimulatedEvents)?.SimulationTimeRemaining ?? 0;
 
+    /// <summary>
+    /// Gets a value indicating whether the safety watchdog timer is currently running.
+    /// </summary>
+    public bool IsSafetyWatchdogRunning => GetSafetyWatchdogRunningState();
+
+    /// <summary>
+    /// Gets the remaining time for the safety watchdog timer in seconds.
+    /// </summary>
+    public double SafetyWatchdogTimeRemaining => GetSafetyWatchdogTimeRemaining();
+
+    /// <summary>
+    /// Gets the configured safety watchdog timeout in seconds.
+    /// </summary>
+    public double SafetyWatchdogTimeoutSeconds => RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds;
+
     #endregion
 
     #region Component Lifecycle
@@ -592,6 +607,126 @@ public partial class RoofControl : ComponentBase, IDisposable
         
         // Fallback: Use current operational status
         return CurrentStatus == RoofControllerStatus.Closed;
+    }
+
+    /// <summary>
+    /// Gets the safety watchdog timer running state using reflection.
+    /// </summary>
+    private bool GetSafetyWatchdogRunningState()
+    {
+        try
+        {
+            // Access the protected _safetyWatchdogTimer field using reflection
+            var type = RoofController.GetType();
+            System.Reflection.FieldInfo? field = null;
+            
+            Logger.LogDebug("Searching for _safetyWatchdogTimer field in type: {TypeName}", type.Name);
+            
+            // Try to find the field in the current type first, then base types
+            var currentType = type;
+            while (currentType != null && field == null)
+            {
+                Logger.LogDebug("Checking type: {TypeName}", currentType.Name);
+                field = currentType.GetField("_safetyWatchdogTimer", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (field != null)
+                {
+                    Logger.LogDebug("Found _safetyWatchdogTimer field in type: {TypeName}", currentType.Name);
+                }
+                currentType = currentType.BaseType;
+            }
+                
+            if (field?.GetValue(RoofController) is System.Timers.Timer timer)
+            {
+                var isEnabled = timer.Enabled;
+                Logger.LogDebug("Reading safety watchdog timer state: Enabled={Enabled}, AutoReset={AutoReset}", 
+                    isEnabled, timer.AutoReset);
+                return isEnabled;
+            }
+            else
+            {
+                Logger.LogDebug("Safety watchdog timer field not found or timer is null");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not get safety watchdog timer state via reflection: {Error}", ex.Message);
+        }
+        
+        // Fallback: Check if roof is moving (watchdog should be running during operations)
+        var fallbackResult = IsMoving;
+        Logger.LogDebug("Safety watchdog reflection failed, using fallback: IsMoving={IsMoving}", fallbackResult);
+        return fallbackResult;
+    }
+
+    /// <summary>
+    /// Gets the safety watchdog timer remaining time using reflection.
+    /// </summary>
+    private double GetSafetyWatchdogTimeRemaining()
+    {
+        try
+        {
+            // Access the protected _operationStartTime field using reflection
+            var type = RoofController.GetType();
+            System.Reflection.FieldInfo? startTimeField = null;
+            System.Reflection.FieldInfo? timerField = null;
+            
+            Logger.LogDebug("Searching for _operationStartTime and _safetyWatchdogTimer fields in type: {TypeName}", type.Name);
+            
+            // Try to find the fields in the current type first, then base types
+            var currentType = type;
+            while (currentType != null && (startTimeField == null || timerField == null))
+            {
+                if (startTimeField == null)
+                {
+                    startTimeField = currentType.GetField("_operationStartTime", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (startTimeField != null)
+                    {
+                        Logger.LogDebug("Found _operationStartTime field in type: {TypeName}", currentType.Name);
+                    }
+                }
+                if (timerField == null)
+                {
+                    timerField = currentType.GetField("_safetyWatchdogTimer", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (timerField != null)
+                    {
+                        Logger.LogDebug("Found _safetyWatchdogTimer field in type: {TypeName}", currentType.Name);
+                    }
+                }
+                currentType = currentType.BaseType;
+            }
+                
+            if (startTimeField?.GetValue(RoofController) is DateTime operationStartTime && 
+                timerField?.GetValue(RoofController) is System.Timers.Timer timer &&
+                timer.Enabled)
+            {
+                var elapsed = DateTime.Now - operationStartTime;
+                var timeout = TimeSpan.FromSeconds(SafetyWatchdogTimeoutSeconds);
+                var remaining = timeout - elapsed;
+                var remainingSeconds = Math.Max(0, remaining.TotalSeconds);
+                
+                Logger.LogDebug("Safety watchdog time remaining: {Remaining}s (elapsed: {Elapsed}s, timeout: {Timeout}s, timer enabled: {TimerEnabled})", 
+                    remainingSeconds, elapsed.TotalSeconds, timeout.TotalSeconds, timer.Enabled);
+                
+                return remainingSeconds;
+            }
+            else
+            {
+                Logger.LogDebug("Safety watchdog time calculation failed - StartTime field: {StartTimeFound}, Timer field: {TimerFound}, Timer enabled: {TimerEnabled}", 
+                    startTimeField != null, timerField != null, 
+                    timerField?.GetValue(RoofController) is System.Timers.Timer t ? t.Enabled : false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not get safety watchdog time remaining via reflection: {Error}", ex.Message);
+        }
+        
+        // Return 0 if not running or error
+        Logger.LogDebug("Safety watchdog time remaining defaulting to 0 (not running or error)");
+        return 0;
     }
 
     /// <summary>

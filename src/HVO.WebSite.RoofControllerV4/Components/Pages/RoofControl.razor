@@ -195,17 +195,61 @@
                                 <div class="col-12">
                                     <div class="alert alert-info mb-0">
                                         <h6 class="alert-heading">
-                                            <i class="bi bi-cpu me-1"></i>System Status
+                                            <i class="bi bi-cpu me-1"></i>System Status & Safety Monitoring
                                         </h6>
                                         <div class="row">
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <strong>Controller:</strong> @(IsInitialized ? "Ready" : "Initializing...")
                                             </div>
-                                            <div class="col-md-4">
-                                                <strong>Safety Watchdog:</strong> @(IsMoving ? "Active" : "Standby")
-                                            </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <strong>Health Check:</strong> @GetHealthCheckStatus()
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>Safety Watchdog:</strong>
+                                                @if (IsSafetyWatchdogRunning)
+                                                {
+                                                    <div>
+                                                        <span class="text-warning">
+                                                            <i class="bi bi-shield-check me-1"></i>
+                                                            <strong>ACTIVE</strong> - @Math.Ceiling(SafetyWatchdogTimeRemaining)s remaining of @SafetyWatchdogTimeoutSeconds-second timeout
+                                                        </span>
+                                                        <div class="progress mt-1" style="height: 8px;">
+                                                            <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" 
+                                                                 role="progressbar" 
+                                                                 style="width: @((SafetyWatchdogTimeoutSeconds - SafetyWatchdogTimeRemaining) / SafetyWatchdogTimeoutSeconds * 100)%"
+                                                                 aria-valuenow="@((SafetyWatchdogTimeoutSeconds - SafetyWatchdogTimeRemaining) / SafetyWatchdogTimeoutSeconds * 100)" 
+                                                                 aria-valuemin="0" 
+                                                                 aria-valuemax="100">
+                                                            </div>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-info-circle me-1"></i>
+                                                            Emergency stop triggers at timeout to prevent runaway operations
+                                                        </small>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div>
+                                                        <span class="text-success">
+                                                            <i class="bi bi-shield-check me-1"></i>
+                                                            <strong>STANDBY</strong> - @SafetyWatchdogTimeoutSeconds-second timeout configured
+                                                        </span>
+                                                        <div class="progress mt-1" style="height: 8px;">
+                                                            <div class="progress-bar bg-success" 
+                                                                 role="progressbar" 
+                                                                 style="width: 100%"
+                                                                 aria-valuenow="100" 
+                                                                 aria-valuemin="0" 
+                                                                 aria-valuemax="100">
+                                                            </div>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-clock me-1"></i>
+                                                            Will activate automatically during roof operations for safety
+                                                        </small>
+                                                    </div>
+                                                }
                                             </div>
                                         </div>
                                     </div>
@@ -309,6 +353,44 @@
                                 </div>
                             </div>
                             
+                            <!-- Simulation Timer Information -->
+                            @if (IsSimulationTimerRunning)
+                            {
+                                <div class="row mt-4">
+                                    <div class="col-12">
+                                        <div class="alert alert-warning">
+                                            <h6 class="alert-heading">
+                                                <i class="bi bi-clock me-1"></i>
+                                                Automatic Simulation Timer Active
+                                            </h6>
+                                            <div class="row align-items-center">
+                                                <div class="col-md-6">
+                                                    <p class="mb-2">
+                                                        <strong>Timer Status:</strong> Roof will automatically reach target position in <strong>@Math.Ceiling(SimulationTimeRemaining) seconds</strong>
+                                                    </p>
+                                                    <p class="mb-0">
+                                                        <i class="bi bi-info-circle text-info me-1"></i>
+                                                        You can manually trigger limit switches to override the timer
+                                                    </p>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="progress" style="height: 25px;">
+                                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                                                             role="progressbar"
+                                                             style="width: @((15 - SimulationTimeRemaining) / 15 * 100)%"
+                                                             aria-valuenow="@((15 - SimulationTimeRemaining) / 15 * 100)"
+                                                             aria-valuemin="0"
+                                                             aria-valuemax="100">
+                                                            @Math.Ceiling(SimulationTimeRemaining)s remaining
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            
                             <!-- Simulation Instructions -->
                             <div class="row mt-4">
                                 <div class="col-12">
@@ -330,6 +412,7 @@
                                                     <li><i class="bi bi-arrow-right text-primary me-1"></i>Open button disabled when roof is open</li>
                                                     <li><i class="bi bi-arrow-right text-primary me-1"></i>Close button disabled when roof is closed</li>
                                                     <li><i class="bi bi-arrow-right text-primary me-1"></i>Limit switches control operational state</li>
+                                                    <li><i class="bi bi-arrow-right text-warning me-1"></i>@((int)RoofControllerOptions.Value.SimulationTimeout.TotalSeconds)-second auto-timer triggers limit switches</li>
                                                 </ul>
                                             </div>
                                             <div class="col-md-6">
@@ -342,7 +425,7 @@
                                                 <strong>Testing Workflow:</strong>
                                                 <ul class="list-unstyled mb-0">
                                                     <li><i class="bi bi-play-circle text-info me-1"></i>1. Start open/close operation</li>
-                                                    <li><i class="bi bi-play-circle text-info me-1"></i>2. Trigger appropriate limit switch</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>2. Wait 15s OR manually trigger limit switch</li>
                                                     <li><i class="bi bi-play-circle text-info me-1"></i>3. Watch buttons update automatically</li>
                                                 </ul>
                                             </div>

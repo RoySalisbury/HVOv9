@@ -33,5 +33,12 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// This prevents runaway operations that could damage the roof or motors.
         /// </summary>
         public TimeSpan SafetyWatchdogTimeout { get; set; } = TimeSpan.FromSeconds(90);
+
+        /// <summary>
+        /// Time for the simulation timer to automatically trigger limit switches during testing.
+        /// Should be shorter than SafetyWatchdogTimeout to allow proper simulation of reaching the target position.
+        /// Defaults to 80% of SafetyWatchdogTimeout (72 seconds when SafetyWatchdogTimeout is 90 seconds).
+        /// </summary>
+        public TimeSpan SimulationTimeout { get; set; } = TimeSpan.FromSeconds(72);
     }
 }
