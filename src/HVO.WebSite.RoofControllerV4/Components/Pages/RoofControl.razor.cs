@@ -300,6 +300,7 @@ public partial class RoofControl : ComponentBase, IDisposable
             }
 
             await UpdateStatusAsync();
+            await InvokeAsync(StateHasChanged); // Force UI update to reflect new button states
         }
         catch (Exception ex)
         {
@@ -334,6 +335,7 @@ public partial class RoofControl : ComponentBase, IDisposable
             }
 
             await UpdateStatusAsync();
+            await InvokeAsync(StateHasChanged); // Force UI update to reflect new button states
         }
         catch (Exception ex)
         {
@@ -368,6 +370,7 @@ public partial class RoofControl : ComponentBase, IDisposable
             }
 
             await UpdateStatusAsync();
+            await InvokeAsync(StateHasChanged); // Force UI update to reflect new button states
         }
         catch (Exception ex)
         {
@@ -395,6 +398,8 @@ public partial class RoofControl : ComponentBase, IDisposable
             if (ShowSimulationControls)
             {
                 SynchronizeLimitSwitchStates();
+                // NOTE: Simulation button states are NOT synchronized with operational status
+                // They should only reflect user's manual interaction with simulation controls
             }
 
             // Log status changes for debugging
@@ -408,6 +413,12 @@ public partial class RoofControl : ComponentBase, IDisposable
             {
                 Logger.LogInformation("Roof initialization status changed from {PreviousInitialized} to {CurrentInitialized}", 
                     previousInitialized, IsInitialized);
+            }
+
+            // Trigger UI update if status or initialization state changed
+            if (previousStatus != CurrentStatus || previousInitialized != IsInitialized)
+            {
+                await InvokeAsync(StateHasChanged);
             }
         }
         catch (Exception ex)
@@ -536,6 +547,128 @@ public partial class RoofControl : ComponentBase, IDisposable
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error synchronizing limit switch states");
+        }
+    }
+
+    /// <summary>
+    /// Synchronizes the simulation button pressed states with the current roof operation status.
+    /// This ensures that the simulation control buttons accurately reflect the ongoing operations.
+    /// </summary>
+    private void SynchronizeButtonStates()
+    {
+        try
+        {
+            var previousOpenPressed = IsOpenButtonPressed;
+            var previousClosePressed = IsCloseButtonPressed;
+            var previousStopPressed = IsStopButtonPressed;
+
+            // Synchronize button states based on current roof status
+            switch (CurrentStatus)
+            {
+                case RoofControllerStatus.Opening:
+                    IsOpenButtonPressed = true;
+                    IsCloseButtonPressed = false;
+                    IsStopButtonPressed = false;
+                    break;
+                    
+                case RoofControllerStatus.Closing:
+                    IsOpenButtonPressed = false;
+                    IsCloseButtonPressed = true;
+                    IsStopButtonPressed = false;
+                    break;
+                    
+                case RoofControllerStatus.Stopped:
+                    // When stopped, the stop button should appear "pressed" briefly to show it was activated
+                    // But we should clear other button states
+                    IsOpenButtonPressed = false;
+                    IsCloseButtonPressed = false;
+                    IsStopButtonPressed = true;
+                    break;
+                    
+                case RoofControllerStatus.Open:
+                case RoofControllerStatus.Closed:
+                    // Operation completed successfully - clear all button pressed states
+                    IsOpenButtonPressed = false;
+                    IsCloseButtonPressed = false;
+                    IsStopButtonPressed = false;
+                    break;
+                    
+                case RoofControllerStatus.PartiallyOpen:
+                case RoofControllerStatus.PartiallyClose:
+                    // For partially open/closed states, only clear button states if we're not currently moving
+                    // This prevents manual limit switch manipulation from clearing active operation button states
+                    if (previousOpenPressed && CurrentStatus == RoofControllerStatus.PartiallyOpen)
+                    {
+                        // We were opening and now partially open - could be legitimate completion or manual limit switch manipulation
+                        // Only clear if the limit switches indicate a stopped state rather than user manipulation
+                        var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+                        if (simulatedService != null && !simulatedService.IsSimulationTimerRunning)
+                        {
+                            // No active simulation timer, this might be manual manipulation - keep the button state
+                            Logger.LogDebug("Partially open state detected but no simulation timer running - keeping open button pressed state");
+                        }
+                        else
+                        {
+                            // Clear the button state - legitimate stop
+                            IsOpenButtonPressed = false;
+                        }
+                    }
+                    else if (previousClosePressed && CurrentStatus == RoofControllerStatus.PartiallyClose)
+                    {
+                        // Similar logic for close operations
+                        var simulatedService = RoofController as RoofControllerServiceWithSimulatedEvents;
+                        if (simulatedService != null && !simulatedService.IsSimulationTimerRunning)
+                        {
+                            Logger.LogDebug("Partially closed state detected but no simulation timer running - keeping close button pressed state");
+                        }
+                        else
+                        {
+                            IsCloseButtonPressed = false;
+                        }
+                    }
+                    
+                    // Always clear stop button for partial states (stop isn't relevant here)
+                    IsStopButtonPressed = false;
+                    break;
+                    
+                case RoofControllerStatus.Error:
+                    // Error state - clear all button states to indicate no active operation
+                    IsOpenButtonPressed = false;
+                    IsCloseButtonPressed = false;
+                    IsStopButtonPressed = false;
+                    break;
+                    
+                case RoofControllerStatus.Unknown:
+                default:
+                    // Unknown state - clear all button states
+                    IsOpenButtonPressed = false;
+                    IsCloseButtonPressed = false;
+                    IsStopButtonPressed = false;
+                    break;
+            }
+
+            // Log button state changes for debugging
+            if (previousOpenPressed != IsOpenButtonPressed)
+            {
+                Logger.LogDebug("Open button state synchronized: {PreviousState} → {NewState} (Roof Status: {Status})", 
+                    previousOpenPressed, IsOpenButtonPressed, CurrentStatus);
+            }
+            
+            if (previousClosePressed != IsCloseButtonPressed)
+            {
+                Logger.LogDebug("Close button state synchronized: {PreviousState} → {NewState} (Roof Status: {Status})", 
+                    previousClosePressed, IsCloseButtonPressed, CurrentStatus);
+            }
+            
+            if (previousStopPressed != IsStopButtonPressed)
+            {
+                Logger.LogDebug("Stop button state synchronized: {PreviousState} → {NewState} (Roof Status: {Status})", 
+                    previousStopPressed, IsStopButtonPressed, CurrentStatus);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error synchronizing button states");
         }
     }
 

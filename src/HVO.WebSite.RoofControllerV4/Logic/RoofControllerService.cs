@@ -124,6 +124,15 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             {
                 if (_safetyWatchdogTimer != null)
                 {
+                    // Stop and dispose the existing timer to ensure clean restart
+                    _safetyWatchdogTimer.Stop();
+                    _safetyWatchdogTimer.Dispose();
+                    
+                    // Create a new timer instance for reliable restart
+                    _safetyWatchdogTimer = new System.Timers.Timer(_roofControllerOptions.SafetyWatchdogTimeout.TotalMilliseconds);
+                    _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
+                    _safetyWatchdogTimer.AutoReset = false; // One-time trigger
+                    
                     _operationStartTime = DateTime.Now;
                     _safetyWatchdogTimer.Start();
                     _logger.LogInformation("Safety watchdog started for {timeout} seconds", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
@@ -143,6 +152,9 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     _safetyWatchdogTimer.Stop();
                     var elapsed = DateTime.Now - _operationStartTime;
                     _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
+                    
+                    // Note: We don't dispose the timer here since we may need to restart it
+                    // The timer will be disposed and recreated in StartSafetyWatchdog or during final disposal
                 }
             }
         }
@@ -426,16 +438,38 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 }
                 else if (!openTriggered && !closedTriggered)
                 {
-                    // Roof is between positions - determine based on current status and last command
+                    // Roof is between positions - determine based on current status and whether operation is active
+                    var isOperationActive = _safetyWatchdogTimer?.Enabled ?? false;
+                    
                     if (this.Status == RoofControllerStatus.Opening || _lastCommand == "Open")
                     {
-                        // Roof was opening but stopped before reaching limit switch - partially open
-                        this.Status = RoofControllerStatus.PartiallyOpen;
+                        if (isOperationActive)
+                        {
+                            // Operation is still active - keep status as Opening
+                            // Don't change to PartiallyOpen until the operation actually stops
+                            this._logger.LogDebug("Roof opening in progress - keeping Opening status (watchdog active)");
+                        }
+                        else
+                        {
+                            // Operation stopped - roof is partially open
+                            this.Status = RoofControllerStatus.PartiallyOpen;
+                            this._logger.LogDebug("Roof opening operation stopped - setting to PartiallyOpen");
+                        }
                     }
                     else if (this.Status == RoofControllerStatus.Closing || _lastCommand == "Close")
                     {
-                        // Roof was closing but stopped before reaching limit switch - partially closed  
-                        this.Status = RoofControllerStatus.PartiallyClose;
+                        if (isOperationActive)
+                        {
+                            // Operation is still active - keep status as Closing
+                            // Don't change to PartiallyClose until the operation actually stops
+                            this._logger.LogDebug("Roof closing in progress - keeping Closing status (watchdog active)");
+                        }
+                        else
+                        {
+                            // Operation stopped - roof is partially closed
+                            this.Status = RoofControllerStatus.PartiallyClose;
+                            this._logger.LogDebug("Roof closing operation stopped - setting to PartiallyClose");
+                        }
                     }
                     else
                     {
@@ -477,6 +511,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     
                     this.InternalStop();
                     this.StopSafetyWatchdog();
+                    
+                    // Update status again after stopping watchdog to ensure correct status transition
+                    this.UpdateRoofStatus();
+                    
                     this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }

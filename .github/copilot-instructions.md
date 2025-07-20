@@ -107,6 +107,26 @@ namespace HVO.ProjectName
 - Use `Span<T>` and `Memory<T>` for high-performance scenarios
 - Dispose of resources properly
 
+### 11. Development Workflow Standards
+- **Terminal Command Pattern**: Always change to project directory before running commands
+  - Pattern: `cd "C:\path\to\project"; dotnet command`
+  - Each `run_in_terminal` creates a new terminal session, requiring directory navigation
+- **Build Before Run**: Always `dotnet build` before `dotnet run` to catch compilation errors early
+- **Configuration Loading**: Applications must run from output directory (`bin/Debug/net9.0`) to find `appsettings.json`
+  - Configuration files are copied to output directory during build
+  - Running from source directory will not load configuration properly
+- **Process Management**: 
+  - Use `taskkill /F /PID <pid>` to stop locked processes before rebuilding
+  - Check for file locks when build fails with "process cannot access file" errors
+- **Threading in Blazor**:
+  - All `StateHasChanged()` calls from background threads must use `InvokeAsync()`
+  - Pattern: `await InvokeAsync(StateHasChanged);`
+  - Timer and event handlers from non-UI threads require thread-safe UI updates
+- **Timer Management for Safety Systems**:
+  - Always dispose and recreate `System.Timers.Timer` for reliable restart behavior
+  - Set `AutoReset = false` for one-time safety triggers
+  - Use timer recreation pattern instead of `Start()/Stop()` for safety-critical scenarios
+
 ## HVOv9-Specific Patterns
 
 ### 1. Result<T> Pattern Usage

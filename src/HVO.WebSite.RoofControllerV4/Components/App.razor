@@ -69,6 +69,36 @@
             100% { transform: rotate(360deg); }
         }
 
+html, body {
+    height: 100%;
+}
+
+body {
+
+        
+        color: white;
+    margin-left: auto;
+    margin-right: auto;
+background-attachment: fixed !important;
+    background-size: cover !important;
+    background: fixed, linear-gradient(rgba(33, 33, 33, 0.75), rgba(33, 33, 33, 0.75)), url('https://www.hualapaivalleyobservatory.org/images/ngc-3372-closeX.jpg');
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Add overlay to ensure text readability */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: -1;
+            pointer-events: none;
+        }
+
         #blazor-error-ui {
             color-scheme: light only;
             background: lightyellow;

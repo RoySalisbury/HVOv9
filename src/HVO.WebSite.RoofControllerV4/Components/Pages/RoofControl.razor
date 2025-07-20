@@ -51,20 +51,6 @@
                             }
                         </div>
                     </div>
-                    
-                    <!-- Progress Bar for Operation -->
-                    @if (IsMoving)
-                    {
-                        <div class="progress mt-3" style="height: 8px;">
-                            <div class="progress-bar @GetProgressBarClass()" 
-                                 role="progressbar" 
-                                 style="width: @GetOperationProgressPercentage()%"
-                                 aria-valuenow="@GetOperationProgressPercentage()" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="100">
-                            </div>
-                        </div>
-                    }
                 </div>
             </div>
         </div>
