@@ -18,5 +18,10 @@ public enum PushButtonLedState
     /// <summary>
     /// LED is not used (no LED pin configured).
     /// </summary>
-    NotUsed = 2
+    NotUsed = 2,
+    
+    /// <summary>
+    /// LED is in blinking mode, alternating between on and off states.
+    /// </summary>
+    Blinking = 3
 }

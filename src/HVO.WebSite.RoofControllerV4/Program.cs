@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.Models;
 using HVO.WebSite.RoofControllerV4.HostedServices;
 using HVO.WebSite.RoofControllerV4.Middleware;
 using HVO.WebSite.RoofControllerV4.HealthChecks;

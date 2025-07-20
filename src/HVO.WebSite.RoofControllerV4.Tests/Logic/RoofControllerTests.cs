@@ -5,6 +5,7 @@ using Moq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HVO;
 using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.Models;
 using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Implementation;
 using System.Device.Gpio;

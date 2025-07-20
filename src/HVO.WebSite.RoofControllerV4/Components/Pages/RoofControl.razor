@@ -1,5 +1,6 @@
 @page "/roof-control"
 @using HVO.WebSite.RoofControllerV4.Logic
+@using HVO.WebSite.RoofControllerV4.Models
 @using Microsoft.AspNetCore.Components.Web
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
@@ -56,36 +57,83 @@
         </div>
     </div>
 
-    <!-- Control Buttons Section -->
+    <!-- Hardware Button Controls -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
+                <div class="card-header bg-dark text-white text-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-controller me-2"></i>
+                        Observatory Hardware Controls
+                    </h4>
+                    <small class="text-light">
+                        @if (ShowSimulationControls)
+                        {
+                            <span>Simulation Mode - Hardware button simulation with configurable timer</span>
+                        }
+                        else
+                        {
+                            <span>Live Hardware Mode - Buttons control actual roof motors</span>
+                        }
+                    </small>
+                </div>
                 <div class="card-body">
                     <div class="control-buttons">
                         <div class="d-grid gap-3 d-md-flex justify-content-md-center">
-                            <button class="btn btn-success btn-lg control-btn @(IsOpenDisabled ? "disabled" : "")" 
-                                    type="button" 
-                                    disabled="@IsOpenDisabled"
-                                    @onclick="OpenRoof">
-                                <i class="bi bi-arrow-up-circle me-2"></i>
-                                Open Roof
-                            </button>
-                            
-                            <button class="btn btn-danger btn-lg control-btn @(IsStopDisabled ? "disabled" : "")" 
-                                    type="button" 
-                                    disabled="@IsStopDisabled"
-                                    @onclick="StopRoof">
-                                <i class="bi bi-stop-circle me-2"></i>
-                                Emergency Stop
-                            </button>
-                            
-                            <button class="btn btn-warning btn-lg control-btn @(IsCloseDisabled ? "disabled" : "")" 
-                                    type="button" 
-                                    disabled="@IsCloseDisabled"
-                                    @onclick="CloseRoof">
-                                <i class="bi bi-arrow-down-circle me-2"></i>
-                                Close Roof
-                            </button>
+                            @if (ShowSimulationControls)
+                            {
+                                <!-- Simulation Mode: Hardware button simulation with toggle behavior -->
+                                <button class="btn btn-success btn-lg simulation-btn"
+                                        type="button"
+                                        @onclick="ToggleOpenButton"
+                                        disabled="@IsOpenDisabled">
+                                    <i class="bi bi-arrow-up-circle me-2"></i>
+                                    Open
+                                </button>
+                                
+                                <button class="btn btn-danger btn-lg simulation-btn"
+                                        type="button"
+                                        @onclick="OnStopButtonDown"
+                                        disabled="@IsStopDisabled">
+                                    <i class="bi bi-stop-circle me-2"></i>
+                                    Stop
+                                </button>
+                                
+                                <button class="btn btn-warning btn-lg simulation-btn"
+                                        type="button"
+                                        @onclick="ToggleCloseButton"
+                                        disabled="@IsCloseDisabled">
+                                    <i class="bi bi-arrow-down-circle me-2"></i>
+                                    Close
+                                </button>
+                            }
+                            else
+                            {
+                                <!-- Live Hardware Mode: Direct service calls -->
+                                <button class="@GetOpenButtonClass()" 
+                                        type="button" 
+                                        disabled="@IsOpenDisabled"
+                                        @onclick="OpenRoof">
+                                    <i class="bi bi-arrow-up-circle me-2"></i>
+                                    Open Roof
+                                </button>
+                                
+                                <button class="@GetStopButtonClass()" 
+                                        type="button" 
+                                        disabled="@IsStopDisabled"
+                                        @onclick="StopRoof">
+                                    <i class="bi bi-stop-circle me-2"></i>
+                                    Emergency Stop
+                                </button>
+                                
+                                <button class="@GetCloseButtonClass()" 
+                                        type="button" 
+                                        disabled="@IsCloseDisabled"
+                                        @onclick="CloseRoof">
+                                    <i class="bi bi-arrow-down-circle me-2"></i>
+                                    Close Roof
+                                </button>
+                            }
                         </div>
                     </div>
                 </div>
@@ -154,8 +202,8 @@
                             <div class="col-md-6">
                                 <h6><i class="bi bi-clock me-1"></i>Automatic Safety Features:</h6>
                                 <ul class="list-unstyled">
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>10-second limit switch activation</li>
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>90-second safety watchdog timer</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>@((int)RoofControllerOptions.Value.LimitSwitchDebounce.TotalMilliseconds)ms limit switch debounce protection</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>@SafetyWatchdogTimeoutSeconds-second safety watchdog timer</li>
                                     <li><i class="bi bi-check-circle text-success me-1"></i>Emergency stop available anytime</li>
                                     <li><i class="bi bi-check-circle text-success me-1"></i>Real-time status monitoring</li>
                                     <li><i class="bi bi-check-circle text-success me-1"></i>Health check system monitoring</li>
@@ -202,8 +250,8 @@
                                                         <div class="progress mt-1" style="height: 8px;">
                                                             <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" 
                                                                  role="progressbar" 
-                                                                 style="width: @((SafetyWatchdogTimeoutSeconds - SafetyWatchdogTimeRemaining) / SafetyWatchdogTimeoutSeconds * 100)%"
-                                                                 aria-valuenow="@((SafetyWatchdogTimeoutSeconds - SafetyWatchdogTimeRemaining) / SafetyWatchdogTimeoutSeconds * 100)" 
+                                                                 style="width: @((RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds - SafetyWatchdogTimeRemaining) / RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds * 100)%"
+                                                                 aria-valuenow="@((RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds - SafetyWatchdogTimeRemaining) / RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds * 100)" 
                                                                  aria-valuemin="0" 
                                                                  aria-valuemax="100">
                                                             </div>
@@ -256,48 +304,13 @@
                 <div class="card border-info">
                     <div class="card-header bg-info text-white text-center">
                         <h5 class="mb-0">
-                            <i class="bi bi-cpu me-2"></i>
-                            Simulation Controls (Development Mode)
+                            <i class="bi bi-toggles me-2"></i>
+                            Limit Switch Simulation (Configuration Enabled)
                         </h5>
-                        <small class="text-light">Toggle buttons stay pressed until clicked again</small>
+                        <small class="text-light">Simulate roof position sensors and movement timing for testing</small>
                     </div>
                     <div class="card-body">
                         <div class="simulation-controls">
-                            <!-- Button Simulations -->
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h6 class="mb-3">
-                                        <i class="bi bi-controller me-1"></i>
-                                        Hardware Button Simulation
-                                    </h6>
-                                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                                        <button class="btn @(IsOpenButtonPressed ? "btn-success" : "btn-outline-success") btn-lg simulation-btn"
-                                                type="button"
-                                                @onclick="ToggleOpenButton"
-                                                disabled="@(!IsInitialized)">
-                                            <i class="bi bi-arrow-up-circle me-2"></i>
-                                            Open Button @(IsOpenButtonPressed ? "(PRESSED)" : "(Released)")
-                                        </button>
-                                        
-                                        <button class="btn @(IsStopButtonPressed ? "btn-danger" : "btn-outline-danger") btn-lg simulation-btn"
-                                                type="button"
-                                                @onclick="ToggleStopButton"
-                                                disabled="@(!IsInitialized)">
-                                            <i class="bi bi-stop-circle me-2"></i>
-                                            Stop Button @(IsStopButtonPressed ? "(PRESSED)" : "(Released)")
-                                        </button>
-                                        
-                                        <button class="btn @(IsCloseButtonPressed ? "btn-warning" : "btn-outline-warning") btn-lg simulation-btn"
-                                                type="button"
-                                                @onclick="ToggleCloseButton"
-                                                disabled="@(!IsInitialized)">
-                                            <i class="bi bi-arrow-down-circle me-2"></i>
-                                            Close Button @(IsCloseButtonPressed ? "(PRESSED)" : "(Released)")
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <!-- Limit Switch Simulations -->
                             <div class="row">
                                 <div class="col-12">
@@ -305,77 +318,101 @@
                                         <i class="bi bi-toggles me-1"></i>
                                         Limit Switch Simulation (Roof Position Feedback)
                                     </h6>
-                                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                                        <button class="btn @(IsOpenLimitSwitchTriggered ? "btn-primary" : "btn-outline-primary") btn-lg simulation-btn"
-                                                type="button"
-                                                @onclick="ToggleOpenLimitSwitch"
-                                                disabled="@(!IsInitialized)">
-                                            <i class="bi bi-toggle-@(IsOpenLimitSwitchTriggered ? "on" : "off") me-2"></i>
-                                            @if (IsOpenLimitSwitchTriggered)
+                                    <div class="row">
+                                        <!-- Open Limit Switch Button with Progress -->
+                                        <div class="col-md-6 mb-3">
+                                            <button class="btn @(IsOpenLimitSwitchTriggered ? "btn-primary" : "btn-outline-primary") btn-lg simulation-btn w-100"
+                                                    type="button"
+                                                    @onclick="ToggleOpenLimitSwitch"
+                                                    disabled="@(!IsInitialized)">
+                                                <i class="bi bi-toggle-@(IsOpenLimitSwitchTriggered ? "on" : "off") me-2"></i>
+                                                @if (IsOpenLimitSwitchTriggered)
+                                                {
+                                                    <span>🟢 ROOF FULLY OPEN</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>⚪ Open Position (Not Detected)</span>
+                                                }
+                                            </button>
+                                            
+                                            <!-- Open Operation Progress (when open timer active) -->
+                                            @if (IsOpenTimerRunning)
                                             {
-                                                <span>🟢 ROOF FULLY OPEN</span>
-                                            }
-                                            else
-                                            {
-                                                <span>⚪ Open Position (Not Detected)</span>
-                                            }
-                                        </button>
-                                        
-                                        <button class="btn @(IsClosedLimitSwitchTriggered ? "btn-secondary" : "btn-outline-secondary") btn-lg simulation-btn"
-                                                type="button"
-                                                @onclick="ToggleClosedLimitSwitch"
-                                                disabled="@(!IsInitialized)">
-                                            <i class="bi bi-toggle-@(IsClosedLimitSwitchTriggered ? "on" : "off") me-2"></i>
-                                            @if (IsClosedLimitSwitchTriggered)
-                                            {
-                                                <span>🔴 ROOF FULLY CLOSED</span>
-                                            }
-                                            else
-                                            {
-                                                <span>⚪ Closed Position (Not Detected)</span>
-                                            }
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Simulation Timer Information -->
-                            @if (IsSimulationTimerRunning)
-                            {
-                                <div class="row mt-4">
-                                    <div class="col-12">
-                                        <div class="alert alert-warning">
-                                            <h6 class="alert-heading">
-                                                <i class="bi bi-clock me-1"></i>
-                                                Automatic Simulation Timer Active
-                                            </h6>
-                                            <div class="row align-items-center">
-                                                <div class="col-md-6">
-                                                    <p class="mb-2">
-                                                        <strong>Timer Status:</strong> Roof will automatically reach target position in <strong>@Math.Ceiling(SimulationTimeRemaining) seconds</strong>
-                                                    </p>
-                                                    <p class="mb-0">
-                                                        <i class="bi bi-info-circle text-info me-1"></i>
-                                                        You can manually trigger limit switches to override the timer
-                                                    </p>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="progress" style="height: 25px;">
-                                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
-                                                             role="progressbar"
-                                                             style="width: @((15 - SimulationTimeRemaining) / 15 * 100)%"
-                                                             aria-valuenow="@((15 - SimulationTimeRemaining) / 15 * 100)"
-                                                             aria-valuemin="0"
+                                                <div class="mt-2">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <small class="text-primary fw-bold">
+                                                            <i class="bi bi-clock me-1"></i>Opening Progress
+                                                        </small>
+                                                        <small class="text-primary fw-bold">
+                                                            @Math.Ceiling(OpenTimerRemaining)s remaining
+                                                        </small>
+                                                    </div>
+                                                    <div class="progress" style="height: 8px;">
+                                                        <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated" 
+                                                             role="progressbar" 
+                                                             style="width: @((RoofControllerOptions.Value.SimulationTimeout.TotalSeconds - OpenTimerRemaining) / RoofControllerOptions.Value.SimulationTimeout.TotalSeconds * 100)%"
+                                                             aria-valuenow="@((RoofControllerOptions.Value.SimulationTimeout.TotalSeconds - OpenTimerRemaining) / RoofControllerOptions.Value.SimulationTimeout.TotalSeconds * 100)" 
+                                                             aria-valuemin="0" 
                                                              aria-valuemax="100">
-                                                            @Math.Ceiling(SimulationTimeRemaining)s remaining
                                                         </div>
                                                     </div>
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-info-circle me-1"></i>
+                                                        Auto-trigger open limit switch at completion or click to override
+                                                    </small>
                                                 </div>
-                                            </div>
+                                            }
+                                        </div>
+                                        
+                                        <!-- Close Limit Switch Button with Progress -->
+                                        <div class="col-md-6 mb-3">
+                                            <button class="btn @(IsClosedLimitSwitchTriggered ? "btn-secondary" : "btn-outline-secondary") btn-lg simulation-btn w-100"
+                                                    type="button"
+                                                    @onclick="ToggleClosedLimitSwitch"
+                                                    disabled="@(!IsInitialized)">
+                                                <i class="bi bi-toggle-@(IsClosedLimitSwitchTriggered ? "on" : "off") me-2"></i>
+                                                @if (IsClosedLimitSwitchTriggered)
+                                                {
+                                                    <span>🔴 ROOF FULLY CLOSED</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>⚪ Closed Position (Not Detected)</span>
+                                                }
+                                            </button>
+                                            
+                                            <!-- Close Operation Progress (when close timer active) -->
+                                            @if (IsCloseTimerRunning)
+                                            {
+                                                <div class="mt-2">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <small class="text-info fw-bold">
+                                                            <i class="bi bi-clock me-1"></i>Closing Progress
+                                                        </small>
+                                                        <small class="text-info fw-bold">
+                                                            @Math.Ceiling(CloseTimerRemaining)s remaining
+                                                        </small>
+                                                    </div>
+                                                    <div class="progress" style="height: 8px;">
+                                                        <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" 
+                                                             role="progressbar" 
+                                                             style="width: @((RoofControllerOptions.Value.SimulationTimeout.TotalSeconds - CloseTimerRemaining) / RoofControllerOptions.Value.SimulationTimeout.TotalSeconds * 100)%"
+                                                             aria-valuenow="@((RoofControllerOptions.Value.SimulationTimeout.TotalSeconds - CloseTimerRemaining) / RoofControllerOptions.Value.SimulationTimeout.TotalSeconds * 100)" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-info-circle me-1"></i>
+                                                        Auto-trigger close limit switch at completion or click to override
+                                                    </small>
+                                                </div>
+                                            }
                                         </div>
                                     </div>
                                 </div>
-                            }
+                            </div>
                             
                             <!-- Simulation Instructions -->
                             <div class="row mt-4">
@@ -389,30 +426,33 @@
                                             <div class="col-md-6">
                                                 <strong>Hardware Button Simulation:</strong>
                                                 <ul class="list-unstyled mb-3 mt-1">
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Buttons stay pressed until toggled again</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Stop button is momentary (auto-releases)</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Use for testing button input events</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Click to toggle hardware button pressed/released state</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Stop button triggers immediate emergency stop</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Simulates physical hardware button behavior</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Enabled via configuration settings</li>
                                                 </ul>
                                                 <strong>Operational Logic:</strong>
                                                 <ul class="list-unstyled mb-0">
-                                                    <li><i class="bi bi-arrow-right text-primary me-1"></i>Open button disabled when roof is open</li>
-                                                    <li><i class="bi bi-arrow-right text-primary me-1"></i>Close button disabled when roof is closed</li>
-                                                    <li><i class="bi bi-arrow-right text-primary me-1"></i>Limit switches control operational state</li>
-                                                    <li><i class="bi bi-arrow-right text-warning me-1"></i>@((int)RoofControllerOptions.Value.SimulationTimeout.TotalSeconds)-second auto-timer triggers limit switches</li>
+                                                    <li><i class="bi bi-shield-x text-danger me-1"></i>Open button disabled when roof is fully open (limit switch triggered)</li>
+                                                    <li><i class="bi bi-shield-x text-danger me-1"></i>Close button disabled when roof is fully closed (limit switch triggered)</li>
+                                                    <li><i class="bi bi-toggles text-primary me-1"></i>Position feedback provided by limit switch sensors</li>
+                                                    <li><i class="bi bi-stopwatch text-warning me-1"></i>@((int)RoofControllerOptions.Value.SimulationTimeout.TotalSeconds)-second simulation timer with @((int)RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds)-second safety watchdog</li>
                                                 </ul>
                                             </div>
                                             <div class="col-md-6">
                                                 <strong>Limit Switch Position Feedback:</strong>
                                                 <ul class="list-unstyled mb-3 mt-1">
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>🟢 = Roof fully at that position</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>⚪ = Position not detected</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Only one position can be active</li>
+                                                    <li><i class="bi bi-toggle-on text-success me-1"></i>🟢 = Position detected (limit switch triggered)</li>
+                                                    <li><i class="bi bi-toggle-off text-muted me-1"></i>⚪ = Position not detected (limit switch inactive)</li>
+                                                    <li><i class="bi bi-shield-check text-warning me-1"></i>Mutual exclusion - only one limit switch active at a time</li>
+                                                    <li><i class="bi bi-clock text-info me-1"></i>@((int)RoofControllerOptions.Value.LimitSwitchDebounce.TotalMilliseconds)ms debounce protection prevents false triggers</li>
                                                 </ul>
                                                 <strong>Testing Workflow:</strong>
                                                 <ul class="list-unstyled mb-0">
-                                                    <li><i class="bi bi-play-circle text-info me-1"></i>1. Start open/close operation</li>
-                                                    <li><i class="bi bi-play-circle text-info me-1"></i>2. Wait 15s OR manually trigger limit switch</li>
-                                                    <li><i class="bi bi-play-circle text-info me-1"></i>3. Watch buttons update automatically</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>1. Click Open/Close to start @((int)RoofControllerOptions.Value.SimulationTimeout.TotalSeconds)-second roof operation</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>2. Wait for auto-completion OR manually trigger limit switch</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>3. Observe real-time progress bars and roof animation</li>
+                                                    <li><i class="bi bi-play-circle text-info me-1"></i>4. Use Stop button for immediate emergency halt</li>
                                                 </ul>
                                             </div>
                                         </div>
@@ -431,14 +471,14 @@
 <div class="toast-container position-fixed top-0 end-0 p-3">
     @foreach (var notification in Notifications)
     {
-        <div class="toast show @GetToastClass(notification.Type)" role="alert">
-            <div class="toast-header">
-                <i class="@GetToastIcon(notification.Type) me-2"></i>
-                <strong class="me-auto">@notification.Title</strong>
-                <small>@notification.Timestamp.ToString("HH:mm:ss")</small>
-                <button type="button" class="btn-close" @onclick="() => RemoveNotification(notification)"></button>
+        <div class="toast show @GetToastClass(notification.Type)" role="alert" style="@GetToastStyle(notification.Type)">
+            <div class="toast-header" style="background-color: rgba(255, 255, 255, 0.1) !important; color: inherit !important; border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;">
+                <i class="@GetToastIcon(notification.Type) me-2" style="color: white !important;"></i>
+                <strong class="me-auto" style="color: white !important;">@notification.Title</strong>
+                <small style="color: rgba(255, 255, 255, 0.8) !important;">@notification.Timestamp.ToString("HH:mm:ss")</small>
+                <button type="button" class="btn-close" @onclick="() => RemoveNotification(notification)" style="filter: brightness(0) invert(1) !important; opacity: 0.8 !important;"></button>
             </div>
-            <div class="toast-body">
+            <div class="toast-body" style="color: white !important; font-weight: 500 !important;">
                 @notification.Message
             </div>
         </div>

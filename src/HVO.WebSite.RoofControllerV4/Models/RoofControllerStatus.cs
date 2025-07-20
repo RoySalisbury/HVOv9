@@ -1,4 +1,4 @@
-namespace HVO.WebSite.RoofControllerV4.Logic
+namespace HVO.WebSite.RoofControllerV4.Models
 {
     /// <summary>
     /// Represents the current operational status of the roof controller system.

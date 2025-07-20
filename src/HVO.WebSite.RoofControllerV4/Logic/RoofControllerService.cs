@@ -4,6 +4,7 @@ using HVO.Iot.Devices.Abstractions;
 using Iot.Device.Common;
 using Microsoft.Extensions.Options;
 using HVO;
+using HVO.WebSite.RoofControllerV4.Models;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
 {
@@ -29,6 +30,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         protected readonly object _syncLock = new object();
         protected volatile bool _disposed;  // Make volatile for thread-safe checking
         protected string _lastCommand = string.Empty;
+        protected RoofControllerStopReason _lastStopReason = RoofControllerStopReason.None;
 
         // Safety watchdog fields - use single lock for atomicity
         protected System.Timers.Timer? _safetyWatchdogTimer;
@@ -177,9 +179,13 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     if (IsDisposed)
                         return;
                         
-                    InternalStop();
+                    InternalStop(RoofControllerStopReason.SafetyWatchdogTimeout);
                     Status = RoofControllerStatus.Error;
                     _lastCommand = "SafetyStop";
+                    
+                    // Ensure LED blinking is stopped for error state
+                    this.UpdateLedBlinkingState();
+                    
                     _logger.LogError("Roof stopped by safety watchdog - manual intervention may be required");
                 }
             }
@@ -198,6 +204,118 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         /// This property returns true when the roof is actively in motion and not at a limit switch position.
         /// </summary>
         public virtual bool IsMoving => Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing;
+
+        /// <summary>
+        /// Gets the reason for the last stop operation.
+        /// </summary>
+        public virtual RoofControllerStopReason LastStopReason
+        {
+            get
+            {
+                lock (_syncLock)
+                {
+                    return _lastStopReason;
+                }
+            }
+            protected set
+            {
+                lock (_syncLock)
+                {
+                    _lastStopReason = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates LED blinking state based on current roof status.
+        /// Starts blinking for Open button when Opening, Close button when Closing.
+        /// Stops blinking when operations complete or are stopped.
+        /// </summary>
+        protected virtual void UpdateLedBlinkingState()
+        {
+            try
+            {
+                _logger.LogTrace("UpdateLedBlinkingState - Status: {Status}", Status);
+
+                switch (Status)
+                {
+                    case RoofControllerStatus.Opening:
+                        // Start blinking open button LED at 1Hz (only if LED pin is configured)
+                        if (_roofControllerOptions.OpenRoofButtonLedPin.HasValue)
+                            _roofOpenButton.StartBlinking(1.0);
+                        if (_roofControllerOptions.CloseRoofButtonLedPin.HasValue)
+                            _roofCloseButton.StopBlinking();
+                        if (_roofControllerOptions.StopRoofButtonLedPin.HasValue)
+                            _roofStopButton.StopBlinking();
+                        
+                        _logger.LogDebug("Started blinking Open button LED for Opening status");
+                        break;
+
+                    case RoofControllerStatus.Closing:
+                        // Start blinking close button LED at 1Hz (only if LED pin is configured)
+                        if (_roofControllerOptions.CloseRoofButtonLedPin.HasValue)
+                            _roofCloseButton.StartBlinking(1.0);
+                        if (_roofControllerOptions.OpenRoofButtonLedPin.HasValue)
+                            _roofOpenButton.StopBlinking();
+                        if (_roofControllerOptions.StopRoofButtonLedPin.HasValue)
+                            _roofStopButton.StopBlinking();
+                        
+                        _logger.LogDebug("Started blinking Close button LED for Closing status");
+                        break;
+
+                    case RoofControllerStatus.Open:
+                    case RoofControllerStatus.Closed:
+                    case RoofControllerStatus.Stopped:
+                    case RoofControllerStatus.PartiallyOpen:
+                    case RoofControllerStatus.PartiallyClose:
+                    case RoofControllerStatus.Error:
+                    case RoofControllerStatus.Unknown:
+                    case RoofControllerStatus.NotInitialized:
+                    default:
+                        // Stop all blinking for final states (only if LED pins are configured)
+                        if (_roofControllerOptions.OpenRoofButtonLedPin.HasValue)
+                            _roofOpenButton.StopBlinking();
+                        if (_roofControllerOptions.CloseRoofButtonLedPin.HasValue)
+                            _roofCloseButton.StopBlinking();
+                        if (_roofControllerOptions.StopRoofButtonLedPin.HasValue)
+                            _roofStopButton.StopBlinking();
+                        
+                        _logger.LogTrace("Stopped all LED blinking for status: {Status}", Status);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Don't let LED control errors affect roof operations
+                _logger.LogError(ex, "Error updating LED blinking state for status {Status}", Status);
+            }
+        }
+
+        /// <summary>
+        /// Stops all LED blinking immediately.
+        /// Used during emergency stops and disposal.
+        /// </summary>
+        protected virtual void StopAllLedBlinking()
+        {
+            try
+            {
+                _logger.LogTrace("StopAllLedBlinking called");
+
+                if (_roofControllerOptions.OpenRoofButtonLedPin.HasValue)
+                    _roofOpenButton.StopBlinking();
+                if (_roofControllerOptions.CloseRoofButtonLedPin.HasValue)
+                    _roofCloseButton.StopBlinking();
+                if (_roofControllerOptions.StopRoofButtonLedPin.HasValue)
+                    _roofStopButton.StopBlinking();
+                
+                _logger.LogTrace("All LED blinking stopped");
+            }
+            catch (Exception ex)
+            {
+                // Don't let LED control errors affect roof operations
+                _logger.LogError(ex, "Error stopping LED blinking");
+            }
+        }
 
 
         public virtual Task<Result<bool>> Initialize(CancellationToken cancellationToken)
@@ -221,7 +339,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 this.InitializeSafetyWatchdog();
 
                 // Always reset to a known safe state on initialization. Using the InternalStop will bypass the initialization check.
-                this.InternalStop();
+                this.InternalStop(RoofControllerStopReason.None);
 
                 // Setup the GPIO controller
                 try
@@ -310,7 +428,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             // Thread-safe button handling
             try
             {
-                this.Stop();
+                this.Stop(RoofControllerStopReason.StopButtonPressed);
             }
             catch (Exception ex)
             {
@@ -323,7 +441,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             // Thread-safe button handling
             try
             {
-                this.Stop();
+                this.Stop(RoofControllerStopReason.NormalStop);
             }
             catch (Exception ex)
             {
@@ -349,7 +467,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             // Thread-safe button handling
             try
             {
-                this.Stop();
+                this.Stop(RoofControllerStopReason.NormalStop);
             }
             catch (Exception ex)
             {
@@ -383,7 +501,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 {
                     this.StopSafetyWatchdog();
                     // Call InternalStop directly to avoid recursion and ensure thread safety
-                    this.InternalStop();
+                    this.InternalStop(RoofControllerStopReason.LimitSwitchReached);
                     this._lastCommand = "LimitStop";
                     this._logger.LogInformation("RoofOpenLimitSwitch contacted - stopping roof. {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
                 }
@@ -408,7 +526,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                 {
                     this.StopSafetyWatchdog();
                     // Call InternalStop directly to avoid recursion and ensure thread safety
-                    this.InternalStop();
+                    this.InternalStop(RoofControllerStopReason.LimitSwitchReached);
                     this._lastCommand = "LimitStop";
                     this._logger.LogInformation("RoofClosedLimitSwitch contacted - stopping roof. {changeType} - {eventDateTime}, CurrentStatus: {currentStatus}", e.ChangeType, e.EventDateTime, this.Status);
                 }
@@ -447,7 +565,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         {
                             // Operation is still active - keep status as Opening
                             // Don't change to PartiallyOpen until the operation actually stops
-                            this._logger.LogDebug("Roof opening in progress - keeping Opening status (watchdog active)");
+                            this._logger.LogTrace("Roof opening in progress - keeping Opening status (watchdog active)");
                         }
                         else
                         {
@@ -462,7 +580,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         {
                             // Operation is still active - keep status as Closing
                             // Don't change to PartiallyClose until the operation actually stops
-                            this._logger.LogDebug("Roof closing in progress - keeping Closing status (watchdog active)");
+                            this._logger.LogTrace("Roof closing in progress - keeping Closing status (watchdog active)");
                         }
                         else
                         {
@@ -486,10 +604,14 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                 this._logger.LogDebug("UpdateRoofStatus: OpenTriggered={openTriggered}, ClosedTriggered={closedTriggered}, LastCommand={lastCommand}, Status={status}", 
                     openTriggered, closedTriggered, _lastCommand, this.Status);
+                
+                // Update LED blinking state based on new status
+                this.UpdateLedBlinkingState();
             }
         }
 
-        public virtual Result<RoofControllerStatus> Stop()
+
+        public virtual Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop)
         {
             try
             {
@@ -509,13 +631,13 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     }
                     // If _lastCommand was "Open" or "Close", keep it for proper status determination in UpdateRoofStatus()
                     
-                    this.InternalStop();
+                    this.InternalStop(reason);
                     this.StopSafetyWatchdog();
                     
                     // Update status again after stopping watchdog to ensure correct status transition
                     this.UpdateRoofStatus();
                     
-                    this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Current Status: {this.Status}");
+                    this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
             }
@@ -565,12 +687,15 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             }
         }
 
-        protected virtual void InternalStop()
+        protected virtual void InternalStop(RoofControllerStopReason reason = RoofControllerStopReason.None)
         {
             lock (this._syncLock)
             {
+                // Set the last stop reason for external access
+                this.LastStopReason = reason;
+                
                 // DON'T set status to Stopped here - let UpdateRoofStatus determine the correct status
-                this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Current Status: {this.Status}");
+                this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
 
                 // Set all relays to safe state for STOP operation atomically
                 SetRelayStatesAtomically(
@@ -582,7 +707,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                 // Update status based on limit switch states and last command
                 this.UpdateRoofStatus();
-                this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Final Status: {this.Status}");
+                this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Reason: {reason}. Final Status: {this.Status}");
             }
         }
 
@@ -630,6 +755,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     this.Status = RoofControllerStatus.Opening;
                     // _lastCommand already set earlier before calling Stop()
                     this.StartSafetyWatchdog();
+                    
+                    // Update LED blinking to start blinking Open button
+                    this.UpdateLedBlinkingState();
+                    
                     this._logger.LogInformation($"====Open - {DateTime.Now:O}. Current Status: {this.Status}");
 
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -685,6 +814,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     this.Status = RoofControllerStatus.Closing;
                     // _lastCommand already set earlier before calling Stop()
                     this.StartSafetyWatchdog();
+                    
+                    // Update LED blinking to start blinking Close button
+                    this.UpdateLedBlinkingState();
+                    
                     this._logger.LogInformation($"====Close - {DateTime.Now:O}. Current Status: {this.Status}");
 
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -719,9 +852,12 @@ namespace HVO.WebSite.RoofControllerV4.Logic
             try
             {
                 // 1. Stop any ongoing operations first
-                InternalStop();
+                InternalStop(RoofControllerStopReason.SystemDisposal);
+                
+                // 2. Stop all LED blinking immediately
+                StopAllLedBlinking();
 
-                // 2. Stop and dispose the safety watchdog timer
+                // 3. Stop and dispose the safety watchdog timer
                 try
                 {
                     lock (_syncLock)
@@ -742,7 +878,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                 if (IsInitialized)
                 {
-                    // 3. Clean up the open limit switch
+                    // 4. Clean up the open limit switch
                     if (_roofOpenLimitSwitch != null)
                     {
                         try
@@ -757,7 +893,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         }
                     }
 
-                    // 4. Clean up the closed limit switch
+                    // 5. Clean up the closed limit switch
                     if (_roofClosedLimitSwitch != null)
                     {
                         try
@@ -772,7 +908,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         }
                     }
 
-                    // 5. Clean up the buttons
+                    // 6. Clean up the buttons
                     // Unregister event handlers before disposal to prevent potential callbacks     
                     if (_roofOpenButton != null)
                     {
@@ -815,7 +951,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         }
                     }
 
-                    // 6. Clean up GPIO pins (but not the controller itself if we don't own it)
+                    // 7. Clean up GPIO pins (but not the controller itself if we don't own it)
                     if (_gpioController != null)
                     {
                         try

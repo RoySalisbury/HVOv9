@@ -1,5 +1,6 @@
 using FluentAssertions;
 using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;

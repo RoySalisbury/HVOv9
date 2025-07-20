@@ -4,6 +4,7 @@ using Asp.Versioning;
 using System.Device.Gpio;
 using System.Device.Gpio.Drivers;
 using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.Models;
 
 namespace HVO.WebSite.RoofControllerV4.Controllers
 {

@@ -126,6 +126,15 @@
     cursor: not-allowed;
 }
 
+/* Button Blinking Animations */
+.btn-blinking {
+    animation: btn-pulse 1.5s ease-in-out infinite;
+}
+
+.btn-urgent-blink {
+    animation: btn-urgent-pulse 1s ease-in-out infinite;
+}
+
 .btn-success {
     background: linear-gradient(135deg, #28a745, #20c997);
 }
@@ -307,6 +316,32 @@
     50% { opacity: 0; }
 }
 
+@keyframes btn-pulse {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    50% { 
+        opacity: 0.8; 
+        transform: scale(1.02);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    }
+}
+
+@keyframes btn-urgent-pulse {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+    50% { 
+        opacity: 0.7; 
+        transform: scale(1.05);
+        box-shadow: 0 8px 20px rgba(220, 53, 69, 0.5);
+    }
+}
+
 @keyframes roofOpening {
     0% { transform: translateX(0); }
     100% { transform: translateX(-10px); }
@@ -315,6 +350,34 @@
 @keyframes roofClosing {
     0% { transform: translateX(0); }
     100% { transform: translateX(5px); }
+}
+
+/* Button Blinking Animations */
+@keyframes btnBlink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.02); }
+}
+
+@keyframes btnUrgentBlink {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    50% { 
+        opacity: 0.8; 
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+    }
+}
+
+/* Button Blinking Classes */
+.btn-blinking {
+    animation: btnBlink 1.5s ease-in-out infinite;
+}
+
+.btn-urgent-blink {
+    animation: btnUrgentBlink 1s ease-in-out infinite;
 }
 
 /* Enhanced Badge Styling */
@@ -334,31 +397,58 @@
     border-radius: 10px;
 }
 
-/* Toast Notifications */
-.toast {
-    border-radius: 10px;
-    border: none;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+/* Toast Notifications - High Specificity to Override Bootstrap */
+.toast-container .toast {
+    border-radius: 10px !important;
+    border: none !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
 }
 
-.toast-success {
-    background: linear-gradient(135deg, #28a745, #20c997);
-    color: white;
+.toast-container .toast.toast-success {
+    background-color: #22c55e !important;
+    color: white !important;
+    border-left: 4px solid #16a34a !important;
 }
 
-.toast-error {
-    background: linear-gradient(135deg, #dc3545, #e91e63);
-    color: white;
+.toast-container .toast.toast-error {
+    background-color: #ef4444 !important;
+    color: white !important;
+    border-left: 4px solid #dc2626 !important;
 }
 
-.toast-warning {
-    background: linear-gradient(135deg, #ffc107, #fd7e14);
-    color: #212529;
+.toast-container .toast.toast-warning {
+    background-color: #f59e0b !important;
+    color: white !important;
+    border-left: 4px solid #d97706 !important;
 }
 
-.toast-info {
-    background: linear-gradient(135deg, #17a2b8, #6f42c1);
-    color: white;
+.toast-container .toast.toast-info {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    border-left: 4px solid #2563eb !important;
+}
+
+/* Toast Content Styling for Better Readability */
+.toast-container .toast .toast-header {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: inherit !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+    font-weight: 600 !important;
+}
+
+.toast-container .toast .toast-body {
+    color: inherit !important;
+    font-weight: 500 !important;
+    line-height: 1.4 !important;
+}
+
+.toast-container .toast .btn-close {
+    filter: brightness(0) invert(1) !important;
+    opacity: 0.8 !important;
+}
+
+.toast-container .toast .btn-close:hover {
+    opacity: 1 !important;
 }
 
 /* Animation Legend */
@@ -472,41 +562,81 @@
     transform: translateY(0);
 }
 
-/* Pressed state styling */
+/* Button styling - solid colors only */
 .simulation-btn.btn-success {
-    background: linear-gradient(135deg, #28a745, #20c997);
-    border-color: #28a745;
-    box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);
-    animation: pulseGreen 2s infinite;
+    background: linear-gradient(135deg, #28a745, #20c997) !important;
+    border-color: #28a745 !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+}
+
+.simulation-btn.btn-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #20c997, #28a745) !important;
+    box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4) !important;
+    transform: translateY(-2px);
 }
 
 .simulation-btn.btn-danger {
-    background: linear-gradient(135deg, #dc3545, #fd7e14);
-    border-color: #dc3545;
-    box-shadow: 0 0 20px rgba(220, 53, 69, 0.4);
-    animation: pulseRed 2s infinite;
+    background: linear-gradient(135deg, #dc3545, #fd7e14) !important;
+    border-color: #dc3545 !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+}
+
+.simulation-btn.btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #fd7e14, #dc3545) !important;
+    box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4) !important;
+    transform: translateY(-2px);
 }
 
 .simulation-btn.btn-warning {
-    background: linear-gradient(135deg, #ffc107, #fd7e14);
-    border-color: #ffc107;
-    color: #212529;
-    box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
-    animation: pulseYellow 2s infinite;
+    background: linear-gradient(135deg, #ffc107, #fd7e14) !important;
+    border-color: #ffc107 !important;
+    color: #212529 !important;
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3) !important;
+}
+
+.simulation-btn.btn-warning:hover:not(:disabled) {
+    background: linear-gradient(135deg, #fd7e14, #ffc107) !important;
+    box-shadow: 0 6px 16px rgba(255, 193, 7, 0.4) !important;
+    transform: translateY(-2px);
 }
 
 .simulation-btn.btn-primary {
-    background: linear-gradient(135deg, #0d6efd, #6610f2);
-    border-color: #0d6efd;
-    box-shadow: 0 0 20px rgba(13, 110, 253, 0.4);
-    animation: pulseBlue 2s infinite;
+    background: linear-gradient(135deg, #0d6efd, #6610f2) !important;
+    border-color: #0d6efd !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3) !important;
+}
+
+.simulation-btn.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #6610f2, #0d6efd) !important;
+    box-shadow: 0 6px 16px rgba(13, 110, 253, 0.4) !important;
+    transform: translateY(-2px);
 }
 
 .simulation-btn.btn-secondary {
-    background: linear-gradient(135deg, #6c757d, #495057);
-    border-color: #6c757d;
-    box-shadow: 0 0 20px rgba(108, 117, 125, 0.4);
-    animation: pulseGray 2s infinite;
+    background: linear-gradient(135deg, #6c757d, #495057) !important;
+    border-color: #6c757d !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3) !important;
+}
+
+.simulation-btn.btn-secondary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #495057, #6c757d) !important;
+    box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4) !important;
+    transform: translateY(-2px);
+}
+
+/* Disabled state */
+.simulation-btn:disabled {
+    opacity: 0.5 !important;
+    background: #6c757d !important;
+    border-color: #6c757d !important;
+    color: white !important;
+    box-shadow: none !important;
+    transform: none !important;
+    cursor: not-allowed !important;
 }
 
 /* Outline versions (not pressed) */

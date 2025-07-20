@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.Models;
 
 namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
 
@@ -16,6 +17,8 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
     [DataRow(RoofControllerStatus.Open, 4)]
     [DataRow(RoofControllerStatus.Opening, 5)]
     [DataRow(RoofControllerStatus.Stopped, 6)]
+    [DataRow(RoofControllerStatus.PartiallyOpen, 7)]
+    [DataRow(RoofControllerStatus.PartiallyClose, 8)]
     [DataRow(RoofControllerStatus.Error, 99)]
     public void EnumValues_HaveCorrectIntegerValues(RoofControllerStatus status, int expectedValue)
     {
@@ -61,6 +64,8 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Logic;
     [DataRow(RoofControllerStatus.Open, "Open")]
     [DataRow(RoofControllerStatus.Opening, "Opening")]
     [DataRow(RoofControllerStatus.Stopped, "Stopped")]
+    [DataRow(RoofControllerStatus.PartiallyOpen, "PartiallyOpen")]
+    [DataRow(RoofControllerStatus.PartiallyClose, "PartiallyClose")]
     [DataRow(RoofControllerStatus.Error, "Error")]
     public void EnumValues_HaveCorrectNames(RoofControllerStatus status, string expectedName)
     {

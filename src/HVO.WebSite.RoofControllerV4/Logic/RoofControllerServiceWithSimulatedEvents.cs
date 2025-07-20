@@ -3,6 +3,7 @@ using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices;
 using System.Device.Gpio;
 using System.Timers;
+using HVO.WebSite.RoofControllerV4.Models;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
 {
@@ -230,13 +231,14 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         }
 
         /// <summary>
-        /// Stops the roof and stops any running simulation timer.
+        /// Stops the roof and stops any running simulation timer with a specified reason.
         /// </summary>
+        /// <param name="reason">The reason for stopping the operation.</param>
         /// <returns>Result indicating the success or failure of the operation</returns>
-        public override Result<RoofControllerStatus> Stop()
+        public override Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop)
         {
             StopSimulationTimer();
-            return base.Stop();
+            return base.Stop(reason);
         }
 
         #endregion

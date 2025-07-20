@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using HVO;
+using HVO.WebSite.RoofControllerV4.Models;
 
 namespace HVO.WebSite.RoofControllerV4.Logic
 {
@@ -30,6 +31,11 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         bool IsMoving { get; }
 
         /// <summary>
+        /// Gets the reason for the last stop operation.
+        /// </summary>
+        RoofControllerStopReason LastStopReason { get; }
+
+        /// <summary>
         /// Initializes the roof controller hardware and prepares it for operation.
         /// </summary>
         /// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
@@ -37,10 +43,11 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         Task<Result<bool>> Initialize(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Immediately stops all roof movement operations.
+        /// Immediately stops all roof movement operations with a specified reason.
         /// </summary>
+        /// <param name="reason">The reason for stopping the operation.</param>
         /// <returns>A result indicating whether the stop operation succeeded.</returns>
-        Result<RoofControllerStatus> Stop();
+        Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop);
 
         /// <summary>
         /// Initiates the roof opening sequence.

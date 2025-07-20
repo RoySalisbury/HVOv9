@@ -1,4 +1,4 @@
-namespace HVO.WebSite.RoofControllerV4.Logic
+namespace HVO.WebSite.RoofControllerV4.Models
 {
     public record RoofControllerOptions
     {
@@ -22,9 +22,9 @@ namespace HVO.WebSite.RoofControllerV4.Logic
         public int OpenRoofButtonPin { get; set; } = 8;
         public int StopRoofButtonPin { get; set; } = 9;
 
-        public int? CloseRoofButtonLedPin { get; set; } = null; // Optional, if not set, no LED will be used
-        public int? OpenRoofButtonLedPin { get; set; } = null; // Optional, if not set, no LED will be used
-        public int? StopRoofButtonLedPin { get; set; } = null; // Optional, if not set, no LED will be used
+        public int? CloseRoofButtonLedPin { get; set; } = 10; // Optional, if not set, no LED will be used
+        public int? OpenRoofButtonLedPin { get; set; } = 11; // Optional, if not set, no LED will be used
+        public int? StopRoofButtonLedPin { get; set; } = 12; // Optional, if not set, no LED will be used
 
         public TimeSpan ButtonDebounce { get; set; } = TimeSpan.FromMilliseconds(50);
 
