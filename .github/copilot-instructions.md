@@ -50,14 +50,24 @@ namespace HVO.ProjectName
 - Use `IServiceCollection` extension methods for complex service registration
 - Prefer interfaces for testability
 
-### 5. Error Handling
-- Use structured logging with `ILogger<T>`
+### 5. Error Handling and Logging Standards
+- **Use structured logging with `ILogger<T>` throughout the workspace** - Follow consistent patterns across all components
+- **Dependency Injection for Logging**: Use constructor injection with optional `ILogger<T>?` parameters in all hardware device classes
+- **Log Level Guidelines**: 
+  - `Trace`: High-frequency operations like timer events and GPIO state toggles
+  - `Debug`: Operational state changes, method entry/exit, configuration changes
+  - `Information`: Important business events, startup/shutdown, major state transitions
+  - `Warning`: Recoverable errors, configuration issues, performance concerns
+  - `Error`: Exceptions and unrecoverable errors with full context
+  - `Critical`: System-level failures requiring immediate attention
+- **Structured Data**: Use named parameters in log messages for better searchability and monitoring
+- **Hardware Device Logging**: All GPIO and IoT device classes must support ILogger<T> with fallback creation when not provided
 - Implement proper exception handling with specific exception types
 - **Use `Result<T>` pattern for operations that can fail** - Located in `HVO/Result.cs`
 - **Use `InvalidOperationException` for true "not found" scenarios only** - Controllers should handle these explicitly
 - **Service state issues should use `InvalidOperationException` but return 500 via controller handling**
 - Implement global exception handling middleware (`HvoServiceExceptionHandler`)
-- Log errors with appropriate log levels (Error, Warning, Information)
+- **Replace Debug.WriteLine with structured logging** - No console debugging in production code
 
 ### 6. Testing Standards
 - Use xUnit as the primary testing framework
@@ -89,11 +99,22 @@ namespace HVO.ProjectName
 - Follow REST conventions for API endpoints
 - Use Bootstrap 5 for responsive UI design with component-specific customizations in scoped CSS
 
-### 8. IoT Device Integration
+### 8. IoT Device Integration and Hardware Standards
+- **Consistent Logging**: All hardware device classes must implement ILogger<T> support with optional dependency injection
+- **Hardware Device Constructor Pattern**: Include optional `ILogger<DeviceClass>? logger = null` parameter in all constructors
+- **Internal Logger Creation**: When logger is not provided via DI, create internal logger or use NullLogger pattern
+- **GPIO State Logging**: Use appropriate log levels for hardware operations:
+  - `Trace` for pin state changes and high-frequency events
+  - `Debug` for device initialization, configuration changes, and operational state
+  - `Information` for important device lifecycle events
+  - `Error` for hardware failures with full context including pin numbers and error details
+- **Thread-Safe Logging**: Ensure all logging calls are thread-safe, especially in timer callbacks and GPIO event handlers
+- **Structured Context**: Include relevant hardware context (pin numbers, device states, timing) in all log messages
 - Implement proper disposal patterns (`IDisposable`, `IAsyncDisposable`)
 - Use event-driven patterns for device state changes
 - Handle GPIO operations with proper error handling
 - Use abstractions for testable device interactions
+- **Follow GpioLimitSwitch.cs pattern for exemplary logging implementation**
 
 ### 9. Configuration Management
 - Use `appsettings.json` for configuration
@@ -126,22 +147,49 @@ namespace HVO.ProjectName
   - Always dispose and recreate `System.Timers.Timer` for reliable restart behavior
   - Set `AutoReset = false` for one-time safety triggers
   - Use timer recreation pattern instead of `Start()/Stop()` for safety-critical scenarios
+- **UI Component Logging**: 
+  - Clean up excessive debug logging from timer and property operations
+  - Use Trace level for high-frequency UI events, Debug for user interactions
+  - Maintain essential operational logging for troubleshooting user interface issues
 
 ## HVOv9-Specific Patterns
 
-### 1. Result<T> Pattern Usage
+### 1. Logging Standardization Patterns
+- **Workspace-Wide Consistency**: All classes across the workspace must follow the same ILogger<T> patterns
+- **Hardware Device Logger Pattern**: 
+  ```csharp
+  private readonly ILogger<DeviceClass>? _logger;
+  
+  public DeviceClass(..., ILogger<DeviceClass>? logger = null)
+  {
+      _logger = logger;
+      // Optional: Create fallback logger if needed
+  }
+  ```
+- **Structured Logging Template**: Use consistent named parameter patterns across all log messages
+  ```csharp
+  _logger?.LogDebug("Operation Started - Parameter: {ParameterName}, State: {CurrentState}", parameterValue, currentState);
+  ```
+- **Log Level Consistency**: 
+  - Hardware classes: Trace for pin operations, Debug for state changes, Information for lifecycle
+  - Service classes: Debug for business operations, Information for important events, Error for failures
+  - UI components: Trace for timers/properties, Debug for user interactions, clean up excessive logging
+- **Error Context Standardization**: Always include relevant context (pin numbers, device states, timing, IDs) in error logs
+- **Performance-Sensitive Logging**: Use Trace level for high-frequency operations to avoid performance impact
+
+### 2. Result<T> Pattern Usage
 - All service methods that can fail should return `Result<T>`
 - Use `Result<T>.Success(value)` for successful operations
 - Use `Result<T>.Failure(exception)` for failed operations
 - Controllers should handle Result<T> and convert to appropriate HTTP responses
 - Use `InvalidOperationException` for 404/NotFound scenarios
 
-### 2. API Response Models
+### 3. API Response Models
 - Create dedicated response models for all API endpoints
 - Use consistent naming: `LatestWeatherResponse`, `CurrentWeatherResponse`, etc.
 - Implement proper JSON serialization attributes when needed
 
-### 3. Integration Test Patterns
+### 4. Integration Test Patterns
 - Use `TestWebApplicationFactory` with service mocking instead of database seeding
 - Mock all external dependencies including database services
 - Create test data builders for consistent test data generation
@@ -149,16 +197,20 @@ namespace HVO.ProjectName
 - Test both success and failure scenarios for all endpoints
 - **Test controller error handling patterns with Result<T> failures**
 
-### 4. Service Layer Architecture
+### 5. Service Layer Architecture and Logging Standards
 - Create interfaces for all services (`IWeatherService`, etc.)
 - Implement business logic in service classes, not controllers
-- Use dependency injection for all service dependencies
+- Use dependency injection for all service dependencies including ILogger<T>
 - Return `Result<T>` from all service methods that can fail
+- **Standardized Service Logging**: All service classes must use structured ILogger<T> patterns
+- **Service Method Logging**: Log entry/exit for complex operations, state changes, and error conditions
+- **Consistent Error Context**: Include relevant business context in error logs (IDs, states, timing)
+- **Performance Logging**: Use Debug level for performance-sensitive operations, Trace for high-frequency calls
 - **Use `InvalidOperationException` for true "not found" scenarios only**
 - **Service state issues should use `InvalidOperationException` but be handled as 500 errors**
-- Log important operations and errors appropriately
+- Log important operations and errors appropriately using structured logging patterns
 
-### 5. Exception Handling Middleware
+### 6. Exception Handling Middleware
 - Use `HvoServiceExceptionHandler` for global exception handling
 - **Controllers should handle Result<T> failures explicitly** using pattern matching
 - **Only use InvalidOperationException for 404 responses when it's truly a "not found" scenario**
