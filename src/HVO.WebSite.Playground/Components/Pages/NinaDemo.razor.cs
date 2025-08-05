@@ -33,7 +33,6 @@ namespace HVO.WebSite.Playground.Components.Pages
         private bool _isCapturing;
         private double _exposureTime = 5.0;
         private string? _selectedFilter;
-        private int _selectedBinning = 1;
         private int _selectedFilterPosition = -1; // New: Track filter position instead of name
         private ImageStatistics? _lastImageStatistics;
         private string? _capturedImageData; // Base64 image data from capture
@@ -44,22 +43,10 @@ namespace HVO.WebSite.Playground.Components.Pages
         private DateTime _captureStartTime; // Track when capture started for timeout handling
 
         // Device selection properties
-        private string? _selectedCameraDeviceId;
-        private string? _selectedMountDeviceId;
         private List<DeviceInfo> _availableCameraDevices = new();
-        private bool _isLoadingDevices;
 
-        // Mount operation properties
-        private double _targetRA = 0.0;
-        private double _targetDec = 0.0;
-        private string? _selectedSlewOption;
-        private readonly string[] _slewOptions = { "", "Center", "Rotate" };
-
-        // Advanced capture properties
-        private bool _enablePlatesolving;
-        private int _captureGain = -1;
-        private bool _saveImage = true;
-        private bool _getImageResult = true;
+        // Advanced capture properties (currently unused but may be implemented later)
+        // These are placeholder fields for future functionality
 
         /// <summary>
         /// Initialize the component when it's first rendered
@@ -227,7 +214,7 @@ namespace HVO.WebSite.Playground.Components.Pages
             try
             {
                 // Get the latest capture statistics first
-                var statisticsResult = await NinaApiClient.GetCaptureStatisticsAsync();
+                var statisticsResult = await NinaApiClient.GetCameraStatisticsAsync();
                 if (statisticsResult.IsSuccessful)
                 {
                     _lastImageStatistics = statisticsResult.Value;
@@ -236,7 +223,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                 }
                 else
                 {
-                    Logger.LogWarning("Failed to get capture statistics after capture finished: {Error}", statisticsResult.Error?.Message ?? "Unknown error");
+                    Logger.LogWarning("Failed to get camera statistics after capture finished: {Error}", statisticsResult.Error?.Message ?? "Unknown error");
                 }
 
                 // Try to get the captured image by calling capture again with waitForResult=true and duration=0
@@ -247,12 +234,12 @@ namespace HVO.WebSite.Playground.Components.Pages
                     {
                         Logger.LogDebug("Attempting to retrieve captured image data from last exposure");
                         
-                        var imageResult = await NinaApiClient.CaptureImageAsync(
+                        var imageResult = await NinaApiClient.CaptureAsync(
                             resize: true,
                             scale: 0.50,
                             quality: 75,
                             duration: 0,           // No new exposure - just get the last result
-                            getResult: true,       // Get the image data
+                            getResult: 1,          // Get the image data
                             waitForResult: true,   // Wait for the result data (should be immediate)
                             omitImage: false       // Include image data
                         );
@@ -400,7 +387,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                         // Try to get capture statistics to see if it completed
                         try
                         {
-                            var statisticsResult = await NinaApiClient.GetCaptureStatisticsAsync();
+                            var statisticsResult = await NinaApiClient.GetCameraStatisticsAsync();
                             if (statisticsResult.IsSuccessful)
                             {
                                 _lastImageStatistics = statisticsResult.Value;
@@ -557,9 +544,6 @@ namespace HVO.WebSite.Playground.Components.Pages
                 return;
             }
 
-            _isLoadingDevices = true;
-            await InvokeAsync(StateHasChanged);
-
             try
             {
                 Logger.LogDebug("Loading available camera devices");
@@ -567,7 +551,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                 // Check if the method exists and handle gracefully if not
                 try
                 {
-                    var devicesResult = await NinaApiClient.ListCameraDevicesAsync();
+                    var devicesResult = await NinaApiClient.GetCameraDevicesAsync();
                     
                     if (devicesResult.IsSuccessful)
                     {
@@ -581,7 +565,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                 }
                 catch (NotImplementedException)
                 {
-                    Logger.LogInformation("ListCameraDevicesAsync not implemented - using fallback");
+                    Logger.LogInformation("GetCameraDevicesAsync not implemented - using fallback");
                     _availableCameraDevices = new List<DeviceInfo>();
                 }
             }
@@ -589,11 +573,6 @@ namespace HVO.WebSite.Playground.Components.Pages
             {
                 Logger.LogWarning(ex, "Error loading camera devices - continuing without device list");
                 _availableCameraDevices = new List<DeviceInfo>();
-            }
-            finally
-            {
-                _isLoadingDevices = false;
-                await InvokeAsync(StateHasChanged);
             }
         }
 
@@ -742,7 +721,7 @@ namespace HVO.WebSite.Playground.Components.Pages
 
                 // Start the capture asynchronously - this will return immediately
                 // We'll be notified via WebSocket when the capture is complete
-                var captureResult = await NinaApiClient.CaptureImageAsync(_exposureTime, _selectedFilter);
+                var captureResult = await NinaApiClient.CaptureAsync(duration: _exposureTime);
                 
                 if (captureResult.IsSuccessful)
                 {
@@ -903,11 +882,28 @@ namespace HVO.WebSite.Playground.Components.Pages
             {
                 Logger.LogDebug("Getting NINA screenshot");
 
-                var screenshotResult = await NinaApiClient.GetScreenshotAsync(cancellationToken: CancellationToken.None);
+                var screenshotResult = await NinaApiClient.TakeScreenshotAsync(cancellationToken: CancellationToken.None);
                 if (screenshotResult.IsSuccessful)
                 {
-                    _screenshotData = screenshotResult.Value;
-                    Logger.LogInformation("Successfully retrieved NINA screenshot - Size: {Size} bytes", _screenshotData.Length);
+                    // Convert the string result to bytes (assuming it's base64)
+                    if (!string.IsNullOrEmpty(screenshotResult.Value))
+                    {
+                        try
+                        {
+                            _screenshotData = Convert.FromBase64String(screenshotResult.Value);
+                            Logger.LogInformation("Successfully retrieved NINA screenshot - Size: {Size} bytes", _screenshotData.Length);
+                        }
+                        catch (FormatException)
+                        {
+                            Logger.LogWarning("Screenshot result is not valid base64 format");
+                            _errorMessage = "Screenshot data format error";
+                        }
+                    }
+                    else
+                    {
+                        Logger.LogWarning("Screenshot result was empty");
+                        _errorMessage = "Empty screenshot data";
+                    }
                 }
                 else
                 {
