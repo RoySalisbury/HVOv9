@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HVO\HVO.csproj" />
     <ProjectReference Include="..\HVO.DataModels\HVO.DataModels.csproj" />
+    <ProjectReference Include="..\HVO.NinaClient\HVO.NinaClient.csproj" />
   </ItemGroup>
 
 </Project>

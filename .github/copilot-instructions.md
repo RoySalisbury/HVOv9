@@ -218,6 +218,20 @@ namespace HVO.ProjectName
 - Provide consistent `ProblemDetails` responses for errors
 - Log exceptions with appropriate context and severity
 
+### 7. NINA API Integration (HVO.NinaClient)
+- **Official API Specifications**: NINA (N.I.N.A. - Nighttime Imaging 'N' Astronomy) API specifications are maintained at:
+  - **REST API Specification**: https://github.com/christian-photo/ninaAPI/blob/main/ninaAPI/api_spec.yaml
+  - **WebSocket/AsyncAPI Specification**: https://github.com/christian-photo/ninaAPI/blob/main/ninaAPI/websocket_spec.yaml
+- **API Response Types**: Always consult official specifications for correct response types
+  - Equipment connection methods return descriptive strings (e.g., "Connected", "Disconnected")
+  - Status queries return structured data objects
+- **Result<T> Pattern**: All NINA API client methods should return `Result<string>` or `Result<T>` based on specification
+- **API Method Categories**:
+  - Connection management: Connect/Disconnect operations typically return status strings
+  - Equipment control: Commands and actions with varied response types per specification
+  - Status queries: Return equipment state and configuration data
+- **Error Handling**: NINA API errors should be wrapped in `Result<T>.Failure()` with appropriate exception context
+
 ## File Organization
 ```
 /src

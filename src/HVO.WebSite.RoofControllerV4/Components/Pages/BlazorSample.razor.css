@@ -1,0 +1,217 @@
+/* Blazor Sample Dark Theme - Based on Weather Dashboard Colors */
+
+.weather-station {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    min-height: 100vh;
+    color: #ffffff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Header Styling */
+.weather-station h1 {
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.last-updated {
+    color: #b0b0b0;
+    font-size: 0.9rem;
+}
+
+.last-updated small {
+    color: #888 !important;
+}
+
+.fas.fa-wifi {
+    color: #4CAF50;
+}
+
+/* Weather Cards */
+.weather-card {
+    background: linear-gradient(145deg, #2a2a2a, #1e1e1e);
+    border-radius: 15px;
+    border: 1px solid #404040;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    color: #ffffff;
+}
+
+.weather-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.4);
+}
+
+/* Weather Icons */
+.weather-icon {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    color: #FFE66D;
+}
+
+.weather-icon .fa-thermometer-half {
+    color: #FF6B6B;
+}
+
+.weather-icon .fa-tint {
+    color: #4ECDC4;
+}
+
+.weather-icon .fa-wind {
+    color: #45B7D1;
+}
+
+.weather-icon .fa-weight {
+    color: #6C5CE7;
+}
+
+.weather-icon .fa-cloud-rain {
+    color: #4ECDC4;
+}
+
+.weather-icon .fa-sun {
+    color: #FFE66D;
+}
+
+.weather-icon .fa-cloud {
+    color: #95A5A6;
+}
+
+/* Weather Values */
+.temperature-display {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #FF6B6B;
+    line-height: 1;
+}
+
+.weather-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.weather-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: #b0b0b0;
+    text-transform: uppercase;
+    margin-top: 10px;
+}
+
+/* Small text and additional info */
+.weather-card small {
+    color: #888 !important;
+}
+
+.text-info {
+    color: #4ECDC4 !important;
+}
+
+.text-danger {
+    color: #FF6B6B !important;
+}
+
+.text-primary {
+    color: #45B7D1 !important;
+}
+
+.text-success {
+    color: #4CAF50 !important;
+}
+
+.text-muted {
+    color: #666 !important;
+}
+
+/* Current Conditions and Sun Times Cards */
+.weather-card h6 {
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.weather-card h6 i {
+    color: #FFE66D;
+}
+
+/* Today's Extremes Section */
+.weather-card strong {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #333;
+    border-top: 4px solid #2196F3;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Alert styling for dark theme */
+.alert-warning {
+    background: linear-gradient(145deg, #8B4513, #A0522D);
+    border: 1px solid #CD853F;
+    color: #ffffff;
+}
+
+.alert-warning i {
+    color: #FFE66D;
+}
+
+/* Container overrides */
+.container-fluid {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    min-height: 100vh;
+    padding: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .weather-station {
+        padding: 15px !important;
+    }
+    
+    .temperature-display {
+        font-size: 2.5rem;
+    }
+    
+    .weather-value {
+        font-size: 2rem;
+    }
+    
+    .weather-icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+}
+
+/* Fix for display-4 heading */
+.display-4 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+/* Status indicators */
+.fa-circle.text-success {
+    color: #4CAF50 !important;
+}
+
+/* Override Bootstrap text utilities for dark theme */
+.weather-station .text-white {
+    color: #ffffff !important;
+}
+
+.weather-station .col-auto h1 i {
+    color: #FFE66D;
+}

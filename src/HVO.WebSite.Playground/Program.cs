@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using HVO.DataModels.Extensions;
+using HVO.NinaClient.Extensions;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Components.Web;
 using HVO.WebSite.Playground.Middleware;
@@ -141,6 +142,9 @@ namespace HVO.WebSite.Playground
             {
                 client.BaseAddress = new Uri("http://localhost:5136");
             });
+
+            // Add NINA API client services
+            services.AddNinaClient(configuration);
 
             services.AddHttpContextAccessor();
         }
