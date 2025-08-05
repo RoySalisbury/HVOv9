@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using HVO;
 
 namespace HVO.NinaClient.Models;
 
@@ -23,8 +24,3 @@ public record NinaApiResponse<T>
     [JsonPropertyName("Type")]
     public string? Type { get; init; }
 }
-
-/// <summary>
-/// Simple string response
-/// </summary>
-public record StringResponse : NinaApiResponse<string>;

@@ -348,7 +348,7 @@ public class NinaApiClient : INinaApiClient
     /// <param name="save">Save the image to disk</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing either a status message or capture data</returns>
-    public async Task<Result<CaptureResponseWrapper>> CaptureAsync(
+    public async Task<Result<CaptureResponseOrString>> CaptureAsync(
         bool? solve = null,
         double? duration = null,
         int? gain = null,
@@ -410,41 +410,41 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        try
-        {
-            // Handle dual response types based on NINA API specification
-            if (waitForResult == true)
-            {
-                var captureResponse = await GetAsync<CaptureResponse>(endpoint, cancellationToken);
-                if (captureResponse.IsSuccessful)
-                {
-                    var wrapper = new CaptureResponseWrapper { Response = captureResponse.Value };
-                    return Result<CaptureResponseWrapper>.Success(wrapper);
-                }
-                else
-                {
-                    return Result<CaptureResponseWrapper>.Failure(captureResponse.Error ?? new InvalidOperationException("Unknown error"));
-                }
-            }
-            else
-            {
-                var stringResponse = await GetAsync<string>(endpoint, cancellationToken);
-                if (stringResponse.IsSuccessful)
-                {
-                    var wrapper = new CaptureResponseWrapper { Response = stringResponse.Value };
-                    return Result<CaptureResponseWrapper>.Success(wrapper);
-                }
-                else
-                {
-                    return Result<CaptureResponseWrapper>.Failure(stringResponse.Error ?? new InvalidOperationException("Unknown error"));
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to start camera capture");
-            return Result<CaptureResponseWrapper>.Failure(ex);
-        }
+        return await GetAsync<CaptureResponseOrString>(endpoint, cancellationToken);
+
+        //try
+        //{
+        //    // Handle dual response types based on NINA API specification
+        //    if (waitForResult == true)
+        //    {
+        //        var captureResponse = await GetAsync<CaptureResponse>(endpoint, cancellationToken);
+        //        if (captureResponse.IsSuccessful)
+        //        {
+        //            return Result<CaptureResponseOrString>.Success(new CaptureResponseOrString(captureResponse.Value));
+        //        }
+        //        else
+        //        {
+        //            return Result<CaptureResponseOrString>.Failure(captureResponse.Error ?? new InvalidOperationException("Unknown error"));
+        //        }
+        //    }
+        //    else
+        //    {
+        //        var stringResponse = await GetAsync<string>(endpoint, cancellationToken);
+        //        if (stringResponse.IsSuccessful)
+        //        {
+        //            return Result<CaptureResponseOrString>.Success(new CaptureResponseOrString(stringResponse.Value));
+        //        }
+        //        else
+        //        {
+        //            return Result<CaptureResponseOrString>.Failure(stringResponse.Error ?? new InvalidOperationException("Unknown error"));
+        //        }
+        //    }
+        //}
+        //catch (Exception ex)
+        //{
+        //    _logger.LogError(ex, "Failed to start camera capture");
+        //    return Result<CaptureResponseOrString>.Failure(ex);
+        //}
     }
 
     /// <summary>
@@ -1633,7 +1633,7 @@ public class NinaApiClient : INinaApiClient
     /// <param name="imageType">Filter by image type. This will restrict the result to images of the specified type</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing image history data or count</returns>
-    public async Task<Result<object>> GetImageHistoryAsync(
+    public async Task<Result<ImageHistoryResponse>> GetImageHistoryAsync(
         bool? all = null,
         int? index = null,
         bool? count = null,
@@ -1663,7 +1663,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<object>(endpoint, cancellationToken);
+        return await GetAsync<ImageHistoryResponse>(endpoint, cancellationToken);
     }
 
     /// <summary>
@@ -2362,7 +2362,7 @@ public class NinaApiClient : INinaApiClient
     /// <param name="quality">The quality of the image, ranging from 1 (worst) to 100 (best). -1 or omitted for png</param>
     /// <param name="size">The size of the image ([width]x[height]). Requires resize to be true</param>
     /// <param name="scale">The scale of the image. Requires resize to be true</param>
-    /// <param name="stream">Stream the image to the client. This will stream the image in image/jpg or image/png format</param>
+    /// <param name="stream">Stream the image to the client</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing the stacked image data</returns>
     public async Task<Result<string>> GetLivestackImageAsync(
@@ -2414,10 +2414,10 @@ public class NinaApiClient : INinaApiClient
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing the sequence as JSON</returns>
-    public async Task<Result<SequenceJsonResponse>> GetSequenceJsonAsync(CancellationToken cancellationToken = default)
+    public async Task<Result<SequenceOrGlobalTriggers>> GetSequenceJsonAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting sequence as JSON");
-        return await GetAsync<SequenceJsonResponse>("/v2/api/sequence/json", cancellationToken);
+        return await GetAsync<SequenceOrGlobalTriggers>("/v2/api/sequence/json", cancellationToken);
     }
 
     /// <summary>
@@ -2428,10 +2428,10 @@ public class NinaApiClient : INinaApiClient
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing the complete sequence state</returns>
-    public async Task<Result<SequenceJsonResponse>> GetSequenceStateAsync(CancellationToken cancellationToken = default)
+    public async Task<Result<SequenceOrGlobalTriggers>> GetSequenceStateAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting complete sequence state");
-        return await GetAsync<SequenceJsonResponse>("/v2/api/sequence/state", cancellationToken);
+        return await GetAsync<SequenceOrGlobalTriggers>("/v2/api/sequence/state", cancellationToken);
     }
 
     /// <summary>
@@ -2443,7 +2443,7 @@ public class NinaApiClient : INinaApiClient
     /// <param name="path">The path to the property that should be updated. Use `GlobalTriggers`, `Start`, `Imaging`, `End` for the sequence root containers. Then use the name of the property or the index of the item in a list, separated with `-`.</param>
     /// <param name="value">The new value</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The result containing the edit operation status</returns>
+    /// <returns>The result containing the operation status</returns>
     public async Task<Result<string>> EditSequenceAsync(string path, string value, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Editing sequence - Path: {Path}, Value: {Value}", path, value);

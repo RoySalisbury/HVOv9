@@ -11,6 +11,7 @@
   <Project Path="HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj" />
   <Project Path="HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
   <Project Path="HVO.NinaClient/HVO.NinaClient.csproj" Id="939204bd-3174-4a74-852f-82c2880b49d6" />
+  <Project Path="HVO.SourceGenerators/HVO.SourceGenerators.csproj" Id="29c65b79-5438-4d25-82d8-e215f4a4f488" />
   <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
   <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
   <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />

@@ -3,30 +3,9 @@ using System.Text.Json.Serialization;
 namespace HVO.NinaClient.Models;
 
 /// <summary>
-/// Response model for sequence JSON data
-/// </summary>
-public record SequenceJsonResponse
-{
-    [JsonPropertyName("Response")]
-    public List<SequenceItem>? Response { get; init; }
-
-    [JsonPropertyName("Error")]
-    public string? Error { get; init; }
-
-    [JsonPropertyName("StatusCode")]
-    public int StatusCode { get; init; }
-
-    [JsonPropertyName("Success")]
-    public bool Success { get; init; }
-
-    [JsonPropertyName("Type")]
-    public string? Type { get; init; }
-}
-
-/// <summary>
 /// Represents a sequence item that can be either an instruction or container
 /// </summary>
-public record SequenceItem
+public record SequenceResponse
 {
     [JsonPropertyName("Conditions")]
     public List<object>? Conditions { get; init; }

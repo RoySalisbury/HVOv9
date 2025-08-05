@@ -29,7 +29,7 @@ public interface INinaApiClient
     Task<Result<string>> WarmCameraAsync(double minutes, bool? cancel = null, CancellationToken cancellationToken = default);
     Task<Result<string>> SetCameraDewHeaterAsync(bool power, CancellationToken cancellationToken = default);
     Task<Result<string>> SetCameraBinningAsync(string binning, CancellationToken cancellationToken = default);
-    Task<Result<CaptureResponseWrapper>> CaptureAsync(
+    Task<Result<CaptureResponseOrString>> CaptureAsync(
         bool? solve = null, 
         double? duration = null, 
         int? gain = null, 
@@ -260,7 +260,7 @@ public interface INinaApiClient
     /// <param name="imageType">Filter by image type. This will restrict the result to images of the specified type</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing image history data or count</returns>
-    Task<Result<object>> GetImageHistoryAsync(
+    Task<Result<ImageHistoryResponse>> GetImageHistoryAsync(
         bool? all = null,
         int? index = null,
         bool? count = null,
@@ -643,7 +643,7 @@ public interface INinaApiClient
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing the sequence as JSON</returns>
-    Task<Result<SequenceJsonResponse>> GetSequenceJsonAsync(CancellationToken cancellationToken = default);
+    Task<Result<SequenceOrGlobalTriggers>> GetSequenceJsonAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Get complete sequence as JSON. For this to work, there needs to be a deep sky object 
@@ -653,7 +653,7 @@ public interface INinaApiClient
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing the complete sequence state</returns>
-    Task<Result<SequenceJsonResponse>> GetSequenceStateAsync(CancellationToken cancellationToken = default);
+    Task<Result<SequenceOrGlobalTriggers>> GetSequenceStateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Edit a sequence. This works similarly to profile/change-value. Note that this mainly 

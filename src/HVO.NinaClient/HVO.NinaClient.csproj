@@ -17,7 +17,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\HVO\HVO.csproj" />
+	  <ProjectReference Include="..\HVO.SourceGenerators\HVO.SourceGenerators.csproj" OutputItemType="Analyzer" 
+						ReferenceOutputAssembly="false" />
+		<ProjectReference Include="..\HVO\HVO.csproj" />
 	</ItemGroup>
 
 </Project>

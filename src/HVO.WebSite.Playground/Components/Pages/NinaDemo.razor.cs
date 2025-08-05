@@ -246,7 +246,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                         
                         if (imageResult.IsSuccessful && imageResult.Value.IsCaptureResponse)
                         {
-                            var captureData = imageResult.Value.CaptureResponseData;
+                            var captureData = imageResult.Value.AsCaptureResponse;
                             if (!string.IsNullOrEmpty(captureData?.Image))
                             {
                                 _capturedImageData = captureData.Image;
@@ -260,7 +260,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                         }
                         else if (imageResult.IsSuccessful && imageResult.Value.IsStringResponse)
                         {
-                            Logger.LogInformation("Image retrieval response: {Response}", imageResult.Value.StringResponse);
+                            Logger.LogInformation("Image retrieval response: {Response}", imageResult.Value.AsStringResponse);
                             // Sometimes NINA returns a string response even when requesting results
                             // This might mean the image data isn't available through this method
                         }
@@ -729,7 +729,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                     
                     if (captureWrapper.IsStringResponse)
                     {
-                        var captureStatus = captureWrapper.StringResponse;
+                        var captureStatus = captureWrapper.AsStringResponse;
                         Logger.LogInformation("Image capture started successfully - Status: {Status}. Waiting for WebSocket completion event...", captureStatus);
                         
                         // Record the capture start time for timeout handling
@@ -742,7 +742,7 @@ namespace HVO.WebSite.Playground.Components.Pages
                     else if (captureWrapper.IsCaptureResponse)
                     {
                         // This would happen if NINA returned the image immediately (very short exposures)
-                        var captureData = captureWrapper.CaptureResponseData;
+                        var captureData = captureWrapper.AsCaptureResponse;
                         Logger.LogInformation("Image capture completed immediately - HasImage: {HasImage}, HasPlatesolve: {HasPlatesolve}", 
                             !string.IsNullOrEmpty(captureData?.Image), captureData?.PlateSolveResult != null);
                         

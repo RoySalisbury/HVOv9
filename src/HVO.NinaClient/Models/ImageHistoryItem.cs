@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace HVO.NinaClient.Models;
 
+
 /// <summary>
 /// Represents an item in the image history
 /// </summary>
