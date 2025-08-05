@@ -1,12 +1,4 @@
 <Solution>
-  <Project Path="HVO.GpioTestApp/HVO.GpioTestApp.csproj" />
-  <Project Path="HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj" />
-  <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
-  <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
-  <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />
-  <Project Path="HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
-  <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
-  <Project Path="HVO/HVO.csproj" />
   <Folder Name="/_misc/">
     <File Path="../.github/copilot-instructions.md" />
     <File Path="../.gitignore" />
@@ -15,4 +7,13 @@
     <File Path="../README.md" />
   </Folder>
   <Project Path="HVO.DataModels/HVO.DataModels.csproj" />
+  <Project Path="HVO.GpioTestApp/HVO.GpioTestApp.csproj" />
+  <Project Path="HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj" />
+  <Project Path="HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
+  <Project Path="HVO.NinaClient/HVO.NinaClient.csproj" Id="939204bd-3174-4a74-852f-82c2880b49d6" />
+  <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
+  <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
+  <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />
+  <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
+  <Project Path="HVO/HVO.csproj" />
 </Solution>
