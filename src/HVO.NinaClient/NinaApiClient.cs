@@ -1,23 +1,29 @@
 ﻿using HVO;
 using HVO.NinaClient.Models;
+using HVO.NinaClient.Resilience;
+using HVO.NinaClient.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
 
 namespace HVO.NinaClient;
 
 /// <summary>
-/// NINA API client for astronomy equipment control and imaging operations
+/// NINA API client for astronomy equipment control and imaging operations with enhanced resilience
 /// </summary>
-public class NinaApiClient : INinaApiClient
+public class NinaApiClient : INinaApiClient, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<NinaApiClient> _logger;
     private readonly NinaApiClientOptions _options;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly CircuitBreaker? _circuitBreaker;
+    private readonly BufferManager _bufferManager;
+    private bool _disposed;
 
     public NinaApiClient(
         HttpClient httpClient,
@@ -28,12 +34,30 @@ public class NinaApiClient : INinaApiClient
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
 
+        // Validate configuration at startup
+        _options.ValidateAndThrow();
+
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
+
+        // Initialize circuit breaker if enabled
+        if (_options.EnableCircuitBreaker)
+        {
+            _circuitBreaker = new CircuitBreaker(
+                _options.CircuitBreakerFailureThreshold,
+                TimeSpan.FromSeconds(_options.CircuitBreakerTimeoutSeconds),
+                logger);
+                
+            _logger.LogInformation("Circuit breaker enabled - FailureThreshold: {FailureThreshold}, Timeout: {Timeout}s",
+                _options.CircuitBreakerFailureThreshold, _options.CircuitBreakerTimeoutSeconds);
+        }
+
+        // Initialize buffer manager for memory optimization
+        _bufferManager = new BufferManager();
 
         ConfigureHttpClient();
     }
@@ -49,8 +73,8 @@ public class NinaApiClient : INinaApiClient
             _httpClient.DefaultRequestHeaders.Add("X-API-Key", _options.ApiKey);
         }
 
-        _logger.LogDebug("NINA API client configured - BaseUrl: {BaseUrl}, Timeout: {Timeout}s", 
-            _options.BaseUrl, _options.TimeoutSeconds);
+        _logger.LogInformation("NINA API client configured - BaseUrl: {BaseUrl}, Timeout: {Timeout}s, CircuitBreaker: {CircuitBreakerEnabled}", 
+            _options.BaseUrl, _options.TimeoutSeconds, _options.EnableCircuitBreaker);
     }
 
     #region Application Methods
@@ -58,13 +82,13 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> GetVersionAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting NINA version");
-        return await GetAsync<string>("/v2/api/version", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/version", cancellationToken));
     }
 
     public async Task<Result<string>> GetApplicationStartTimeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting NINA application start time");
-        return await GetAsync<string>("/v2/api/application-start", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/application-start", cancellationToken));
     }
 
     public async Task<Result<string>> SwitchTabAsync(string tab, CancellationToken cancellationToken = default)
@@ -72,19 +96,19 @@ public class NinaApiClient : INinaApiClient
         _logger.LogInformation("Switching to application tab: {Tab}", tab);
         
         var endpoint = $"/v2/api/application/switch-tab?tab={Uri.EscapeDataString(tab)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     public async Task<Result<string>> GetCurrentTabAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting current application tab");
-        return await GetAsync<string>("/v2/api/application/get-tab", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/application/get-tab", cancellationToken));
     }
 
     public async Task<Result<IReadOnlyList<string>>> GetInstalledPluginsAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting list of installed plugins");
-        var result = await GetAsync<List<string>>("/v2/api/application/plugins", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<string>>("/v2/api/application/plugins", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -106,7 +130,7 @@ public class NinaApiClient : INinaApiClient
         }
         
         var endpoint = "/v2/api/application/logs?" + string.Join("&", queryParams);
-        var result = await GetAsync<List<LogEntry>>(endpoint, cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<LogEntry>>(endpoint, cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -119,7 +143,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<EventEntry>>> GetEventHistoryAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting event history");
-        var result = await GetAsync<List<EventEntry>>("/v2/api/event-history", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<EventEntry>>("/v2/api/event-history", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -163,7 +187,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -178,7 +202,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<CameraInfo>> GetCameraInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting camera information");
-        return await GetAsync<CameraInfo>("/v2/api/equipment/camera/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<CameraInfo>("/v2/api/equipment/camera/info", cancellationToken));
     }
 
     /// <summary>
@@ -189,7 +213,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetCameraDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available camera devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/camera/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/camera/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -207,7 +231,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanCameraDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for camera devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/camera/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/camera/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -233,7 +257,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -244,7 +268,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectCameraAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting camera");
-        return await GetAsync<string>("/v2/api/equipment/camera/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/camera/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -257,7 +281,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting camera readout mode to {Mode}", mode);
         var endpoint = $"/v2/api/equipment/camera/set-readout?mode={mode}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -282,7 +306,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"cancel={cancel.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/equipment/camera/cool?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -302,7 +326,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"cancel={cancel.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/equipment/camera/warm?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -315,7 +339,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting camera dew heater power: {Power}", power);
         var endpoint = $"/v2/api/equipment/camera/dew-heater?power={power.ToString().ToLower()}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -328,7 +352,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting camera binning to {Binning}", binning);
         var endpoint = $"/v2/api/equipment/camera/set-binning?binning={Uri.EscapeDataString(binning)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -410,41 +434,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<CaptureResponseOrString>(endpoint, cancellationToken);
-
-        //try
-        //{
-        //    // Handle dual response types based on NINA API specification
-        //    if (waitForResult == true)
-        //    {
-        //        var captureResponse = await GetAsync<CaptureResponse>(endpoint, cancellationToken);
-        //        if (captureResponse.IsSuccessful)
-        //        {
-        //            return Result<CaptureResponseOrString>.Success(new CaptureResponseOrString(captureResponse.Value));
-        //        }
-        //        else
-        //        {
-        //            return Result<CaptureResponseOrString>.Failure(captureResponse.Error ?? new InvalidOperationException("Unknown error"));
-        //        }
-        //    }
-        //    else
-        //    {
-        //        var stringResponse = await GetAsync<string>(endpoint, cancellationToken);
-        //        if (stringResponse.IsSuccessful)
-        //        {
-        //            return Result<CaptureResponseOrString>.Success(new CaptureResponseOrString(stringResponse.Value));
-        //        }
-        //        else
-        //        {
-        //            return Result<CaptureResponseOrString>.Failure(stringResponse.Error ?? new InvalidOperationException("Unknown error"));
-        //        }
-        //    }
-        //}
-        //catch (Exception ex)
-        //{
-        //    _logger.LogError(ex, "Failed to start camera capture");
-        //    return Result<CaptureResponseOrString>.Failure(ex);
-        //}
+        return await ExecuteWithResilienceAsync(() => GetAsync<CaptureResponseOrString>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -455,7 +445,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> AbortCameraExposureAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Aborting camera exposure");
-        return await GetAsync<string>("/v2/api/equipment/camera/abort-exposure", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/camera/abort-exposure", cancellationToken));
     }
 
     /// <summary>
@@ -466,7 +456,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<ImageStatistics>> GetCameraStatisticsAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting camera statistics");
-        return await GetAsync<ImageStatistics>("/v2/api/equipment/camera/capture/statistics", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<ImageStatistics>("/v2/api/equipment/camera/capture/statistics", cancellationToken));
     }
 
     #endregion
@@ -481,7 +471,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<DomeInfo>> GetDomeInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting dome information");
-        return await GetAsync<DomeInfo>("/v2/api/equipment/dome/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<DomeInfo>("/v2/api/equipment/dome/info", cancellationToken));
     }
 
     /// <summary>
@@ -492,7 +482,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetDomeDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available dome devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/dome/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/dome/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -510,7 +500,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanDomeDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for dome devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/dome/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/dome/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -536,7 +526,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -547,7 +537,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectDomeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting dome");
-        return await GetAsync<string>("/v2/api/equipment/dome/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -558,7 +548,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> OpenDomeShutterAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Opening dome shutter");
-        return await GetAsync<string>("/v2/api/equipment/dome/open", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/open", cancellationToken));
     }
 
     /// <summary>
@@ -569,7 +559,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> CloseDomeShutterAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Closing dome shutter");
-        return await GetAsync<string>("/v2/api/equipment/dome/close", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/close", cancellationToken));
     }
 
     /// <summary>
@@ -580,7 +570,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StopDomeMovementAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Stopping dome movement");
-        return await GetAsync<string>("/v2/api/equipment/dome/stop", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/stop", cancellationToken));
     }
 
     /// <summary>
@@ -593,7 +583,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting dome follow: {Enabled}", enabled);
         var endpoint = $"/v2/api/equipment/dome/set-follow?enabled={enabled.ToString().ToLower()}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -604,7 +594,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> SyncDomeToTelescopeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Syncing dome to telescope");
-        return await GetAsync<string>("/v2/api/equipment/dome/sync", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/sync", cancellationToken));
     }
 
     /// <summary>
@@ -624,7 +614,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"waitToFinish={waitToFinish.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/equipment/dome/slew?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -635,7 +625,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> SetDomeParkPositionAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Setting dome park position");
-        return await GetAsync<string>("/v2/api/equipment/dome/set-park-position", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/set-park-position", cancellationToken));
     }
 
     /// <summary>
@@ -646,7 +636,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> ParkDomeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Parking dome");
-        return await GetAsync<string>("/v2/api/equipment/dome/park", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/park", cancellationToken));
     }
 
     /// <summary>
@@ -657,7 +647,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> HomeDomeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Homing dome");
-        return await GetAsync<string>("/v2/api/equipment/dome/home", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/dome/home", cancellationToken));
     }
 
     #endregion
@@ -672,7 +662,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<FilterWheelInfo>> GetFilterWheelInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting filter wheel information");
-        return await GetAsync<FilterWheelInfo>("/v2/api/equipment/filterwheel/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FilterWheelInfo>("/v2/api/equipment/filterwheel/info", cancellationToken));
     }
 
     /// <summary>
@@ -683,7 +673,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetFilterWheelDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available filter wheel devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/filterwheel/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/filterwheel/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -701,7 +691,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanFilterWheelDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for filter wheel devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/filterwheel/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/filterwheel/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -727,7 +717,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -738,7 +728,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectFilterWheelAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting filter wheel");
-        return await GetAsync<string>("/v2/api/equipment/filterwheel/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/filterwheel/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -751,7 +741,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Changing filter to filter ID: {FilterId}", filterId);
         var endpoint = $"/v2/api/equipment/filterwheel/change-filter?filterId={filterId}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -764,7 +754,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogDebug("Getting filter information for filter ID: {FilterId}", filterId);
         var endpoint = $"/v2/api/equipment/filterwheel/filter-info?filterId={filterId}";
-        return await GetAsync<FilterInfo>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FilterInfo>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -779,7 +769,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<FlatDeviceInfo>> GetFlatDeviceInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting flat device information");
-        return await GetAsync<FlatDeviceInfo>("/v2/api/equipment/flatdevice/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FlatDeviceInfo>("/v2/api/equipment/flatdevice/info", cancellationToken));
     }
 
     /// <summary>
@@ -790,7 +780,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetFlatDeviceDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available flat device devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/flatdevice/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/flatdevice/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -808,7 +798,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanFlatDeviceDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for flat device devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/flatdevice/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/flatdevice/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -834,7 +824,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -845,7 +835,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectFlatDeviceAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting flat device");
-        return await GetAsync<string>("/v2/api/equipment/flatdevice/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/flatdevice/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -858,7 +848,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting flat device light: {On}", on);
         var endpoint = $"/v2/api/equipment/flatdevice/set-light?on={on.ToString().ToLower()}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -871,7 +861,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting flat device cover closed: {Closed}", closed);
         var endpoint = $"/v2/api/equipment/flatdevice/set-cover?closed={closed.ToString().ToLower()}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -884,7 +874,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting flat device brightness to: {Brightness}", brightness);
         var endpoint = $"/v2/api/equipment/flatdevice/set-brightness?brightness={brightness}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -899,7 +889,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<FocuserInfo>> GetFocuserInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting focuser information");
-        return await GetAsync<FocuserInfo>("/v2/api/equipment/focuser/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FocuserInfo>("/v2/api/equipment/focuser/info", cancellationToken));
     }
 
     /// <summary>
@@ -910,7 +900,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetFocuserDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available focuser devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/focuser/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/focuser/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -928,7 +918,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanFocuserDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for focuser devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/focuser/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/focuser/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -954,7 +944,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -965,7 +955,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectFocuserAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting focuser");
-        return await GetAsync<string>("/v2/api/equipment/focuser/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/focuser/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -978,7 +968,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Moving focuser to position: {Position}", position);
         var endpoint = $"/v2/api/equipment/focuser/move?position={position}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -997,7 +987,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?cancel={cancel.Value.ToString().ToLower()}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1008,7 +998,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<FocuserLastAF>> GetLastAutoFocusAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting last autofocus result");
-        return await GetAsync<FocuserLastAF>("/v2/api/equipment/focuser/last-af", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FocuserLastAF>("/v2/api/equipment/focuser/last-af", cancellationToken));
     }
 
     #endregion
@@ -1077,7 +1067,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"offset={offset.Value}");
 
         var endpoint = "/v2/api/flats/skyflat?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1149,7 +1139,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"keepClosed={keepClosed.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/flats/auto-brightness?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1221,7 +1211,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"keepClosed={keepClosed.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/flats/auto-exposure?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1265,7 +1255,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"keepClosed={keepClosed.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/flats/trained-dark-flat?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1309,7 +1299,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"keepClosed={keepClosed.Value.ToString().ToLower()}");
 
         var endpoint = "/v2/api/flats/trained-flat?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1320,7 +1310,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<FlatCaptureStatus>> GetFlatCaptureStatusAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting flat capture status");
-        return await GetAsync<FlatCaptureStatus>("/v2/api/flats/status", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FlatCaptureStatus>("/v2/api/flats/status", cancellationToken));
     }
 
     /// <summary>
@@ -1331,7 +1321,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StopFlatCaptureAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Stopping flat capture process");
-        return await GetAsync<string>("/v2/api/flats/stop", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/flats/stop", cancellationToken));
     }
 
     #endregion
@@ -1346,7 +1336,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<FramingAssistantInfo>> GetFramingAssistantInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting framing assistant information");
-        return await GetAsync<FramingAssistantInfo>("/v2/api/framing/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<FramingAssistantInfo>("/v2/api/framing/info", cancellationToken));
     }
 
     /// <summary>
@@ -1359,7 +1349,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting framing assistant source: {Source}", source);
         var endpoint = $"/v2/api/framing/set-source?source={Uri.EscapeDataString(source)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1373,7 +1363,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting framing assistant coordinates - RA: {RightAscension}°, Dec: {Declination}°", rightAscension, declination);
         var endpoint = $"/v2/api/framing/set-coordinates?rightAscension={rightAscension}&declination={declination}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1392,7 +1382,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?option={Uri.EscapeDataString(option)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1405,7 +1395,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting framing assistant rotation: {Rotation}°", rotation);
         var endpoint = $"/v2/api/framing/set-rotation?rotation={rotation}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1416,7 +1406,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DetermineFramingAssistantRotationAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Determining framing assistant rotation from camera");
-        return await GetAsync<string>("/v2/api/framing/determine-rotation", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/framing/determine-rotation", cancellationToken));
     }
 
     #endregion
@@ -1431,7 +1421,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<GuiderInfoResponse>> GetGuiderInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting guider equipment information");
-        return await GetAsync<GuiderInfoResponse>("/v2/api/equipment/guider/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<GuiderInfoResponse>("/v2/api/equipment/guider/info", cancellationToken));
     }
 
     /// <summary>
@@ -1442,7 +1432,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetGuiderDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available guider devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/guider/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/guider/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -1460,7 +1450,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanGuiderDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for guider devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/guider/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/guider/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -1486,7 +1476,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(to)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1497,7 +1487,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectGuiderAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting from guider device");
-        return await GetAsync<string>("/v2/api/equipment/guider/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/guider/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -1516,7 +1506,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?calibrate={calibrate.Value.ToString().ToLowerInvariant()}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1527,7 +1517,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StopGuidingAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Stopping guiding");
-        return await GetAsync<string>("/v2/api/equipment/guider/stop", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/guider/stop", cancellationToken));
     }
 
     /// <summary>
@@ -1538,7 +1528,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> ClearGuiderCalibrationAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Clearing guider calibration");
-        return await GetAsync<string>("/v2/api/equipment/guider/clear-calibration", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/guider/clear-calibration", cancellationToken));
     }
 
     /// <summary>
@@ -1549,7 +1539,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<GuideStepsHistory>> GetGuiderGraphAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting guider graph history");
-        return await GetAsync<GuideStepsHistory>("/v2/api/equipment/guider/graph", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<GuideStepsHistory>("/v2/api/equipment/guider/graph", cancellationToken));
     }
 
     #endregion
@@ -1621,11 +1611,11 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<ImageResponse>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<ImageResponse>(endpoint, cancellationToken));
     }
 
     /// <summary>
-    /// Gets image history. Only one parameter is required
+/// Gets image history. Only one parameter is required
     /// </summary>
     /// <param name="all">Whether to get all images or only the current image</param>
     /// <param name="index">The index of the image to get</param>
@@ -1663,7 +1653,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<ImageHistoryResponse>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<ImageHistoryResponse>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1735,7 +1725,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<MountInfo>> GetMountInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting mount information");
-        return await GetAsync<MountInfo>("/v2/api/equipment/mount/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<MountInfo>("/v2/api/equipment/mount/info", cancellationToken));
     }
 
     /// <summary>
@@ -1746,7 +1736,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetMountDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available mount devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/mount/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/mount/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -1764,7 +1754,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanMountDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for mount devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/mount/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/mount/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -1790,7 +1780,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
         
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1801,7 +1791,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectMountAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting mount");
-        return await GetAsync<string>("/v2/api/equipment/mount/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -1812,7 +1802,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> HomeMountAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Homing mount");
-        return await GetAsync<string>("/v2/api/equipment/mount/home", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/home", cancellationToken));
     }
 
     /// <summary>
@@ -1826,7 +1816,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Setting mount tracking mode to: {Mode}", mode);
         var endpoint = $"/v2/api/equipment/mount/tracking?mode={mode}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1837,7 +1827,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> ParkMountAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Parking mount");
-        return await GetAsync<string>("/v2/api/equipment/mount/park", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/park", cancellationToken));
     }
 
     /// <summary>
@@ -1848,7 +1838,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> UnparkMountAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Unparking mount");
-        return await GetAsync<string>("/v2/api/equipment/mount/unpark", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/unpark", cancellationToken));
     }
 
     /// <summary>
@@ -1860,7 +1850,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> FlipMountAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Performing meridian flip");
-        return await GetAsync<string>("/v2/api/equipment/mount/flip", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/flip", cancellationToken));
     }
 
     /// <summary>
@@ -1904,7 +1894,7 @@ public class NinaApiClient : INinaApiClient
             queryParams.Add($"rotationAngle={rotationAngle.Value}");
 
         var endpoint = "/v2/api/equipment/mount/slew?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -1917,7 +1907,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StopMountSlewAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Stopping mount slew");
-        return await GetAsync<string>("/v2/api/equipment/mount/slew/stop", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/slew/stop", cancellationToken));
     }
 
     /// <summary>
@@ -1928,7 +1918,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> SetMountParkPositionAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Setting mount park position");
-        return await GetAsync<string>("/v2/api/equipment/mount/set-park-position", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/mount/set-park-position", cancellationToken));
     }
 
     /// <summary>
@@ -1957,7 +1947,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -1972,7 +1962,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<RotatorInfoResponse>> GetRotatorInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting rotator information");
-        return await GetAsync<RotatorInfoResponse>("/v2/api/equipment/rotator/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<RotatorInfoResponse>("/v2/api/equipment/rotator/info", cancellationToken));
     }
 
     /// <summary>
@@ -1983,7 +1973,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> ConnectRotatorAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Connecting to rotator");
-        return await GetAsync<string>("/v2/api/equipment/rotator/connect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/rotator/connect", cancellationToken));
     }
 
     /// <summary>
@@ -1994,7 +1984,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectRotatorAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting rotator");
-        return await GetAsync<string>("/v2/api/equipment/rotator/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/rotator/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -2005,7 +1995,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetRotatorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available rotator devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/rotator/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/rotator/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2023,7 +2013,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanRotatorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for rotator devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/rotator/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/rotator/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2043,7 +2033,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Moving rotator to position: {Position} degrees", position);
         var endpoint = $"/v2/api/equipment/rotator/move?position={position}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2056,7 +2046,7 @@ public class NinaApiClient : INinaApiClient
     {
         _logger.LogInformation("Moving rotator to mechanical position: {Position} degrees", position);
         var endpoint = $"/v2/api/equipment/rotator/move-mechanical?position={position}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -2071,7 +2061,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<SafetyMonitorInfoResponse>> GetSafetyMonitorInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting safety monitor information");
-        return await GetAsync<SafetyMonitorInfoResponse>("/v2/api/equipment/safetymonitor/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<SafetyMonitorInfoResponse>("/v2/api/equipment/safetymonitor/info", cancellationToken));
     }
 
     /// <summary>
@@ -2090,7 +2080,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?deviceId={Uri.EscapeDataString(deviceId)}";
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2101,7 +2091,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectSafetyMonitorAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting safety monitor");
-        return await GetAsync<string>("/v2/api/equipment/safetymonitor/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/safetymonitor/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -2112,7 +2102,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetSafetyMonitorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available safety monitor devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/safetymonitor/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/safetymonitor/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2130,7 +2120,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanSafetyMonitorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for safety monitor devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/safetymonitor/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/safetymonitor/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2152,7 +2142,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<SwitchInfoResponse>> GetSwitchInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting switch information");
-        return await GetAsync<SwitchInfoResponse>("/v2/api/equipment/switch/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<SwitchInfoResponse>("/v2/api/equipment/switch/info", cancellationToken));
     }
 
     /// <summary>
@@ -2171,7 +2161,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2182,7 +2172,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectSwitchAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting switch");
-        return await GetAsync<string>("/v2/api/equipment/switch/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/switch/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -2193,7 +2183,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetSwitchDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available switch devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/switch/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/switch/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2211,7 +2201,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanSwitchDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for switch devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/switch/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/switch/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2239,7 +2229,7 @@ public class NinaApiClient : INinaApiClient
         };
 
         var endpoint = $"/v2/api/equipment/switch/set?{string.Join("&", queryParams)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -2254,7 +2244,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<WeatherInfoResponse>> GetWeatherInfoAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting weather information");
-        return await GetAsync<WeatherInfoResponse>("/v2/api/equipment/weather/info", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<WeatherInfoResponse>("/v2/api/equipment/weather/info", cancellationToken));
     }
 
     /// <summary>
@@ -2273,7 +2263,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?to={Uri.EscapeDataString(deviceId)}";
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2284,7 +2274,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> DisconnectWeatherAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Disconnecting weather device");
-        return await GetAsync<string>("/v2/api/equipment/weather/disconnect", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/equipment/weather/disconnect", cancellationToken));
     }
 
     /// <summary>
@@ -2295,7 +2285,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetWeatherDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available weather devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/weather/list-devices", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/weather/list-devices", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2313,7 +2303,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanWeatherDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for weather devices");
-        var result = await GetAsync<List<DeviceInfo>>("/v2/api/equipment/weather/rescan", cancellationToken);
+        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/weather/rescan", cancellationToken));
         
         if (result.IsSuccessful)
         {
@@ -2337,7 +2327,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StartLivestackAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Starting livestack");
-        return await GetAsync<string>("/v2/api/livestack/start", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/livestack/start", cancellationToken));
     }
 
     /// <summary>
@@ -2350,7 +2340,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StopLivestackAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Stopping livestack");
-        return await GetAsync<string>("/v2/api/livestack/stop", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/livestack/stop", cancellationToken));
     }
 
     /// <summary>
@@ -2400,7 +2390,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     #endregion
@@ -2417,7 +2407,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<SequenceOrGlobalTriggers>> GetSequenceJsonAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting sequence as JSON");
-        return await GetAsync<SequenceOrGlobalTriggers>("/v2/api/sequence/json", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<SequenceOrGlobalTriggers>("/v2/api/sequence/json", cancellationToken));
     }
 
     /// <summary>
@@ -2431,7 +2421,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<SequenceOrGlobalTriggers>> GetSequenceStateAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting complete sequence state");
-        return await GetAsync<SequenceOrGlobalTriggers>("/v2/api/sequence/state", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<SequenceOrGlobalTriggers>("/v2/api/sequence/state", cancellationToken));
     }
 
     /// <summary>
@@ -2455,7 +2445,7 @@ public class NinaApiClient : INinaApiClient
         };
 
         var endpoint = $"/v2/api/sequence/edit?{string.Join("&", queryParams)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2476,7 +2466,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?skipValidation={skipValidation.Value.ToString().ToLower()}";
         }
 
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2488,7 +2478,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> StopSequenceAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Stopping sequence");
-        return await GetAsync<string>("/v2/api/sequence/stop", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/sequence/stop", cancellationToken));
     }
 
     /// <summary>
@@ -2500,7 +2490,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<string>> ResetSequenceAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Resetting sequence");
-        return await GetAsync<string>("/v2/api/sequence/reset", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>("/v2/api/sequence/reset", cancellationToken));
     }
 
     /// <summary>
@@ -2512,7 +2502,7 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<AvailableSequencesResponse>> ListAvailableSequencesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Listing available sequences");
-        return await GetAsync<AvailableSequencesResponse>("/v2/api/sequence/list-available", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<AvailableSequencesResponse>("/v2/api/sequence/list-available", cancellationToken));
     }
 
     /// <summary>
@@ -2546,7 +2536,7 @@ public class NinaApiClient : INinaApiClient
         };
 
         var endpoint = $"/v2/api/sequence/set-target?{string.Join("&", queryParams)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2561,7 +2551,7 @@ public class NinaApiClient : INinaApiClient
         _logger.LogInformation("Loading sequence from file - SequenceName: {SequenceName}", sequenceName);
 
         var endpoint = $"/v2/api/sequence/load?sequenceName={Uri.EscapeDataString(sequenceName)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2584,23 +2574,23 @@ public class NinaApiClient : INinaApiClient
             if (response.IsSuccessStatusCode)
             {
                 try
-                {
-                    var ninaResponse = JsonSerializer.Deserialize<NinaApiResponse<string>>(responseContent, _jsonOptions);
-                    if (ninaResponse?.Success == true && ninaResponse.Response != null)
-                    {
-                        return HVO.Result<string>.Success(ninaResponse.Response);
-                    }
-                    else
-                    {
-                        var errorMessage = string.IsNullOrEmpty(ninaResponse?.Error) ? "Unknown error from API" : ninaResponse.Error;
-                        return HVO.Result<string>.Failure(new InvalidOperationException(errorMessage));
-                    }
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogError(ex, "Failed to deserialize response from LoadSequenceFromJsonAsync");
-                    return HVO.Result<string>.Failure(new InvalidOperationException($"Failed to parse API response: {ex.Message}"));
-                }
+    {
+        var ninaResponse = JsonSerializer.Deserialize<NinaApiResponse<string>>(responseContent, _jsonOptions);
+        if (ninaResponse?.Success == true && ninaResponse.Response != null)
+        {
+            return HVO.Result<string>.Success(ninaResponse.Response);
+        }
+        else
+        {
+            var errorMessage = string.IsNullOrEmpty(ninaResponse?.Error) ? "Unknown error from API" : ninaResponse.Error;
+            return HVO.Result<string>.Failure(new InvalidOperationException(errorMessage));
+        }
+    }
+    catch (JsonException ex)
+    {
+        _logger.LogError(ex, "Failed to deserialize response from LoadSequenceFromJsonAsync");
+        return HVO.Result<string>.Failure(new InvalidOperationException($"Failed to parse API response: {ex.Message}"));
+    }
             }
             else
             {
@@ -2646,7 +2636,7 @@ public class NinaApiClient : INinaApiClient
             endpoint += $"?active={active.Value.ToString().ToLower()}";
         }
 
-        return await GetAsync<object>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<object>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2667,7 +2657,7 @@ public class NinaApiClient : INinaApiClient
         };
 
         var endpoint = "/v2/api/profile/change-value?" + string.Join("&", queryParams);
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2681,7 +2671,7 @@ public class NinaApiClient : INinaApiClient
         _logger.LogInformation("Switching profile to: {ProfileId}", profileId);
 
         var endpoint = $"/v2/api/profile/switch?profileid={Uri.EscapeDataString(profileId)}";
-        return await GetAsync<string>(endpoint, cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<string>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2692,13 +2682,40 @@ public class NinaApiClient : INinaApiClient
     public async Task<Result<HorizonData>> GetProfileHorizonAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting profile horizon data");
-        return await GetAsync<HorizonData>("/v2/api/profile/horizon", cancellationToken);
+        return await ExecuteWithResilienceAsync(() => GetAsync<HorizonData>("/v2/api/profile/horizon", cancellationToken));
     }
 
     #endregion
 
 
-    #region Helper Methods
+    #region Helper Methods with Enhanced Resilience
+
+    /// <summary>
+    /// Execute operation with resilience patterns (retry, circuit breaker)
+    /// </summary>
+    /// <typeparam name="T">Return type</typeparam>
+    /// <param name="operation">Operation to execute</param>
+    /// <returns>Result of the operation</returns>
+    private async Task<Result<T>> ExecuteWithResilienceAsync<T>(Func<Task<Result<T>>> operation)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(NinaApiClient));
+
+        // First apply retry policy
+        var retryResult = await RetryPolicy.ExecuteWithRetryAsync(
+            operation,
+            _options.MaxRetryAttempts,
+            TimeSpan.FromMilliseconds(_options.RetryDelayMs),
+            _logger);
+
+        // Then apply circuit breaker if enabled
+        if (_circuitBreaker != null)
+        {
+            return await _circuitBreaker.ExecuteAsync(async () => retryResult);
+        }
+
+        return retryResult;
+    }
 
     private async Task<Result<T>> GetAsync<T>(string endpoint, CancellationToken cancellationToken = default)
         where T : class
@@ -2747,5 +2764,62 @@ public class NinaApiClient : INinaApiClient
         }
     }
 
+    /// <summary>
+    /// Gets diagnostics information about the client
+    /// </summary>
+    /// <returns>Diagnostics information</returns>
+    public NinaClientDiagnostics GetDiagnostics()
+    {
+        var bufferStats = _bufferManager.GetStatistics();
+        
+        return new NinaClientDiagnostics
+        {
+            IsDisposed = _disposed,
+            BaseUrl = _options.BaseUrl,
+            TimeoutSeconds = _options.TimeoutSeconds,
+            CircuitBreakerEnabled = _options.EnableCircuitBreaker,
+            CircuitBreakerState = _circuitBreaker?.State.ToString(),
+            CircuitBreakerFailureCount = _circuitBreaker?.FailureCount ?? 0,
+            BufferStatistics = bufferStats
+        };
+    }
+
     #endregion
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        try
+        {
+            _circuitBreaker?.Dispose();
+            _bufferManager?.Dispose();
+            _httpClient?.Dispose();
+            
+            _logger.LogDebug("NinaApiClient disposed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during NinaApiClient disposal");
+        }
+
+        GC.SuppressFinalize(this);
+    }
+}
+
+/// <summary>
+/// Diagnostics information for the NINA API client
+/// </summary>
+public record NinaClientDiagnostics
+{
+    public bool IsDisposed { get; init; }
+    public string BaseUrl { get; init; } = string.Empty;
+    public int TimeoutSeconds { get; init; }
+    public bool CircuitBreakerEnabled { get; init; }
+    public string? CircuitBreakerState { get; init; }
+    public int CircuitBreakerFailureCount { get; init; }
+    public BufferStatistics BufferStatistics { get; init; } = new();
 }
