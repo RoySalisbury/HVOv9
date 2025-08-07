@@ -745,7 +745,7 @@ public interface INinaApiClient
     /// <param name="active">Whether to show the active profile or a list of all available profiles</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing profile information or list of profiles</returns>
-    Task<Result<object>> ShowProfileAsync(bool? active = null, CancellationToken cancellationToken = default);
+    Task<Result<ProfileResponse>> ShowProfileAsync(bool? active = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Changes a value in the profile

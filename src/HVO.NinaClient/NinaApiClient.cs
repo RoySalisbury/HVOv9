@@ -2,6 +2,7 @@
 using HVO.NinaClient.Models;
 using HVO.NinaClient.Resilience;
 using HVO.NinaClient.Infrastructure;
+using HVO.NinaClient.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http;
@@ -44,13 +45,14 @@ public class NinaApiClient : INinaApiClient, IDisposable
             NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
-        // Initialize circuit breaker if enabled
+        // Initialize circuit breaker if enabled in configuration
+        // Circuit breaker prevents cascading failures by tracking failure patterns
         if (_options.EnableCircuitBreaker)
         {
             _circuitBreaker = new CircuitBreaker(
-                _options.CircuitBreakerFailureThreshold,
-                TimeSpan.FromSeconds(_options.CircuitBreakerTimeoutSeconds),
-                logger);
+                _options.CircuitBreakerFailureThreshold,              // How many failures before opening (e.g., 5)
+                TimeSpan.FromSeconds(_options.CircuitBreakerTimeoutSeconds), // How long to stay open (e.g., 30s)
+                logger);                                              // Logger for circuit breaker state changes
                 
             _logger.LogInformation("Circuit breaker enabled - FailureThreshold: {FailureThreshold}, Timeout: {Timeout}s",
                 _options.CircuitBreakerFailureThreshold, _options.CircuitBreakerTimeoutSeconds);
@@ -108,14 +110,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<string>>> GetInstalledPluginsAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting list of installed plugins");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<string>>("/v2/api/application/plugins", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<string>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<string>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<string>>("/v2/api/application/plugins", cancellationToken));
     }
 
     public async Task<Result<IReadOnlyList<LogEntry>>> GetApplicationLogsAsync(int lineCount, string? level = null, CancellationToken cancellationToken = default)
@@ -130,27 +126,15 @@ public class NinaApiClient : INinaApiClient, IDisposable
         }
         
         var endpoint = "/v2/api/application/logs?" + string.Join("&", queryParams);
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<LogEntry>>(endpoint, cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<LogEntry>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<LogEntry>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<LogEntry>>(endpoint, cancellationToken));
     }
 
     public async Task<Result<IReadOnlyList<EventEntry>>> GetEventHistoryAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting event history");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<EventEntry>>("/v2/api/event-history", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<EventEntry>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<EventEntry>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<EventEntry>>("/v2/api/event-history", cancellationToken));
     }
 
     public async Task<Result<string>> TakeScreenshotAsync(
@@ -213,14 +197,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetCameraDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available camera devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/camera/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/camera/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -231,14 +209,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanCameraDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for camera devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/camera/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/camera/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -482,14 +454,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetDomeDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available dome devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/dome/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/dome/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -500,14 +466,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanDomeDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for dome devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/dome/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/dome/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -673,14 +633,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetFilterWheelDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available filter wheel devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/filterwheel/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/filterwheel/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -691,14 +645,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanFilterWheelDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for filter wheel devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/filterwheel/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/filterwheel/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -780,14 +728,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetFlatDeviceDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available flat device devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/flatdevice/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/flatdevice/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -798,14 +740,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanFlatDeviceDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for flat device devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/flatdevice/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/flatdevice/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -900,14 +836,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetFocuserDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available focuser devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/focuser/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/focuser/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -918,14 +848,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanFocuserDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for focuser devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/focuser/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/focuser/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -1432,14 +1356,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetGuiderDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available guider devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/guider/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/guider/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -1450,14 +1368,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanGuiderDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for guider devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/guider/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/guider/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -1616,13 +1528,13 @@ public class NinaApiClient : INinaApiClient, IDisposable
 
     /// <summary>
 /// Gets image history. Only one parameter is required
-    /// </summary>
-    /// <param name="all">Whether to get all images or only the current image</param>
-    /// <param name="index">The index of the image to get</param>
-    /// <param name="count">Whether to count the number of images</param>
-    /// <param name="imageType">Filter by image type. This will restrict the result to images of the specified type</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The result containing image history data or count</returns>
+/// </summary>
+/// <param name="all">Whether to get all images or only the current image</param>
+/// <param name="index">The index of the image to get</param>
+/// <param name="count">Whether to count the number of images</param>
+/// <param name="imageType">Filter by image type. This will restrict the result to images of the specified type</param>
+/// <param name="cancellationToken">Cancellation token</param>
+/// <returns>The result containing image history data or count</returns>
     public async Task<Result<ImageHistoryResponse>> GetImageHistoryAsync(
         bool? all = null,
         int? index = null,
@@ -1682,10 +1594,18 @@ public class NinaApiClient : INinaApiClient, IDisposable
             endpoint += "?" + string.Join("&", queryParams);
         }
 
-        // For thumbnails, we need to handle binary data differently
+        // Use the resilience wrapper for consistent retry and circuit breaker behavior
+        return await ExecuteWithResilienceAsync(() => GetThumbnailDataAsync(endpoint, cancellationToken));
+    }
+
+    /// <summary>
+    /// Helper method to handle binary thumbnail data retrieval with consistent error handling
+    /// </summary>
+    private async Task<Result<byte[]>> GetThumbnailDataAsync(string endpoint, CancellationToken cancellationToken)
+    {
         try
         {
-            _logger.LogTrace("GET request to {Endpoint}", endpoint);
+            _logger.LogTrace("GET request to {Endpoint} for binary thumbnail data", endpoint);
 
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);
             
@@ -1694,22 +1614,54 @@ public class NinaApiClient : INinaApiClient, IDisposable
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogError("GET request failed - Endpoint: {Endpoint}, Status: {StatusCode}, Content: {Content}", 
                     endpoint, response.StatusCode, content);
-                return Result<byte[]>.Failure(new InvalidOperationException($"API request failed with status {response.StatusCode}: {content}"));
+                
+                // Use the same exception mapping as other methods for consistency
+                var httpException = NinaApiExceptionMapper.MapHttpStatusToException(
+                    response.StatusCode, content, endpoint);
+                return Result<byte[]>.Failure(httpException);
             }
 
+            // For binary data (thumbnails), read directly as byte array
             var thumbnailData = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            _logger.LogTrace("Successfully retrieved thumbnail from {Endpoint}", endpoint);
+            
+            // Validate that we actually received data
+            if (thumbnailData == null || thumbnailData.Length == 0)
+            {
+                _logger.LogWarning("API returned empty thumbnail data for {Endpoint}", endpoint);
+                var emptyDataException = new NinaApiLogicalException("API returned empty thumbnail data", endpoint);
+                return Result<byte[]>.Failure(emptyDataException);
+            }
+            
+            _logger.LogTrace("Successfully retrieved {ByteCount} bytes of thumbnail data from {Endpoint}", 
+                thumbnailData.Length, endpoint);
             return Result<byte[]>.Success(thumbnailData);
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
             _logger.LogError(ex, "Request timeout for {Endpoint}", endpoint);
-            return Result<byte[]>.Failure(new TimeoutException($"Request to {endpoint} timed out", ex));
+            // Use NINA-specific connection exception for timeouts
+            var timeoutException = new NinaConnectionException($"Request to {endpoint} timed out", ex);
+            return Result<byte[]>.Failure(timeoutException);
+        }
+        catch (TaskCanceledException ex) when (ex.CancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Request cancelled for {Endpoint}", endpoint);
+            // User cancellation - don't treat as error, just propagate
+            return Result<byte[]>.Failure(ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request exception for {Endpoint}", endpoint);
+            // Use NINA-specific connection exception for HTTP issues
+            var connectionException = new NinaConnectionException($"HTTP request failed for {endpoint}: {ex.Message}", ex);
+            return Result<byte[]>.Failure(connectionException);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting thumbnail from {Endpoint}", endpoint);
-            return Result<byte[]>.Failure(ex);
+            _logger.LogError(ex, "Unexpected error getting thumbnail data from {Endpoint}", endpoint);
+            // Use base NINA exception for unexpected errors
+            var unexpectedException = new NinaApiException($"Unexpected error occurred while getting thumbnail from {endpoint}: {ex.Message}", ex);
+            return Result<byte[]>.Failure(unexpectedException);
         }
     }
 
@@ -1736,14 +1688,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetMountDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available mount devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/mount/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/mount/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -1754,14 +1700,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanMountDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for mount devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/mount/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/mount/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -1995,14 +1935,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetRotatorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available rotator devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/rotator/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/rotator/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -2013,14 +1947,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanRotatorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for rotator devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/rotator/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/rotator/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -2102,14 +2030,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetSafetyMonitorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available safety monitor devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/safetymonitor/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/safetymonitor/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -2120,14 +2042,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanSafetyMonitorDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for safety monitor devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/safetymonitor/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/safetymonitor/rescan", cancellationToken));
     }
 
     #endregion
@@ -2183,14 +2099,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetSwitchDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available switch devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/switch/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/switch/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -2201,14 +2111,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanSwitchDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for switch devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/switch/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/switch/rescan", cancellationToken));
     }
 
     /// <summary>
@@ -2285,14 +2189,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> GetWeatherDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting available weather devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/weather/list-devices", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/weather/list-devices", cancellationToken));
     }
 
     /// <summary>
@@ -2303,14 +2201,8 @@ public class NinaApiClient : INinaApiClient, IDisposable
     public async Task<Result<IReadOnlyList<DeviceInfo>>> RescanWeatherDevicesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Rescanning for weather devices");
-        var result = await ExecuteWithResilienceAsync(() => GetAsync<List<DeviceInfo>>("/v2/api/equipment/weather/rescan", cancellationToken));
-        
-        if (result.IsSuccessful)
-        {
-            return Result<IReadOnlyList<DeviceInfo>>.Success(result.Value.AsReadOnly());
-        }
-        
-        return Result<IReadOnlyList<DeviceInfo>>.Failure(result.Error ?? new InvalidOperationException("Unknown error"));
+        // Now GetAsync<IReadOnlyList<T>> automatically handles the conversion from List<T>
+        return await ExecuteWithResilienceAsync(() => GetAsync<IReadOnlyList<DeviceInfo>>("/v2/api/equipment/weather/rescan", cancellationToken));
     }
 
     #endregion
@@ -2564,56 +2456,73 @@ public class NinaApiClient : INinaApiClient, IDisposable
     {
         _logger.LogInformation("Loading sequence from JSON data");
 
-        try
+        return await ExecuteWithResilienceAsync(async () =>
         {
-            var httpContent = new StringContent(sequenceJson, System.Text.Encoding.UTF8, "application/json");
-            
-            var response = await _httpClient.PostAsync("/v2/api/sequence/load", httpContent, cancellationToken);
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            try
+            {
+                var httpContent = new StringContent(sequenceJson, System.Text.Encoding.UTF8, "application/json");
+                
+                var response = await _httpClient.PostAsync("/v2/api/sequence/load", httpContent, cancellationToken);
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            if (response.IsSuccessStatusCode)
-            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("LoadSequenceFromJsonAsync failed with status code: {StatusCode}, Response: {Response}", 
+                        response.StatusCode, responseContent);
+                    
+                    // Use the same exception mapping as other methods for consistency
+                    var httpException = NinaApiExceptionMapper.MapHttpStatusToException(
+                        response.StatusCode, responseContent, "/v2/api/sequence/load");
+                    return Result<string>.Failure(httpException);
+                }
+
                 try
-    {
-        var ninaResponse = JsonSerializer.Deserialize<NinaApiResponse<string>>(responseContent, _jsonOptions);
-        if (ninaResponse?.Success == true && ninaResponse.Response != null)
-        {
-            return HVO.Result<string>.Success(ninaResponse.Response);
-        }
-        else
-        {
-            var errorMessage = string.IsNullOrEmpty(ninaResponse?.Error) ? "Unknown error from API" : ninaResponse.Error;
-            return HVO.Result<string>.Failure(new InvalidOperationException(errorMessage));
-        }
-    }
-    catch (JsonException ex)
-    {
-        _logger.LogError(ex, "Failed to deserialize response from LoadSequenceFromJsonAsync");
-        return HVO.Result<string>.Failure(new InvalidOperationException($"Failed to parse API response: {ex.Message}"));
-    }
+                {
+                    var ninaResponse = JsonSerializer.Deserialize<NinaApiResponse<string>>(responseContent, _jsonOptions);
+                    if (ninaResponse?.Success == true && ninaResponse.Response != null)
+                    {
+                        return Result<string>.Success(ninaResponse.Response);
+                    }
+                    else
+                    {
+                        var errorMessage = string.IsNullOrEmpty(ninaResponse?.Error) ? "Unknown error from API" : ninaResponse.Error;
+                        _logger.LogWarning("API returned error response: {Error}", errorMessage);
+                        
+                        var logicalException = NinaApiExceptionMapper.MapApiErrorToException(errorMessage, "/v2/api/sequence/load");
+                        return Result<string>.Failure(logicalException);
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogError(ex, "Failed to deserialize response from LoadSequenceFromJsonAsync");
+                    var jsonException = new NinaApiException($"Failed to parse response from /v2/api/sequence/load: {ex.Message}", ex);
+                    return Result<string>.Failure(jsonException);
+                }
             }
-            else
+            catch (HttpRequestException ex)
             {
-                _logger.LogError("LoadSequenceFromJsonAsync failed with status code: {StatusCode}, Response: {Response}", 
-                    response.StatusCode, responseContent);
-                return HVO.Result<string>.Failure(new HttpRequestException($"API request failed with status {response.StatusCode}: {responseContent}"));
+                _logger.LogError(ex, "HTTP request failed for LoadSequenceFromJsonAsync");
+                var connectionException = new NinaConnectionException($"HTTP request failed for /v2/api/sequence/load: {ex.Message}", ex);
+                return Result<string>.Failure(connectionException);
             }
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "HTTP request failed for LoadSequenceFromJsonAsync");
-            return HVO.Result<string>.Failure(ex);
-        }
-        catch (TaskCanceledException ex)
-        {
-            _logger.LogError(ex, "LoadSequenceFromJsonAsync was cancelled");
-            return HVO.Result<string>.Failure(ex);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error in LoadSequenceFromJsonAsync");
-            return HVO.Result<string>.Failure(ex);
-        }
+            catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+            {
+                _logger.LogError(ex, "Request timeout for LoadSequenceFromJsonAsync");
+                var timeoutException = new NinaConnectionException($"Request to /v2/api/sequence/load timed out", ex);
+                return Result<string>.Failure(timeoutException);
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogDebug("LoadSequenceFromJsonAsync was cancelled");
+                return Result<string>.Failure(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in LoadSequenceFromJsonAsync");
+                var unexpectedException = new NinaApiException($"Unexpected error occurred while loading sequence: {ex.Message}", ex);
+                return Result<string>.Failure(unexpectedException);
+            }
+        });
     }
 
     #endregion
@@ -2626,7 +2535,7 @@ public class NinaApiClient : INinaApiClient, IDisposable
     /// <param name="active">Whether to show the active profile or a list of all available profiles</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result containing profile information or list of profiles</returns>
-    public async Task<Result<object>> ShowProfileAsync(bool? active = null, CancellationToken cancellationToken = default)
+    public async Task<Result<ProfileResponse>> ShowProfileAsync(bool? active = null, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Getting profile information - Active: {Active}", active?.ToString() ?? "all");
 
@@ -2636,7 +2545,7 @@ public class NinaApiClient : INinaApiClient, IDisposable
             endpoint += $"?active={active.Value.ToString().ToLower()}";
         }
 
-        return await ExecuteWithResilienceAsync(() => GetAsync<object>(endpoint, cancellationToken));
+        return await ExecuteWithResilienceAsync(() => GetAsync<ProfileResponse>(endpoint, cancellationToken));
     }
 
     /// <summary>
@@ -2692,28 +2601,42 @@ public class NinaApiClient : INinaApiClient, IDisposable
 
     /// <summary>
     /// Execute operation with resilience patterns (retry, circuit breaker)
+    /// 
+    /// This method implements a two-layer resilience pattern:
+    /// 1. Retry Policy: Handles transient failures with exponential backoff
+    /// 2. Circuit Breaker: Prevents cascading failures by "opening" after threshold failures
     /// </summary>
     /// <typeparam name="T">Return type</typeparam>
     /// <param name="operation">Operation to execute</param>
     /// <returns>Result of the operation</returns>
     private async Task<Result<T>> ExecuteWithResilienceAsync<T>(Func<Task<Result<T>>> operation)
     {
+        // Ensure client hasn't been disposed
         if (_disposed)
             throw new ObjectDisposedException(nameof(NinaApiClient));
 
-        // First apply retry policy
+        // LAYER 1: Retry Policy - Handles transient failures
+        // This applies exponential backoff retry logic for network timeouts, 
+        // temporary API errors, and other recoverable failures
         var retryResult = await RetryPolicy.ExecuteWithRetryAsync(
-            operation,
-            _options.MaxRetryAttempts,
-            TimeSpan.FromMilliseconds(_options.RetryDelayMs),
-            _logger);
+            operation,                                              // The actual API call to execute
+            _options.MaxRetryAttempts,                             // Max attempts (e.g., 3)
+            TimeSpan.FromMilliseconds(_options.RetryDelayMs),      // Base delay between retries (e.g., 1000ms)
+            _logger);                                              // Logger for retry attempts
 
-        // Then apply circuit breaker if enabled
+        // LAYER 2: Circuit Breaker - Prevents cascading failures
+        // If enabled, this wraps the retry result to track failure patterns
+        // and "open" the circuit if too many failures occur
         if (_circuitBreaker != null)
         {
-            return await _circuitBreaker.ExecuteAsync(async () => retryResult);
+            // Circuit breaker evaluates the retry result and decides:
+            // - CLOSED: Normal operation, passes through the result
+            // - OPEN: Too many failures, immediately fails without calling operation
+            // - HALF-OPEN: Testing recovery, allows one attempt to check if service is healthy
+            return await _circuitBreaker.ExecuteAsync(() => Task.FromResult(retryResult));
         }
 
+        // If no circuit breaker configured, return the retry result directly
         return retryResult;
     }
 
@@ -2731,37 +2654,118 @@ public class NinaApiClient : INinaApiClient, IDisposable
             {
                 _logger.LogError("GET request failed - Endpoint: {Endpoint}, Status: {StatusCode}, Content: {Content}", 
                     endpoint, response.StatusCode, content);
-                return Result<T>.Failure(new InvalidOperationException($"API request failed with status {response.StatusCode}: {content}"));
+                
+                var httpException = NinaApiExceptionMapper.MapHttpStatusToException(
+                    response.StatusCode, content, endpoint);
+                return Result<T>.Failure(httpException);
             }
 
-            var apiResponse = JsonSerializer.Deserialize<NinaApiResponse<T>>(content, _jsonOptions);
+            // Determine the actual type to deserialize based on the requested type T
+            var deserializationType = GetDeserializationType<T>();
             
-            if (apiResponse?.Success != true)
+            // Deserialize to the appropriate type
+            var jsonDocument = JsonDocument.Parse(content);
+            var responseElement = jsonDocument.RootElement.GetProperty("Response");
+            var successElement = jsonDocument.RootElement.TryGetProperty("Success", out var success) ? success : default;
+            var errorElement = jsonDocument.RootElement.TryGetProperty("Error", out var error) ? error : default;
+            
+            if (successElement.ValueKind != JsonValueKind.Undefined && !successElement.GetBoolean())
             {
-                var error = apiResponse?.Error ?? "Unknown API error";
-                _logger.LogWarning("API returned error response: {Error}", error);
-                return Result<T>.Failure(new InvalidOperationException($"API error: {error}"));
+                var apiError = errorElement.ValueKind != JsonValueKind.Undefined ? errorElement.GetString() : "Unknown API error";
+                _logger.LogWarning("API returned error response: {Error}", apiError);
+                
+                var logicalException = NinaApiExceptionMapper.MapApiErrorToException(apiError ?? "Unknown API error", endpoint);
+                return Result<T>.Failure(logicalException);
             }
 
-            if (apiResponse.Response == null)
+            if (responseElement.ValueKind == JsonValueKind.Null || responseElement.ValueKind == JsonValueKind.Undefined)
             {
                 _logger.LogWarning("API returned null data for {Endpoint}", endpoint);
-                return Result<T>.Failure(new InvalidOperationException("API returned null data"));
+                var nullDataException = new NinaApiLogicalException("API returned null data", endpoint);
+                return Result<T>.Failure(nullDataException);
             }
 
+            // Deserialize to the intermediate type
+            var deserializedData = JsonSerializer.Deserialize(responseElement.GetRawText(), deserializationType, _jsonOptions);
+            
+            if (deserializedData == null)
+            {
+                _logger.LogWarning("Failed to deserialize response data for {Endpoint}", endpoint);
+                var deserializationException = new NinaApiLogicalException("Failed to deserialize response data", endpoint);
+                return Result<T>.Failure(deserializationException);
+            }
+
+            // Convert to the requested type T
+            var convertedData = ConvertToRequestedType<T>(deserializedData);
+            
             _logger.LogTrace("Successfully retrieved data from {Endpoint}", endpoint);
-            return Result<T>.Success(apiResponse.Response);
+            return Result<T>.Success(convertedData);
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
             _logger.LogError(ex, "Request timeout for {Endpoint}", endpoint);
-            return Result<T>.Failure(new TimeoutException($"Request to {endpoint} timed out", ex));
+            var timeoutException = new NinaConnectionException($"Request to {endpoint} timed out", ex);
+            return Result<T>.Failure(timeoutException);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request exception for {Endpoint}", endpoint);
+            var connectionException = new NinaConnectionException($"HTTP request failed for {endpoint}: {ex.Message}", ex);
+            return Result<T>.Failure(connectionException);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON deserialization failed for {Endpoint}", endpoint);
+            var jsonException = new NinaApiException($"Failed to parse response from {endpoint}: {ex.Message}", ex);
+            return Result<T>.Failure(jsonException);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting data from {Endpoint}", endpoint);
-            return Result<T>.Failure(ex);
+            _logger.LogError(ex, "Unexpected error getting data from {Endpoint}", endpoint);
+            var unexpectedException = new NinaApiException($"Unexpected error occurred while calling {endpoint}: {ex.Message}", ex);
+            return Result<T>.Failure(unexpectedException);
         }
+    }
+
+    /// <summary>
+    /// Gets the actual type to deserialize based on the requested return type
+    /// </summary>
+    private static Type GetDeserializationType<T>()
+    {
+        var requestedType = typeof(T);
+        
+        // If T is IReadOnlyList<TElement>, we need to deserialize to List<TElement>
+        if (requestedType.IsGenericType && requestedType.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+        {
+            var elementType = requestedType.GetGenericArguments()[0];
+            return typeof(List<>).MakeGenericType(elementType);
+        }
+        
+        // For other types, deserialize to the requested type directly
+        return requestedType;
+    }
+
+    /// <summary>
+    /// Converts the deserialized data to the requested type T
+    /// </summary>
+    private static T ConvertToRequestedType<T>(object deserializedData) where T : class
+    {
+        var requestedType = typeof(T);
+        
+        // If T is IReadOnlyList<TElement> and data is List<TElement>, convert to ReadOnlyCollection
+        if (requestedType.IsGenericType && requestedType.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+        {
+            if (deserializedData is System.Collections.IList list)
+            {
+                var elementType = requestedType.GetGenericArguments()[0];
+                var readOnlyListType = typeof(System.Collections.ObjectModel.ReadOnlyCollection<>).MakeGenericType(elementType);
+                var readOnlyList = Activator.CreateInstance(readOnlyListType, list);
+                return (T)readOnlyList!;
+            }
+        }
+        
+        // For other types, return as-is (already the correct type)
+        return (T)deserializedData;
     }
 
     /// <summary>
