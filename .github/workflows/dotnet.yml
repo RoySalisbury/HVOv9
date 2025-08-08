@@ -27,6 +27,9 @@ on:
       - '.vscode/**'
       - '.devcontainer/**'
       - '.github/ISSUE_TEMPLATE/**'
+  schedule:
+    # Run integration tests nightly at 2 AM UTC
+    - cron: '0 2 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,7 +38,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -61,14 +64,116 @@ jobs:
 
       - name: Restore
         run: |
-          dotnet restore ./src/HVOv9.slnx --nologo -v minimal || dotnet restore --nologo -v minimal
+          cd src && dotnet restore HVOv9.slnx --nologo -v minimal || dotnet restore --nologo -v minimal
 
       - name: Build
         run: |
-          dotnet build ./src/HVOv9.slnx -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true || \
+          cd src && dotnet build HVOv9.slnx -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true || \
           dotnet build -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true
 
-      - name: Test
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            src/**/bin/Release/**
+            !src/**/bin/Release/**/ref/**
+          retention-days: 1
+
+  test-unit:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    strategy:
+      matrix:
+        test-project:
+          - HVO.Iot.Devices.Tests
+          - HVO.WebSite.Playground.Tests
+          - HVO.WebSite.RoofControllerV4.Tests
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            **/*.sln*
+            global.json
+            NuGet.config
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: src
+
+      - name: Run unit tests
         run: |
-          dotnet test ./src/HVOv9.slnx -c Release --no-build --nologo -v minimal -maxcpucount || \
-          dotnet test -c Release --no-build --nologo -v minimal -maxcpucount
+          cd src && dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
+            --filter "TestCategory!=Integration" \
+            --logger "console;verbosity=normal"
+
+  test-integration:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    # Gate integration tests: run on main branch, scheduled runs, or when PR has integration-tests label
+    if: |
+      github.ref == 'refs/heads/main' || 
+      github.event_name == 'schedule' || 
+      contains(github.event.pull_request.labels.*.name, 'integration-tests')
+    
+    strategy:
+      matrix:
+        test-project:
+          - HVO.Iot.Devices.Tests
+          - HVO.WebSite.Playground.Tests
+          - HVO.WebSite.RoofControllerV4.Tests
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            **/*.sln*
+            global.json
+            NuGet.config
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: src
+
+      - name: Run integration tests
+        run: |
+          cd src && dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
+            --filter "TestCategory=Integration" \
+            --logger "console;verbosity=normal"

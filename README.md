@@ -105,6 +105,30 @@ Run tests:
 dotnet test
 ```
 
+### CI/CD Workflow
+
+The GitHub Actions workflow is split into separate jobs for faster feedback:
+
+- **Build job**: Restores dependencies, builds the solution, and uploads artifacts
+- **Unit test jobs**: Run in parallel matrix across all test projects, excluding integration tests
+- **Integration test jobs**: Only run when specific conditions are met
+
+#### Integration Test Gate
+
+Integration tests are slower and may require special setup (like GPIO hardware simulation). They only run when:
+
+- **On main branch**: All pushes to main automatically run integration tests
+- **Scheduled runs**: Nightly at 2 AM UTC via cron schedule
+- **PR with label**: Add the `integration-tests` label to any PR to include integration tests
+
+For most PRs, only unit tests run by default, providing faster feedback. Add the `integration-tests` label when you need full test coverage.
+
+Example: Adding the integration-tests label to a PR:
+```bash
+# Using GitHub CLI
+gh pr edit --add-label "integration-tests"
+```
+
 ## API docs
 
 - OpenAPI JSON:  /openapi/v1.json

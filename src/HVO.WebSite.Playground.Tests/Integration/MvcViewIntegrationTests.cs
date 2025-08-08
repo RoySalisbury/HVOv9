@@ -8,6 +8,7 @@ namespace HVO.WebSite.Playground.Tests.Integration;
 /// Integration tests for MVC views and pages
 /// </summary>
 [TestClass]
+[TestCategory("Integration")]
 public class MvcViewIntegrationTests
 {
     private WebApplicationFactory<Program> _factory = null!;

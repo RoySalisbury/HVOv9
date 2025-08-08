@@ -12,6 +12,7 @@ namespace HVO.WebSite.Playground.Tests.Integration
     /// Integration tests for health check endpoints
     /// </summary>
     [TestClass]
+    [TestCategory("Integration")]
     public class HealthChecksTests
     {
         private TestWebApplicationFactory _factory = null!;
