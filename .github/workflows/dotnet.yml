@@ -79,6 +79,7 @@ jobs:
             src/**/bin/Release/**
             !src/**/bin/Release/**/ref/**
             src/**/obj/Release/net9.0/compressed/**
+            src/**/obj/Release/net9.0/scopedcss/**
           retention-days: 1
 
   test-unit:
