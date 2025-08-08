@@ -1,7 +1,9 @@
-    {
+{
       "image": "mcr.microsoft.com/devcontainers/dotnet:9.0",
-      "runArgs": ["--device=/dev/net/tun"],
-      "features": {        
+      "runArgs": [
+        "--device=/dev/net/tun"
+      ],
+      "features": {
         "ghcr.io/tailscale/codespace/tailscale": {}
       },
       "customizations": {
@@ -16,5 +18,16 @@
           ]
         }
       },
-      "forwardPorts": [5136, 7151]
+      "forwardPorts": [
+        5136,
+        7151
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "x509stores",
+          "target": "/home/vscode/.dotnet/corefx/cryptography/x509stores"
+        }
+      ],
+      "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh"
     }

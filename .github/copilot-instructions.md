@@ -219,7 +219,7 @@ namespace HVO.ProjectName
   - `EnableHttpsRedirect` is false by default (no forced redirect to HTTPS)
   - `TrustDevCertificates` is true by default so LocalApi HttpClient can call local endpoints over HTTPS when needed
 - Launch profiles bind to `https://0.0.0.0:7151;http://0.0.0.0:5136` and auto-open the site
-- A script exports a dev cert to `.certs/https-devcert.pfx` (ignored by git)
+- Dev certificates are provided by the dev container; no local export script or `.certs/https-devcert.pfx` is required.
 
 ### 7. NINA API Integration (HVO.NinaClient)
 - **Official API Specifications**: NINA (N.I.N.A. - Nighttime Imaging 'N' Astronomy) API specifications are maintained at:

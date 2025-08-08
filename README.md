@@ -38,6 +38,21 @@ This repo is configured for VS Code Dev Containers / GitHub Codespaces:
 - Dev container installs .NET 9 SDK and helpful extensions
 - Ports forwarded by default: 5136 (HTTP) and 7151 (HTTPS)
 - VS Code launch profiles auto-build and open the site in your browser
+- Dev certificates are provisioned by the dev container automatically (no manual export or `.certs` files required)
+
+### Dev Container details
+- Base image: mcr.microsoft.com/devcontainers/dotnet:9.0 (includes .NET 9 SDK)
+- VS Code extensions preinstalled:
+   - ms-dotnettools.csdevkit (C# Dev Kit)
+   - ms-dotnettools.vscode-dotnet-runtime (.NET Runtime)
+   - GitHub.remotehub (GitHub Repositories)
+   - GitHub.vscode-pull-request-github (GitHub Pull Requests)
+   - ms-vsliveshare.vsliveshare (Live Share)
+- Forwarded ports: 5136 (HTTP), 7151 (HTTPS)
+- Features/Mounts:
+   - tailscale feature enabled for Codespaces (ghcr.io/tailscale/codespace/tailscale)
+   - Volume mount for X509 stores at /home/vscode/.dotnet/corefx/cryptography/x509stores (persists dev cert store between rebuilds)
+- On create, the container runs a script to set up the .NET dev certificate inside the container
 
 ### Quick start
 
@@ -50,6 +65,33 @@ This repo is configured for VS Code Dev Containers / GitHub Codespaces:
 Notes
 - In Development, HTTPS redirection is disabled by default (configurable).
 - LocalApi HttpClient can trust dev certs in Development to avoid SSL errors over port forwarding.
+- Dev certs are container-managed; you don’t need to run any setup scripts or keep a local PFX.
+
+### Troubleshooting the Dev Container
+- Rebuild the container (fixes most environment drift):
+   - VS Code: Command Palette → “Dev Containers: Rebuild Container”
+   - GitHub Codespaces: Use the “Rebuild Container” action from the codespace menu
+- Re-run dev cert setup if HTTPS fails to start:
+   ```bash
+   bash .devcontainer/setup-dotnet-dev-cert.sh
+   ```
+   Then reload the VS Code window.
+- Free ports 5136/7151 if the app can’t bind:
+   - VS Code task: “kill:playground”
+   - Or run:
+      ```bash
+      bash .vscode/kill-playground.sh
+      ```
+- Reset build state if restores/builds start failing:
+   ```bash
+   dotnet restore --force
+   dotnet clean
+   dotnet build
+   ```
+- Local Docker only (not Codespaces): clear persisted X509 store if certs get stuck:
+   ```bash
+   docker volume rm x509stores
+   ```
 
 ## Build and test
 

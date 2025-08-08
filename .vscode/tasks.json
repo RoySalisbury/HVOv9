@@ -2,13 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "setup:https-devcert",
-      "type": "shell",
-      "command": "bash",
-      "args": ["${workspaceFolder}/.vscode/setup-https.sh"],
-      "problemMatcher": []
-    },
-    {
       "label": "kill:playground",
       "type": "shell",
   "command": "bash",
@@ -18,12 +11,12 @@
     },
     {
       "label": "prepare:playground:debug",
-      "dependsOn": ["kill:playground", "setup:https-devcert", "build:playground:debug"],
+  "dependsOn": ["kill:playground", "build:playground:debug"],
       "problemMatcher": []
     },
     {
       "label": "prepare:playground:release",
-      "dependsOn": ["kill:playground", "setup:https-devcert", "build:playground:release"],
+  "dependsOn": ["kill:playground", "build:playground:release"],
       "problemMatcher": []
     },
     {
