@@ -20,6 +20,7 @@ namespace HVO.WebSite.Playground.Tests.Integration;
 /// Tests the full HTTP request/response cycle with real dependencies
 /// </summary>
 [TestClass]
+[TestCategory("Integration")]
 public class WeatherApiIntegrationTests
 {
     private TestWebApplicationFactory _factory = null!;

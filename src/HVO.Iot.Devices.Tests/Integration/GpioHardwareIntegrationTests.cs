@@ -19,6 +19,7 @@ namespace HVO.Iot.Devices.Tests.Integration;
 /// 3. Ensure proper GPIO pin connections
 /// </summary>
 [TestClass]
+[TestCategory("Integration")]
 public class GpioHardwareIntegrationTests : IDisposable
 {
     private ServiceProvider _serviceProvider = null!;
