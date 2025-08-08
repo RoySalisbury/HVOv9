@@ -122,9 +122,22 @@ jobs:
 
       - name: Run unit tests
         run: |
-          cd src && dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
+          cd src
+          mkdir -p TestResults/${{ matrix.test-project }}
+          dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
             --filter "TestCategory!=Integration" \
+            -l "trx;LogFileName=${{ matrix.test-project }}.trx" \
+            --results-directory TestResults/${{ matrix.test-project }} \
             --logger "console;verbosity=normal"
+
+      - name: Upload Unit Test Results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-unit-${{ matrix.test-project }}-${{ github.run_id }}
+          path: src/TestResults/${{ matrix.test-project }}
+          if-no-files-found: warn
+          retention-days: 7
 
   test-integration:
     needs: build
@@ -174,6 +187,19 @@ jobs:
 
       - name: Run integration tests
         run: |
-          cd src && dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
+          cd src
+          mkdir -p TestResults/${{ matrix.test-project }}
+          dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
             --filter "TestCategory=Integration" \
+            -l "trx;LogFileName=${{ matrix.test-project }}.trx" \
+            --results-directory TestResults/${{ matrix.test-project }} \
             --logger "console;verbosity=normal"
+
+      - name: Upload Integration Test Results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-integration-${{ matrix.test-project }}-${{ github.run_id }}
+          path: src/TestResults/${{ matrix.test-project }}
+          if-no-files-found: warn
+          retention-days: 7
