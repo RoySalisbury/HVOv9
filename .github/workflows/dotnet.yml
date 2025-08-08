@@ -78,6 +78,7 @@ jobs:
           path: |
             src/**/bin/Release/**
             !src/**/bin/Release/**/ref/**
+            src/**/obj/Release/net9.0/compressed/**
           retention-days: 1
 
   test-unit:
