@@ -129,6 +129,17 @@ Example: Adding the integration-tests label to a PR:
 gh pr edit --add-label "integration-tests"
 ```
 
+### CI Automation
+- Test artifacts:
+   - Both unit and integration jobs publish TRX results per project as run artifacts.
+   - Download from the run page to inspect failing tests locally.
+- Automatic CI failure issues:
+   - Workflow “CI Failure Reporter” auto-creates/updates a GitHub issue when “.NET Build & Test” fails.
+   - Issue includes run link, failing jobs/steps summary, and next steps.
+- Manual run (to analyze a specific run):
+   - Actions → “CI Failure Reporter” → “Run workflow”.
+   - Optionally provide run_id to target a specific Actions run.
+
 ## API docs
 
 - OpenAPI JSON:  /openapi/v1.json
