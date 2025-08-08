@@ -1,0 +1,74 @@
+name: .NET Build & Test
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
+      - '**/*.txt'
+      - '.vscode/**'
+      - '.devcontainer/**'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
+      - '**/*.txt'
+      - '.vscode/**'
+      - '.devcontainer/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            **/*.sln*
+            global.json
+            NuGet.config
+
+      - name: Restore
+        run: |
+          dotnet restore ./src/HVOv9.slnx --nologo -v minimal || dotnet restore --nologo -v minimal
+
+      - name: Build
+        run: |
+          dotnet build ./src/HVOv9.slnx -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true || \
+          dotnet build -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: |
+          dotnet test ./src/HVOv9.slnx -c Release --no-build --nologo -v minimal -maxcpucount || \
+          dotnet test -c Release --no-build --nologo -v minimal -maxcpucount

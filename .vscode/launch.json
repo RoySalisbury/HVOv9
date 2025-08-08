@@ -3,5 +3,75 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": []
+    "configurations": [
+        {
+            "name": ".NET Debug: HVO.WebSite.Playground",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "prepare:playground:debug",
+            "postDebugTask": "setup:https-devcert",
+            "program": "${workspaceFolder}/src/HVO.WebSite.Playground/bin/Debug/net9.0/HVO.WebSite.Playground.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HVO.WebSite.Playground/bin/Debug/net9.0",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136",
+                "ASPNETCORE_Kestrel__Certificates__Default__Path": "${workspaceFolder}/.certs/https-devcert.pfx",
+                "ASPNETCORE_Kestrel__Certificates__Default__Password": "hvo_dev_password"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
+                "uriFormat": "https://localhost:%s"
+            }
+        },
+        {
+            "name": ".NET Debug (HTTP only): HVO.WebSite.Playground",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "prepare:playground:debug",
+            "program": "${workspaceFolder}/src/HVO.WebSite.Playground/bin/Debug/net9.0/HVO.WebSite.Playground.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HVO.WebSite.Playground/bin/Debug/net9.0",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://0.0.0.0:5136"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on\\s+http://\\S+:(\\d+)",
+                "uriFormat": "http://localhost:%s"
+            }
+        },
+        {
+            "name": ".NET Release: HVO.WebSite.Playground",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "prepare:playground:release",
+            "postDebugTask": "setup:https-devcert",
+            "program": "${workspaceFolder}/src/HVO.WebSite.Playground/bin/Release/net9.0/HVO.WebSite.Playground.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HVO.WebSite.Playground/bin/Release/net9.0",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Production",
+                "DOTNET_ENVIRONMENT": "Production",
+                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136",
+                "ASPNETCORE_Kestrel__Certificates__Default__Path": "${workspaceFolder}/.certs/https-devcert.pfx",
+                "ASPNETCORE_Kestrel__Certificates__Default__Password": "hvo_dev_password"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
+                "uriFormat": "https://localhost:%s"
+            }
+        }
+    ]
 }

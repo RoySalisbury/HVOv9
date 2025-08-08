@@ -1,256 +1,114 @@
 # HVOv9 - Hualapai Valley Observatory v9
 
-The ninth version of the Hualapai Valley Observatory software suite, a comprehensive IoT and web application platform for observatory automation and control systems.
+The ninth version of the Hualapai Valley Observatory software suite: a modern .NET platform for observatory automation, weather APIs, and interactive web control.
 
 ## Overview
 
-HVOv9 is a modern .NET 9.0-based platform that provides:
-- **Observatory Automation**: IoT device control and monitoring
-- **Weather Data Management**: Real-time weather station integration and API
-- **Web Interface**: Blazor Server-based interactive dashboard
-- **Roof Control**: Automated observatory roof control system
-- **Comprehensive Testing**: Full test coverage with unit and integration tests
+HVOv9 provides:
+- Observatory automation and GPIO device integration
+- Weather data APIs and dashboard (Blazor Server)
+- Roof controller application
+- Solid testing (unit and integration)
 
-## Technology Stack
+## Tech stack
 
-- **.NET 9.0** - Latest LTS framework
-- **ASP.NET Core** - Web applications and APIs
-- **Blazor Server** - Interactive web UI with `@rendermode InteractiveServer`
-- **Entity Framework Core** - Data access and modeling
-- **MSTest** - Comprehensive testing framework with dependency injection support
-- **IoT Device Integration** - GPIO controls and hardware interfaces
-- **Azure DevOps** - CI/CD pipeline
+- .NET 9.0
+- ASP.NET Core + Blazor Server
+- Entity Framework Core
+- MSTest-based test projects (with helpers for DI/mocking)
+- Scalar for interactive API reference
 
-## Project Structure
+## Repository layout (high level)
 
 ```
 src/
-├── HVO/                              # Core library and shared components
-│   ├── Result.cs                     # Result<T> pattern implementation
-│   ├── ResultUsageExamples.cs       # Usage examples for Result pattern
-│   ├── ComponentModel/               # Component model extensions
-│   │   └── AttributeExtensions.cs   # Attribute utility extensions
-│   └── Iot/                         # IoT device abstractions
-│       └── Devices/                 # Device implementations
-│
-├── HVO.DataModels/                   # Data models and Entity Framework context
-│   ├── Data/                        # Database context and configurations
-│   │   └── HvoDbContext.cs          # Main EF Core database context
-│   ├── Models/                      # Entity models for weather and device data
-│   ├── RawModels/                   # Raw data models for device input
-│   ├── Repositories/                # Repository pattern implementations
-│   └── Extensions/                  # Service collection extensions
-│
-├── HVO.WebSite.Playground/          # Main web application
-│   ├── Controllers/                 # API controllers (Weather, Ping, Home)
-│   ├── Components/                  # Blazor components
-│   │   ├── Pages/                   # Routable pages with .razor.cs code-behind
-│   │   └── Layout/                  # Layout components
-│   ├── Services/                    # Business logic services
-│   │   ├── IWeatherService.cs       # Weather service interface
-│   │   └── WeatherService.cs        # Weather service implementation
-│   ├── Models/                      # API response models
-│   │   └── WeatherApiModels.cs      # Weather API DTOs and responses
-│   ├── Middleware/                  # Custom middleware
-│   │   └── HvoServiceExceptionHandler.cs # Global exception handling
-│   └── wwwroot/                     # Static web assets
-│
-├── HVO.WebSite.Playground.Tests/    # Comprehensive test suite
-│   ├── Controllers/                 # Controller unit tests
-│   │   └── WeatherControllerTests.cs # Weather API controller tests
-│   ├── Services/                    # Service layer tests
-│   │   └── WeatherServiceTests.cs   # Weather service business logic tests
-│   ├── Integration/                 # Integration tests
-│   │   └── WeatherApiIntegrationTests.cs # Full HTTP API contract tests
-│   ├── Core/                        # Core pattern tests
-│   │   └── ResultPatternTests.cs    # Result<T> pattern validation
-│   └── TestHelpers/                 # Test utilities and factories
-│       ├── TestWebApplicationFactory.cs # Enhanced test server factory
-│       ├── WeatherTestDataBuilder.cs # Test data generation
-│       ├── TestDbContextFactory.cs  # Database test utilities
-│       └── TestUtilities.cs         # Common test utilities
-│
-├── HVO.Iot.Devices.Tests/           # IoT device testing
-│   ├── GpioButtonWithLedTests.cs    # GPIO button and LED component tests
-│   ├── GpioLimitSwitchTests.cs      # Limit switch hardware tests
-│   └── MSTestSettings.cs            # Test configuration
-│
-├── HVO.GpioTestApp/                  # GPIO testing and validation application
-│   └── Program.cs                   # GPIO device testing console app
-│
-├── HVO.WebSite.RoofControllerV4/     # Observatory roof control system
-│   ├── Controllers/                 # Roof control API endpoints
-│   ├── HostedServices/              # Background services for automation
-│   └── Logic/                       # Roof control business logic
-│
-└── HVOv9.slnx                       # Solution file
+├── HVO/                       # Core library (Result<T>, shared types, utilities)
+├── HVO.DataModels/            # EF Core DbContext, entities, repositories
+├── HVO.NinaClient/            # NINA REST + WebSocket client
+├── HVO.SourceGenerators/      # Source generator(s)
+├── HVO.Iot.Devices/           # IoT abstractions & implementations
+├── HVO.Iot.Devices.Tests/     # IoT tests
+├── HVO.WebSite.Playground/    # Web app (Blazor Server + APIs)
+└── HVO.WebSite.RoofControllerV4/  # Roof controller app
 ```
 
-## Getting Started
+## Dev environment (VS Code + Dev Container)
 
-### Prerequisites
+This repo is configured for VS Code Dev Containers / GitHub Codespaces:
+- Dev container installs .NET 9 SDK and helpful extensions
+- Ports forwarded by default: 5136 (HTTP) and 7151 (HTTPS)
+- VS Code launch profiles auto-build and open the site in your browser
 
-- **.NET 9.0 SDK** or later
-- **Visual Studio 2022** or **VS Code** with C# extension
-- **Git** for version control
+### Quick start
 
-### Installation
+1) Open in VS Code (Dev Containers) or GitHub Codespaces.
+2) Press F5 and pick “.NET Debug: HVO.WebSite.Playground”.
+    - HTTPS: https://localhost:7151
+    - HTTP:  http://localhost:5136
+    - There’s also “.NET Debug (HTTP only)” to avoid HTTPS entirely.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://royjs.visualstudio.com/Hualapai%20Valley%20Observatory%20-%20v9/_git/HVOv9
-   cd HVOv9/src
-   ```
+Notes
+- In Development, HTTPS redirection is disabled by default (configurable).
+- LocalApi HttpClient can trust dev certs in Development to avoid SSL errors over port forwarding.
 
-2. **Restore dependencies:**
-   ```bash
-   dotnet restore
-   ```
+## Build and test
 
-3. **Build the solution:**
-   ```bash
-   dotnet build
-   ```
-
-4. **Run tests:**
-   ```bash
-   dotnet test
-   ```
-
-### Running the Applications
-
-#### Web Playground Application
+Build everything:
 ```bash
-cd HVO.WebSite.Playground
-dotnet run
-```
-Access at: `https://localhost:5001` or `http://localhost:5000`
-
-#### Roof Controller Application
-```bash
-cd HVO.WebSite.RoofControllerV4
-dotnet run
-```
-
-#### GPIO Test Application
-```bash
-cd HVO.GpioTestApp
-dotnet run
-```
-
-## API Documentation
-
-### Weather API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1.0/weather/latest` | GET | Get the most recent weather record |
-| `/api/v1.0/weather/current` | GET | Get current weather conditions |
-| `/api/v1.0/weather/highs-lows` | GET | Get weather highs/lows for date range |
-
-#### Example Usage
-```bash
-# Get latest weather data
-curl https://localhost:5001/api/v1.0/weather/latest
-
-# Get weather highs/lows for specific date range
-curl "https://localhost:5001/api/v1.0/weather/highs-lows?startDate=2025-07-01&endDate=2025-07-13"
-```
-
-## Build and Test
-
-### Building
-```bash
-# Build entire solution
 dotnet build
-
-# Build specific project
-dotnet build HVO.WebSite.Playground
-
-# Build for Release
-dotnet build --configuration Release
 ```
 
-### Testing
+Run tests:
 ```bash
-# Run all tests
 dotnet test
-
-# Run with detailed output
-dotnet test --verbosity normal
-
-# Run specific test project
-dotnet test HVO.WebSite.Playground.Tests
-
-# Run tests for both Debug and Release configurations
-dotnet test --configuration Debug
-dotnet test --configuration Release
 ```
 
-### Test Coverage
-- **140+ total tests** across the solution
-- **MSTest framework** with dependency injection support
-- **Unit tests** for individual components and services
-- **Integration tests** for web APIs and IoT devices
-- **Mock GPIO controllers** for hardware-independent testing
-- **Comprehensive API contract validation** with integration tests
+## API docs
 
-### Testing Framework
-The solution uses **MSTest** exclusively for consistency and maintainability:
-- `[TestClass]` for test class definition
-- `[TestMethod]` for individual test methods
-- `[DataRow]` for parameterized tests
-- `[TestInitialize]` and `[TestCleanup]` for setup/teardown
-- Dependency injection integration for IoT testing scenarios
+- OpenAPI JSON:  /openapi/v1.json
+- Scalar UI:     /scalar/v1 (Development only)
 
-See `MSTest_Standardization.md` for complete testing guidelines and migration details.
-
-## Coding Standards
-
-The project follows the HVOv9 coding standards as outlined in `.github/copilot-instructions.md`:
-
-- **No top-level statements** - Explicit `Main` method with proper class structure
-- **Code-behind files** for all Razor components (`.razor.cs`)
-- **Result<T> pattern** for error handling and operation results
-- **Dependency injection** with constructor injection patterns
-- **Comprehensive testing** with AAA pattern (Arrange, Act, Assert)
-- **API versioning** with URL segments (`/api/v1.0/`)
+Example requests (Development defaults):
+```bash
+curl http://localhost:5136/api/v1.0/weather/latest
+curl "http://localhost:5136/api/v1.0/weather/highs-lows?startDate=2025-07-01&endDate=2025-07-13"
+```
 
 ## Configuration
 
-### Database Connection
-Configure connection strings in `appsettings.json`:
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=.;Database=HVO;Trusted_Connection=true;"
-  }
-}
-```
+App settings are in `appsettings.json` with environment overrides, e.g. `appsettings.Development.json`.
 
-### Environment-Specific Settings
-- `appsettings.json` - Base configuration
-- `appsettings.Development.json` - Development overrides
-- `appsettings.Production.json` - Production settings
+Key flags in HVO.WebSite.Playground:
+- `EnableHttpsRedirect` (bool)
+   - Default: true (non-Development), false (Development)
+   - Controls UseHttpsRedirection()
+- `TrustDevCertificates` (bool)
+   - Default: true (Development), false (non-Development)
+   - When true, LocalApi HttpClient accepts the local dev cert
+
+Ports:
+- HTTP 5136, HTTPS 7151 (configurable via ASPNETCORE_URLS in launch)
+
+Database:
+- Store connection strings securely (user secrets, environment variables). Avoid embedding secrets in source.
+
+## Coding standards
+
+See `.github/copilot-instructions.md` for workspace-wide standards:
+- Explicit Program.Main (no top-level statements)
+- Code-behind for Razor components (`.razor.cs`), scoped CSS/JS
+- Result<T> pattern for operations that can fail
+- Structured logging with ILogger<T>
+- API versioning via URL segments (`/api/v1.0/...`)
 
 ## Contributing
 
-1. **Follow coding standards** as defined in `.github/copilot-instructions.md`
-2. **Write comprehensive tests** for new features
-3. **Use Result<T> pattern** for operations that can fail
-4. **Create code-behind files** for Blazor components
-5. **Update documentation** for API changes
-
-### Pull Request Process
-1. Create a feature branch from `main`
-2. Implement changes with appropriate tests
-3. Ensure all tests pass: `dotnet test`
-4. Submit pull request with clear description
+1. Follow standards in `.github/copilot-instructions.md`.
+2. Include tests with feature changes.
+3. Use Result<T> for error-prone operations.
+4. Keep components clean (markup in .razor, logic in .razor.cs).
 
 ## License
 
-This project is part of the Hualapai Valley Observatory automation system.
+Part of the Hualapai Valley Observatory automation system.
 
-## Support
-
-For questions or issues, please contact the HVO development team or create an issue in the Azure DevOps repository.

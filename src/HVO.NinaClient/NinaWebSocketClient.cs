@@ -129,7 +129,6 @@ public record NinaWebSocketOptions
     /// The base URI for the NINA WebSocket server (default: ws://localhost:1888/v2)
     /// </summary>
     [Required]
-    [Url]
     public string BaseUri { get; init; } = "ws://localhost:1888/v2";
 
     /// <summary>

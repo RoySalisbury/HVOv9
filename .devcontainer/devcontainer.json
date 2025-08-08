@@ -1,16 +1,22 @@
     {
       "image": "mcr.microsoft.com/devcontainers/universal:latest",
+      "runArgs": ["--device=/dev/net/tun"],
       "features": {
         "ghcr.io/devcontainers/features/dotnet:latest": {
           "version": "9.0"
-        }
+        },
+        "ghcr.io/tailscale/codespace/tailscale": {}
       },
       "customizations": {
         "vscode": {
           "extensions": [
             "ms-dotnettools.csdevkit",
-            "ms-dotnettools.vscode-dotnet-runtime"
+            "ms-dotnettools.vscode-dotnet-runtime",
+            "GitHub.remotehub",
+            "GitHub.vscode-pull-request-github",
+            "ms-vsliveshare.vsliveshare"
           ]
         }
-      }
+      },
+      "forwardPorts": [5136, 7151]
     }

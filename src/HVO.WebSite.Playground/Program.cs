@@ -10,6 +10,8 @@ using System.Text.Json.Serialization;
 using Scalar.AspNetCore;
 using HVO.DataModels.Data;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
+using System.Net.Http;
 
 namespace HVO.WebSite.Playground
 {
@@ -138,9 +140,23 @@ namespace HVO.WebSite.Playground
             services.AddScoped<HVO.WebSite.Playground.Services.IWeatherService, HVO.WebSite.Playground.Services.WeatherService>();
 
             // Configure HttpClient for Blazor Server components
+            // In Development (or when configured), trust the local dev certificate to avoid SSL issues over port forwarding
             services.AddHttpClient("LocalApi", client =>
             {
                 client.BaseAddress = new Uri("http://localhost:5136");
+            })
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+            {
+                var config = sp.GetRequiredService<IConfiguration>();
+                var env = sp.GetRequiredService<IHostEnvironment>();
+                var trustDevCerts = config.GetValue("TrustDevCertificates", env.IsDevelopment());
+
+                var handler = new HttpClientHandler();
+                if (trustDevCerts)
+                {
+                    handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                }
+                return handler;
             });
 
             // Add NINA API client services
@@ -186,7 +202,12 @@ namespace HVO.WebSite.Playground
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();
+            // Enable HTTPS redirection based on configuration (disable in Development by default)
+            var enableHttpsRedirect = app.Configuration.GetValue("EnableHttpsRedirect", !app.Environment.IsDevelopment());
+            if (enableHttpsRedirect)
+            {
+                app.UseHttpsRedirection();
+            }
             app.UseRouting();
             app.UseAntiforgery();
             app.MapStaticAssets();

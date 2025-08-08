@@ -11,9 +11,9 @@ HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a 
 - Blazor Server for interactive web UI
 - Entity Framework Core for data access
 - IoT device integration with GPIO controls
-- xUnit with FluentAssertions for unit testing
-- Moq for service mocking and test isolation
-- Azure DevOps for CI/CD
+- MSTest for unit and integration testing
+- Moq (optional) for service mocking and test isolation
+- GitHub + VS Code Dev Containers for development
 
 ## HVOv9 Coding Standards
 
@@ -70,13 +70,13 @@ namespace HVO.ProjectName
 - **Replace Debug.WriteLine with structured logging** - No console debugging in production code
 
 ### 6. Testing Standards
-- Use xUnit as the primary testing framework
+- Use MSTest as the primary testing framework
 - Follow AAA pattern (Arrange, Act, Assert)
 - Use `WebApplicationFactory<T>` for integration tests
 - Mock external dependencies using Moq or similar
 - **Use service mocking instead of database seeding for integration tests**
 - **Create enhanced TestWebApplicationFactory with proper service replacement**
-- Use FluentAssertions for readable test assertions
+- FluentAssertions is optional
 - Test file naming: `{ClassUnderTest}Tests.cs`
 - **Suppress CS1030 warnings in test projects for clean builds**
 
@@ -128,17 +128,13 @@ namespace HVO.ProjectName
 - Use `Span<T>` and `Memory<T>` for high-performance scenarios
 - Dispose of resources properly
 
-### 11. Development Workflow Standards
-- **Terminal Command Pattern**: Always change to project directory before running commands
-  - Pattern: `cd "C:\path\to\project"; dotnet command`
-  - Each `run_in_terminal` creates a new terminal session, requiring directory navigation
-- **Build Before Run**: Always `dotnet build` before `dotnet run` to catch compilation errors early
-- **Configuration Loading**: Applications must run from output directory (`bin/Debug/net9.0`) to find `appsettings.json`
-  - Configuration files are copied to output directory during build
-  - Running from source directory will not load configuration properly
-- **Process Management**: 
-  - Use `taskkill /F /PID <pid>` to stop locked processes before rebuilding
-  - Check for file locks when build fails with "process cannot access file" errors
+- ### 11. Development Workflow Standards
+- **VS Code Dev Container**: Use the provided Dev Container; ports 5136 (HTTP) and 7151 (HTTPS) are forwarded by default
+- **VS Code Launch**: Use the provided launch configs (.NET Debug/.NET Release). They build first and auto-open the browser
+- **HTTP/HTTPS**: Development disables HTTPS redirection by default; an HTTP-only profile is available to avoid cert prompts
+- **Configuration Loading**: Launch configurations run from the output directory (`bin/<Config>/net9.0`) to ensure config files are loaded consistently
+- **Process Management**: Use the `kill:playground` task to free ports 5136/7151 before relaunch
+- **Build Before Run**: Build prior to run is handled by VS Code tasks
 - **Threading in Blazor**:
   - All `StateHasChanged()` calls from background threads must use `InvokeAsync()`
   - Pattern: `await InvokeAsync(StateHasChanged);`
@@ -217,6 +213,13 @@ namespace HVO.ProjectName
 - **Service state issues (e.g., "not initialized") should return 500 Internal Server Error**
 - Provide consistent `ProblemDetails` responses for errors
 - Log exceptions with appropriate context and severity
+
+### 7. HTTPS and Local Development
+- Development environment:
+  - `EnableHttpsRedirect` is false by default (no forced redirect to HTTPS)
+  - `TrustDevCertificates` is true by default so LocalApi HttpClient can call local endpoints over HTTPS when needed
+- Launch profiles bind to `https://0.0.0.0:7151;http://0.0.0.0:5136` and auto-open the site
+- A script exports a dev cert to `.certs/https-devcert.pfx` (ignored by git)
 
 ### 7. NINA API Integration (HVO.NinaClient)
 - **Official API Specifications**: NINA (N.I.N.A. - Nighttime Imaging 'N' Astronomy) API specifications are maintained at:
@@ -304,41 +307,9 @@ namespace HVO.ProjectName
 - Follow OWASP security guidelines
 - Validate and sanitize user inputs
 
-## Azure DevOps Integration
-- Use Azure DevOps for CI/CD pipelines and work item tracking
-- Azure DevOps CLI is available for work item management
-
-### Work Item Creation Best Practices
-- Use `--fields` parameter to specify Description and Acceptance Criteria separately
-- Field format: `"Description=<content>" "Acceptance Criteria=<content>"`
-- Priority field: `"Microsoft.VSTS.Common.Priority=3"` (1=Critical, 2=High, 3=Medium, 4=Low)
-- Leave `--assigned-to` blank on initial creation unless specifically requested
-
-### Work Item Lifecycle Management
-- **Bug States**: New → Active → Resolved → Closed
-- Always assign work items when beginning development: `--assigned-to "user@domain.com"`
-- Update state progression:
-  - **New**: Initial creation state
-  - **Active**: When development begins (`--state "Active" --fields "System.Reason=Development Started"`)
-  - **Resolved**: When fix is complete and PR created (`--state "Resolved" --fields "System.Reason=Fixed"`)
-  - **Closed**: When changes are deployed and verified in production
-- Update work items throughout the development process to maintain accurate project status
-
-### Content Formatting for Azure DevOps
-- **Use HTML formatting instead of Markdown** for work item descriptions and acceptance criteria
-- HTML formatting renders properly in Azure DevOps web interface
-- Use HTML tags: `<h2>`, `<h3>`, `<ul>`, `<li>`, `<code>`, `<strong>`, `<p>`
-- Example structure:
-  ```html
-  <h2>Issue Description</h2>
-  <p>Description content with <code>code examples</code></p>
-  <h3>Subsection</h3>
-  <ul>
-    <li>List item with <strong>emphasis</strong></li>
-    <li>Code reference: <code>[HttpGet("endpoint")]</code></li>
-  </ul>
-  ```
-- For acceptance criteria, use simple `<li>` elements instead of checkboxes for better readability
+## GitHub & CI/CD
+- Use GitHub for repo hosting and pull requests
+- For CI/CD, use GitHub Actions (not configured here). If needed later, add workflows under `.github/workflows/`
 
 ## Deployment
 - Support containerization with Docker when appropriate
