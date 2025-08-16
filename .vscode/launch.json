@@ -5,6 +5,70 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": ".NET Debug: HVO.WebSite.v9",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "prepare:v9:debug",
+            "program": "${workspaceFolder}/src/HVO.WebSite.v9/bin/Debug/net9.0/HVO.WebSite.v9.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HVO.WebSite.v9/bin/Debug/net9.0",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
+                "uriFormat": "https://localhost:%s"
+            }
+        },
+        {
+            "name": ".NET Debug (HTTP only): HVO.WebSite.v9",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "prepare:v9:debug",
+            "program": "${workspaceFolder}/src/HVO.WebSite.v9/bin/Debug/net9.0/HVO.WebSite.v9.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HVO.WebSite.v9/bin/Debug/net9.0",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://0.0.0.0:5136"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on\\s+http://\\S+:(\\d+)",
+                "uriFormat": "http://localhost:%s"
+            }
+        },
+        {
+            "name": ".NET Release: HVO.WebSite.v9",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "prepare:v9:release",
+            "program": "${workspaceFolder}/src/HVO.WebSite.v9/bin/Release/net9.0/HVO.WebSite.v9.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HVO.WebSite.v9/bin/Release/net9.0",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Production",
+                "DOTNET_ENVIRONMENT": "Production",
+                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
+                "uriFormat": "https://localhost:%s"
+            }
+        },
+
+        {
             "name": ".NET Debug: HVO.WebSite.Playground",
             "type": "coreclr",
             "request": "launch",

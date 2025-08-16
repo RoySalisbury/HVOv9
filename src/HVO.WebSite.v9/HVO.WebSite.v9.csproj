@@ -9,13 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../HVO/HVO.csproj" />
-    <ProjectReference Include="../HVO.DataModels/HVO.DataModels.csproj" />
+    <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="1.2.53" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Asp.Versioning.Mvc" Version="8.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <ProjectReference Include="..\HVO\HVO.csproj" />
+    <ProjectReference Include="..\HVO.DataModels\HVO.DataModels.csproj" />
   </ItemGroup>
 </Project>

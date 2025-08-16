@@ -4,19 +4,30 @@
     {
       "label": "kill:playground",
       "type": "shell",
-  "command": "bash",
-  "args": ["${workspaceFolder}/.vscode/kill-playground.sh"],
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/.vscode/kill-playground.sh"
+      ],
       "problemMatcher": [],
-      "presentation": { "reveal": "silent", "panel": "shared" }
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     },
     {
       "label": "prepare:playground:debug",
-  "dependsOn": ["kill:playground", "build:playground:debug"],
+      "dependsOn": [
+        "kill:playground",
+        "build:playground:debug"
+      ],
       "problemMatcher": []
     },
     {
       "label": "prepare:playground:release",
-  "dependsOn": ["kill:playground", "build:playground:release"],
+      "dependsOn": [
+        "kill:playground",
+        "build:playground:release"
+      ],
       "problemMatcher": []
     },
     {
@@ -30,8 +41,13 @@
         "Debug"
       ],
       "group": "build",
-      "problemMatcher": ["$msCompile"],
-      "presentation": { "reveal": "silent", "panel": "shared" }
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     },
     {
       "label": "build:playground:release",
@@ -44,8 +60,86 @@
         "Release"
       ],
       "group": "build",
-      "problemMatcher": ["$msCompile"],
-      "presentation": { "reveal": "silent", "panel": "shared" }
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+
+
+
+
+
+    {
+      "label": "kill:v9",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/.vscode/kill-v9.sh"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "prepare:v9:debug",
+      "dependsOn": [
+        "kill:v9",
+        "build:v9:debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare:v9:release",
+      "dependsOn": [
+        "kill:v9",
+        "build:v9:release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "build:v9:debug",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
+        "-c",
+        "Debug"
+      ],
+      "group": "build",
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build:v9:release",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
+        "-c",
+        "Release"
+      ],
+      "group": "build",
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
+
   ]
 }
