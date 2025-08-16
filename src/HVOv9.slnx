@@ -15,4 +15,5 @@
   <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />
   <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
   <Project Path="HVO/HVO.csproj" />
+  <Project Path="HVO.WebSite.v9/HVO.WebSite.v9.csproj" />
 </Solution>
