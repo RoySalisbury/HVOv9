@@ -355,7 +355,8 @@ namespace HVO.Iot.Devices.Tests
         public void ButtonPress_WithDebouncing_IgnoresRapidChanges()
         {
             // Arrange
-            _buttonWithLed = CreateButtonWithLed(debounceTime: TimeSpan.FromMilliseconds(200));
+            // Ensure doublePress >= 3 * debounceTime per ButtonBase contract
+            _buttonWithLed = CreateButtonWithLed(doublePress: TimeSpan.FromMilliseconds(1000), debounceTime: TimeSpan.FromMilliseconds(200));
             int eventCount = 0;
             _buttonWithLed.ButtonDown += (sender, args) => eventCount++;
 
@@ -410,7 +411,15 @@ namespace HVO.Iot.Devices.Tests
             // After disposal, events should not fire
             if (!UseRealHardware && _mockGpioController != null)
             {
-                SimulateButtonPressAndRelease();
+                // After disposal, pins are closed; simulate may throw. Ignore such exceptions and only assert no event fired.
+                try
+                {
+                    SimulateButtonPressAndRelease();
+                }
+                catch
+                {
+                    // Expected in disposed state where pins are closed.
+                }
                 Thread.Sleep(100);
                 Assert.IsFalse(eventFired, "Events should not fire after disposal");
             }

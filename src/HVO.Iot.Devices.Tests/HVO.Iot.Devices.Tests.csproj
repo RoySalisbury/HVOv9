@@ -14,11 +14,11 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
     <PackageReference Include="MSTest" Version="3.6.4" />
-    <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../HVO/HVO.csproj" />
+  <ProjectReference Include="../HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
   </ItemGroup>
 
   <ItemGroup>
