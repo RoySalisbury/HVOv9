@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
     <ProjectReference Include="../HVO/HVO.csproj" />
   </ItemGroup>
 
