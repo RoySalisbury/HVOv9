@@ -6,7 +6,7 @@
 HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a comprehensive IoT and web application platform for observatory automation and control systems.
 
 ## Core Technologies
-- .NET 9.0 (Latest LTS)
+- .NET 9.0 (STS; SDK pinned via global.json)
 - ASP.NET Core for web applications
 - Blazor Server for interactive web UI
 - Entity Framework Core for data access
@@ -128,7 +128,7 @@ namespace HVO.ProjectName
 - Use `Span<T>` and `Memory<T>` for high-performance scenarios
 - Dispose of resources properly
 
-- ### 11. Development Workflow Standards
+### 11. Development Workflow Standards
 - **VS Code Dev Container**: Use the provided Dev Container; ports 5136 (HTTP) and 7151 (HTTPS) are forwarded by default
 - **VS Code Launch**: Use the provided launch configs (.NET Debug/.NET Release). They build first and auto-open the browser
 - **HTTP/HTTPS**: Development disables HTTPS redirection by default; an HTTP-only profile is available to avoid cert prompts
@@ -221,7 +221,7 @@ namespace HVO.ProjectName
 - Launch profiles bind to `https://0.0.0.0:7151;http://0.0.0.0:5136` and auto-open the site
 - Dev certificates are provided by the dev container; no local export script or `.certs/https-devcert.pfx` is required.
 
-### 7. NINA API Integration (HVO.NinaClient)
+### 8. NINA API Integration (HVO.NinaClient)
 - **Official API Specifications**: NINA (N.I.N.A. - Nighttime Imaging 'N' Astronomy) API specifications are maintained at:
   - **REST API Specification**: https://github.com/christian-photo/ninaAPI/blob/main/ninaAPI/api_spec.yaml
   - **WebSocket/AsyncAPI Specification**: https://github.com/christian-photo/ninaAPI/blob/main/ninaAPI/websocket_spec.yaml
