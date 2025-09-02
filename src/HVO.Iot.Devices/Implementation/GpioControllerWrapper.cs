@@ -1,5 +1,7 @@
 using System;
 using System.Device.Gpio;
+using System.IO;
+using System.Runtime.InteropServices;
 using HVO.Iot.Devices.Abstractions;
 
 namespace HVO.Iot.Devices.Implementation;
@@ -29,32 +31,32 @@ public class GpioControllerWrapper : IGpioController
         if (gpioController != null)
         {
             _gpioController = gpioController;
+            return;
         }
-        else
-        {
-            // Determine whether to use real hardware
-            bool shouldUseRealHardware = useRealHardware ?? 
-                (System.Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true");
 
-            if (shouldUseRealHardware)
+        // When caller explicitly sets useRealHardware:
+        if (useRealHardware.HasValue)
+        {
+            if (useRealHardware.Value)
             {
-                // Validate platform when attempting to use real GPIO hardware
-                if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
+                if (TryCreateRealController(out var realController))
                 {
-                    throw new PlatformNotSupportedException(
-                        "Real GPIO hardware (USE_REAL_GPIO=true) is only supported on Linux/Raspberry Pi. " +
-                        "Use MockGpioController for development on other platforms by setting USE_REAL_GPIO=false or leaving it unset.");
+                    _gpioController = realController;
                 }
-                
-                // Use real GPIO hardware by wrapping System.Device.Gpio.GpioController
-                _gpioController = new SystemGpioControllerAdapter(new GpioController());
+                else
+                {
+                    _gpioController = new MockGpioController();
+                }
             }
             else
             {
-                // Use mock GPIO controller that emulates hardware behavior
                 _gpioController = new MockGpioController();
             }
+            return;
         }
+
+        // Auto selection path (same logic as CreateAutoSelecting)
+        _gpioController = SelectAutoController();
     }
 
     /// <summary>
@@ -65,32 +67,101 @@ public class GpioControllerWrapper : IGpioController
     /// <returns>A new GpioControllerWrapper instance with appropriate underlying controller.</returns>
     public static GpioControllerWrapper CreateAutoSelecting(bool? useRealHardware = null)
     {
-        // Determine whether to use real hardware
-        bool shouldUseRealHardware = useRealHardware ?? 
-            (System.Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true");
-
-        IGpioController underlyingController;
-
-        if (shouldUseRealHardware)
+        // Explicit override (true = force attempt real, false = force mock)
+        if (useRealHardware.HasValue)
         {
-            // Validate platform when attempting to use real GPIO hardware
-            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
+            if (useRealHardware.Value)
             {
-                throw new PlatformNotSupportedException(
-                    "Real GPIO hardware (USE_REAL_GPIO=true) is only supported on Linux/Raspberry Pi. " +
-                    "Use MockGpioController for development on other platforms by setting USE_REAL_GPIO=false or leaving it unset.");
+                if (TryCreateRealController(out var realController))
+                {
+                    return new GpioControllerWrapper(realController, useRealHardware: true);
+                }
+                return new GpioControllerWrapper(new MockGpioController(), useRealHardware: false);
             }
-            
-            // Use real GPIO hardware by wrapping System.Device.Gpio.GpioController
-            underlyingController = new SystemGpioControllerAdapter(new GpioController());
-        }
-        else
-        {
-            // Use mock GPIO controller that emulates hardware behavior
-            underlyingController = new MockGpioController();
+            return new GpioControllerWrapper(new MockGpioController(), useRealHardware: false);
         }
 
-        return new GpioControllerWrapper(underlyingController);
+        // Auto selection path when parameter is null
+        return new GpioControllerWrapper(SelectAutoController(), useRealHardware: null);
+    }
+
+    /// <summary>
+    /// Implements the auto selection logic described in requirements.
+    /// </summary>
+    private static IGpioController SelectAutoController()
+    {
+        // 1. Check environment variable USE_REAL_GPIO (true => attempt real first)
+        var envValue = Environment.GetEnvironmentVariable("USE_REAL_GPIO");
+        var envRequestsReal = string.Equals(envValue, "true", StringComparison.OrdinalIgnoreCase);
+
+        if (envRequestsReal)
+        {
+            if (TryCreateRealController(out var realFromEnv))
+            {
+                return realFromEnv;
+            }
+            // fall through to other heuristics if creation failed
+        }
+
+        // 2. If running on Raspberry Pi, attempt real
+        if (IsRaspberryPi())
+        {
+            if (TryCreateRealController(out var realOnPi))
+            {
+                return realOnPi;
+            }
+        }
+
+        // 3. If on another platform but real controller is available, use it
+        if (TryCreateRealController(out var realOtherPlatform))
+        {
+            return realOtherPlatform;
+        }
+
+        // 4. Fallback: mock
+        return new MockGpioController();
+    }
+
+    /// <summary>
+    /// Attempts to create a real System.Device.Gpio.GpioController wrapped in an adapter.
+    /// Returns false if not available / not supported.
+    /// </summary>
+    private static bool TryCreateRealController(out IGpioController controller)
+    {
+        try
+        {
+            controller = new SystemGpioControllerAdapter(new GpioController());
+            return true;
+        }
+        catch
+        {
+            controller = default!;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Rough detection for Raspberry Pi based on Linux platform &amp; device tree / cpuinfo contents.
+    /// </summary>
+    private static bool IsRaspberryPi()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return false;
+        try
+        {
+            if (File.Exists("/proc/device-tree/model"))
+            {
+                var model = File.ReadAllText("/proc/device-tree/model");
+                if (model.Contains("Raspberry", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            if (File.Exists("/proc/cpuinfo"))
+            {
+                var cpuInfo = File.ReadAllText("/proc/cpuinfo");
+                if (cpuInfo.Contains("Raspberry Pi", StringComparison.OrdinalIgnoreCase) || cpuInfo.Contains("BCM", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch { /* ignore */ }
+        return false;
     }
 
     /// <inheritdoc />
