@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
     "profiles": {
-      "http": {
+      "Debug": {
         "commandName": "Project",
         "dotnetRunMessages": true,
         "launchBrowser": true,
@@ -10,7 +10,7 @@
           "ASPNETCORE_ENVIRONMENT": "Development"
         }
       },
-      "https": {
+      "Debug-Secure": {
         "commandName": "Project",
         "dotnetRunMessages": true,
         "launchBrowser": true,
