@@ -66,7 +66,7 @@ public partial class RoofControl : ComponentBase, IDisposable
         get 
         {
             // Base conditions: not initialized, currently moving, or already opening - use service state
-            var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || RoofController.Status == RoofControllerStatus.Opening;
+            var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || RoofController.Status == RoofControllerStatus.Opening || RoofController.Status == RoofControllerStatus.Open; ;
             
             // In simulation mode, also consider limit switch states
             if (ShowSimulationControls)
@@ -94,7 +94,7 @@ public partial class RoofControl : ComponentBase, IDisposable
         get 
         {
             // Base conditions: not initialized, currently moving, or already closing - use service state
-            var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || RoofController.Status == RoofControllerStatus.Closing;
+            var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || RoofController.Status == RoofControllerStatus.Closing || RoofController.Status == RoofControllerStatus.Closed;
             
             // In simulation mode, also consider limit switch states
             if (ShowSimulationControls)

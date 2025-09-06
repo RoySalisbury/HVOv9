@@ -358,20 +358,16 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                     try
                     {
-                        this._gpioController.OpenPin(this._roofControllerOptions.OpenRoofRelayPin, PinMode.Output);
-                        this._gpioController.Write(this._roofControllerOptions.OpenRoofRelayPin, RelayOff);
-                        openedPins.Add(this._roofControllerOptions.OpenRoofRelayPin);
-
-                        this._gpioController.OpenPin(this._roofControllerOptions.CloseRoofRelayPin, PinMode.Output);
-                        this._gpioController.Write(this._roofControllerOptions.CloseRoofRelayPin, RelayOn);
+                        this._gpioController.OpenPin(this._roofControllerOptions.CloseRoofRelayPin, PinMode.Output, RelayOff); // This is wired N/O
                         openedPins.Add(this._roofControllerOptions.CloseRoofRelayPin);
 
-                        this._gpioController.OpenPin(this._roofControllerOptions.StopRoofRelayPin, PinMode.Output);
-                        this._gpioController.Write(this._roofControllerOptions.StopRoofRelayPin, RelayOff);
+                        this._gpioController.OpenPin(this._roofControllerOptions.OpenRoofRelayPin, PinMode.Output, RelayOff); // This is wired N/O
+                        openedPins.Add(this._roofControllerOptions.OpenRoofRelayPin);
+
+                        this._gpioController.OpenPin(this._roofControllerOptions.StopRoofRelayPin, PinMode.Output, RelayOff); // This is wired N/C
                         openedPins.Add(this._roofControllerOptions.StopRoofRelayPin);
 
-                        this._gpioController.OpenPin(this._roofControllerOptions.KeypadEnableRelayPin, PinMode.Output);
-                        this._gpioController.Write(this._roofControllerOptions.KeypadEnableRelayPin, RelayOn);
+                        this._gpioController.OpenPin(this._roofControllerOptions.KeypadEnableRelayPin, PinMode.Output, RelayOff); // This are wired N/C
                         openedPins.Add(this._roofControllerOptions.KeypadEnableRelayPin);
                     }
                     catch (Exception)
@@ -699,10 +695,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                 // Set all relays to safe state for STOP operation atomically
                 SetRelayStatesAtomically(
-                    stopRelay: RelayOn,    // Stop relay ON to halt movement
-                    openRelay: RelayOff,   // Open relay OFF
-                    closeRelay: RelayOff,  // Close relay OFF
-                    keypadRelay: RelayOn   // Enable keypad
+                    stopRelay: RelayOff,    // Stop relay ON to halt movement - Wired N/C
+                    openRelay: RelayOff,    // Open relay OFF
+                    closeRelay: RelayOff,   // Close relay OFF
+                    keypadRelay: RelayOff   // Enable keypad - Wired N/C
                 );
 
                 // Update status based on limit switch states and last command
@@ -745,10 +741,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                     // Start the motors to open the roof atomically
                     SetRelayStatesAtomically(
-                        stopRelay: RelayOff,   // Stop relay OFF
+                        stopRelay: RelayOn,   // Stop relay OFF - Wired N/C
                         openRelay: RelayOn,    // Open relay ON
                         closeRelay: RelayOff,  // Close relay OFF
-                        keypadRelay: RelayOff  // Disable keypad during operation
+                        keypadRelay: RelayOn  // Disable keypad during operation - Wired N/C
                     );
 
                     // Set the status to opening
@@ -804,10 +800,10 @@ namespace HVO.WebSite.RoofControllerV4.Logic
 
                     // Start the motors to close the roof atomically
                     SetRelayStatesAtomically(
-                        stopRelay: RelayOff,   // Stop relay OFF
+                        stopRelay: RelayOn,   // Stop relay OFF - Wired N/C
                         openRelay: RelayOff,   // Open relay OFF
                         closeRelay: RelayOn,   // Close relay ON
-                        keypadRelay: RelayOff  // Disable keypad during operation
+                        keypadRelay: RelayOn  // Disable keypad during operation - Wired N/C
                     );
 
                     // Set the status to closing
@@ -984,7 +980,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         {
                             if (this._gpioController.IsPinOpen(this._roofControllerOptions.StopRoofRelayPin))
                             {
-                                this._gpioController.Write(this._roofControllerOptions.StopRoofRelayPin, RelayOff);
+                                this._gpioController.Write(this._roofControllerOptions.StopRoofRelayPin, RelayOff); // This is wired N/C
                                 this._gpioController.ClosePin(this._roofControllerOptions.StopRoofRelayPin);
                             }
                         }
@@ -997,7 +993,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                         {
                             if (this._gpioController.IsPinOpen(this._roofControllerOptions.KeypadEnableRelayPin))
                             {
-                                this._gpioController.Write(this._roofControllerOptions.KeypadEnableRelayPin, RelayOff);
+                                this._gpioController.Write(this._roofControllerOptions.KeypadEnableRelayPin, RelayOff); // This is wired N/C
                                 this._gpioController.ClosePin(this._roofControllerOptions.KeypadEnableRelayPin);
                             }
                         }

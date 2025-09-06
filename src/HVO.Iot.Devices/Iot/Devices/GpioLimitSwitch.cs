@@ -448,7 +448,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
             // This configures the hardware with the appropriate pin mode
             try
             {
-                GpioController.OpenPin(GpioPinNumber, GpioPinMode);
+                GpioController.OpenPin(GpioPinNumber, GpioPinMode, initialValue: PinValue.Low);
                 initState.PinOpened = true;
                 _logger?.LogDebug("Successfully opened GPIO pin {Pin} in mode {Mode}", GpioPinNumber, GpioPinMode);
             }

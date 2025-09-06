@@ -114,7 +114,7 @@ public class MockGpioController : IGpioController
     }
 
     /// <inheritdoc />
-    public void OpenPin(int pinNumber, PinMode mode)
+    public void OpenPin(int pinNumber, PinMode mode, PinValue initialValue)
     {
         ThrowIfDisposed();
         
@@ -131,9 +131,10 @@ public class MockGpioController : IGpioController
 
         pinState.IsOpen = true;
         pinState.Mode = mode;
+        pinState.Value = initialValue;
         
         // Set initial pin value based on mode and pull resistor configuration
-        SetInitialPinValue(pinNumber, mode);
+        //SetInitialPinValue(pinNumber, mode);
     }
 
     /// <inheritdoc />
@@ -285,7 +286,8 @@ public class MockGpioController : IGpioController
     /// </summary>
     /// <param name="pinNumber">The pin number.</param>
     /// <param name="mode">The pin mode.</param>
-    private void SetInitialPinValue(int pinNumber, PinMode mode)
+    /// <param name="initialValue">The initial value to set for output pins.</param>
+    private void SetInitialPinValue(int pinNumber, PinMode mode, PinValue initialValue)
     {
         var pinState = _pinStates[pinNumber];
         

@@ -29,7 +29,8 @@ public interface IGpioController : IDisposable
     /// </summary>
     /// <param name="pinNumber">The pin number to open.</param>
     /// <param name="mode">The mode to configure the pin in.</param>
-    void OpenPin(int pinNumber, PinMode mode);
+    /// <param name="initialValue">The initial value to set if the pin is opened in output mode.</param>
+    void OpenPin(int pinNumber, PinMode mode, PinValue initialValue);
 
     /// <summary>
     /// Closes a pin and releases its resources.

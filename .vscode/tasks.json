@@ -14,6 +14,75 @@
         "panel": "shared"
       }
     },
+
+    // ================= RoofControllerV4 Tasks =================
+    {
+      "label": "kill:roofv4",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/.vscode/kill-roofv4.sh"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "prepare:roofv4:debug",
+      "dependsOn": [
+        "kill:roofv4",
+        "build:roofv4:debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare:roofv4:release",
+      "dependsOn": [
+        "kill:roofv4",
+        "build:roofv4:release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "build:roofv4:debug",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj",
+        "-c",
+        "Debug"
+      ],
+      "group": "build",
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build:roofv4:release",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj",
+        "-c",
+        "Release"
+      ],
+      "group": "build",
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
     {
       "label": "prepare:playground:debug",
       "dependsOn": [

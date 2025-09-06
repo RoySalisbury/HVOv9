@@ -11,16 +11,48 @@ using HVO.WebSite.RoofControllerV4.HealthChecks;
 using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Implementation;
 
+using System.Runtime.Loader;
+
 namespace HVO.WebSite.RoofControllerV4;
 
 public class Program
 {
     public static void Main(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            try { Console.WriteLine("AppDomain.CurrentDomain.UnhandledException"); }
+            catch { /* swallow */ }
+        };
+
+        AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+        {
+            try { Console.WriteLine("AppDomain.CurrentDomain.ProcessExit"); }
+            catch { /* swallow */ }
+        };
+
+        TaskScheduler.UnobservedTaskException += (s, e) =>
+        {
+            try { Console.WriteLine("TaskScheduler.UnobservedTaskException"); }
+            catch { /* swallow */ }
+        };
+
+        AssemblyLoadContext.Default.Unloading += _ =>
+        {
+            try { Console.WriteLine("AssemblyLoadContext.Default.Unloading"); }
+            catch { /* swallow */ }
+        };
+
+
+
         var builder = WebApplication.CreateBuilder(args);
         ConfigureServices(builder.Services, builder.Configuration, builder.Environment);
 
         var app = builder.Build();
+
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Register(() => Console.WriteLine("IHostApplicationLifetime.Register"));        
+
         Configure(app);
 
         app.Run();
@@ -60,7 +92,7 @@ public class Program
 
         // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
         services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
-        
+
         // Register RoofController based on configuration
         services.AddSingleton<IRoofControllerService>(serviceProvider =>
         {
@@ -124,7 +156,7 @@ public class Program
                 context.ProblemDetails.Instance = $"{context.HttpContext.Request.Method} {context.HttpContext.Request.Path}";
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
                 context.ProblemDetails.Extensions["timestamp"] = DateTime.UtcNow;
-                
+
                 // Add request information for debugging
                 if (context.HttpContext.Request.Headers.ContainsKey("User-Agent"))
                 {
@@ -165,7 +197,7 @@ public class Program
 
         // Add exception handling middleware
         app.UseExceptionHandler();
-        
+
         // Add Problem Details middleware for consistent error responses
         app.UseStatusCodePages();
 
@@ -190,7 +222,7 @@ public class Program
         // Add health check endpoints
         // IMPORTANT: These are the RECOMMENDED ASP.NET Core health check endpoints
         // Do NOT duplicate these with custom controllers - use these built-in endpoints:
-        
+
         // Detailed health endpoint with comprehensive information
         // Use this for: monitoring dashboards, detailed health reporting, troubleshooting
         app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
@@ -243,7 +275,7 @@ public class Program
         // COMMENTED OUT CODE - Examples of other built-in ASP.NET Core functionality
         // ============================================================================
         // Uncomment and configure as needed for your application:
-        
+
         // Built-in Swagger UI (alternative to Scalar):
         // app.UseSwagger();
         // app.UseSwaggerUI(options =>
@@ -257,7 +289,7 @@ public class Program
 
         // Built-in static file serving (for wwwroot folder):
         // app.UseStaticFiles();
-        
+
         // Built-in anti-forgery token support:
         // app.UseAntiforgery();
 

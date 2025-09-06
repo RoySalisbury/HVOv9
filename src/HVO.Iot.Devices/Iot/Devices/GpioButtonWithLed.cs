@@ -10,12 +10,8 @@ namespace HVO.Iot.Devices;
 /// Represents a GPIO button with integrated LED functionality, supporting both synchronous and asynchronous disposal patterns.
 /// Provides thread-safe operation with optimized performance for high-frequency button events.
 /// </summary>
-public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
+public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
 {
-    // Copied from the original ButtonBase because they were not exposed as public/protected fields.
-    internal const long DefaultDoublePressTicks = 15000000;
-    internal const long DefaultHoldingMilliseconds = 2000;
-
     private readonly IGpioController _gpioController;
     private readonly PinMode _gpioPinMode;
     private readonly PinMode _eventPinMode;
@@ -34,12 +30,12 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     /// Uses volatile to ensure visibility across threads without locking.
     /// </summary>
     private volatile bool _disposed = false;
-    
+
     /// <summary>
     /// Current LED state. Access is synchronized through _lockObject.
     /// </summary>
     private PushButtonLedState _ledState = PushButtonLedState.NotUsed;
-    
+
     /// <summary>
     /// Current button press state. Access is synchronized through _lockObject.
     /// </summary>
@@ -55,17 +51,17 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     /// Timer used for LED blinking operations. Access is synchronized through _lockObject.
     /// </summary>
     private System.Timers.Timer? _blinkTimer;
-    
+
     /// <summary>
     /// Current blinking frequency in Hz. Valid range: 0.1Hz to 10Hz.
     /// </summary>
     private double _blinkFrequencyHz = 1.0;
-    
+
     /// <summary>
     /// Internal state tracking for blink toggle. Access is synchronized through _lockObject.
     /// </summary>
     private bool _blinkToggleState = false;
-    
+
     /// <summary>
     /// Flag indicating if blinking is currently active. Access is synchronized through _lockObject.
     /// </summary>
@@ -121,7 +117,6 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         _ledPin = ledPin;
         _logger = logger;
         HasExternalResistor = hasExternalResistor;
-        DebounceTime = debounceTime; // Initialize the DebounceTime property
 
         _eventPinMode = isPullUp ? PinMode.InputPullUp : PinMode.InputPullDown;
         _gpioPinMode = hasExternalResistor ? PinMode.Input : _eventPinMode;
@@ -138,12 +133,6 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     public bool HasExternalResistor { get; private set; } = false;
 
     /// <summary>
-    /// Gets the debounce time used to filter out mechanical button bounce.
-    /// Events occurring within this timeframe are ignored to prevent false triggers.
-    /// </summary>
-    public TimeSpan DebounceTime { get; private set; }
-
-    /// <summary>
     /// Gets or sets the current LED state with thread-safe access.
     /// Setting a state other than NotUsed when no LED pin is configured will be ignored.
     /// </summary>
@@ -153,7 +142,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         {
             // Fast path: check disposal without locking
             if (_disposed) return _ledPin.HasValue ? PushButtonLedState.Off : PushButtonLedState.NotUsed;
-            
+
             lock (_lockObject)
             {
                 return _disposed ? (_ledPin.HasValue ? PushButtonLedState.Off : PushButtonLedState.NotUsed) : _ledState;
@@ -163,10 +152,10 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         {
             // Fast path: check disposal without locking
             if (_disposed) return;
-            
+
             // Cannot set LED state when no LED pin is configured
             if (!_ledPin.HasValue && value != PushButtonLedState.NotUsed) return;
-            
+
             lock (_lockObject)
             {
                 if (!_disposed && _ledState != value)
@@ -182,23 +171,23 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     /// Gets or sets the LED behavior options.
     /// Updates LED hardware immediately when changed (only if LED pin is configured).
     /// </summary>
-    public PushButtonLedOptions LedOptions 
-    { 
+    public PushButtonLedOptions LedOptions
+    {
         get => _ledOptions;
-        set 
+        set
         {
             if (_disposed) return;
-            
+
             lock (_lockObject)
             {
                 if (!_disposed && _ledOptions != value)
                 {
                     var previousOptions = _ledOptions;
                     _ledOptions = value;
-                    
-                    _logger?.LogDebug("LED Options Changed - From: {PreviousOptions} to: {NewOptions}, LED Pin: {LedPin}, Blinking: {IsBlinking}", 
+
+                    _logger?.LogDebug("LED Options Changed - From: {PreviousOptions} to: {NewOptions}, LED Pin: {LedPin}, Blinking: {IsBlinking}",
                         previousOptions, value, _ledPin?.ToString() ?? "None", _isBlinking);
-                    
+
                     // Update LED immediately when options change (only if LED pin is configured)
                     if (_ledPin.HasValue)
                     {
@@ -217,7 +206,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         get
         {
             if (_disposed) return false;
-            
+
             lock (_lockObject)
             {
                 return !_disposed && _isBlinking;
@@ -235,40 +224,40 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     {
         if (_disposed)
             throw new InvalidOperationException("Cannot start blinking on disposed object");
-            
+
         if (!_ledPin.HasValue)
             throw new InvalidOperationException("Cannot start blinking when no LED pin is configured");
-            
+
         if (frequencyHz < 0.1 || frequencyHz > 10.0)
-            throw new ArgumentOutOfRangeException(nameof(frequencyHz), frequencyHz, 
+            throw new ArgumentOutOfRangeException(nameof(frequencyHz), frequencyHz,
                 "Blinking frequency must be between 0.1Hz and 10Hz");
 
         lock (_lockObject)
         {
             if (_disposed) return;
-            
-            _logger?.LogDebug("Starting Blink - Pin: {LedPin}, Frequency: {FrequencyHz}Hz, Options: {LedOptions}", 
+
+            _logger?.LogDebug("Starting Blink - Pin: {LedPin}, Frequency: {FrequencyHz}Hz, Options: {LedOptions}",
                 _ledPin.Value, frequencyHz, _ledOptions);
-            
+
             // Stop any existing blinking
             StopBlinkingInternal();
-            
+
             // Set up new blinking parameters
             _blinkFrequencyHz = frequencyHz;
             _blinkToggleState = false;
             _isBlinking = true;
             _ledState = PushButtonLedState.Blinking;
-            
+
             // Create and start the blink timer
             var intervalMs = 500.0 / frequencyHz; // Half period for toggle
             _blinkTimer = new System.Timers.Timer(intervalMs);
             _blinkTimer.Elapsed += OnBlinkTimerElapsed;
             _blinkTimer.AutoReset = true;
             _blinkTimer.Start();
-            
-            _logger?.LogDebug("Blink Started - Interval: {IntervalMs}ms, Timer Active: {TimerEnabled}", 
+
+            _logger?.LogDebug("Blink Started - Interval: {IntervalMs}ms, Timer Active: {TimerEnabled}",
                 intervalMs, _blinkTimer.Enabled);
-            
+
             // Start with LED on
             UpdateBlinkHardware();
         }
@@ -280,19 +269,19 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     public void StopBlinking()
     {
         if (_disposed) return;
-        
+
         lock (_lockObject)
         {
             if (!_disposed)
             {
-                _logger?.LogDebug("Stopping Blink - Pin: {LedPin}, Was Blinking: {WasBlinking}", 
+                _logger?.LogDebug("Stopping Blink - Pin: {LedPin}, Was Blinking: {WasBlinking}",
                     _ledPin?.ToString() ?? "None", _isBlinking);
-                
+
                 StopBlinkingInternal();
                 // Update LED state based on current options
                 UpdateLedHardwareFromOptions();
-                
-                _logger?.LogDebug("Blink Stopped - LED state restored based on options: {LedOptions}", 
+
+                _logger?.LogDebug("Blink Stopped - LED state restored based on options: {LedOptions}",
                     _ledOptions);
             }
         }
@@ -307,21 +296,21 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     public void SetBlinkFrequency(double frequencyHz)
     {
         if (frequencyHz < 0.1 || frequencyHz > 10.0)
-            throw new ArgumentOutOfRangeException(nameof(frequencyHz), frequencyHz, 
+            throw new ArgumentOutOfRangeException(nameof(frequencyHz), frequencyHz,
                 "Blinking frequency must be between 0.1Hz and 10Hz");
 
         if (_disposed) return;
-        
+
         lock (_lockObject)
         {
             if (_disposed) return;
-            
+
             var oldFrequency = _blinkFrequencyHz;
             _blinkFrequencyHz = frequencyHz;
-            
-            _logger?.LogDebug("Frequency Change - From: {OldFrequency}Hz to {NewFrequency}Hz, Currently Blinking: {IsBlinking}", 
+
+            _logger?.LogDebug("Frequency Change - From: {OldFrequency}Hz to {NewFrequency}Hz, Currently Blinking: {IsBlinking}",
                 oldFrequency, frequencyHz, _isBlinking);
-            
+
             // If currently blinking, restart with new frequency
             if (_isBlinking && _blinkTimer != null)
             {
@@ -329,8 +318,8 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 _blinkTimer.Stop();
                 _blinkTimer.Interval = intervalMs;
                 _blinkTimer.Start();
-                
-                _logger?.LogDebug("Timer Updated - New Interval: {IntervalMs}ms, Timer Active: {TimerEnabled}", 
+
+                _logger?.LogDebug("Timer Updated - New Interval: {IntervalMs}ms, Timer Active: {TimerEnabled}",
                     intervalMs, _blinkTimer.Enabled);
             }
         }
@@ -349,10 +338,10 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             _blinkTimer.Dispose();
             _blinkTimer = null;
         }
-        
+
         _isBlinking = false;
         _blinkToggleState = false;
-        
+
         // Set LED state back to Off (will be updated by caller as needed)
         if (_ledState == PushButtonLedState.Blinking)
         {
@@ -369,20 +358,20 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     private void OnBlinkTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
     {
         if (_disposed) return;
-        
+
         try
         {
             lock (_lockObject)
             {
                 if (_disposed || !_isBlinking) return;
-                
+
                 // Toggle the blink state
                 var previousState = _blinkToggleState;
                 _blinkToggleState = !_blinkToggleState;
-                
-                _logger?.LogTrace("Blink Toggle - From: {PreviousState} to: {NewState}, Frequency: {FrequencyHz}Hz", 
+
+                _logger?.LogTrace("Blink Toggle - From: {PreviousState} to: {NewState}, Frequency: {FrequencyHz}Hz",
                     previousState, _blinkToggleState, _blinkFrequencyHz);
-                
+
                 // Update hardware based on current conditions
                 UpdateBlinkHardware();
             }
@@ -390,7 +379,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Blink Timer Error - {ErrorMessage}", ex.Message);
-            
+
             // Don't let timer exceptions crash the application
         }
     }
@@ -403,10 +392,10 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     private void UpdateBlinkHardware()
     {
         if (_disposed || !_ledPin.HasValue || !_isBlinking) return;
-        
+
         bool shouldBeOn;
         string reason;
-        
+
         // Determine LED state based on options and blinking state
         switch (_ledOptions)
         {
@@ -415,43 +404,43 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 shouldBeOn = false;
                 reason = "AlwaysOff option overrides blinking";
                 break;
-                
+
             case PushButtonLedOptions.AlwaysOn:
                 // When AlwaysOn, LED stays on unless in blinking state where it follows blink pattern
                 shouldBeOn = _blinkToggleState;
                 reason = $"AlwaysOn with blinking - toggle state: {_blinkToggleState}";
                 break;
-                
+
             case PushButtonLedOptions.FollowPressedState:
                 // When following pressed state:
                 // - If button is pressed, LED is on (overrides blinking)
                 // - If button is not pressed, follow blink pattern
                 shouldBeOn = _isPressed || _blinkToggleState;
-                reason = _isPressed 
-                    ? "Button pressed overrides blinking" 
+                reason = _isPressed
+                    ? "Button pressed overrides blinking"
                     : $"Following blink pattern - toggle state: {_blinkToggleState}";
                 break;
-                
+
             default:
                 shouldBeOn = _blinkToggleState;
                 reason = $"Default blinking behavior - toggle state: {_blinkToggleState}";
                 break;
         }
-        
+
         var pinValue = shouldBeOn ? PinValue.High : PinValue.Low;
-        
-        _logger?.LogTrace("Blink Update - Pin: {LedPin}, Value: {PinValue}, Frequency: {FrequencyHz}Hz, Options: {LedOptions}, Reason: {Reason}", 
+
+        _logger?.LogTrace("Blink Update - Pin: {LedPin}, Value: {PinValue}, Frequency: {FrequencyHz}Hz, Options: {LedOptions}, Reason: {Reason}",
             _ledPin.Value, pinValue, _blinkFrequencyHz, _ledOptions, reason);
-        
+
         try
         {
             _gpioController.Write(_ledPin.Value, pinValue);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Blink Update Failed - Pin: {LedPin}, Error: {ErrorMessage}", 
+            _logger?.LogError(ex, "Blink Update Failed - Pin: {LedPin}, Error: {ErrorMessage}",
                 _ledPin.Value, ex.Message);
-            
+
             // Only ignore GPIO errors during disposal
             if (!_disposed)
             {
@@ -474,7 +463,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             var errorMessage = _gpioPinMode == PinMode.Input
                 ? $"GPIO pin {_buttonPin} cannot be configured as Input"
                 : $"GPIO pin {_buttonPin} cannot be configured as {(_eventPinMode == PinMode.InputPullUp ? "pull-up" : "pull-down")}. Use an external resistor and set {nameof(HasExternalResistor)}=true";
-            
+
             throw new ArgumentException(errorMessage, nameof(_buttonPin));
         }
 
@@ -494,7 +483,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             // Step 1: Open button pin
             try
             {
-                _gpioController.OpenPin(_buttonPin, _gpioPinMode);
+                _gpioController.OpenPin(_buttonPin, _gpioPinMode, initialValue: PinValue.High);
                 buttonPinOpened = true;
             }
             catch (Exception ex)
@@ -508,7 +497,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             {
                 try
                 {
-                    _gpioController.OpenPin(_ledPin.Value, PinMode.Output);
+                    _gpioController.OpenPin(_ledPin.Value, PinMode.Output, initialValue: PinValue.High);
                     ledPinOpened = true;
                 }
                 catch (Exception ex)
@@ -525,8 +514,8 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 lock (_lockObject)
                 {
                     // Set initial pressed state based on pin mode and current value
-                    _isPressed = _eventPinMode == PinMode.InputPullUp ? 
-                        initialValue == PinValue.Low : 
+                    _isPressed = _eventPinMode == PinMode.InputPullUp ?
+                        initialValue == PinValue.Low :
                         initialValue == PinValue.High;
                 }
             }
@@ -584,19 +573,19 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
 
         var pinValue = _ledState == PushButtonLedState.On ? PinValue.High : PinValue.Low;
         var reason = "Direct LED state change";
-        
-        _logger?.LogDebug("LED Update - Pin: {LedPin}, State: {LedState}, Value: {PinValue}, Reason: {Reason}", 
+
+        _logger?.LogDebug("LED Update - Pin: {LedPin}, State: {LedState}, Value: {PinValue}, Reason: {Reason}",
             _ledPin.Value, _ledState, pinValue, reason);
-        
+
         try
         {
             _gpioController.Write(_ledPin.Value, pinValue);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "LED Update Failed - Pin: {LedPin}, Error: {ErrorMessage}", 
+            _logger?.LogError(ex, "LED Update Failed - Pin: {LedPin}, Error: {ErrorMessage}",
                 _ledPin.Value, ex.Message);
-            
+
             // Only ignore GPIO errors during disposal
             if (!_disposed)
             {
@@ -619,7 +608,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         // except when FollowPressedState and button is pressed (which overrides blinking)
         if (_isBlinking && !(_ledOptions == PushButtonLedOptions.FollowPressedState && _isPressed))
         {
-            _logger?.LogTrace("LED Update Skipped - Blinking active, Options: {LedOptions}, ButtonPressed: {ButtonPressed}", 
+            _logger?.LogTrace("LED Update Skipped - Blinking active, Options: {LedOptions}, ButtonPressed: {ButtonPressed}",
                 _ledOptions, _isPressed);
             return;
         }
@@ -627,26 +616,26 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         var shouldTurnOn = ShouldLedBeOn();
         var newLedState = shouldTurnOn ? PushButtonLedState.On : PushButtonLedState.Off;
         var reason = GetLedChangeReason();
-        
+
         // Only update if not currently blinking or if we need to override for pressed state
         if (!_isBlinking || (_ledOptions == PushButtonLedOptions.FollowPressedState && _isPressed))
         {
             _ledState = newLedState;
-            
+
             var pinValue = shouldTurnOn ? PinValue.High : PinValue.Low;
-            
-            _logger?.LogDebug("LED Update from Options - Pin: {LedPin}, State: {NewLedState}, Value: {PinValue}, Options: {LedOptions}, ButtonPressed: {ButtonPressed}, Reason: {Reason}", 
+
+            _logger?.LogDebug("LED Update from Options - Pin: {LedPin}, State: {NewLedState}, Value: {PinValue}, Options: {LedOptions}, ButtonPressed: {ButtonPressed}, Reason: {Reason}",
                 _ledPin.Value, newLedState, pinValue, _ledOptions, _isPressed, reason);
-            
+
             try
             {
                 _gpioController.Write(_ledPin.Value, pinValue);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "LED Update Failed - Pin: {LedPin}, Error: {ErrorMessage}", 
+                _logger?.LogError(ex, "LED Update Failed - Pin: {LedPin}, Error: {ErrorMessage}",
                     _ledPin.Value, ex.Message);
-                
+
                 // Only ignore GPIO errors during disposal
                 if (!_disposed)
                 {
@@ -671,7 +660,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     {
         // If no LED pin is configured, LED should never be on
         if (!_ledPin.HasValue) return false;
-        
+
         return _ledOptions switch
         {
             PushButtonLedOptions.AlwaysOn => true,
@@ -726,7 +715,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 callPressed = isPressed;
             }
 
-            _logger?.LogDebug("Button Event - Pin: {ButtonPin}, Event: {ChangeType}, Pressed: {IsPressed}, PinMode: {EventPinMode}", 
+            _logger?.LogDebug("Button Event - Pin: {ButtonPin}, Event: {ChangeType}, Pressed: {IsPressed}, PinMode: {EventPinMode}",
                 _buttonPin, pinValueChangedEventArgs.ChangeType, isPressed, _eventPinMode);
 
             // Thread-safe state update
@@ -736,10 +725,10 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 {
                     var previousPressed = _isPressed;
                     _isPressed = isPressed;
-                    
-                    _logger?.LogDebug("Button State Change - From: {PreviousPressed} to: {NewPressed}, LED Options: {LedOptions}, Blinking: {IsBlinking}", 
+
+                    _logger?.LogDebug("Button State Change - From: {PreviousPressed} to: {NewPressed}, LED Options: {LedOptions}, Blinking: {IsBlinking}",
                         previousPressed, _isPressed, _ledOptions, _isBlinking);
-                    
+
                     // Always update LED hardware - UpdateLedHardwareFromOptions() handles the logic
                     // This ensures LED stays consistent based on LedOptions setting
                     UpdateLedHardwareFromOptions();
@@ -754,14 +743,14 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                     if (callPressed)
                     {
                         _logger?.LogDebug("Button Pressed Event - Calling base handler");
-                        
+
                         // Call the base class method for button pressed
                         HandleButtonPressed();
                     }
                     else
                     {
                         _logger?.LogDebug("Button Released Event - Calling base handler");
-                        
+
                         // Call the base class method for button released
                         HandleButtonReleased();
                     }
@@ -769,7 +758,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 catch (Exception ex)
                 {
                     _logger?.LogError(ex, "Button Handler Error - {ErrorMessage}", ex.Message);
-                    
+
                     // Don't let button handler exceptions crash the GPIO monitoring
                 }
             }
@@ -777,10 +766,58 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Pin State Change Error - {ErrorMessage}", ex.Message);
-            
+
             // Don't let pin state change exceptions crash the application
         }
     }
+
+    /// <summary>
+    /// Handles changes in GPIO pin, based on whether the system is pullup or pulldown.
+    /// </summary>
+    /// <param name="sender">The sender object.</param>
+    /// <param name="pinValueChangedEventArgs">The pin argument changes.</param>
+    private void XX_PinStateChanged(object sender, PinValueChangedEventArgs pinValueChangedEventArgs)
+    {
+        // Fast path: early exit if disposed
+        if (_disposed) return;
+
+        switch (pinValueChangedEventArgs.ChangeType)
+        {
+            case PinEventTypes.Falling:
+                if (_eventPinMode == PinMode.InputPullUp)
+                {
+                    HandleButtonPressed();
+                }
+                else
+                {
+                    HandleButtonReleased();
+                }
+
+                break;
+            case PinEventTypes.Rising:
+                if (_eventPinMode == PinMode.InputPullUp)
+                {
+                    HandleButtonReleased();
+                }
+                else
+                {
+                    HandleButtonPressed();
+                }
+
+                break;
+        }
+    }
+
+    protected override void HandleButtonPressed()
+    {
+        base.HandleButtonPressed();
+    }
+
+    protected override void HandleButtonReleased()
+    {
+        base.HandleButtonReleased();
+    }
+
 
     /// <summary>
     /// Optimized resource cleanup method to reduce code duplication and improve performance.
@@ -793,7 +830,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
     {
         var errors = new List<Exception>();
 
-        _logger?.LogDebug("Starting Cleanup - Button Pin: {ButtonPin}, LED Pin: {LedPin}, Blinking: {IsBlinking}", 
+        _logger?.LogDebug("Starting Cleanup - Button Pin: {ButtonPin}, LED Pin: {LedPin}, Blinking: {IsBlinking}",
             _buttonPin, _ledPin?.ToString() ?? "None", _isBlinking);
 
         // Step 1: Stop blinking timer first to prevent interference
@@ -803,7 +840,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             {
                 _logger?.LogDebug("Cleanup - Stopping blinking timer");
             }
-            
+
             StopBlinkingInternal();
             _blinkTimer?.Dispose();
         }
@@ -819,7 +856,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             try
             {
                 _logger?.LogDebug("Cleanup - Turning off LED on pin {LedPin}", _ledPin.Value);
-                
+
                 _gpioController.Write(_ledPin.Value, PinValue.Low);
             }
             catch (Exception ex)
@@ -835,8 +872,8 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             try
             {
                 _logger?.LogDebug("Cleanup - Unregistering callback for pin {ButtonPin}", _buttonPin);
-                
-                _gpioController.UnregisterCallbackForPinValueChangedEvent(_buttonPin, PinStateChanged);
+
+                //_gpioController.UnregisterCallbackForPinValueChangedEvent(_buttonPin, PinStateChanged);
             }
             catch (Exception ex)
             {
@@ -851,7 +888,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             try
             {
                 _logger?.LogDebug("Cleanup - Disposing GPIO controller");
-                
+
                 _gpioController?.Dispose();
             }
             catch (Exception ex)
@@ -868,7 +905,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                 try
                 {
                     _logger?.LogDebug("Cleanup - Closing button pin {ButtonPin}", _buttonPin);
-                    
+
                     _gpioController.ClosePin(_buttonPin);
                 }
                 catch (Exception ex)
@@ -877,13 +914,13 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
                     errors.Add(ex);
                 }
             }
-            
+
             if (ledPinOpened && _ledPin.HasValue)
             {
                 try
                 {
                     _logger?.LogDebug("Cleanup - Closing LED pin {LedPin}", _ledPin.Value);
-                    
+
                     _gpioController.ClosePin(_ledPin.Value);
                 }
                 catch (Exception ex)
@@ -917,27 +954,27 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             return;
         }
 
-        _logger?.LogDebug("Dispose(disposing: {Disposing}) - Starting disposal for Button Pin: {ButtonPin}, LED Pin: {LedPin}", 
+        _logger?.LogDebug("Dispose(disposing: {Disposing}) - Starting disposal for Button Pin: {ButtonPin}, LED Pin: {LedPin}",
             disposing, _buttonPin, _ledPin?.ToString() ?? "None");
 
         if (disposing)
         {
             // Set disposal flag first to prevent new operations
             _disposed = true;
-            
+
             try
             {
                 _logger?.LogDebug("Dispose - Starting cleanup of managed resources");
-                
+
                 // Cleanup resources without additional locking
                 CleanupResources();
-                
+
                 _logger?.LogDebug("Dispose - Managed resource cleanup completed");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Dispose Error - Cleanup failed: {ErrorMessage}", ex.Message);
-                
+
                 // Don't let cleanup errors prevent disposal completion
             }
         }
@@ -960,7 +997,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             return;
         }
 
-        _logger?.LogDebug("DisposeAsync - Starting async disposal for Button Pin: {ButtonPin}, LED Pin: {LedPin}", 
+        _logger?.LogDebug("DisposeAsync - Starting async disposal for Button Pin: {ButtonPin}, LED Pin: {LedPin}",
             _buttonPin, _ledPin?.ToString() ?? "None");
 
         // Set disposal flag first to prevent new operations
@@ -973,7 +1010,7 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
             {
                 var settlingDelay = Math.Min(50, (int)DebounceTime.TotalMilliseconds);
                 _logger?.LogDebug("DisposeAsync - Waiting {SettlingDelay}ms for settling", settlingDelay);
-                
+
                 await Task.Delay(settlingDelay).ConfigureAwait(false);
             }
 
@@ -981,26 +1018,229 @@ public class GpioButtonWithLed : ButtonBase, IAsyncDisposable
 
             // Cleanup resources
             CleanupResources();
-            
+
             _logger?.LogDebug("DisposeAsync - Resource cleanup completed");
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "DisposeAsync Error - Cleanup failed: {ErrorMessage}", ex.Message);
-            
+
             // Don't let cleanup errors prevent disposal completion
         }
         finally
         {
             _logger?.LogDebug("DisposeAsync - Calling base disposal and suppressing finalization");
-            
+
             // Call base disposal
             Dispose(true);
-            
+
             // Suppress finalization
             GC.SuppressFinalize(this);
-            
+
             _logger?.LogDebug("DisposeAsync - Completed successfully");
         }
     }
 }
+
+
+/// <summary>
+/// 
+/// </summary>
+public abstract class GpioButtonBase : IDisposable
+{
+    /// <summary>
+    /// 
+    /// </summary>
+    protected internal const long DefaultDoublePressTicks = 15000000;
+
+    /// <summary>
+    /// 
+    /// </summary>
+    protected internal const long DefaultHoldingMilliseconds = 2000;
+
+    private bool _disposed = false;
+
+    private long _doublePressTicks;
+    private long _holdingMs;
+    private long _debounceStartTicks;
+
+    private ButtonHoldingState _holdingState = ButtonHoldingState.Completed;
+
+    private long _lastPress = DateTime.MinValue.Ticks;
+    private Timer? _holdingTimer;
+
+    /// <summary>
+    /// Delegate for button up event.
+    /// </summary>
+    public event EventHandler<EventArgs>? ButtonUp;
+
+    /// <summary>
+    /// Delegate for button down event.
+    /// </summary>
+    public event EventHandler<EventArgs>? ButtonDown;
+
+    /// <summary>
+    /// Delegate for button pressed event.
+    /// </summary>
+    public event EventHandler<EventArgs>? Press;
+
+    /// <summary>
+    /// Delegate for button double pressed event.
+    /// </summary>
+    public event EventHandler<EventArgs>? DoublePress;
+
+    /// <summary>
+    /// Delegate for button holding event.
+    /// </summary>
+    public event EventHandler<ButtonHoldingEventArgs>? Holding;
+
+    /// <summary>
+    /// Define if holding event is enabled or disabled on the button.
+    /// </summary>
+    public bool IsHoldingEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Define if double press event is enabled or disabled on the button.
+    /// </summary>
+    public bool IsDoublePressEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Indicates if the button is currently pressed.
+    /// </summary>
+    public bool IsPressed { get; set; } = false;
+
+    /// <summary>
+    /// Gets the debounce time used to filter out mechanical button bounce.
+    /// Events occurring within this timeframe are ignored to prevent false triggers.
+    /// </summary>
+    public TimeSpan DebounceTime { get; private set; }
+
+    /// <summary>
+    /// Initialization of the button.
+    /// </summary>
+    public GpioButtonBase()
+        : this(TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), default)
+    {
+    }
+
+    /// <summary>
+    /// Initialization of the button.
+    /// </summary>
+    /// <param name="doublePress">Max ticks between button presses to count as doublePress.</param>
+    /// <param name="holding">Min ms a button is pressed to count as holding.</param>
+    /// <param name="debounceTime">The amount of time during which the transitions are ignored, or zero</param>
+    public GpioButtonBase(TimeSpan doublePress, TimeSpan holding, TimeSpan debounceTime)
+    {
+        if (debounceTime.TotalMilliseconds * 3 > doublePress.TotalMilliseconds)
+        {
+            throw new ArgumentException($"The parameter {nameof(doublePress)} should be at least three times {nameof(debounceTime)}");
+        }
+
+        _doublePressTicks = doublePress.Ticks;
+        _holdingMs = (long)holding.TotalMilliseconds;
+        DebounceTime = debounceTime;
+    }
+
+    /// <summary>
+    /// Handler for pressing the button.
+    /// </summary>
+    protected virtual void HandleButtonPressed()
+    {
+        if (DateTime.UtcNow.Ticks - _debounceStartTicks < DebounceTime.Ticks)
+        {
+            return;
+        }
+
+        IsPressed = true;
+
+        ButtonDown?.Invoke(this, new EventArgs());
+
+        if (IsHoldingEnabled)
+        {
+            _holdingTimer = new Timer(StartHoldingHandler, null, (int)_holdingMs, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>
+    /// Handler for releasing the button.
+    /// </summary>
+    protected virtual void HandleButtonReleased()
+    {
+        if (DebounceTime.Ticks > 0 && !IsPressed)
+        {
+            return;
+        }
+
+        _debounceStartTicks = DateTime.UtcNow.Ticks;
+        _holdingTimer?.Dispose();
+        _holdingTimer = null;
+
+        IsPressed = false;
+
+        ButtonUp?.Invoke(this, new EventArgs());
+        Press?.Invoke(this, new EventArgs());
+
+        if (IsHoldingEnabled && _holdingState == ButtonHoldingState.Started)
+        {
+            _holdingState = ButtonHoldingState.Completed;
+            Holding?.Invoke(this, new ButtonHoldingEventArgs { HoldingState = ButtonHoldingState.Completed });
+        }
+
+        if (IsDoublePressEnabled)
+        {
+            if (_lastPress == DateTime.MinValue.Ticks)
+            {
+                _lastPress = DateTime.UtcNow.Ticks;
+            }
+            else
+            {
+                if (DateTime.UtcNow.Ticks - _lastPress <= _doublePressTicks)
+                {
+                    DoublePress?.Invoke(this, new EventArgs());
+                }
+
+                _lastPress = DateTime.MinValue.Ticks;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handler for holding the button.
+    /// </summary>
+    private void StartHoldingHandler(object? state)
+    {
+        _holdingTimer?.Dispose();
+        _holdingTimer = null;
+        _holdingState = ButtonHoldingState.Started;
+
+        Holding?.Invoke(this, new ButtonHoldingEventArgs { HoldingState = ButtonHoldingState.Started });
+    }
+
+    /// <summary>
+    /// Cleanup resources.
+    /// </summary>
+    /// <param name="disposing">Disposing.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            _holdingTimer?.Dispose();
+            _holdingTimer = null;
+        }
+
+        _disposed = true;
+    }
+
+    /// <summary>
+    /// Public dispose method for IDisposable interface.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+    }
+}    
