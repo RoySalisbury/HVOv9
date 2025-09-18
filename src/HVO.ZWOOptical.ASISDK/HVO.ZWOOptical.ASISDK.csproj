@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>    
+
+    <RootNamespace>HVO.ZWOOptical.ASISDK</RootNamespace>
+    <AssemblyName>HVO.ZWOOptical.ASISDK</AssemblyName>
+    <PackageLicenseFile>license.txt</PackageLicenseFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>HVO.ZWOOptical.ASISDK</PackageId>
+    <Version>0.0.3</Version>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>Astronomy,ZWO,ASI</PackageTags>
+    <RepositoryUrl>https://github.com/RoySalisbury/HVOv9</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/RoySalisbury/HVOv9/HVO.ZWOOptical.ASISDK</PackageProjectUrl>    
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" PackagePath="./" Pack="True" />
+    <None Include="runtimes/license.txt" PackagePath="" Pack="True" />
+    <None Include="runtimes/asi.rules" PackagePath="runtimes" Pack="True" />
+    <None Include="runtimes/armv7/libASICamera2.so" PackagePath="runtimes/linux-arm/native" Pack="True" />
+    <None Include="runtimes/armv8/libASICamera2.so" PackagePath="runtimes/linux-arm64/native" Pack="True" />
+    <None Include="runtimes/mac/libASICamera2.dylib" PackagePath="runtimes/osx-arm64/native" Pack="True" />
+  </ItemGroup>
+
+<Target Name="CopyPackageToLocalFeed" AfterTargets="Pack">
+        <PropertyGroup>
+            <!-- The correct path for the nupkg file after 'dotnet pack' -->
+            <NupkgFileName>$(PackageId).$(PackageVersion).nupkg</NupkgFileName>
+            <FullPackagePath>$(OutputPath)../$(NupkgFileName)</FullPackagePath>
+        </PropertyGroup>
+        <Copy SourceFiles="$(FullPackagePath)"
+              DestinationFolder="$(SolutionDir)LocalPackages"
+              Condition="Exists('$(FullPackagePath)')" />
+        <Message Text="Copied package from $(FullPackagePath) to $(SolutionDir)LocalPackages" Importance="High" />
+    </Target>
+
+</Project>

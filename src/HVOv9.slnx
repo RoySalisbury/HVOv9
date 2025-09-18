@@ -1,4 +1,10 @@
 <Solution>
+  <Folder Name="/SkyMonitor/">
+    <Project Path="HVO.CLI.SkyMonitor/HVO.CLI.SkyMonitor.csproj" />
+    <Project Path="HVO.Infrastucture.SkyMonitor/HVO.Infrastucture.SkyMonitor.csproj" />
+    <Project Path="HVO.Services.SkyMonitor/HVO.Services.SkyMonitor.csproj" />
+    <Project Path="HVO.WebSite.SkyMonitorV4/HVO.WebSite.SkyMonitorV4.csproj" />
+  </Folder>
   <Folder Name="/_misc/">
     <File Path="../.github/copilot-instructions.md" />
     <File Path="../.gitignore" />
@@ -14,8 +20,8 @@
   <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
   <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />
   <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
+  <Project Path="HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
   <Project Path="HVO/HVO.csproj" />
   <Project Path="HVO.WebSite.v9/HVO.WebSite.v9.csproj" />
-  <Project Path="HVO.WebSite.SkyMonitorv4/HVO.WebSite.SkyMonitorv4.csproj" />
   <Project Path="HVO.WebSite.v9.Tests/HVO.WebSite.v9.Tests.csproj" />
 </Solution>

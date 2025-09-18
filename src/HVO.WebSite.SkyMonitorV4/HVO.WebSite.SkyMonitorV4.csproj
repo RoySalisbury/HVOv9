@@ -6,9 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+
   <ItemGroup>
     <Folder Include="HostedServices/" />
-    <Folder Include="runtimes/" />
   </ItemGroup>
 
 </Project>
