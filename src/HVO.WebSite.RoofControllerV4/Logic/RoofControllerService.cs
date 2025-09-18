@@ -63,7 +63,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     ledPin: this._roofControllerOptions.OpenRoofButtonLedPin, 
                     doublePress: TimeSpan.FromTicks(15000000),
                     holding: TimeSpan.FromMilliseconds(2000),
-                    isPullUp: false, 
+                    isPullUp: true, 
                     hasExternalResistor: false, 
                     gpioController: this._gpioController, 
                     debounceTime: this._roofControllerOptions.ButtonDebounce);
@@ -72,7 +72,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     ledPin: this._roofControllerOptions.CloseRoofButtonLedPin, 
                     doublePress: TimeSpan.FromTicks(15000000),
                     holding: TimeSpan.FromMilliseconds(2000),
-                    isPullUp: false, 
+                    isPullUp: true, 
                     hasExternalResistor: false, 
                     gpioController: this._gpioController, 
                     debounceTime: this._roofControllerOptions.ButtonDebounce);
@@ -81,7 +81,7 @@ namespace HVO.WebSite.RoofControllerV4.Logic
                     ledPin: this._roofControllerOptions.StopRoofButtonLedPin, 
                     doublePress: TimeSpan.FromTicks(15000000),
                     holding: TimeSpan.FromMilliseconds(2000),
-                    isPullUp: false, 
+                    isPullUp: true, 
                     hasExternalResistor: false, 
                     gpioController: this._gpioController, 
                     debounceTime: this._roofControllerOptions.ButtonDebounce);

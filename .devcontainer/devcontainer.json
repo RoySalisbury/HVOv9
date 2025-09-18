@@ -1,8 +1,10 @@
 {
       "image": "mcr.microsoft.com/devcontainers/dotnet:9.0",
       "runArgs": [
-        "--device=/dev/net/tun"
+        "--device=/dev/net/tun",
+        "--device=/dev/gpiomem0:/dev/gpiomem0"
       ],
+      "privileged": true,
       "features": {
         "ghcr.io/tailscale/codespace/tailscale": {}
       },
@@ -27,7 +29,13 @@
           "type": "volume",
           "source": "x509stores",
           "target": "/home/vscode/.dotnet/corefx/cryptography/x509stores"
+        },
+        {
+          "type": "bind",
+          "target": "/proc/device-tree/model",
+          "source": "/proc/device-tree/model"
         }
       ],
-      "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh"
+      "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh",
+      "postCreateCommand": "sudo apt update && sudo apt install -y libgpiod-dev"
     }
