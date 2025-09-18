@@ -42,9 +42,9 @@
             <FullPackagePath>$(OutputPath)../$(NupkgFileName)</FullPackagePath>
         </PropertyGroup>
         <Copy SourceFiles="$(FullPackagePath)"
-              DestinationFolder="$(SolutionDir)LocalPackages"
+              DestinationFolder="$(SolutionDir)../.LocalPackages"
               Condition="Exists('$(FullPackagePath)')" />
-        <Message Text="Copied package from $(FullPackagePath) to $(SolutionDir)LocalPackages" Importance="High" />
+        <Message Text="Copied package from $(FullPackagePath) to $(SolutionDir)../.LocalPackages" Importance="High" />
     </Target>
 
 </Project>

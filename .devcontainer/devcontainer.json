@@ -2,7 +2,8 @@
       "image": "mcr.microsoft.com/devcontainers/dotnet:9.0",
       "runArgs": [
         "--device=/dev/net/tun",
-        "--device=/dev/gpiomem0:/dev/gpiomem0"
+        "--device=/dev/gpiomem0:/dev/gpiomem0",
+        "--device=/dev/i2c-1:/dev/i2c-1"
       ],
       "privileged": true,
       "features": {
@@ -37,5 +38,5 @@
         }
       ],
       "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh",
-      "postCreateCommand": "sudo apt update && sudo apt install -y libgpiod-dev"
+      "postCreateCommand": "sudo apt update && sudo apt install -y libgpiod-dev i2c-tools && sudo usermod -aG i2c vscode"
     }
