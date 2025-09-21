@@ -78,7 +78,7 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         _logger.LogInformation("WatchdogBatteryHat initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusId, _i2cAddress);
     }
 
-    public int GetPeriod()
+    public int GetWatchdogPeriodSeconds()
     {
         try
         {
@@ -89,31 +89,31 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetPeriod failed");
+            _logger.LogError(e, "GetWatchdogPeriodSeconds failed");
             return -1;
         }
     }
 
-    public int SetPeriod(int val)
+    public int SetWatchdogPeriodSeconds(int seconds)
     {
-        if (val < 1) val = 65001;
+        if (seconds < 1) seconds = 65001;
         try
         {
             lock (Sync)
             {
-                WriteUInt16(WRITE_INTERVAL_ADD, (ushort)val);
+                WriteUInt16(WRITE_INTERVAL_ADD, (ushort)seconds);
             }
-            _logger.LogDebug("SetPeriod - Value: {Value}", val);
+            _logger.LogDebug("SetWatchdogPeriodSeconds - Seconds: {Seconds}", seconds);
             return 1;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetPeriod failed - Value: {Value}", val);
+            _logger.LogError(e, "SetWatchdogPeriodSeconds failed - Seconds: {Seconds}", seconds);
             return -1;
         }
     }
 
-    public int Reload()
+    public int ReloadWatchdog()
     {
         try
         {
@@ -121,7 +121,7 @@ public class WatchdogBatteryHat : I2cRegisterDevice
             {
                 WriteByte(RELOAD_ADD, RELOAD_KEY);
             }
-            _logger.LogInformation("Watchdog reloaded");
+            _logger.LogInformation("ReloadWatchdog executed");
             return 1;
         }
         catch (Exception e)
@@ -131,28 +131,28 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
     }
 
-    public int SetDefaultPeriod(int val)
+    public int SetDefaultWatchdogPeriodSeconds(int seconds)
     {
-        if (val <= 10 || val >= 65000)
+        if (seconds <= 10 || seconds >= 65000)
             return -1;
 
         try
         {
             lock (Sync)
             {
-                WriteUInt16(WRITE_INITIAL_INTERVAL_ADD, (ushort)val);
+                WriteUInt16(WRITE_INITIAL_INTERVAL_ADD, (ushort)seconds);
             }
-            _logger.LogDebug("SetDefaultPeriod - Value: {Value}", val);
+            _logger.LogDebug("SetDefaultWatchdogPeriodSeconds - Seconds: {Seconds}", seconds);
             return 1;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetDefaultPeriod failed - Value: {Value}", val);
+            _logger.LogError(e, "SetDefaultWatchdogPeriodSeconds failed - Seconds: {Seconds}", seconds);
             return -1;
         }
     }
 
-    public int GetDefaultPeriod()
+    public int GetDefaultWatchdogPeriodSeconds()
     {
         try
         {
@@ -163,14 +163,14 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetDefaultPeriod failed");
+            _logger.LogError(e, "GetDefaultWatchdogPeriodSeconds failed");
             return -1;
         }
     }
 
-    public int SetOffInterval(int val)
+    public int SetPowerOffIntervalSeconds(int seconds)
     {
-        if (val <= 2 || val >= WDT_MAX_POWER_OFF_INTERVAL)
+        if (seconds <= 2 || seconds >= WDT_MAX_POWER_OFF_INTERVAL)
             return -1;
 
         try
@@ -178,23 +178,23 @@ public class WatchdogBatteryHat : I2cRegisterDevice
             lock (Sync)
             {
                 Span<byte> data = stackalloc byte[4];
-                data[0] = (byte)(val & 0xff);
-                data[1] = (byte)((val >> 8) & 0xff);
-                data[2] = (byte)((val >> 16) & 0xff);
-                data[3] = (byte)((val >> 24) & 0xff);
+                data[0] = (byte)(seconds & 0xff);
+                data[1] = (byte)((seconds >> 8) & 0xff);
+                data[2] = (byte)((seconds >> 16) & 0xff);
+                data[3] = (byte)((seconds >> 24) & 0xff);
                 WriteBlock(POWER_OFF_INTERVAL_SET_ADD, data);
             }
-            _logger.LogDebug("SetOffInterval - Seconds: {Seconds}", val);
+            _logger.LogDebug("SetPowerOffIntervalSeconds - Seconds: {Seconds}", seconds);
             return 1;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetOffInterval failed - Seconds: {Seconds}", val);
+            _logger.LogError(e, "SetPowerOffIntervalSeconds failed - Seconds: {Seconds}", seconds);
             return -1;
         }
     }
 
-    public int GetOffInterval()
+    public int GetPowerOffIntervalSeconds()
     {
         try
         {
@@ -207,12 +207,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetOffInterval failed");
+            _logger.LogError(e, "GetPowerOffIntervalSeconds failed");
             return -1;
         }
     }
 
-    public int GetResetCount()
+    public int GetWatchdogResetCount()
     {
         try
         {
@@ -223,12 +223,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetResetCount failed");
+            _logger.LogError(e, "GetWatchdogResetCount failed");
             return -1;
         }
     }
 
-    public double GetVin()
+    public double GetInputVoltageVin()
     {
         try
         {
@@ -240,12 +240,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetVin failed");
+            _logger.LogError(e, "GetInputVoltageVin failed");
             return -1;
         }
     }
 
-    public double GetVrasp()
+    public double GetSystemVoltageVout()
     {
         try
         {
@@ -257,12 +257,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetVrasp failed");
+            _logger.LogError(e, "GetSystemVoltageVout failed");
             return -1;
         }
     }
 
-    public double GetVbat()
+    public double GetBatteryVoltageVbat()
     {
         try
         {
@@ -274,12 +274,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetVbat failed");
+            _logger.LogError(e, "GetBatteryVoltageVbat failed");
             return -1;
         }
     }
 
-    public int GetTemp()
+    public int GetTemperatureCelsius()
     {
         try
         {
@@ -290,28 +290,28 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetTemp failed");
+            _logger.LogError(e, "GetTemperatureCelsius failed");
             return -1;
         }
     }
 
-    public int GetChargeStat()
+    public byte GetChargerStatusRaw()
     {
         try
         {
             lock (Sync)
             {
-                return ReadByte(CHARGE_STAT_ADD) & 0x0f;
+                return (byte)(ReadByte(CHARGE_STAT_ADD) & 0x0f);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetChargeStat failed");
-            return -1;
+            _logger.LogError(e, "GetChargerStatusRaw failed");
+            return 0xFF;
         }
     }
 
-    public int GetRepowerOnBattery()
+    public bool? GetRepowerOnBattery()
     {
         try
         {
@@ -321,29 +321,28 @@ public class WatchdogBatteryHat : I2cRegisterDevice
                 if (stat > 0)
                 {
                     int val = ReadByte(POWER_OFF_ON_BATTERY_ADD);
-                    return val > 0 ? 0 : 1;
+                    return val == 0;
                 }
-                return -1;
+                return null;
             }
         }
         catch (Exception e)
         {
             _logger.LogError(e, "GetRepowerOnBattery failed");
-            return -1;
+            return null;
         }
     }
 
-    public int SetRepowerOnBattery(int val)
+    public int SetRepowerOnBattery(bool enable)
     {
         try
         {
             lock (Sync)
             {
-                val = val != 0 ? 0 : 1;
                 int stat = ReadByte(CHARGE_STAT_ADD) & 0xf0;
                 if (stat > 0)
                 {
-                    WriteByte(POWER_OFF_ON_BATTERY_ADD, (byte)val);
+                    WriteByte(POWER_OFF_ON_BATTERY_ADD, enable ? (byte)0 : (byte)1);
                     return 1;
                 }
                 return -1;
@@ -351,12 +350,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetRepowerOnBattery failed - Value: {Value}", val);
+            _logger.LogError(e, "SetRepowerOnBattery failed - Enable: {Enable}", enable);
             return -1;
         }
     }
 
-    public int GetPowerButtonEnable()
+    public int GetPowerButtonEnableRaw()
     {
         try
         {
@@ -372,22 +371,21 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetPowerButtonEnable failed");
+            _logger.LogError(e, "GetPowerButtonEnableRaw failed");
             return -1;
         }
     }
 
-    public int SetPowerButtonEnable(int val)
+    public int SetPowerButtonEnable(bool enable)
     {
         try
         {
             lock (Sync)
             {
-                val = val != 0 ? 1 : 0;
                 int stat = ReadByte(CHARGE_STAT_ADD) & 0xf0;
                 if (stat > 0x10)
                 {
-                    WriteByte(POWER_SW_USAGE_ADD, (byte)val);
+                    WriteByte(POWER_SW_USAGE_ADD, enable ? (byte)1 : (byte)0);
                     return 1;
                 }
                 return -1;
@@ -395,12 +393,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetPowerButtonEnable failed - Value: {Value}", val);
+            _logger.LogError(e, "SetPowerButtonEnable failed - Enable: {Enable}", enable);
             return -1;
         }
     }
 
-    public int GetPowerButtonPush()
+    public int GetPowerButtonStatusRaw()
     {
         try
         {
@@ -416,12 +414,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetPowerButtonPush failed");
+            _logger.LogError(e, "GetPowerButtonStatusRaw failed");
             return -1;
         }
     }
 
-    public int ClrPowerButton()
+    public int ClearPowerButtonStatus()
     {
         try
         {
@@ -437,7 +435,7 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
     }
 
-    public int GetPowerButton()
+    public int GetPowerButtonStatus()
     {
         try
         {
@@ -457,26 +455,26 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
     }
 
-    public int SetPowerButton(int val)
+    public int SetPowerButtonStatus(int value)
     {
-        val = Math.Clamp(val, 0, 1);
+        value = Math.Clamp(value, 0, 1);
         try
         {
             lock (Sync)
             {
-                WriteByte(POWER_SW_STATUS_ADD, (byte)val);
+                WriteByte(POWER_SW_STATUS_ADD, (byte)value);
             }
-            _logger.LogDebug("SetPowerButton - Value: {Value}", val);
+            _logger.LogDebug("SetPowerButtonStatus - Value: {Value}", value);
             return 1;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetPowerButton failed - Value: {Value}", val);
+            _logger.LogError(e, "SetPowerButtonStatus failed - Value: {Value}", value);
             return -1;
         }
     }
 
-    public int GetPowerButtonInterruptEnable()
+    public int GetPowerButtonInterruptEnableRaw()
     {
         try
         {
@@ -492,22 +490,21 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetPowerButtonInterruptEnable failed");
+            _logger.LogError(e, "GetPowerButtonInterruptEnableRaw failed");
             return -1;
         }
     }
 
-    public int SetPowerButtonInterruptEnable(int val)
+    public int SetPowerButtonInterruptEnable(bool enable)
     {
         try
         {
             lock (Sync)
             {
-                val = val != 0 ? 1 : 0;
                 int stat = ReadByte(CHARGE_STAT_ADD) & 0xf0;
                 if (stat > 0x10)
                 {
-                    WriteByte(POWER_SW_INT_OUT_ADD, (byte)val);
+                    WriteByte(POWER_SW_INT_OUT_ADD, enable ? (byte)1 : (byte)0);
                     return 1;
                 }
                 return -1;
@@ -515,12 +512,12 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetPowerButtonInterruptEnable failed - Value: {Value}", val);
+            _logger.LogError(e, "SetPowerButtonInterruptEnable failed - Enable: {Enable}", enable);
             return -1;
         }
     }
 
-    public (int year, int month, int day, int hour, int minute, int second) GetRTC()
+    public DateTime GetRtc()
     {
         try
         {
@@ -528,32 +525,26 @@ public class WatchdogBatteryHat : I2cRegisterDevice
             {
                 Span<byte> buff = stackalloc byte[6];
                 ReadBlock(I2C_RTC_YEAR_ADD, buff);
-                return (2000 + buff[0], buff[1], buff[2], buff[3], buff[4], buff[5]);
+                return new DateTime(2000 + buff[0], buff[1], buff[2], buff[3], buff[4], buff[5], DateTimeKind.Local);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetRTC failed");
+            _logger.LogError(ex, "GetRtc failed");
             throw new InvalidOperationException("Could not read RTC: " + ex.Message, ex);
         }
     }
 
-    public void SetRTC(int y, int mo, int d, int h, int m, int s)
+    public void SetRtc(DateTime dateTime)
     {
+        int y = dateTime.Year;
+        int mo = dateTime.Month;
+        int d = dateTime.Day;
+        int h = dateTime.Hour;
+        int m = dateTime.Minute;
+        int s = dateTime.Second;
         if (y > 2000) y -= 2000;
-        if (y < 0 || y > 255)
-            throw new ArgumentOutOfRangeException(nameof(y), "Invalid year!");
-        if (mo < 1 || mo > 12)
-            throw new ArgumentOutOfRangeException(nameof(mo), "Invalid month!");
-        if (d < 1 || d > 31)
-            throw new ArgumentOutOfRangeException(nameof(d), "Invalid day!");
-        if (h < 0 || h > 23)
-            throw new ArgumentOutOfRangeException(nameof(h), "Invalid hour!");
-        if (m < 0 || m > 59)
-            throw new ArgumentOutOfRangeException(nameof(m), "Invalid minute!");
-        if (s < 0 || s > 59)
-            throw new ArgumentOutOfRangeException(nameof(s), "Invalid second!");
-
+        if (y < 0 || y > 255) throw new ArgumentOutOfRangeException(nameof(dateTime), "Invalid year in DateTime!");
         Span<byte> buff = stackalloc byte[] { (byte)y, (byte)mo, (byte)d, (byte)h, (byte)m, (byte)s, 0xaa };
 
         try
@@ -565,7 +556,7 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SetRTC failed");
+            _logger.LogError(ex, "SetRtc failed");
             throw new InvalidOperationException("Could not set RTC: " + ex.Message, ex);
         }
     }
