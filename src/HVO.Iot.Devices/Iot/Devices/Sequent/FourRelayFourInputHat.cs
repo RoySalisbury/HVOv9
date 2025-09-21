@@ -4,10 +4,11 @@ using System;
 using System.Device.I2c;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using HVO.Iot.Devices.Iot.Devices.Common;
 
 namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 
-public class SM4rel4in : IDisposable
+public class FourRelayFourInputHat : I2cRegisterDevice
 {
     public enum LED_MODE
     {
@@ -60,27 +61,22 @@ public class SM4rel4in : IDisposable
     public const int LED_AUTO = 0;
     public const int LED_MANUAL = 1;
 
-    private readonly I2cDevice _device;
-    private readonly bool _ownsDevice;
-    private readonly object _sync = new();
-    private readonly ILogger<SM4rel4in> _logger;
+    private readonly ILogger<FourRelayFourInputHat> _logger;
 
     private readonly int _hwAddress;
     private readonly int _i2cBusNo;
     private readonly Lazy<(byte Major, byte Minor)> _hardwareRevision;
     private readonly Lazy<(byte Major, byte Minor)> _softwareRevision;
 
-    public SM4rel4in(int stack = 0, int i2cBus = 1, ILogger<SM4rel4in>? logger = null)
+    public FourRelayFourInputHat(int stack = 0, int i2cBus = 1, ILogger<FourRelayFourInputHat>? logger = null)
+        : base(i2cBus, _CARD_BASE_ADDRESS + stack)
     {
         if (stack < 0 || stack > _STACK_LEVEL_MAX)
             throw new ArgumentOutOfRangeException(nameof(stack), "Invalid stack level!");
 
         _hwAddress = _CARD_BASE_ADDRESS + stack;
         _i2cBusNo = i2cBus;
-        _logger = logger ?? NullLogger<SM4rel4in>.Instance;
-
-        _device = I2cDevice.Create(new I2cConnectionSettings(_i2cBusNo, _hwAddress));
-        _ownsDevice = true;
+        _logger = logger ?? NullLogger<FourRelayFourInputHat>.Instance;
 
         _hardwareRevision = new Lazy<(byte Major, byte Minor)>(GetHardwareRevision);
         _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
@@ -88,11 +84,11 @@ public class SM4rel4in : IDisposable
         _logger.LogInformation("SM4rel4in initialized - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
     }
 
-    public SM4rel4in(I2cDevice device, ILogger<SM4rel4in>? logger = null)
+    public FourRelayFourInputHat(I2cDevice device, ILogger<FourRelayFourInputHat>? logger = null)
+        : base(device)
     {
-        _device = device ?? throw new ArgumentNullException(nameof(device));
-        _ownsDevice = false;
-        _logger = logger ?? NullLogger<SM4rel4in>.Instance;
+        _ = device ?? throw new ArgumentNullException(nameof(device));
+        _logger = logger ?? NullLogger<FourRelayFourInputHat>.Instance;
         _i2cBusNo = device.ConnectionSettings.BusId;
         _hwAddress = device.ConnectionSettings.DeviceAddress;
 
@@ -102,34 +98,13 @@ public class SM4rel4in : IDisposable
         _logger.LogInformation("SM4rel4in initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
     }
 
-    public void Dispose()
-    {
-        if (_ownsDevice)
-        {
-            _device.Dispose();
-        }
-    }
-
-    private byte ReadRegByte(byte register)
-    {
-        Span<byte> buffer = stackalloc byte[1];
-        _device.WriteRead(stackalloc byte[] { register }, buffer);
-        return buffer[0];
-    }
-
-    private short ReadRegInt16(byte register)
-    {
-        Span<byte> buffer = stackalloc byte[2];
-        _device.WriteRead(stackalloc byte[] { register }, buffer);
-        return BitConverter.ToInt16(buffer);
-    }
 
     private (byte Major, byte Minor) GetHardwareRevision()
     {
         Span<byte> buffer = stackalloc byte[2];
-        lock (_sync)
+        lock (Sync)
         {
-            _device.WriteRead(stackalloc byte[] { _I2C_MEM_REVISION_HW_MAJOR_ADD }, buffer);
+            ReadBlock(_I2C_MEM_REVISION_HW_MAJOR_ADD, buffer);
         }
         return (buffer[0], buffer[1]);
     }
@@ -137,9 +112,9 @@ public class SM4rel4in : IDisposable
     private (byte Major, byte Minor) GetSoftwareRevision()
     {
         Span<byte> buffer = stackalloc byte[2];
-        lock (_sync)
+        lock (Sync)
         {
-            _device.WriteRead(stackalloc byte[] { _I2C_MEM_REVISION_MAJOR_ADD }, buffer);
+            ReadBlock(_I2C_MEM_REVISION_MAJOR_ADD, buffer);
         }
         return (buffer[0], buffer[1]);
     }
@@ -147,24 +122,7 @@ public class SM4rel4in : IDisposable
     public (byte Major, byte Minor) HardwareRevision => _hardwareRevision.Value;
     public (byte Major, byte Minor) SoftwareRevision => _softwareRevision.Value;
 
-    private ushort ReadRegUInt16(byte register)
-    {
-        Span<byte> buffer = stackalloc byte[2];
-        _device.WriteRead(stackalloc byte[] { register }, buffer);
-        return BitConverter.ToUInt16(buffer);
-    }
-
-    private uint ReadRegUInt32(byte register)
-    {
-        Span<byte> buffer = stackalloc byte[4];
-        _device.WriteRead(stackalloc byte[] { register }, buffer);
-        return BitConverter.ToUInt32(buffer);
-    }
-
-    private void WriteReg(byte register, byte value)
-    {
-        _device.Write(stackalloc byte[] { register, value });
-    }
+    private short ReadRegInt16(byte register) => unchecked((short)ReadUInt16(register));
 
     public void SetRelay(int relay, int val)
     {
@@ -173,12 +131,12 @@ public class SM4rel4in : IDisposable
 
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 if (val != 0)
-                    WriteReg(_I2C_MEM_RELAY_SET, (byte)relay);
+                    WriteByte(_I2C_MEM_RELAY_SET, (byte)relay);
                 else
-                    WriteReg(_I2C_MEM_RELAY_CLR, (byte)relay);
+                    WriteByte(_I2C_MEM_RELAY_CLR, (byte)relay);
             }
             _logger.LogDebug("Relay set - Relay: {Relay}, Value: {Value}", relay, val);
         }
@@ -193,9 +151,9 @@ public class SM4rel4in : IDisposable
     {
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                WriteReg(_I2C_MEM_RELAY_VAL, (byte)(0x0f & val));
+                WriteByte(_I2C_MEM_RELAY_VAL, (byte)(0x0f & val));
             }
             _logger.LogDebug("All relays set - Mask: 0x{Mask:X2}", (byte)(0x0f & val));
         }
@@ -213,9 +171,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int val;
-            lock (_sync)
+            lock (Sync)
             {
-                val = ReadRegByte(_I2C_MEM_RELAY_VAL);
+                val = ReadByte(_I2C_MEM_RELAY_VAL);
             }
             return ((val & (1 << (relay - 1))) != 0) ? 1 : 0;
         }
@@ -230,9 +188,9 @@ public class SM4rel4in : IDisposable
     {
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                return ReadRegByte(_I2C_MEM_RELAY_VAL);
+                return ReadByte(_I2C_MEM_RELAY_VAL);
             }
         }
         catch (Exception e)
@@ -249,9 +207,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int val;
-            lock (_sync)
+            lock (Sync)
             {
-                val = ReadRegByte(_I2C_MEM_DIG_IN);
+                val = ReadByte(_I2C_MEM_DIG_IN);
             }
             return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
         }
@@ -266,9 +224,9 @@ public class SM4rel4in : IDisposable
     {
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                return ReadRegByte(_I2C_MEM_DIG_IN);
+                return ReadByte(_I2C_MEM_DIG_IN);
             }
         }
         catch (Exception e)
@@ -285,9 +243,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int val;
-            lock (_sync)
+            lock (Sync)
             {
-                val = ReadRegByte(_I2C_MEM_AC_IN);
+                val = ReadByte(_I2C_MEM_AC_IN);
             }
             return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
         }
@@ -302,9 +260,9 @@ public class SM4rel4in : IDisposable
     {
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                return ReadRegByte(_I2C_MEM_AC_IN);
+                return ReadByte(_I2C_MEM_AC_IN);
             }
         }
         catch (Exception e)
@@ -321,9 +279,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int val;
-            lock (_sync)
+            lock (Sync)
             {
-                val = ReadRegByte(_I2C_MEM_EDGE_ENABLE);
+                val = ReadByte(_I2C_MEM_EDGE_ENABLE);
             }
             return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
         }
@@ -340,14 +298,14 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                int val = ReadRegByte(_I2C_MEM_EDGE_ENABLE);
+                int val = ReadByte(_I2C_MEM_EDGE_ENABLE);
                 if (state != 0)
                     val |= 1 << (channel - 1);
                 else
                     val &= ~(1 << (channel - 1));
-                WriteReg(_I2C_MEM_EDGE_ENABLE, (byte)val);
+                WriteByte(_I2C_MEM_EDGE_ENABLE, (byte)val);
             }
             _logger.LogDebug("SetCountCfg - Channel: {Channel}, State: {State}", channel, state);
         }
@@ -364,10 +322,10 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 byte address = (byte)(_I2C_MEM_PULSE_COUNT_START + (channel - 1) * _COUNT_SIZE_BYTES);
-                return ReadRegUInt32(address);
+                return ReadUInt32(address);
             }
         }
         catch (Exception e)
@@ -383,9 +341,9 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                WriteReg(_I2C_MEM_PULSE_COUNT_RESET, (byte)channel);
+                WriteByte(_I2C_MEM_PULSE_COUNT_RESET, (byte)channel);
             }
             _logger.LogDebug("ResetCount - Channel: {Channel}", channel);
         }
@@ -402,10 +360,10 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 byte address = (byte)(_I2C_MEM_PPS + (channel - 1) * _FREQ_SIZE_BYTES);
-                return ReadRegUInt16(address);
+                return ReadUInt16(address);
             }
         }
         catch (Exception e)
@@ -422,9 +380,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int val;
-            lock (_sync)
+            lock (Sync)
             {
-                val = ReadRegByte(_I2C_MEM_ENC_ENABLE);
+                val = ReadByte(_I2C_MEM_ENC_ENABLE);
             }
             return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
         }
@@ -441,14 +399,14 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                int val = ReadRegByte(_I2C_MEM_ENC_ENABLE);
+                int val = ReadByte(_I2C_MEM_ENC_ENABLE);
                 if (state != 0)
                     val |= 1 << (channel - 1);
                 else
                     val &= ~(1 << (channel - 1));
-                WriteReg(_I2C_MEM_ENC_ENABLE, (byte)val);
+                WriteByte(_I2C_MEM_ENC_ENABLE, (byte)val);
             }
             _logger.LogDebug("SetEncoderCfg - Channel: {Channel}, State: {State}", channel, state);
         }
@@ -465,10 +423,10 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 byte address = (byte)(_I2C_MEM_ENC_COUNT_START + (channel - 1) * _COUNT_SIZE_BYTES);
-                return (int)ReadRegUInt32(address);
+                return (int)ReadUInt32(address);
             }
         }
         catch (Exception e)
@@ -484,9 +442,9 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                WriteReg(_I2C_MEM_ENC_COUNT_RESET, (byte)channel);
+                WriteByte(_I2C_MEM_ENC_COUNT_RESET, (byte)channel);
             }
             _logger.LogDebug("ResetEncoder - Channel: {Channel}", channel);
         }
@@ -503,10 +461,10 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 byte address = (byte)(_I2C_MEM_IN_FREQUENCY + (channel - 1) * _FREQ_SIZE_BYTES);
-                return ReadRegUInt16(address);
+                return ReadUInt16(address);
             }
         }
         catch (Exception e)
@@ -522,10 +480,10 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 byte address = (byte)(_I2C_MEM_PWM_IN_FILL + (channel - 1) * _FREQ_SIZE_BYTES);
-                return ReadRegUInt16(address) / 100.0;
+                return ReadUInt16(address) / 100.0;
             }
         }
         catch (Exception e)
@@ -541,7 +499,7 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid relay number, number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 short val = ReadRegInt16((byte)(_I2C_CRT_IN + (channel - 1) * _CRT_SIZE));
                 return val / _CRT_SCALE;
@@ -560,7 +518,7 @@ public class SM4rel4in : IDisposable
             throw new ArgumentOutOfRangeException(nameof(channel), "Invalid relay number, number must be [1..4]!");
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 short val = ReadRegInt16((byte)(_I2C_CRT_IN_RMS + (channel - 1) * _CRT_SIZE));
                 return val / _CRT_SCALE;
@@ -573,61 +531,13 @@ public class SM4rel4in : IDisposable
         }
     }
 
-    [Obsolete("Use GetLedMode(byte ledNumber) returning LED_MODE instead.")]
-    public int GetLedCfg(int led)
-    {
-        if (led < 1 || led > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(led), "Invalid led number number must be [1..4]!");
-        try
-        {
-            return GetLedMode((byte)led) == LED_MODE.MANUAL ? 1 : 0;
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "GetLedCfg failed - Led: {Led}", led);
-            throw new Exception("Fail to read with exception " + e.Message, e);
-        }
-    }
-
-    [Obsolete("Use SetLedMode(byte ledNumber, LED_MODE mode) instead.")]
-    public void SetLedCfg(int led, int mode)
-    {
-        if (led < 1 || led > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(led), "Invalid led number number must be [1..4]!");
-        try
-        {
-            SetLedMode((byte)led, mode == 0 ? LED_MODE.AUTO : LED_MODE.MANUAL);
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "SetLedCfg failed - Led: {Led}, Mode: {Mode}", led, mode);
-            throw new Exception("Fail to write with exception " + e.Message, e);
-        }
-    }
-
-    [Obsolete("Use SetLedState(byte ledNumber, LED_STATE state) instead.")]
-    public void SetLed(int led, int val)
-    {
-        if (led < 1 || led > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(led), "Invalid led number number must be [1..4]!");
-        try
-        {
-            SetLedState((byte)led, val != 0 ? LED_STATE.ON : LED_STATE.OFF);
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "SetLed failed - Led: {Led}, Value: {Value}", led, val);
-            throw new Exception("Fail to write with exception " + e.Message, e);
-        }
-    }
-
     public void SetAllLeds(int val)
     {
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                WriteReg(_I2C_MEM_LED_VAL, (byte)(0x0f & val));
+                WriteByte(_I2C_MEM_LED_VAL, (byte)(0x0f & val));
             }
             _logger.LogDebug("SetAllLeds - Mask: 0x{Mask:X2}", (byte)(0x0f & val));
         }
@@ -638,29 +548,13 @@ public class SM4rel4in : IDisposable
         }
     }
 
-    [Obsolete("Use GetLedState(byte ledNumber) returning LED_STATE instead.")]
-    public int GetLed(int led)
-    {
-        if (led < 1 || led > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(led), "Invalid led number number must be [1..4]!");
-        try
-        {
-            return GetLedState((byte)led) == LED_STATE.ON ? 1 : 0;
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "GetLed failed - Led: {Led}", led);
-            throw new Exception("Fail to read with exception " + e.Message, e);
-        }
-    }
-
     public int GetAllLeds()
     {
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                return ReadRegByte(_I2C_MEM_LED_VAL);
+                return ReadByte(_I2C_MEM_LED_VAL);
             }
         }
         catch (Exception e)
@@ -677,9 +571,9 @@ public class SM4rel4in : IDisposable
 
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
-                int current = ReadRegByte(_I2C_MEM_LED_MODE);
+                int current = ReadByte(_I2C_MEM_LED_MODE);
                 if (mode == LED_MODE.MANUAL)
                 {
                     current |= 1 << (ledNumber - 1);
@@ -688,7 +582,7 @@ public class SM4rel4in : IDisposable
                 {
                     current &= ~(1 << (ledNumber - 1));
                 }
-                WriteReg(_I2C_MEM_LED_MODE, (byte)current);
+                WriteByte(_I2C_MEM_LED_MODE, (byte)current);
             }
             _logger.LogDebug("SetLedMode - Led: {Led}, Mode: {Mode}", ledNumber, mode);
         }
@@ -707,9 +601,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int current;
-            lock (_sync)
+            lock (Sync)
             {
-                current = ReadRegByte(_I2C_MEM_LED_MODE);
+                current = ReadByte(_I2C_MEM_LED_MODE);
             }
             return (current & (1 << (ledNumber - 1))) != 0 ? LED_MODE.MANUAL : LED_MODE.AUTO;
         }
@@ -727,10 +621,10 @@ public class SM4rel4in : IDisposable
 
         try
         {
-            lock (_sync)
+            lock (Sync)
             {
                 var reg = state == LED_STATE.ON ? _I2C_MEM_LED_SET : _I2C_MEM_LED_CLR;
-                WriteReg(reg, ledNumber);
+                WriteByte(reg, ledNumber);
             }
             _logger.LogDebug("SetLedState - Led: {Led}, State: {State}", ledNumber, state);
         }
@@ -749,9 +643,9 @@ public class SM4rel4in : IDisposable
         try
         {
             int val;
-            lock (_sync)
+            lock (Sync)
             {
-                val = ReadRegByte(_I2C_MEM_LED_VAL);
+                val = ReadByte(_I2C_MEM_LED_VAL);
             }
             return (val & (1 << (ledNumber - 1))) != 0 ? LED_STATE.ON : LED_STATE.OFF;
         }
@@ -760,16 +654,6 @@ public class SM4rel4in : IDisposable
             _logger.LogError(e, "GetLedState failed - Led: {Led}", ledNumber);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
-    }
-}
-
-public static class I2cDeviceExtensions
-{
-    public static byte ReadByte(this I2cDevice device, byte register)
-    {
-        Span<byte> buffer = stackalloc byte[1];
-        device.WriteRead(stackalloc byte[] { register }, buffer);
-        return buffer[0];
     }
 }
 
