@@ -114,6 +114,13 @@ public class MockGpioController : IGpioController
     }
 
     /// <inheritdoc />
+    public void OpenPin(int pinNumber, PinMode mode)
+    {
+        var initial = mode == PinMode.Output ? PinValue.Low : PinValue.Low;
+        OpenPin(pinNumber, mode, initial);
+    }
+
+    /// <inheritdoc />
     public void OpenPin(int pinNumber, PinMode mode, PinValue initialValue)
     {
         ThrowIfDisposed();

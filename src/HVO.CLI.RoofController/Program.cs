@@ -14,20 +14,7 @@ class Program
         // Console.WriteLine("Relay Hardware Revision: " + sequentRelayHat.HardwareRevision);
         // Console.WriteLine("Relay Software Revision: " + sequentRelayHat.SoftwareRevision);
 
-        var voltageIn = Wdt.GetVin();
-        Console.WriteLine("Vin: " + voltageIn);
-
-        var voltageBat = Wdt.GetVbat();
-        Console.WriteLine("Vbat: " + voltageBat);
-
-        var tempC = Wdt.GetTemp();
-        Console.WriteLine("TempC: " + tempC);
-
-        var chargeStat = Wdt.GetChargeStat();
-        Console.WriteLine("ChargeStat: " + chargeStat);
-
-        var vRasp = Wdt.GetVrasp();
-        Console.WriteLine("VRasp: " + vRasp);
+    Console.WriteLine("RoofController CLI placeholder: watchdog telemetry reading not wired.");
 
 
 

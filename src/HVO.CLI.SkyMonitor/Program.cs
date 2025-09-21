@@ -125,10 +125,7 @@ public sealed class ASICameraAdaptorFactory
             throw new ArgumentOutOfRangeException(nameof(cameraIndex), "Invalid camera index.");
         }
 
-        var cameraAdaptor = Activator.CreateInstance<ASICameraAdaptor>();
-        cameraAdaptor.Initialize(cameraIndex);
-
-        return cameraAdaptor;
+        return new ASICameraAdaptor(cameraIndex);
     }
 }
 

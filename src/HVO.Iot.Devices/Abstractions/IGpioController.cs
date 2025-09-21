@@ -25,7 +25,14 @@ public interface IGpioController : IDisposable
     bool IsPinOpen(int pinNumber);
 
     /// <summary>
-    /// Opens a pin for GPIO operations.
+    /// Opens a pin for GPIO operations with a default initial value (Low for outputs).
+    /// </summary>
+    /// <param name="pinNumber">The pin number to open.</param>
+    /// <param name="mode">The mode to configure the pin in.</param>
+    void OpenPin(int pinNumber, PinMode mode);
+
+    /// <summary>
+    /// Opens a pin for GPIO operations with an explicit initial value for outputs.
     /// </summary>
     /// <param name="pinNumber">The pin number to open.</param>
     /// <param name="mode">The mode to configure the pin in.</param>

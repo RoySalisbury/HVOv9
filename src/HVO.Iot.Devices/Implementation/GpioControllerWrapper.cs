@@ -186,6 +186,14 @@ public class GpioControllerWrapper : IGpioController
     }
 
     /// <inheritdoc />
+    public void OpenPin(int pinNumber, PinMode mode)
+    {
+        ThrowIfDisposed();
+        var initial = mode == PinMode.Output ? PinValue.Low : PinValue.Low;
+        _gpioController.OpenPin(pinNumber, mode, initial);
+    }
+
+    /// <inheritdoc />
     public void ClosePin(int pinNumber)
     {
         ThrowIfDisposed();
@@ -272,6 +280,13 @@ internal class SystemGpioControllerAdapter : IGpioController
         ThrowIfDisposed();
         _systemGpioController.OpenPin(pinNumber, mode, initialValue); 
         ;
+    }
+
+    public void OpenPin(int pinNumber, PinMode mode)
+    {
+        ThrowIfDisposed();
+        var initial = mode == PinMode.Output ? PinValue.Low : PinValue.Low;
+        _systemGpioController.OpenPin(pinNumber, mode, initial);
     }
 
     public void ClosePin(int pinNumber)
