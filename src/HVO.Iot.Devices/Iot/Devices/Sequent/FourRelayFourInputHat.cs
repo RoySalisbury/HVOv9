@@ -10,16 +10,16 @@ namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 
 public class FourRelayFourInputHat : I2cRegisterDevice
 {
-    public enum LED_MODE
+    public enum LedMode
     {
-        AUTO = 0,
-        MANUAL = 1
+        Auto = 0,
+        Manual = 1
     }
 
-    public enum LED_STATE
+    public enum LedState
     {
-        OFF = 0,
-        ON = 1
+        Off = 0,
+        On = 1
     }
 
     public const string Version = "1.0.5";
@@ -58,8 +58,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
     private const byte _I2C_CRT_IN_RMS = 80;
     private const double _CRT_SCALE = 1000.0;
 
-    public const int LED_AUTO = 0;
-    public const int LED_MANUAL = 1;
+    // LED mode constants removed in favor of LedMode enum
 
     private readonly ILogger<FourRelayFourInputHat> _logger;
 
@@ -124,50 +123,50 @@ public class FourRelayFourInputHat : I2cRegisterDevice
 
     private short ReadRegInt16(byte register) => unchecked((short)ReadUInt16(register));
 
-    public void SetRelay(int relay, int val)
+    public void SetRelay(int relayIndex, bool isOn)
     {
-        if (relay < 1 || relay > _RELAY_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(relay), "Invalid relay number must be [1..4]!");
+        if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(relayIndex), "Invalid relay number must be [1..4]!");
 
         try
         {
             lock (Sync)
             {
-                if (val != 0)
-                    WriteByte(_I2C_MEM_RELAY_SET, (byte)relay);
+                if (isOn)
+                    WriteByte(_I2C_MEM_RELAY_SET, (byte)relayIndex);
                 else
-                    WriteByte(_I2C_MEM_RELAY_CLR, (byte)relay);
+                    WriteByte(_I2C_MEM_RELAY_CLR, (byte)relayIndex);
             }
-            _logger.LogDebug("Relay set - Relay: {Relay}, Value: {Value}", relay, val);
+            _logger.LogDebug("SetRelay - Relay: {Relay}, On: {On}", relayIndex, isOn);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetRelay failed - Relay: {Relay}, Value: {Value}", relay, val);
+            _logger.LogError(e, "SetRelay failed - Relay: {Relay}, On: {On}", relayIndex, isOn);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public void SetAllRelays(int val)
+    public void SetRelaysMask(byte mask)
     {
         try
         {
             lock (Sync)
             {
-                WriteByte(_I2C_MEM_RELAY_VAL, (byte)(0x0f & val));
+                WriteByte(_I2C_MEM_RELAY_VAL, (byte)(0x0f & mask));
             }
-            _logger.LogDebug("All relays set - Mask: 0x{Mask:X2}", (byte)(0x0f & val));
+            _logger.LogDebug("SetRelaysMask - Mask: 0x{Mask:X2}", (byte)(0x0f & mask));
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetAllRelays failed - Value: {Value}", val);
+            _logger.LogError(e, "SetRelaysMask failed - Mask: 0x{Mask:X2}", (byte)(0x0f & mask));
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public int GetRelay(int relay)
+    public bool IsRelayOn(int relayIndex)
     {
-        if (relay < 1 || relay > _RELAY_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(relay), "Invalid relay number must be [1..4]!");
+        if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(relayIndex), "Invalid relay number must be [1..4]!");
         try
         {
             int val;
@@ -175,35 +174,35 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 val = ReadByte(_I2C_MEM_RELAY_VAL);
             }
-            return ((val & (1 << (relay - 1))) != 0) ? 1 : 0;
+            return (val & (1 << (relayIndex - 1))) != 0;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetRelay failed - Relay: {Relay}", relay);
+            _logger.LogError(e, "IsRelayOn failed - Relay: {Relay}", relayIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetAllRelays()
+    public byte GetRelaysMask()
     {
         try
         {
             lock (Sync)
             {
-                return ReadByte(_I2C_MEM_RELAY_VAL);
+                return (byte)ReadByte(_I2C_MEM_RELAY_VAL);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetAllRelays failed");
+            _logger.LogError(e, "GetRelaysMask failed");
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetIn(int channel)
+    public bool IsDigitalInputHigh(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             int val;
@@ -211,35 +210,35 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 val = ReadByte(_I2C_MEM_DIG_IN);
             }
-            return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
+            return (val & (1 << (inputIndex - 1))) != 0;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetIn failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "IsDigitalInputHigh failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetAllIn()
+    public byte GetDigitalInputsMask()
     {
         try
         {
             lock (Sync)
             {
-                return ReadByte(_I2C_MEM_DIG_IN);
+                return (byte)ReadByte(_I2C_MEM_DIG_IN);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetAllIn failed");
+            _logger.LogError(e, "GetDigitalInputsMask failed");
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetAcIn(int channel)
+    public bool IsAcInputActive(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             int val;
@@ -247,35 +246,35 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 val = ReadByte(_I2C_MEM_AC_IN);
             }
-            return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
+            return (val & (1 << (inputIndex - 1))) != 0;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetAcIn failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "IsAcInputActive failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetAllAcIn()
+    public byte GetAcInputsMask()
     {
         try
         {
             lock (Sync)
             {
-                return ReadByte(_I2C_MEM_AC_IN);
+                return (byte)ReadByte(_I2C_MEM_AC_IN);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetAllAcIn failed");
+            _logger.LogError(e, "GetAcInputsMask failed");
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetCountCfg(int channel)
+    public bool IsCounterEnabled(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             int val;
@@ -283,100 +282,100 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 val = ReadByte(_I2C_MEM_EDGE_ENABLE);
             }
-            return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
+            return (val & (1 << (inputIndex - 1))) != 0;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetCountCfg failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "IsCounterEnabled failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void SetCountCfg(int channel, int state)
+    public void SetCounterEnabled(int inputIndex, bool enabled)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             lock (Sync)
             {
                 int val = ReadByte(_I2C_MEM_EDGE_ENABLE);
-                if (state != 0)
-                    val |= 1 << (channel - 1);
+                if (enabled)
+                    val |= 1 << (inputIndex - 1);
                 else
-                    val &= ~(1 << (channel - 1));
+                    val &= ~(1 << (inputIndex - 1));
                 WriteByte(_I2C_MEM_EDGE_ENABLE, (byte)val);
             }
-            _logger.LogDebug("SetCountCfg - Channel: {Channel}, State: {State}", channel, state);
+            _logger.LogDebug("SetCounterEnabled - Channel: {Channel}, Enabled: {Enabled}", inputIndex, enabled);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetCountCfg failed - Channel: {Channel}, State: {State}", channel, state);
+            _logger.LogError(e, "SetCounterEnabled failed - Channel: {Channel}, Enabled: {Enabled}", inputIndex, enabled);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public uint GetCount(int channel)
+    public uint GetPulseCount(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                byte address = (byte)(_I2C_MEM_PULSE_COUNT_START + (channel - 1) * _COUNT_SIZE_BYTES);
+                byte address = (byte)(_I2C_MEM_PULSE_COUNT_START + (inputIndex - 1) * _COUNT_SIZE_BYTES);
                 return ReadUInt32(address);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetCount failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetPulseCount failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void ResetCount(int channel)
+    public void ResetPulseCount(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                WriteByte(_I2C_MEM_PULSE_COUNT_RESET, (byte)channel);
+                WriteByte(_I2C_MEM_PULSE_COUNT_RESET, (byte)inputIndex);
             }
-            _logger.LogDebug("ResetCount - Channel: {Channel}", channel);
+            _logger.LogDebug("ResetPulseCount - Channel: {Channel}", inputIndex);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "ResetCount failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "ResetPulseCount failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public ushort GetPps(int channel)
+    public int GetPulsesPerSecond(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                byte address = (byte)(_I2C_MEM_PPS + (channel - 1) * _FREQ_SIZE_BYTES);
+                byte address = (byte)(_I2C_MEM_PPS + (inputIndex - 1) * _FREQ_SIZE_BYTES);
                 return ReadUInt16(address);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetPps failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetPulsesPerSecond failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public int GetEncoderCfg(int channel)
+    public bool IsEncoderEnabled(int encoderIndex)
     {
-        if (channel < 1 || channel > _ENC_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
+        if (encoderIndex < 1 || encoderIndex > _ENC_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(encoderIndex), "Invalid encoder channel number must be [1..2]!");
         try
         {
             int val;
@@ -384,219 +383,219 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 val = ReadByte(_I2C_MEM_ENC_ENABLE);
             }
-            return ((val & (1 << (channel - 1))) != 0) ? 1 : 0;
+            return (val & (1 << (encoderIndex - 1))) != 0;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetEncoderCfg failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "IsEncoderEnabled failed - Channel: {Channel}", encoderIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void SetEncoderCfg(int channel, int state)
+    public void SetEncoderEnabled(int encoderIndex, bool enabled)
     {
-        if (channel < 1 || channel > _ENC_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
+        if (encoderIndex < 1 || encoderIndex > _ENC_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(encoderIndex), "Invalid encoder channel number must be [1..2]!");
         try
         {
             lock (Sync)
             {
                 int val = ReadByte(_I2C_MEM_ENC_ENABLE);
-                if (state != 0)
-                    val |= 1 << (channel - 1);
+                if (enabled)
+                    val |= 1 << (encoderIndex - 1);
                 else
-                    val &= ~(1 << (channel - 1));
+                    val &= ~(1 << (encoderIndex - 1));
                 WriteByte(_I2C_MEM_ENC_ENABLE, (byte)val);
             }
-            _logger.LogDebug("SetEncoderCfg - Channel: {Channel}, State: {State}", channel, state);
+            _logger.LogDebug("SetEncoderEnabled - Channel: {Channel}, Enabled: {Enabled}", encoderIndex, enabled);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetEncoderCfg failed - Channel: {Channel}, State: {State}", channel, state);
+            _logger.LogError(e, "SetEncoderEnabled failed - Channel: {Channel}, Enabled: {Enabled}", encoderIndex, enabled);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public int GetEncoder(int channel)
+    public int GetEncoderCount(int encoderIndex)
     {
-        if (channel < 1 || channel > _ENC_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
+        if (encoderIndex < 1 || encoderIndex > _ENC_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(encoderIndex), "Invalid encoder channel number must be [1..2]!");
         try
         {
             lock (Sync)
             {
-                byte address = (byte)(_I2C_MEM_ENC_COUNT_START + (channel - 1) * _COUNT_SIZE_BYTES);
+                byte address = (byte)(_I2C_MEM_ENC_COUNT_START + (encoderIndex - 1) * _COUNT_SIZE_BYTES);
                 return (int)ReadUInt32(address);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetEncoder failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetEncoderCount failed - Channel: {Channel}", encoderIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void ResetEncoder(int channel)
+    public void ResetEncoderCount(int encoderIndex)
     {
-        if (channel < 1 || channel > _ENC_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..2]!");
+        if (encoderIndex < 1 || encoderIndex > _ENC_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(encoderIndex), "Invalid encoder channel number must be [1..2]!");
         try
         {
             lock (Sync)
             {
-                WriteByte(_I2C_MEM_ENC_COUNT_RESET, (byte)channel);
+                WriteByte(_I2C_MEM_ENC_COUNT_RESET, (byte)encoderIndex);
             }
-            _logger.LogDebug("ResetEncoder - Channel: {Channel}", channel);
+            _logger.LogDebug("ResetEncoderCount - Channel: {Channel}", encoderIndex);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "ResetEncoder failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "ResetEncoderCount failed - Channel: {Channel}", encoderIndex);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public ushort GetFrequency(int channel)
+    public double GetInputFrequencyHz(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                byte address = (byte)(_I2C_MEM_IN_FREQUENCY + (channel - 1) * _FREQ_SIZE_BYTES);
+                byte address = (byte)(_I2C_MEM_IN_FREQUENCY + (inputIndex - 1) * _FREQ_SIZE_BYTES);
                 return ReadUInt16(address);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetFrequency failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetInputFrequencyHz failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public double GetPwmFill(int channel)
+    public double GetPwmDutyCyclePercent(int inputIndex)
     {
-        if (channel < 1 || channel > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid input channel number number must be [1..4]!");
+        if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(inputIndex), "Invalid input channel number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                byte address = (byte)(_I2C_MEM_PWM_IN_FILL + (channel - 1) * _FREQ_SIZE_BYTES);
+                byte address = (byte)(_I2C_MEM_PWM_IN_FILL + (inputIndex - 1) * _FREQ_SIZE_BYTES);
                 return ReadUInt16(address) / 100.0;
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetPwmFill failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetPwmDutyCyclePercent failed - Channel: {Channel}", inputIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public double GetCrt(int channel)
+    public double GetCurrentAmps(int relayIndex)
     {
-        if (channel < 1 || channel > _RELAY_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid relay number, number must be [1..4]!");
+        if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(relayIndex), "Invalid relay number, number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                short val = ReadRegInt16((byte)(_I2C_CRT_IN + (channel - 1) * _CRT_SIZE));
+                short val = ReadRegInt16((byte)(_I2C_CRT_IN + (relayIndex - 1) * _CRT_SIZE));
                 return val / _CRT_SCALE;
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetCrt failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetCurrentAmps failed - Relay: {Relay}", relayIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public double GetCrtRms(int channel)
+    public double GetCurrentRmsAmps(int relayIndex)
     {
-        if (channel < 1 || channel > _RELAY_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(channel), "Invalid relay number, number must be [1..4]!");
+        if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(relayIndex), "Invalid relay number, number must be [1..4]!");
         try
         {
             lock (Sync)
             {
-                short val = ReadRegInt16((byte)(_I2C_CRT_IN_RMS + (channel - 1) * _CRT_SIZE));
+                short val = ReadRegInt16((byte)(_I2C_CRT_IN_RMS + (relayIndex - 1) * _CRT_SIZE));
                 return val / _CRT_SCALE;
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetCrtRms failed - Channel: {Channel}", channel);
+            _logger.LogError(e, "GetCurrentRmsAmps failed - Relay: {Relay}", relayIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void SetAllLeds(int val)
+    public void SetLedsMask(byte mask)
     {
         try
         {
             lock (Sync)
             {
-                WriteByte(_I2C_MEM_LED_VAL, (byte)(0x0f & val));
+                WriteByte(_I2C_MEM_LED_VAL, (byte)(0x0f & mask));
             }
-            _logger.LogDebug("SetAllLeds - Mask: 0x{Mask:X2}", (byte)(0x0f & val));
+            _logger.LogDebug("SetLedsMask - Mask: 0x{Mask:X2}", (byte)(0x0f & mask));
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetAllLeds failed - Value: {Value}", val);
+            _logger.LogError(e, "SetLedsMask failed - Mask: 0x{Mask:X2}", (byte)(0x0f & mask));
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public int GetAllLeds()
+    public byte GetLedsMask()
     {
         try
         {
             lock (Sync)
             {
-                return ReadByte(_I2C_MEM_LED_VAL);
+                return (byte)ReadByte(_I2C_MEM_LED_VAL);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetAllLeds failed");
+            _logger.LogError(e, "GetLedsMask failed");
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void SetLedMode(byte ledNumber, LED_MODE mode)
+    public void SetLedMode(int ledIndex, LedMode mode)
     {
-        if (ledNumber < 1 || ledNumber > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(ledNumber), "LED number must be between 1 and 4.");
+        if (ledIndex < 1 || ledIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(ledIndex), "LED number must be between 1 and 4.");
 
         try
         {
             lock (Sync)
             {
                 int current = ReadByte(_I2C_MEM_LED_MODE);
-                if (mode == LED_MODE.MANUAL)
+                if (mode == LedMode.Manual)
                 {
-                    current |= 1 << (ledNumber - 1);
+                    current |= 1 << (ledIndex - 1);
                 }
                 else
                 {
-                    current &= ~(1 << (ledNumber - 1));
+                    current &= ~(1 << (ledIndex - 1));
                 }
                 WriteByte(_I2C_MEM_LED_MODE, (byte)current);
             }
-            _logger.LogDebug("SetLedMode - Led: {Led}, Mode: {Mode}", ledNumber, mode);
+            _logger.LogDebug("SetLedMode - Led: {Led}, Mode: {Mode}", ledIndex, mode);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetLedMode failed - Led: {Led}, Mode: {Mode}", ledNumber, mode);
+            _logger.LogError(e, "SetLedMode failed - Led: {Led}, Mode: {Mode}", ledIndex, mode);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public LED_MODE GetLedMode(byte ledNumber)
+    public LedMode GetLedMode(int ledIndex)
     {
-        if (ledNumber < 1 || ledNumber > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(ledNumber), "LED number must be between 1 and 4.");
+        if (ledIndex < 1 || ledIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(ledIndex), "LED number must be between 1 and 4.");
 
         try
         {
@@ -605,40 +604,40 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 current = ReadByte(_I2C_MEM_LED_MODE);
             }
-            return (current & (1 << (ledNumber - 1))) != 0 ? LED_MODE.MANUAL : LED_MODE.AUTO;
+            return (current & (1 << (ledIndex - 1))) != 0 ? LedMode.Manual : LedMode.Auto;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetLedMode failed - Led: {Led}", ledNumber);
+            _logger.LogError(e, "GetLedMode failed - Led: {Led}", ledIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
 
-    public void SetLedState(byte ledNumber, LED_STATE state)
+    public void SetLed(int ledIndex, bool isOn)
     {
-        if (ledNumber < 1 || ledNumber > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(ledNumber), "LED number must be between 1 and 4.");
+        if (ledIndex < 1 || ledIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(ledIndex), "LED number must be between 1 and 4.");
 
         try
         {
             lock (Sync)
             {
-                var reg = state == LED_STATE.ON ? _I2C_MEM_LED_SET : _I2C_MEM_LED_CLR;
-                WriteByte(reg, ledNumber);
+                var reg = isOn ? _I2C_MEM_LED_SET : _I2C_MEM_LED_CLR;
+                WriteByte(reg, (byte)ledIndex);
             }
-            _logger.LogDebug("SetLedState - Led: {Led}, State: {State}", ledNumber, state);
+            _logger.LogDebug("SetLed - Led: {Led}, On: {On}", ledIndex, isOn);
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "SetLedState failed - Led: {Led}, State: {State}", ledNumber, state);
+            _logger.LogError(e, "SetLed failed - Led: {Led}, On: {On}", ledIndex, isOn);
             throw new Exception("Fail to write with exception " + e.Message, e);
         }
     }
 
-    public LED_STATE GetLedState(byte ledNumber)
+    public bool IsLedOn(int ledIndex)
     {
-        if (ledNumber < 1 || ledNumber > _IN_CH_COUNT)
-            throw new ArgumentOutOfRangeException(nameof(ledNumber), "LED number must be between 1 and 4.");
+        if (ledIndex < 1 || ledIndex > _IN_CH_COUNT)
+            throw new ArgumentOutOfRangeException(nameof(ledIndex), "LED number must be between 1 and 4.");
 
         try
         {
@@ -647,11 +646,11 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 val = ReadByte(_I2C_MEM_LED_VAL);
             }
-            return (val & (1 << (ledNumber - 1))) != 0 ? LED_STATE.ON : LED_STATE.OFF;
+            return (val & (1 << (ledIndex - 1))) != 0;
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "GetLedState failed - Led: {Led}", ledNumber);
+            _logger.LogError(e, "IsLedOn failed - Led: {Led}", ledIndex);
             throw new Exception("Fail to read with exception " + e.Message, e);
         }
     }
