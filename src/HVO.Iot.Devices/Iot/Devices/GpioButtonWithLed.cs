@@ -808,12 +808,16 @@ public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
         }
     }
 
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
     protected override void HandleButtonPressed()
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
     {
         base.HandleButtonPressed();
     }
 
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
     protected override void HandleButtonReleased()
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
     {
         base.HandleButtonReleased();
     }
