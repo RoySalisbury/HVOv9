@@ -417,11 +417,13 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
             this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
 
             // // Set all relays to safe state for STOP operation atomically
-            SetRelayStatesAtomically(
-                stopRelay: true,    // Stop relay ON to halt movement - Wired N/C
-                openRelay: false,   // Open relay OFF
-                closeRelay: false   // Close relay OFF
-            );
+                SetRelayStatesAtomically(
+                    stopRelay: true,  // Stop relay OFF to halt movement 
+                    openRelay: false,   // Open relay ON
+                    closeRelay: false, // Close relay OFF
+                    clearFault: false   // Close relay OFF
+                );
+
 
             // Update status based on limit switch states and last command
             this.UpdateRoofStatus();
@@ -463,9 +465,10 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
 
                 // // Start the motors to open the roof atomically
                 SetRelayStatesAtomically(
-                    stopRelay: false,    // Stop relay OFF to halt movement 
+                    stopRelay: false,  // Stop relay OFF to halt movement 
                     openRelay: true,   // Open relay ON
-                    closeRelay: false   // Close relay OFF
+                    closeRelay: false, // Close relay OFF
+                    clearFault: false   // Close relay OFF
                 );
 
                 // Set the status to opening
@@ -518,10 +521,12 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
 
                 // // Start the motors to close the roof atomically
                 SetRelayStatesAtomically(
-                    stopRelay: false,    // Stop relay OFF to halt movement 
-                    openRelay: false,   // Open relay OFF
-                    closeRelay: true   // Close relay ON
+                    stopRelay: false,  // Stop relay OFF to halt movement 
+                    openRelay: false,   // Open relay ON
+                    closeRelay: true, // Close relay OFF
+                    clearFault: false   // Close relay OFF
                 );
+
 
                 // Set the status to closing
                 this.Status = RoofControllerStatus.Closing;
@@ -547,7 +552,7 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     /// <param name="stopRelay">State for stop relay</param>
     /// <param name="openRelay">State for open relay</param>
     /// <param name="closeRelay">State for close relay</param>
-    protected virtual void SetRelayStatesAtomically(bool stopRelay, bool openRelay, bool closeRelay)
+    protected virtual void SetRelayStatesAtomically(bool stopRelay, bool openRelay, bool closeRelay, bool clearFault = false)
     {
         if (this._fourRelayFourInputHat == null || _roofControllerOptions == null)
             return;
@@ -585,6 +590,38 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
         }
     }
 
+    protected virtual Result<bool> ClearFault(int pulseMs = 250)
+    {
+        pulseMs = Math.Max(0, pulseMs);
+
+        try
+        {
+            ThrowIfDisposed();
+
+            lock (this._syncLock)
+            {
+                if (this.IsInitialized == false)
+                {
+                    return Result<bool>.Failure(new InvalidOperationException("Device not initialized"));
+                }
+
+                InternalStop(RoofControllerStopReason.EmergencyStop);
+
+                this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, false);
+                this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, true);
+                Task.Delay(pulseMs).Wait();
+                this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, false);
+
+                this._logger.LogInformation($"====ClearFault - {DateTime.Now:O}. Current Status: {this.Status}");
+
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            return Result<bool>.Failure(ex);
+        }
+    }
 
     /// <summary>
     /// Thread-safe check if the controller is disposed without throwing.

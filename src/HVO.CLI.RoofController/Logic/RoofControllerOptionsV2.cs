@@ -8,7 +8,8 @@ public record class RoofControllerOptionsV2
     /// </summary>
     public TimeSpan SafetyWatchdogTimeout { get; set; } = TimeSpan.FromSeconds(90);
 
-    public int StopRelayId { get; set; } = 1;
-    public int OpenRelayId { get; set; } = 2;
-    public int CloseRelayId { get; set; } = 3;
+    public int OpenRelayId { get; set; } = 1; // FWD
+    public int CloseRelayId { get; set; } = 2; // REV
+    public int ClearFault { get; set; } = 3;
+    public int StopRelayId { get; set; } = 4;
 }
