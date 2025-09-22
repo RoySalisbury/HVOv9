@@ -276,6 +276,25 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    public Result<(bool in1, bool in2, bool in3, bool in4)> GetAllDigitalInputs()
+    {
+        var maskResult = GetDigitalInputsMask();
+        if (maskResult.IsFailure)
+        {
+            _logger.LogError(maskResult.Error, "GetAllDigitalInputs failed to read digital input mask");
+            return Result<(bool, bool, bool, bool)>.Failure(maskResult.Error!);
+        }
+
+        byte mask = maskResult.Value;
+        var result = (
+            in1: (mask & 0x01) != 0,
+            in2: (mask & 0x02) != 0,
+            in3: (mask & 0x04) != 0,
+            in4: (mask & 0x08) != 0
+        );
+        return result;
+    }
+
     public Result<bool> IsAcInputActive(int inputIndex)
     {
         if (inputIndex < 1 || inputIndex > _IN_CH_COUNT)
