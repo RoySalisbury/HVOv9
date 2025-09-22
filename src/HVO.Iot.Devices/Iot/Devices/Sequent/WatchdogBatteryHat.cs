@@ -562,8 +562,6 @@ public class WatchdogBatteryHat : I2cRegisterDevice
         }
         return true;
     }
-
-    // remove local I2C helpers; using base class helpers
 }
 
 #pragma warning restore CS1591 // Missing XML comment for publicly visible type or member

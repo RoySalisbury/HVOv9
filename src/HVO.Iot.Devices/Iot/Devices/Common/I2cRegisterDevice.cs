@@ -6,16 +6,20 @@ namespace HVO.Iot.Devices.Iot.Devices.Common;
 
 public abstract class I2cRegisterDevice : IDisposable
 {
-    protected I2cRegisterDevice(int busId, int address)
+    private readonly int _postTransactionDelayMs;
+
+    protected I2cRegisterDevice(int busId, int address, int postTransactionDelayMs = 15)
     {
         Device = I2cDevice.Create(new I2cConnectionSettings(busId, address));
         OwnsDevice = true;
+        _postTransactionDelayMs = postTransactionDelayMs < 0 ? 0 : postTransactionDelayMs;
     }
 
-    protected I2cRegisterDevice(I2cDevice device)
+    protected I2cRegisterDevice(I2cDevice device, int postTransactionDelayMs = 15)
     {
         Device = device ?? throw new ArgumentNullException(nameof(device));
         OwnsDevice = false;
+        _postTransactionDelayMs = postTransactionDelayMs < 0 ? 0 : postTransactionDelayMs;
     }
 
     protected I2cDevice Device { get; }
@@ -34,6 +38,7 @@ public abstract class I2cRegisterDevice : IDisposable
     {
         Span<byte> rb = stackalloc byte[1];
         Device.WriteRead(stackalloc byte[] { reg }, rb);
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
         return rb[0];
     }
 
@@ -41,6 +46,7 @@ public abstract class I2cRegisterDevice : IDisposable
     {
         Span<byte> rb = stackalloc byte[2];
         Device.WriteRead(stackalloc byte[] { reg }, rb);
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
         return (ushort)(rb[0] | (rb[1] << 8));
     }
 
@@ -48,22 +54,26 @@ public abstract class I2cRegisterDevice : IDisposable
     {
         Span<byte> rb = stackalloc byte[4];
         Device.WriteRead(stackalloc byte[] { reg }, rb);
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
         return (uint)(rb[0] | (rb[1] << 8) | (rb[2] << 16) | (rb[3] << 24));
     }
 
     protected void ReadBlock(byte reg, Span<byte> destination)
     {
         Device.WriteRead(stackalloc byte[] { reg }, destination);
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
     }
 
     protected void WriteByte(byte reg, byte value)
     {
         Device.Write(stackalloc byte[] { reg, value });
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
     }
 
     protected void WriteUInt16(byte reg, ushort value)
     {
         Device.Write(stackalloc byte[] { reg, (byte)(value & 0xFF), (byte)((value >> 8) & 0xFF) });
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
     }
 
     protected void WriteBlock(byte reg, ReadOnlySpan<byte> data)
@@ -72,6 +82,7 @@ public abstract class I2cRegisterDevice : IDisposable
         buffer[0] = reg;
         data.CopyTo(buffer.AsSpan(1));
         Device.Write(buffer);
+        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
     }
 }
 

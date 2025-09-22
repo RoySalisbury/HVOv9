@@ -17,12 +17,6 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         Manual = 1
     }
 
-    public enum LedState
-    {
-        Off = 0,
-        On = 1
-    }
-
     public const string Version = "1.0.5";
     private const int _CARD_BASE_ADDRESS = 0x0e;
     private const int _STACK_LEVEL_MAX = 7;
@@ -59,8 +53,6 @@ public class FourRelayFourInputHat : I2cRegisterDevice
     private const byte _I2C_CRT_IN_RMS = 80;
     private const double _CRT_SCALE = 1000.0;
 
-    // LED mode constants removed in favor of LedMode enum
-
     private readonly ILogger<FourRelayFourInputHat> _logger;
 
     private readonly int _hwAddress;
@@ -81,7 +73,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         _hardwareRevision = new Lazy<(byte Major, byte Minor)>(GetHardwareRevision);
         _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
 
-        _logger.LogInformation("SM4rel4in initialized - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
+        _logger.LogInformation("FourRelayFourInputHat initialized - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
     }
 
     public FourRelayFourInputHat(I2cDevice device, ILogger<FourRelayFourInputHat>? logger = null)
@@ -95,7 +87,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         _hardwareRevision = new Lazy<(byte Major, byte Minor)>(GetHardwareRevision);
         _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
 
-        _logger.LogInformation("SM4rel4in initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
+        _logger.LogInformation("FourRelayFourInputHat initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
     }
 
 
@@ -145,6 +137,52 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         {
             _logger.LogError(e, "SetRelay failed - Relay: {Relay}, On: {On}", relayIndex, isOn);
             return Result<bool>.Failure(e);
+        }
+    }
+
+    public Result<bool> TrySetRelayWithRetry(int relayIndex, bool desiredState, int attempts = 3, int delayMs = 5)
+    {
+        if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
+            return Result<bool>.Failure(new ArgumentOutOfRangeException(nameof(relayIndex), "Invalid relay number must be [1..4]!"));
+
+        if (attempts < 1) attempts = 1;
+        if (delayMs < 0) delayMs = 0;
+
+        Exception? lastError = null;
+        for (int i = 1; i <= attempts; i++)
+        {
+            var setResult = SetRelay(relayIndex, desiredState);
+            if (setResult.IsFailure)
+            {
+                lastError = setResult.Error;
+            }
+
+            var verifyResult = IsRelayOn(relayIndex);
+            if (!verifyResult.IsFailure && verifyResult.Value == desiredState)
+            {
+                _logger.LogDebug("TrySetRelayWithRetry succeeded - Relay: {Relay}, State: {State}, Attempt: {Attempt}", relayIndex, desiredState, i);
+                return true;
+            }
+
+            if (i < attempts && delayMs > 0)
+            {
+                try
+                {
+                    Task.Delay(delayMs).Wait();
+                }
+                catch { /* ignore */ }
+            }
+        }
+
+        if (lastError is not null)
+        {
+            _logger.LogError(lastError, "TrySetRelayWithRetry failed - Relay: {Relay}, State: {State}, Attempts: {Attempts}", relayIndex, desiredState, attempts);
+            return Result<bool>.Failure(lastError);
+        }
+        else
+        {
+            _logger.LogError("TrySetRelayWithRetry verification failed - Relay: {Relay}, State: {State}, Attempts: {Attempts}", relayIndex, desiredState, attempts);
+            return false; // indication of failure without specific exception
         }
     }
 

@@ -1,68 +1,77 @@
-﻿using System.Device.I2c;
+﻿using System;
+using System.Device.Gpio;
+using System.Device.Gpio.Drivers;
+using HVO.Iot.Devices; // Your namespace for GpioLimitSwitch
+using HVO.Iot.Devices.Abstractions;
+using HVO.Iot.Devices.Implementation;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+using HVO.CLI.RoofController.HostedService;
+using HVO.CLI.RoofController.Logic;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
-using Iot.Device.OneWire;
+using Iot.Device.Common;
 
 namespace HVO.CLI.RoofController;
 
 class Program
 {
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
-        // var settings1 = new I2cConnectionSettings(1, 0x0e);
-        // using var device1 = I2cDevice.Create(settings1);
-        // using var sequentRelayHat = new FourRelayFourInputHat(device1);
-        // Console.WriteLine("Relay Hardware Revision: " + sequentRelayHat.HardwareRevision);
-        // Console.WriteLine("Relay Software Revision: " + sequentRelayHat.SoftwareRevision);
+        var hostApplicationBuilder = Host.CreateApplicationBuilder(args);
+        ConfigureServices(hostApplicationBuilder.Services, hostApplicationBuilder.Configuration, hostApplicationBuilder.Environment);
 
-    Console.WriteLine("RoofController CLI placeholder: watchdog telemetry reading not wired.");
+        var host = hostApplicationBuilder.Build();
+        ConfigureHost(host, hostApplicationBuilder.Environment);
 
+        await host.StartAsync();
 
+        // Do test stuff here ... the background service is still running....
+        var roofController = host.Services.GetRequiredService<IRoofControllerServiceV2>();
+        var status = roofController.Status;
 
+        for (int i = 0; i < 10; i++)
+        {
+            roofController.Stop();
+            await Task.Delay(1000);
 
-//         var ledMode1 = sequentRelayHat.GetLedMode(1);
-        // sequentRelayHat.SetLedMode(1, Iot.Devices.Iot.Devices.Sequent.FourRelayHat.LED_MODE.MANUAL);
-        // ledMode1 = sequentRelayHat.GetLedMode(1);
+            roofController.Close();
+            await Task.Delay(1000);
 
-        // var ledState1 = sequentRelayHat.GetLedState(1);
-        // sequentRelayHat.SetLedState(1, Iot.Devices.Iot.Devices.Sequent.FourRelayHat.LED_STATE.ON);
-        // ledState1 = sequentRelayHat.GetLedState(1);
-        // sequentRelayHat.SetLedState(1, Iot.Devices.Iot.Devices.Sequent.FourRelayHat.LED_STATE.OFF);
-        // ledState1 = sequentRelayHat.GetLedState(1);
+//            roofController.Stop();
+//            await Task.Delay(1000);
+        }
 
-        // sequentRelayHat.SetLedMode(1, Iot.Devices.Iot.Devices.Sequent.FourRelayHat.LED_MODE.AUTO);
-        // ledMode1 = sequentRelayHat.GetLedMode(1);
-        // sequentRelayHat.SetLedState(1, Iot.Devices.Iot.Devices.Sequent.FourRelayHat.LED_STATE.ON);
-        // ledState1 = sequentRelayHat.GetLedState(1);
-        // sequentRelayHat.SetLedState(1, Iot.Devices.Iot.Devices.Sequent.FourRelayHat.LED_STATE.OFF);
-        // ledState1 = sequentRelayHat.GetLedState(1);
+        await host.WaitForShutdownAsync();
+    }
 
+    private static void ConfigureServices(IServiceCollection services, IConfiguration configuration, IHostEnvironment hostEnvironment)
+    {
+        // Bind the configuration section to the MyServiceSettings class
+        services.Configure<RoofControllerOptionsV2>(configuration.GetSection(nameof(RoofControllerOptionsV2)));
+        services.Configure<RoofControllerHostOptionsV2>(configuration.GetSection(nameof(RoofControllerHostOptionsV2)));
 
+        services.AddSingleton<FourRelayFourInputHat>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<FourRelayFourInputHat>>();
+            return new FourRelayFourInputHat(logger: logger);
+        });
 
-        // sequentRelayHat.SetRelayState(1, true);
-        // sequentRelayHat.SetRelayState(2, true);
-        // sequentRelayHat.SetRelayState(3, true);
-        // sequentRelayHat.SetRelayState(4, true);
-        // System.Threading.Thread.Sleep(1000);
+        // Register other services for DI
+        services.AddSingleton<IRoofControllerServiceV2, RoofControllerServiceV2>();
 
-        // var relay1 = sequentRelayHat.GetRelayState(1);
-        // var relay2 = sequentRelayHat.GetRelayState(2);
-        // var relay3 = sequentRelayHat.GetRelayState(3);
-        // var relay4 = sequentRelayHat.GetRelayState(4);
-        // System.Threading.Thread.Sleep(1000);
+        // Register your background service
+        services.AddHostedService<RoofControllerServiceV2Host>();
+    }
 
+    private static void ConfigureHost(IHost host, IHostEnvironment hostEnvironment)
+    {
+        var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
-        // sequentRelayHat.SetRelayState(1, false);
-        // relay1 = sequentRelayHat.GetRelayState(1);
-        // sequentRelayHat.SetRelayState(2, false);
-        // relay2 = sequentRelayHat.GetRelayState(2);
-        // sequentRelayHat.SetRelayState(3, false);
-        // relay3 = sequentRelayHat.GetRelayState(3);
-        // sequentRelayHat.SetRelayState(4, false);
-        // relay4 = sequentRelayHat.GetRelayState(4);
-
-        System.Threading.Thread.Sleep(1000);
-
-
+        lifetime.ApplicationStarted.Register(() => Console.WriteLine("IHostApplicationLifetime.ApplicationStarted"));
+        lifetime.ApplicationStopping.Register(() => Console.WriteLine("IHostApplicationLifetime.Register"));
+        lifetime.ApplicationStopped.Register(() => Console.WriteLine("IHostApplicationLifetime.ApplicationStopped"));
     }
 }
 
