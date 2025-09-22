@@ -11,7 +11,4 @@ public record class RoofControllerOptionsV2
     public int StopRelayId { get; set; } = 1;
     public int OpenRelayId { get; set; } = 2;
     public int CloseRelayId { get; set; } = 3;
-
-    public int MaxRelayRetryAttempts { get; set; } = 3;
-    public int RelayRetryDelayMs { get; set; } = 5;
 }

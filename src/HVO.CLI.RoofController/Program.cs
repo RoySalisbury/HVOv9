@@ -33,14 +33,17 @@ class Program
 
         for (int i = 0; i < 10; i++)
         {
-            roofController.Stop();
+            roofController.Open();
+            Console.WriteLine($"Status: {roofController.Status}");
             await Task.Delay(1000);
 
             roofController.Close();
+            Console.WriteLine($"Status: {roofController.Status}");
             await Task.Delay(1000);
 
-//            roofController.Stop();
-//            await Task.Delay(1000);
+            roofController.Stop();
+            Console.WriteLine($"Status: {roofController.Status}");
+            await Task.Delay(1000);
         }
 
         await host.WaitForShutdownAsync();

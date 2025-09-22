@@ -565,19 +565,16 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
         {
             try
             {
-                var attempts = Math.Max(1, _roofControllerOptions.MaxRelayRetryAttempts);
-                var delayMs = Math.Max(0, _roofControllerOptions.RelayRetryDelayMs);
-
-                var result = _fourRelayFourInputHat.TrySetRelayWithRetry(relayId, relayValue, attempts, delayMs);
+                var result = _fourRelayFourInputHat.TrySetRelayWithRetry(relayId, relayValue);
                 if (result.IsFailure || result.Value == false)
                 {
                     if (result.IsFailure && result.Error is not null)
                     {
-                        _logger.LogError(result.Error, "Failed to set {RelayName} relay pin {Pin} to {Value} after {Attempts} attempts", relayName, relayId, relayValue, attempts);
+                        _logger.LogError(result.Error, "Failed to set {RelayName} relay pin {Pin} to {Value} ", relayName, relayId, relayValue);
                     }
                     else
                     {
-                        _logger.LogError("Failed to verify {RelayName} relay pin {Pin} to {Value} after {Attempts} attempts", relayName, relayId, relayValue, attempts);
+                        _logger.LogError("Failed to verify {RelayName} relay pin {Pin} to {Value}", relayName, relayId, relayValue);
                     }
                 }
             }
