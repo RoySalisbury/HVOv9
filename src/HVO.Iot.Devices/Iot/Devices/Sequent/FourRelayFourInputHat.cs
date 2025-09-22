@@ -9,11 +9,19 @@ using HVO;
 
 namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 
+/// <summary>
+/// Sequent Microsystems 4-Relay/4-Input HAT device driver with thread-safe I2C register access.
+/// </summary>
 public class FourRelayFourInputHat : I2cRegisterDevice
 {
+    /// <summary>
+    /// LED operating mode.
+    /// </summary>
     public enum LedMode
     {
-        Auto = 0,
+    /// <summary>LED behavior managed automatically by the HAT.</summary>
+    Auto = 0,
+        /// <summary>LED behavior controlled manually via API.</summary>
         Manual = 1
     }
 
@@ -60,6 +68,9 @@ public class FourRelayFourInputHat : I2cRegisterDevice
     private readonly Lazy<(byte Major, byte Minor)> _hardwareRevision;
     private readonly Lazy<(byte Major, byte Minor)> _softwareRevision;
 
+    /// <summary>
+    /// Initializes a new instance using a bus number and stack index (0..7).
+    /// </summary>
     public FourRelayFourInputHat(int stack = 0, int i2cBus = 1, ILogger<FourRelayFourInputHat>? logger = null)
         : base(i2cBus, _CARD_BASE_ADDRESS + stack)
     {
@@ -76,6 +87,9 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         _logger.LogInformation("FourRelayFourInputHat initialized - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
     }
 
+    /// <summary>
+    /// Initializes a new instance from an existing <see cref="I2cDevice"/>.
+    /// </summary>
     public FourRelayFourInputHat(I2cDevice device, ILogger<FourRelayFourInputHat>? logger = null)
         : base(device)
     {
@@ -111,11 +125,18 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         return (buffer[0], buffer[1]);
     }
 
+    /// <summary>Hardware revision (Major, Minor).</summary>
     public (byte Major, byte Minor) HardwareRevision => _hardwareRevision.Value;
+    /// <summary>Software/firmware revision (Major, Minor).</summary>
     public (byte Major, byte Minor) SoftwareRevision => _softwareRevision.Value;
 
     private short ReadRegInt16(byte register) => unchecked((short)ReadUInt16(register));
 
+    /// <summary>
+    /// Sets a relay on or off.
+    /// </summary>
+    /// <param name="relayIndex">Relay index 1..4.</param>
+    /// <param name="isOn">True to energize the relay; false to de-energize.</param>
     public Result<bool> SetRelay(int relayIndex, bool isOn)
     {
         if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
@@ -140,6 +161,14 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Sets a relay to <paramref name="desiredState"/> with verification and retry.
+    /// </summary>
+    /// <param name="relayIndex">Relay index 1..4.</param>
+    /// <param name="desiredState">Desired on/off state.</param>
+    /// <param name="attempts">Maximum attempts to try (>=1).</param>
+    /// <param name="delayMs">Delay in milliseconds between attempts (>=0).</param>
+    /// <returns>True on verified success; otherwise returns failure with context when available.</returns>
     public Result<bool> TrySetRelayWithRetry(int relayIndex, bool desiredState, int attempts = 3, int delayMs = 5)
     {
         if (relayIndex < 1 || relayIndex > _RELAY_COUNT)
@@ -157,6 +186,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
                 lastError = setResult.Error;
             }
 
+            // Read back relay state to verify
             var verifyResult = IsRelayOn(relayIndex);
             if (!verifyResult.IsFailure && verifyResult.Value == desiredState)
             {
@@ -168,6 +198,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             {
                 try
                 {
+                    // Allow HAT MCU time to settle between attempts
                     Task.Delay(delayMs).Wait();
                 }
                 catch { /* ignore */ }
@@ -260,6 +291,9 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Reads the digital inputs mask (bits 0..3 map to inputs 1..4).
+    /// </summary>
     public Result<byte> GetDigitalInputsMask()
     {
         try
@@ -276,6 +310,9 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Returns the high/low status of all 4 digital inputs as a tuple.
+    /// </summary>
     public Result<(bool in1, bool in2, bool in3, bool in4)> GetAllDigitalInputs()
     {
         var maskResult = GetDigitalInputsMask();
@@ -285,7 +322,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             return Result<(bool, bool, bool, bool)>.Failure(maskResult.Error!);
         }
 
-        byte mask = maskResult.Value;
+    byte mask = maskResult.Value; // bits 0..3 map to inputs 1..4
         var result = (
             in1: (mask & 0x01) != 0,
             in2: (mask & 0x02) != 0,
@@ -315,6 +352,9 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Reads the AC inputs mask (bits 0..3 map to inputs 1..4).
+    /// </summary>
     public Result<byte> GetAcInputsMask()
     {
         try
@@ -331,6 +371,9 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Returns the active/inactive status of all 4 AC inputs as a tuple.
+    /// </summary>
     public Result<(bool in1, bool in2, bool in3, bool in4)> GetAllAcInputs()
     {
         var maskResult = GetAcInputsMask();
@@ -340,7 +383,7 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             return Result<(bool, bool, bool, bool)>.Failure(maskResult.Error!);
         }
 
-        byte mask = maskResult.Value;
+    byte mask = maskResult.Value; // bits 0..3 map to AC inputs 1..4
         var result = (
             in1: (mask & 0x01) != 0,
             in2: (mask & 0x02) != 0,
