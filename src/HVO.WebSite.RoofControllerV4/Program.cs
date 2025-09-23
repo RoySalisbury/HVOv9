@@ -13,7 +13,6 @@ using HVO.Iot.Devices.Implementation;
 
 using System.Runtime.Loader;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
-using HVO.WebSite.RoofControllerV4.HostedService;
 
 namespace HVO.WebSite.RoofControllerV4;
 

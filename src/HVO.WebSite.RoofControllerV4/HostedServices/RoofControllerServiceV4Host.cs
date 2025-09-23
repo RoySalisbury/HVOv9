@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace HVO.WebSite.RoofControllerV4.HostedService;
+namespace HVO.WebSite.RoofControllerV4.HostedServices;
 
 public class RoofControllerServiceV4Host : BackgroundService
 {
