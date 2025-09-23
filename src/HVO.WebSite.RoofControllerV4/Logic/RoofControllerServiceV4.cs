@@ -79,11 +79,21 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     protected virtual void OnFaultNotificationChanged(bool isHigh)
     {
         _logger.LogDebug("FaultNotificationChanged: {State}", isHigh);
-        // For now, only update status context
         lock (_syncLock)
         {
             _lastIn3 = isHigh;
-            UpdateRoofStatus();
+            if (isHigh)
+            {
+                // Fail-safe: stop movement immediately on fault and set error
+                StopSafetyWatchdog();
+                InternalStop(RoofControllerStopReason.EmergencyStop);
+                Status = RoofControllerStatus.Error;
+                _lastCommand = "FaultStop";
+            }
+            else
+            {
+                UpdateRoofStatus();
+            }
         }
     }
     protected virtual void OnRoofMovementNotificationChanged(bool isHigh)
@@ -607,8 +617,22 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return stopResult;
                 }
 
-                if ((this.Status == RoofControllerStatus.Open) || false /* (this._roofOpenLimitSwitch.IsTriggered) */)
+                // Single read to check limit states and handle the both-limits error case
+                var (forwardLimit, reverseLimit) = GetCurrentLimitStates();
+                if (forwardLimit && reverseLimit)
                 {
+                    this.Status = RoofControllerStatus.Error;
+                    _logger.LogError("Open command refused: both limit switches are active");
+                    return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Both limit switches are active"));
+                }
+
+                if ((this.Status == RoofControllerStatus.Open) || forwardLimit)
+                {
+                    if (forwardLimit)
+                    {
+                        this._logger.LogInformation("Open command: forward/open limit is active, roof is fully open");
+                    }
+
                     // If already open, just return
                     this.Status = RoofControllerStatus.Open;
 
@@ -616,13 +640,6 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
-                // Open direction guard: if the forward/open limit is currently active, refuse motion
-                if (IsForwardLimitActive())
-                {
-                    this._logger.LogWarning("Open command refused: forward/open limit is active");
-                    this.Status = RoofControllerStatus.Open;
-                    return Result<RoofControllerStatus>.Success(this.Status);
-                }
 
                 // Start the motors to open the roof atomically
                 // stopRelay=false releases stop; openRelay=true energizes open; closeRelay=false
@@ -678,20 +695,26 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return stopResult;
                 }
 
-                if ((this.Status == RoofControllerStatus.Closed) || false /* (this._roofClosedLimitSwitch.IsTriggered) */)
+                // Single read to check limit states and handle the both-limits error case
+                var (forwardLimit, reverseLimit) = GetCurrentLimitStates();
+                if (forwardLimit && reverseLimit)
                 {
+                    this.Status = RoofControllerStatus.Error;
+                    _logger.LogError("Close command refused: both limit switches are active");
+                    return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Both limit switches are active"));
+                }
+
+                if ((this.Status == RoofControllerStatus.Closed) || reverseLimit)
+                {
+                    if (reverseLimit)
+                    {
+                        this._logger.LogInformation("Close command: reverse/closed limit is active, roof is fully closed");
+                    }
+
                     // If already closed, just return
                     this.Status = RoofControllerStatus.Closed;
 
                     this._logger.LogInformation($"====Close - {DateTime.Now:O}. Already Closed. Current Status: {this.Status}");
-                    return Result<RoofControllerStatus>.Success(this.Status);
-                }
-
-                // Close direction guard: if the reverse/closed limit is currently active, refuse motion
-                if (IsReverseLimitActive())
-                {
-                    this._logger.LogWarning("Close command refused: reverse/closed limit is active");
-                    this.Status = RoofControllerStatus.Closed;
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
@@ -791,6 +814,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 InternalStop(RoofControllerStopReason.EmergencyStop);
+                StopSafetyWatchdog();
 
                 this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, false);
                 this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, true);
