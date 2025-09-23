@@ -28,11 +28,7 @@ class Program
         await host.StartAsync();
 
         // Do test stuff here ... the background service is still running....
-    var roofController = host.Services.GetRequiredService<IRoofControllerServiceV2>();
-    roofController.ForwardLimitSwitchChanged += (_, s) => Console.WriteLine($"ForwardLimitSwitch: {s}");
-    roofController.ReverseLimitSwitchChanged += (_, s) => Console.WriteLine($"ReverseLimitSwitch: {s}");
-    roofController.FaultNotificationChanged += (_, s) => Console.WriteLine($"FaultNotification: {s}");
-    roofController.RoofMovementNotificationChanged += (_, s) => Console.WriteLine($"RoofMovementNotification: {s}");
+        var roofController = host.Services.GetRequiredService<IRoofControllerServiceV2>();
         var status = roofController.Status;
 
         for (int i = 0; i < 10; i++)

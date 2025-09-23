@@ -27,17 +27,75 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     private EventHandler<bool>? _hatIn2Handler;
     private EventHandler<bool>? _hatIn3Handler;
     private EventHandler<bool>? _hatIn4Handler;
+    private bool InputsEventsActive => _hatIn1Handler is not null || _hatIn2Handler is not null || _hatIn3Handler is not null || _hatIn4Handler is not null;
+
+    // Last-known input states (null until first known)
+    private bool? _lastIn1;
+    private bool? _lastIn2;
+    private bool? _lastIn3;
+    private bool? _lastIn4;
 
     // Legacy DigitalInput1..4 events removed; use named alias events below
 
-    /// <summary>Raised when the forward (open) limit switch changes state.</summary>
-    public event EventHandler<bool>? ForwardLimitSwitchChanged;
-    /// <summary>Raised when the reverse (close) limit switch changes state.</summary>
-    public event EventHandler<bool>? ReverseLimitSwitchChanged;
-    /// <summary>Raised when fault notification input changes state.</summary>
-    public event EventHandler<bool>? FaultNotificationChanged;
-    /// <summary>Raised when roof movement notification input changes state.</summary>
-    public event EventHandler<bool>? RoofMovementNotificationChanged;
+    // Event hooks are handled internally and exposed via protected virtual methods instead of public events
+    protected virtual void OnForwardLimitSwitchChanged(bool isHigh)
+    {
+        // Treat high = switch contacted
+        lock (_syncLock)
+        {
+            _logger.LogDebug("ForwardLimitSwitchChanged: {State}", isHigh);
+            _lastIn1 = isHigh;
+            if (isHigh)
+            {
+                StopSafetyWatchdog();
+                InternalStop(RoofControllerStopReason.LimitSwitchReached);
+                _lastCommand = "LimitStop";
+            }
+            else
+            {
+                UpdateRoofStatus();
+            }
+        }
+    }
+    protected virtual void OnReverseLimitSwitchChanged(bool isHigh)
+    {
+        // Treat high = switch contacted
+        lock (_syncLock)
+        {
+            _logger.LogDebug("ReverseLimitSwitchChanged: {State}", isHigh);
+            _lastIn2 = isHigh;
+            if (isHigh)
+            {
+                StopSafetyWatchdog();
+                InternalStop(RoofControllerStopReason.LimitSwitchReached);
+                _lastCommand = "LimitStop";
+            }
+            else
+            {
+                UpdateRoofStatus();
+            }
+        }
+    }
+    protected virtual void OnFaultNotificationChanged(bool isHigh)
+    {
+        _logger.LogDebug("FaultNotificationChanged: {State}", isHigh);
+        // For now, only update status context
+        lock (_syncLock)
+        {
+            _lastIn3 = isHigh;
+            UpdateRoofStatus();
+        }
+    }
+    protected virtual void OnRoofMovementNotificationChanged(bool isHigh)
+    {
+        _logger.LogDebug("RoofMovementNotificationChanged: {State}", isHigh);
+        // Movement notification can help infer motion between limits
+        lock (_syncLock)
+        {
+            _lastIn4 = isHigh;
+            UpdateRoofStatus();
+        }
+    }
 
     public RoofControllerServiceV2(ILogger<RoofControllerServiceV2> logger, IOptions<RoofControllerOptionsV2> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
     {
@@ -108,10 +166,10 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
             // Subscribe to HAT input events and forward them if enabled
             if (_roofControllerOptions.EnableDigitalInputPolling)
             {
-                _hatIn1Handler = (_, s) => { ForwardLimitSwitchChanged?.Invoke(this, s); };
-                _hatIn2Handler = (_, s) => { ReverseLimitSwitchChanged?.Invoke(this, s); };
-                _hatIn3Handler = (_, s) => { FaultNotificationChanged?.Invoke(this, s); };
-                _hatIn4Handler = (_, s) => { RoofMovementNotificationChanged?.Invoke(this, s); };
+                _hatIn1Handler = (_, s) => OnForwardLimitSwitchChanged(s);
+                _hatIn2Handler = (_, s) => OnReverseLimitSwitchChanged(s);
+                _hatIn3Handler = (_, s) => OnFaultNotificationChanged(s);
+                _hatIn4Handler = (_, s) => OnRoofMovementNotificationChanged(s);
 
                 _fourRelayFourInputHat.DigitalInput1Changed += _hatIn1Handler;
                 _fourRelayFourInputHat.DigitalInput2Changed += _hatIn2Handler;
@@ -208,7 +266,7 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
                 if (IsDisposed)
                     return;
 
-                //InternalStop(RoofControllerStopReason.SafetyWatchdogTimeout);
+                InternalStop(RoofControllerStopReason.SafetyWatchdogTimeout);
                 Status = RoofControllerStatus.Error;
                 _lastCommand = "SafetyStop";
 
@@ -361,8 +419,40 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     {
         lock (this._syncLock)
         {
-            var openTriggered = false;  //this._roofOpenLimitSwitch?.IsTriggered ?? false;
-            var closedTriggered = false;  //this._roofClosedLimitSwitch?.IsTriggered ?? false;
+            bool openTriggered;
+            bool closedTriggered;
+
+            if (InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue)
+            {
+                openTriggered = _lastIn1.Value;
+                closedTriggered = _lastIn2.Value;
+            }
+            else
+            {
+                openTriggered = false;
+                closedTriggered = false;
+                try
+                {
+                    var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
+                    if (!inputs.IsFailure)
+                    {
+                        openTriggered = inputs.Value.in1;
+                        closedTriggered = inputs.Value.in2;
+                        _lastIn1 = openTriggered;
+                        _lastIn2 = closedTriggered;
+                        _lastIn3 = inputs.Value.in3;
+                        _lastIn4 = inputs.Value.in4;
+                    }
+                    else if (inputs.Error is not null)
+                    {
+                        _logger.LogWarning(inputs.Error, "UpdateRoofStatus: Failed to read digital inputs; using defaults");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "UpdateRoofStatus: Exception while reading digital inputs");
+                }
+            }
 
             if (openTriggered && !closedTriggered)
             {
@@ -602,7 +692,7 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
 
 
     /// <summary>
-    /// Safely sets all GPIO relay pins to the specified states atomically.
+    /// Safely sets all relay pins to the specified states atomically.
     /// This prevents hardware from being in inconsistent states due to exceptions.
     /// </summary>
     /// <param name="stopRelay">State for stop relay</param>

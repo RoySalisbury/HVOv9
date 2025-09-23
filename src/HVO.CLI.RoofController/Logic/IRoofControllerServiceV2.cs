@@ -54,21 +54,6 @@ public interface IRoofControllerServiceV2
  
         // DigitalInput1..4 events removed; use named alias events below
 
-        /// <summary>
-        /// Forward (open) limit switch state change.
-        /// </summary>
-        event EventHandler<bool>? ForwardLimitSwitchChanged;
-        /// <summary>
-        /// Reverse (close) limit switch state change.
-        /// </summary>
-        event EventHandler<bool>? ReverseLimitSwitchChanged;
-        /// <summary>
-        /// Fault notification input change.
-        /// </summary>
-        event EventHandler<bool>? FaultNotificationChanged;
-        /// <summary>
-        /// Roof movement notification input change.
-        /// </summary>
-        event EventHandler<bool>? RoofMovementNotificationChanged;
+        // Public input-change events removed; the service exposes protected virtual hooks instead
  
 }
