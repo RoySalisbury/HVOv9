@@ -52,4 +52,21 @@ public interface IRoofControllerServiceV2
         /// <returns>A result containing the updated roof controller status.</returns>
         Result<RoofControllerStatus> Close();
  
+        /// <summary>
+        /// Raised when digital input 1 changes. Arg: new state (true=high).
+        /// </summary>
+        event EventHandler<bool>? DigitalInput1Changed;
+        /// <summary>
+        /// Raised when digital input 2 changes. Arg: new state (true=high).
+        /// </summary>
+        event EventHandler<bool>? DigitalInput2Changed;
+        /// <summary>
+        /// Raised when digital input 3 changes. Arg: new state (true=high).
+        /// </summary>
+        event EventHandler<bool>? DigitalInput3Changed;
+        /// <summary>
+        /// Raised when digital input 4 changes. Arg: new state (true=high).
+        /// </summary>
+        event EventHandler<bool>? DigitalInput4Changed;
+ 
 }

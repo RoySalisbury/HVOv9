@@ -22,6 +22,28 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     private readonly RoofControllerOptionsV2 _roofControllerOptions;
     private readonly FourRelayFourInputHat _fourRelayFourInputHat;
 
+    // Digital input polling
+    private CancellationTokenSource? _inputPollCts;
+    private Task? _inputPollTask;
+    private (bool in1, bool in2, bool in3, bool in4)? _lastInputs;
+
+    /// <summary>
+    /// Raised when digital input 1 changes. Arg: new state (true=high).
+    /// </summary>
+    public event EventHandler<bool>? DigitalInput1Changed;
+    /// <summary>
+    /// Raised when digital input 2 changes. Arg: new state (true=high).
+    /// </summary>
+    public event EventHandler<bool>? DigitalInput2Changed;
+    /// <summary>
+    /// Raised when digital input 3 changes. Arg: new state (true=high).
+    /// </summary>
+    public event EventHandler<bool>? DigitalInput3Changed;
+    /// <summary>
+    /// Raised when digital input 4 changes. Arg: new state (true=high).
+    /// </summary>
+    public event EventHandler<bool>? DigitalInput4Changed;
+
     public RoofControllerServiceV2(ILogger<RoofControllerServiceV2> logger, IOptions<RoofControllerOptionsV2> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
     {
         this._logger = logger;
@@ -80,6 +102,12 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
 
             // Initialize the safety watchdog timer
             this.InitializeSafetyWatchdog();
+
+            // Start digital input polling if enabled
+            if (_roofControllerOptions.EnableDigitalInputPolling)
+            {
+                StartDigitalInputPolling(cancellationToken);
+            }
 
             // Always reset to a known safe state on initialization. Using the InternalStop will bypass the initialization check.
             this.InternalStop(RoofControllerStopReason.None);
@@ -209,6 +237,16 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
             // 1. Stop any ongoing operations first
             InternalStop(RoofControllerStopReason.SystemDisposal);
 
+            // 2. Stop input polling
+            try
+            {
+                await StopDigitalInputPollingAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error stopping digital input polling");
+            }
+
             // 3. Stop and dispose the safety watchdog timer
             try
             {
@@ -299,6 +337,138 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     {
         if (_disposed)
             throw new ObjectDisposedException(GetType().Name);
+    }
+
+    /// <summary>
+    /// Starts background polling of the FourRelayFourInput HAT digital inputs and raises edge-change events.
+    /// </summary>
+    protected virtual void StartDigitalInputPolling(CancellationToken shutdownToken)
+    {
+        // If already running, stop first
+        StopDigitalInputPolling();
+
+        _inputPollCts = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
+        var token = _inputPollCts.Token;
+
+        _inputPollTask = Task.Run(async () =>
+        {
+            _logger.LogInformation("Digital input polling started (interval: {Interval} ms)", _roofControllerOptions.DigitalInputPollInterval.TotalMilliseconds);
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    (bool in1, bool in2, bool in3, bool in4)? snapshot = null;
+                    try
+                    {
+                        var result = _fourRelayFourInputHat.GetAllDigitalInputs();
+                        if (result.IsSuccessful)
+                        {
+                            snapshot = result.Value;
+                        }
+                        else if (result.Error is not null)
+                        {
+                            _logger.LogWarning(result.Error, "GetAllDigitalInputs failed while polling");
+                        }
+                        else
+                        {
+                            _logger.LogWarning("GetAllDigitalInputs returned failure without exception while polling");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Exception during digital input poll");
+                    }
+
+                    if (snapshot.HasValue)
+                    {
+                        var current = snapshot.Value;
+                        (bool in1, bool in2, bool in3, bool in4)? previous;
+                        lock (_syncLock)
+                        {
+                            previous = _lastInputs;
+                            _lastInputs = current;
+                        }
+
+                        if (previous.HasValue)
+                        {
+                            var prev = previous.Value;
+                            if (prev.in1 != current.in1) SafeRaiseInputChanged(1, current.in1);
+                            if (prev.in2 != current.in2) SafeRaiseInputChanged(2, current.in2);
+                            if (prev.in3 != current.in3) SafeRaiseInputChanged(3, current.in3);
+                            if (prev.in4 != current.in4) SafeRaiseInputChanged(4, current.in4);
+                        }
+                        // else: first sample establishes baseline; no events raised
+                    }
+
+                    try
+                    {
+                        await Task.Delay(_roofControllerOptions.DigitalInputPollInterval, token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                _logger.LogInformation("Digital input polling stopped");
+            }
+        }, token);
+    }
+
+    /// <summary>
+    /// Stops the background digital input polling task asynchronously.
+    /// </summary>
+    protected virtual async Task StopDigitalInputPollingAsync()
+    {
+        try
+        {
+            var cts = _inputPollCts;
+            var task = _inputPollTask;
+            _inputPollCts = null;
+            _inputPollTask = null;
+            if (cts != null)
+            {
+                try { cts.Cancel(); } catch { }
+                cts.Dispose();
+            }
+            if (task != null)
+            {
+                try { await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error stopping digital input polling");
+        }
+    }
+
+    /// <summary>
+    /// Synchronous wrapper to stop input polling when async is not convenient.
+    /// </summary>
+    protected virtual void StopDigitalInputPolling()
+    {
+        StopDigitalInputPollingAsync().GetAwaiter().GetResult();
+    }
+
+    private void SafeRaiseInputChanged(int index, bool state)
+    {
+        try
+        {
+            switch (index)
+            {
+                case 1: DigitalInput1Changed?.Invoke(this, state); break;
+                case 2: DigitalInput2Changed?.Invoke(this, state); break;
+                case 3: DigitalInput3Changed?.Invoke(this, state); break;
+                case 4: DigitalInput4Changed?.Invoke(this, state); break;
+            }
+            _logger.LogTrace("Digital input {Index} changed to {State}", index, state);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error raising DigitalInput{Index}Changed event", index);
+        }
     }
 
     protected virtual void UpdateRoofStatus()

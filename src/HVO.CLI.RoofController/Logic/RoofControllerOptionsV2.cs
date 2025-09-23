@@ -12,4 +12,15 @@ public record class RoofControllerOptionsV2
     public int CloseRelayId { get; set; } = 2; // REV
     public int ClearFault { get; set; } = 3;
     public int StopRelayId { get; set; } = 4;
+
+    /// <summary>
+    /// Enables background polling of the 4 digital inputs on the FourRelayFourInput HAT.
+    /// When enabled, input edge-change events will be raised.
+    /// </summary>
+    public bool EnableDigitalInputPolling { get; set; } = true;
+
+    /// <summary>
+    /// Interval between input polls. Keep small for responsive edge notifications.
+    /// </summary>
+    public TimeSpan DigitalInputPollInterval { get; set; } = TimeSpan.FromMilliseconds(25);
 }
