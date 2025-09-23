@@ -8,8 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
-using HVO.CLI.RoofController.HostedService;
-using HVO.CLI.RoofController.Logic;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
 using Iot.Device.Common;
 

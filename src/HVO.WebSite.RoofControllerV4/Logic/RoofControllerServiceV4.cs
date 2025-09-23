@@ -562,13 +562,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             // DON'T set status to Stopped here - let UpdateRoofStatus determine the correct status
             this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
 
-            // // Set all relays to safe state for STOP operation atomically
-                SetRelayStatesAtomically(
-                    stopRelay: true,  // Stop relay OFF to halt movement 
-                    openRelay: false,   // Open relay ON
-                    closeRelay: false, // Close relay OFF
-                    clearFault: false   // Close relay OFF
-                );
+            // Set all relays to safe state for STOP operation atomically
+            // stopRelay=true engages the stop; open/close relays are de-energized
+            SetRelayStatesAtomically(
+                stopRelay: true,
+                openRelay: false,
+                closeRelay: false
+            );
 
 
             // Update status based on limit switch states and last command
@@ -609,12 +609,20 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
-                // // Start the motors to open the roof atomically
+                // Open direction guard: if the forward/open limit is currently active, refuse motion
+                if (IsForwardLimitActive())
+                {
+                    this._logger.LogWarning("Open command refused: forward/open limit is active");
+                    this.Status = RoofControllerStatus.Open;
+                    return Result<RoofControllerStatus>.Success(this.Status);
+                }
+
+                // Start the motors to open the roof atomically
+                // stopRelay=false releases stop; openRelay=true energizes open; closeRelay=false
                 SetRelayStatesAtomically(
-                    stopRelay: false,  // Stop relay OFF to halt movement 
-                    openRelay: true,   // Open relay ON
-                    closeRelay: false, // Close relay OFF
-                    clearFault: false   // Close relay OFF
+                    stopRelay: false,
+                    openRelay: true,
+                    closeRelay: false
                 );
 
                 // Set the status to opening
@@ -665,12 +673,20 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
-                // // Start the motors to close the roof atomically
+                // Close direction guard: if the reverse/closed limit is currently active, refuse motion
+                if (IsReverseLimitActive())
+                {
+                    this._logger.LogWarning("Close command refused: reverse/closed limit is active");
+                    this.Status = RoofControllerStatus.Closed;
+                    return Result<RoofControllerStatus>.Success(this.Status);
+                }
+
+                // Start the motors to close the roof atomically
+                // stopRelay=false releases stop; closeRelay=true energizes close; openRelay=false
                 SetRelayStatesAtomically(
-                    stopRelay: false,  // Stop relay OFF to halt movement 
-                    openRelay: false,   // Open relay ON
-                    closeRelay: true, // Close relay OFF
-                    clearFault: false   // Close relay OFF
+                    stopRelay: false,
+                    openRelay: false,
+                    closeRelay: true
                 );
 
 
@@ -698,7 +714,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     /// <param name="stopRelay">State for stop relay</param>
     /// <param name="openRelay">State for open relay</param>
     /// <param name="closeRelay">State for close relay</param>
-    protected virtual void SetRelayStatesAtomically(bool stopRelay, bool openRelay, bool closeRelay, bool clearFault = false)
+    protected virtual void SetRelayStatesAtomically(bool stopRelay, bool openRelay, bool closeRelay)
     {
         if (this._fourRelayFourInputHat == null || _roofControllerOptions == null)
             return;
@@ -736,7 +752,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
     }
 
-    protected virtual Result<bool> ClearFault(int pulseMs = 250)
+    public virtual Result<bool> ClearFault(int pulseMs = 250)
     {
         pulseMs = Math.Max(0, pulseMs);
 
@@ -767,6 +783,49 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         {
             return Result<bool>.Failure(ex);
         }
+    }
+
+    /// <summary>
+    /// Helper to get the immediate view of forward/reverse limits using cached events when present,
+    /// otherwise performing a single read from the HAT.
+    /// </summary>
+    protected virtual (bool forward, bool reverse) GetCurrentLimitStates()
+    {
+        if (InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue)
+        {
+            return (_lastIn1!.Value, _lastIn2!.Value);
+        }
+
+        try
+        {
+            var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
+            if (!inputs.IsFailure)
+            {
+                _lastIn1 = inputs.Value.in1;
+                _lastIn2 = inputs.Value.in2;
+                _lastIn3 = inputs.Value.in3;
+                _lastIn4 = inputs.Value.in4;
+                return (inputs.Value.in1, inputs.Value.in2);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GetCurrentLimitStates: failed to read inputs; assuming not at limits");
+        }
+
+        return (false, false);
+    }
+
+    protected virtual bool IsForwardLimitActive()
+    {
+        var (forward, _) = GetCurrentLimitStates();
+        return forward;
+    }
+
+    protected virtual bool IsReverseLimitActive()
+    {
+        var (_, reverse) = GetCurrentLimitStates();
+        return reverse;
     }
 
     /// <summary>

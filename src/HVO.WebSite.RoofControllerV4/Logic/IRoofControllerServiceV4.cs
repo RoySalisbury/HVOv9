@@ -51,6 +51,13 @@ public interface IRoofControllerServiceV4
         /// </summary>
         /// <returns>A result containing the updated roof controller status.</returns>
         Result<RoofControllerStatus> Close();
+        
+        /// <summary>
+        /// Pulses the clear-fault relay to reset fault conditions on the motor controller.
+        /// </summary>
+        /// <param name="pulseMs">Duration to hold the clear-fault relay active.</param>
+        /// <returns>A result indicating whether the clear-fault pulse completed.</returns>
+        Result<bool> ClearFault(int pulseMs = 250);
  
         // DigitalInput1..4 events removed; use named alias events below
 
