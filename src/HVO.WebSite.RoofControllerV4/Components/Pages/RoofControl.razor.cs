@@ -17,10 +17,10 @@ public partial class RoofControl : ComponentBase, IDisposable
 {
     #region Dependency Injection
 
-    [Inject] private IRoofControllerService RoofController { get; set; } = default!;
+    [Inject] private IRoofControllerServiceV4 RoofController { get; set; } = default!;
     [Inject] private ILogger<RoofControl> Logger { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
-    [Inject] private IOptions<RoofControllerOptions> RoofControllerOptions { get; set; } = default!;
+    [Inject] private IOptions<RoofControllerOptionsV4> RoofControllerOptions { get; set; } = default!;
 
     #endregion
 

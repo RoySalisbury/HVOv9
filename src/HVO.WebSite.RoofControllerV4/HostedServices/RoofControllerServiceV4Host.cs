@@ -1,29 +1,30 @@
 using System;
-using HVO.CLI.RoofController.Logic;
+using HVO.WebSite.RoofControllerV4.Logic;
+using HVO.WebSite.RoofControllerV4.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace HVO.CLI.RoofController.HostedService;
+namespace HVO.WebSite.RoofControllerV4.HostedService;
 
-public class RoofControllerServiceV2Host : BackgroundService
+public class RoofControllerServiceV4Host : BackgroundService
 {
-    private readonly ILogger<RoofControllerServiceV2Host> _logger;
-    private readonly IRoofControllerServiceV2 _roofControllerServiceV2;
-    private readonly RoofControllerHostOptionsV2 _options;
+    private readonly ILogger<RoofControllerServiceV4Host> _logger;
+    private readonly IRoofControllerServiceV4 _roofControllerServiceV4;
+    private readonly RoofControllerHostOptionsV4 _options;
 
 
-    public RoofControllerServiceV2Host(ILogger<RoofControllerServiceV2Host> logger, IOptions<RoofControllerHostOptionsV2> options, IRoofControllerServiceV2 roofControllerServiceV2)
+    public RoofControllerServiceV4Host(ILogger<RoofControllerServiceV4Host> logger, IOptions<RoofControllerHostOptionsV4> options, IRoofControllerServiceV4 roofControllerServiceV4)
     {
         _logger = logger;
         _options = options.Value;
-        _roofControllerServiceV2 = roofControllerServiceV2;
+        _roofControllerServiceV4 = roofControllerServiceV4;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("{backgroundServiceName} is starting.", nameof(RoofControllerServiceV2Host));
-        stoppingToken.Register(() => _logger.LogInformation("{nameof(RoofControllerServiceV2Host)} is stopping.", nameof(RoofControllerServiceV2Host)));
+        _logger.LogInformation("{backgroundServiceName} is starting.", nameof(RoofControllerServiceV4Host));
+        stoppingToken.Register(() => _logger.LogInformation("{backgroundServiceName} is stopping.", nameof(RoofControllerServiceV4Host)));
 
         try
         {
@@ -31,7 +32,7 @@ public class RoofControllerServiceV2Host : BackgroundService
             {
                 try
                 {
-                    var initResult = await this._roofControllerServiceV2.Initialize(stoppingToken);
+                    var initResult = await this._roofControllerServiceV4.Initialize(stoppingToken);
                     if (!initResult.IsSuccessful)
                     {
                         _logger.LogError("Failed to initialize roof controller: {Error}", initResult.Error?.Message ?? "Unknown error");
@@ -47,7 +48,7 @@ public class RoofControllerServiceV2Host : BackgroundService
                         {
                             // Can setup the watchdog here.......
 
-                            _logger.LogInformation("{backgroundServiceName} is performing its work at: {time}", nameof(RoofControllerServiceV2Host), DateTimeOffset.Now);
+                            _logger.LogInformation("{backgroundServiceName} is performing its work at: {time}", nameof(RoofControllerServiceV4Host), DateTimeOffset.Now);
                             nextLogTime = DateTime.UtcNow.Add(logInterval);
                         }
 
@@ -56,32 +57,32 @@ public class RoofControllerServiceV2Host : BackgroundService
                 }
                 catch (TaskCanceledException)
                 {
-                    _logger.LogDebug("{backgroundServiceName} TaskCanceledException.", nameof(RoofControllerServiceV2Host));
+                    _logger.LogDebug("{backgroundServiceName} TaskCanceledException.", nameof(RoofControllerServiceV4Host));
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "{backgroundServiceName}  Error. Restarting in {RestartDelay} seconds.", nameof(RoofControllerServiceV2Host), _options.RestartOnFailureWaitTime);
+                    _logger.LogError(ex, "{backgroundServiceName}  Error. Restarting in {RestartDelay} seconds.", nameof(RoofControllerServiceV4Host), _options.RestartOnFailureWaitTime);
                     await Task.Delay(TimeSpan.FromSeconds(_options.RestartOnFailureWaitTime), stoppingToken).ConfigureAwait(false);
                 }
                 finally
                 {
                     // FIXED: Use async disposal for better performance
-                    if (this._roofControllerServiceV2 is IAsyncDisposable asyncDisposable)
+                    if (this._roofControllerServiceV4 is IAsyncDisposable asyncDisposable)
                     {
                         await asyncDisposable.DisposeAsync().ConfigureAwait(false);
                     }
                     else
                     {
-                        ((IDisposable)this._roofControllerServiceV2).Dispose();
+                        ((IDisposable)this._roofControllerServiceV4).Dispose();
                     }
-                    _logger.LogDebug("{backgroundServiceName} instance disposed.", nameof(RoofControllerServiceV2Host));
+                    _logger.LogDebug("{backgroundServiceName} instance disposed.", nameof(RoofControllerServiceV4Host));
                 }
             }
         }
         finally
         {
-            _logger.LogInformation("{backgroundServiceName} has stopped.", nameof(RoofControllerServiceV2Host));
+            _logger.LogInformation("{backgroundServiceName} has stopped.", nameof(RoofControllerServiceV4Host));
         }
     }
 }

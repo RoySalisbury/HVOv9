@@ -12,6 +12,8 @@ using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Implementation;
 
 using System.Runtime.Loader;
+using HVO.Iot.Devices.Iot.Devices.Sequent;
+using HVO.WebSite.RoofControllerV4.HostedService;
 
 namespace HVO.WebSite.RoofControllerV4;
 
@@ -81,28 +83,24 @@ public class Program
         // ============================================================================
 
         services.AddOptions();
-        services.Configure<RoofControllerOptions>(Configuration.GetSection(nameof(RoofControllerOptions)));
-        services.Configure<RoofControllerServiceHostOptions>(Configuration.GetSection(nameof(RoofControllerServiceHostOptions)));
+        services.Configure<RoofControllerOptionsV4>(Configuration.GetSection(nameof(RoofControllerOptionsV4)));
+        services.Configure<RoofControllerHostOptionsV4>(Configuration.GetSection(nameof(RoofControllerHostOptionsV4)));
 
         // Add Razor Components for Blazor Server
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
-        services.AddHostedService<RoofControllerServiceHost>();
+        services.AddSingleton<FourRelayFourInputHat>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<FourRelayFourInputHat>>();
+            return new FourRelayFourInputHat(logger: logger);
+        });
 
-        // Configure GPIO Controller - GpioControllerWrapper automatically handles platform detection and controller selection
-        services.AddSingleton<IGpioController>(_ => GpioControllerWrapper.CreateAutoSelecting());
+
+        services.AddHostedService<RoofControllerServiceV4Host>();
 
         // Register RoofController based on configuration
-        services.AddSingleton<IRoofControllerService>(serviceProvider =>
-        {
-            var logger = serviceProvider.GetRequiredService<ILogger<RoofControllerService>>();
-            var roofControllerOptions = serviceProvider.GetRequiredService<IOptions<RoofControllerOptions>>();
-            var gpioController = serviceProvider.GetRequiredService<IGpioController>();
-
-            logger.LogInformation("Using RoofControllerService for production hardware");
-            return new RoofControllerService(logger, roofControllerOptions, gpioController);
-        });
+        services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
 
         // Add weather service
         services.AddScoped<HVO.WebSite.RoofControllerV4.Services.IWeatherService, HVO.WebSite.RoofControllerV4.Services.WeatherService>();

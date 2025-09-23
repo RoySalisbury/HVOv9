@@ -1,12 +1,12 @@
 using System;
-using HVO.CLI.RoofController.Models;
+using HVO.WebSite.RoofControllerV4.Models;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace HVO.CLI.RoofController.Logic;
+namespace HVO.WebSite.RoofControllerV4.Logic;
 
-public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposable, IDisposable
+public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposable, IDisposable
 {
     protected readonly object _syncLock = new object();
     protected volatile bool _disposed;  // Make volatile for thread-safe checking
@@ -18,8 +18,8 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     protected string _lastCommand = string.Empty;
     protected RoofControllerStopReason _lastStopReason = RoofControllerStopReason.None;
 
-    private readonly ILogger<RoofControllerServiceV2> _logger;
-    private readonly RoofControllerOptionsV2 _roofControllerOptions;
+    private readonly ILogger<RoofControllerServiceV4> _logger;
+    private readonly RoofControllerOptionsV4 _roofControllerOptions;
     private readonly FourRelayFourInputHat _fourRelayFourInputHat;
 
     // Forward digital input events from the HAT
@@ -97,7 +97,7 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
         }
     }
 
-    public RoofControllerServiceV2(ILogger<RoofControllerServiceV2> logger, IOptions<RoofControllerOptionsV2> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
+    public RoofControllerServiceV4(ILogger<RoofControllerServiceV4> logger, IOptions<RoofControllerOptionsV4> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
     {
         this._logger = logger;
         this._roofControllerOptions = roofControllerOptions.Value;
@@ -140,7 +140,7 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     {
         if (this._disposed)
         {
-            return Task.FromResult(Result<bool>.Failure(new ObjectDisposedException(nameof(RoofControllerServiceV2))));
+            return Task.FromResult(Result<bool>.Failure(new ObjectDisposedException(nameof(RoofControllerServiceV4))));
         }
 
         lock (this._syncLock)
@@ -285,7 +285,7 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     /// Finalizer (destructor) ensures cleanup of resources if Dispose is not called.
     /// Should rarely be needed as proper disposal should occur through IAsyncDisposable.
     /// </summary>
-    ~RoofControllerServiceV2()
+    ~RoofControllerServiceV4()
     {
         // Pass false because we're in the finalizer
         Dispose(false);

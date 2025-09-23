@@ -18,9 +18,9 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
     public class RoofController : ControllerBase
     {
         private readonly ILogger<RoofController> _logger;
-        private readonly IRoofControllerService _roofController;
+        private readonly IRoofControllerServiceV4 _roofController;
 
-        public RoofController(ILogger<RoofController> logger, IRoofControllerService roofController)
+        public RoofController(ILogger<RoofController> logger, IRoofControllerServiceV4 roofController)
         {
             this._logger = logger;
             this._roofController = roofController;

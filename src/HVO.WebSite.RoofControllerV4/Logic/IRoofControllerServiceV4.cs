@@ -1,9 +1,9 @@
 using System;
-using HVO.CLI.RoofController.Models;
+using HVO.WebSite.RoofControllerV4.Models;
 
-namespace HVO.CLI.RoofController.Logic;
+namespace HVO.WebSite.RoofControllerV4.Logic;
 
-public interface IRoofControllerServiceV2
+public interface IRoofControllerServiceV4
 {
         /// <summary>
         /// Gets a value indicating whether the roof controller has been initialized and is ready for operation.

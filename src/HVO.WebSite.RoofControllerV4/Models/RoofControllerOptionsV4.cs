@@ -1,6 +1,6 @@
-namespace HVO.CLI.RoofController.Logic;
+namespace HVO.WebSite.RoofControllerV4.Models;
 
-public record class RoofControllerOptionsV2
+public record class RoofControllerOptionsV4
 {
     /// <summary>
     /// Maximum time the roof can run continuously in either direction before the safety watchdog stops it.
