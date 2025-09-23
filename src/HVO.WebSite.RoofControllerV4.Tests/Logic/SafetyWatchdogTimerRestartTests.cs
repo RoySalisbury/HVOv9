@@ -36,8 +36,6 @@ public class SafetyWatchdogTimerRestartTests
         _roofControllerOptions = new RoofControllerOptions
         {
             SafetyWatchdogTimeout = TimeSpan.FromMilliseconds(100), // Very short for quick testing
-            SimulationTimeout = TimeSpan.FromMilliseconds(80),
-            UseSimulatedEvents = false,
             RoofOpenedLimitSwitchPin = 17,
             RoofClosedLimitSwitchPin = 21,
             OpenRoofRelayPin = 24,

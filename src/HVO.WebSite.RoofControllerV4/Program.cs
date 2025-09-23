@@ -100,16 +100,8 @@ public class Program
             var roofControllerOptions = serviceProvider.GetRequiredService<IOptions<RoofControllerOptions>>();
             var gpioController = serviceProvider.GetRequiredService<IGpioController>();
 
-            if (roofControllerOptions.Value.UseSimulatedEvents)
-            {
-                logger.LogInformation("Using RoofControllerServiceWithSimulatedEvents for development/testing");
-                return new RoofControllerServiceWithSimulatedEvents(logger, roofControllerOptions, gpioController);
-            }
-            else
-            {
-                logger.LogInformation("Using RoofControllerService for production hardware");
-                return new RoofControllerService(logger, roofControllerOptions, gpioController);
-            }
+            logger.LogInformation("Using RoofControllerService for production hardware");
+            return new RoofControllerService(logger, roofControllerOptions, gpioController);
         });
 
         // Add weather service

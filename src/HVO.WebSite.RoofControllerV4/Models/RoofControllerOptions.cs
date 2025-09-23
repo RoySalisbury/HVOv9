@@ -2,11 +2,7 @@ namespace HVO.WebSite.RoofControllerV4.Models
 {
     public record RoofControllerOptions
     {
-        /// <summary>
-        /// Determines whether to use the simulated event roof controller for testing/development,
-        /// or the real hardware roof controller for production.
-        /// </summary>
-        public bool UseSimulatedEvents { get; set; } = false;
+    // Simulation mode removed; always use hardware controller
 
         public int RoofClosedLimitSwitchPin { get; set; } = 21;
         public int RoofOpenedLimitSwitchPin { get; set; } = 17;
@@ -34,11 +30,6 @@ namespace HVO.WebSite.RoofControllerV4.Models
         /// </summary>
         public TimeSpan SafetyWatchdogTimeout { get; set; } = TimeSpan.FromSeconds(90);
 
-        /// <summary>
-        /// Time for the simulation timer to automatically trigger limit switches during testing.
-        /// Should be shorter than SafetyWatchdogTimeout to allow proper simulation of reaching the target position.
-        /// Defaults to 80% of SafetyWatchdogTimeout (72 seconds when SafetyWatchdogTimeout is 90 seconds).
-        /// </summary>
-        public TimeSpan SimulationTimeout { get; set; } = TimeSpan.FromSeconds(72);
+        // Simulation timer removed
     }
 }

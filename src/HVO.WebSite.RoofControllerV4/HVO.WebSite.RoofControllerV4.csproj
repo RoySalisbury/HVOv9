@@ -22,4 +22,8 @@
     <ProjectReference Include="../HVO/HVO.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Logic/RoofControllerServiceWithSimulatedEvents.cs" />
+  </ItemGroup>
+
 </Project>

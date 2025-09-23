@@ -1,0 +1,1 @@
+// Removed legacy simulation controls verification. File deleted.

@@ -1,4 +1,6 @@
-# Hardware Simulation Improvements
+# [DEPRECATED] Hardware Simulation Improvements
+
+> Note: As of RoofController V4, the web UI and service operate in hardware-only mode. The simulation UI and the `RoofControllerServiceWithSimulatedEvents` class have been removed/excluded from the project. This document is retained for historical context only and no longer reflects the current implementation.
 
 ## Overview
 Updated the unified roof control buttons to use actual hardware button event simulation instead of direct service method calls, making the simulation more realistic and consistent with real hardware behavior.
