@@ -25,19 +25,6 @@ public static class GpioTestConfiguration
         return services;
     }
 
-    /// <summary>
-    /// Configures dependency injection for real GPIO controller hardware.
-    /// Use this for integration tests that require actual Raspberry Pi hardware.
-    /// </summary>
-    /// <param name="services">The service collection to configure.</param>
-    /// <returns>The configured service collection for method chaining.</returns>
-    public static IServiceCollection AddRealGpioController(this IServiceCollection services)
-    {
-        // Create GpioControllerWrapper without dependencies to avoid circular dependency
-        services.AddSingleton<IGpioController>(provider => new GpioControllerWrapper(null, useRealHardware: true));
-        services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Trace));
-        return services;
-    }
 
     /// <summary>
     /// Creates a service provider configured for mock GPIO testing.
@@ -51,16 +38,4 @@ public static class GpioTestConfiguration
         return services.BuildServiceProvider();
     }
 
-    /// <summary>
-    /// Creates a service provider configured for real GPIO hardware testing.
-    /// This is a convenience method for integration tests with actual hardware.
-    /// Only use this when running tests on actual Raspberry Pi hardware.
-    /// </summary>
-    /// <returns>A configured service provider with real GPIO controller.</returns>
-    public static ServiceProvider CreateRealGpioServiceProvider()
-    {
-        var services = new ServiceCollection();
-        services.AddRealGpioController();
-        return services.BuildServiceProvider();
-    }
 }

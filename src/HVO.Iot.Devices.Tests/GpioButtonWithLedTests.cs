@@ -25,34 +25,17 @@ namespace HVO.Iot.Devices.Tests
         private const int TestPin = ButtonPin; // For readability in tests
         private const int TestLedPin = LedPin; // For readability in tests
 
-        // Configuration: Set to true to test against real Raspberry Pi GPIO hardware
-        // Set to false to test against mock implementation
-        // Default to false for safety - only enable real hardware on supported platforms
-        private static readonly bool UseRealHardware = Environment.GetEnvironmentVariable("USE_REAL_GPIO") == "true" && 
-            System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
 
         [TestInitialize]
         public void Setup()
         {
-            // Configure dependency injection based on hardware availability
-            if (UseRealHardware)
+            _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
+            _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
+            _logger = _serviceProvider.GetRequiredService<ILogger<GpioButtonWithLed>>();
+            // Get reference to the mock controller for direct testing
+            if (_gpioController is GpioControllerWrapper wrapper)
             {
-                _serviceProvider = GpioTestConfiguration.CreateRealGpioServiceProvider();
-                _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
-                _logger = _serviceProvider.GetRequiredService<ILogger<GpioButtonWithLed>>();
-            }
-            else
-            {
-                _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-                _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
-                _logger = _serviceProvider.GetRequiredService<ILogger<GpioButtonWithLed>>();
-                
-                // Get reference to the mock controller for direct testing
-                // Since we're now using GpioControllerWrapper, we need to access the underlying controller
-                if (_gpioController is GpioControllerWrapper wrapper)
-                {
-                    _mockGpioController = wrapper.UnderlyingController as MockGpioController;
-                }
+                _mockGpioController = wrapper.UnderlyingController as MockGpioController;
             }
         }
 
@@ -105,7 +88,7 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void SimulateButtonPress()
         {
-            if (!UseRealHardware && _mockGpioController != null)
+            if (_mockGpioController != null)
             {
                 _mockGpioController.SimulatePinValueChange(TestPin, PinValue.Low);
             }
@@ -116,7 +99,7 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void SimulateButtonRelease()
         {
-            if (!UseRealHardware && _mockGpioController != null)
+            if (_mockGpioController != null)
             {
                 _mockGpioController.SimulatePinValueChange(TestPin, PinValue.High);
             }
@@ -138,7 +121,7 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void VerifyPinMode(int pinNumber, PinMode expectedMode)
         {
-            if (!UseRealHardware && _mockGpioController != null)
+            if (_mockGpioController != null)
             {
                 var actualMode = _mockGpioController.GetPinMode(pinNumber);
                 Assert.AreEqual(expectedMode, actualMode, $"Pin {pinNumber} should be configured as {expectedMode} but was {actualMode}");
@@ -158,11 +141,8 @@ namespace HVO.Iot.Devices.Tests
             Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
             
             // Verify pins are configured correctly
-            if (!UseRealHardware)
-            {
-                VerifyPinMode(TestPin, PinMode.InputPullUp);
-                VerifyPinMode(TestLedPin, PinMode.Output);
-            }
+            VerifyPinMode(TestPin, PinMode.InputPullUp);
+            VerifyPinMode(TestLedPin, PinMode.Output);
         }
 
         [TestMethod]
@@ -175,10 +155,7 @@ namespace HVO.Iot.Devices.Tests
             Assert.IsNotNull(_buttonWithLed);
             
             // Verify pin is configured with pull-down
-            if (!UseRealHardware)
-            {
-                VerifyPinMode(TestPin, PinMode.InputPullDown);
-            }
+            VerifyPinMode(TestPin, PinMode.InputPullDown);
         }
 
         [TestMethod]
@@ -191,10 +168,7 @@ namespace HVO.Iot.Devices.Tests
             Assert.IsNotNull(_buttonWithLed);
             
             // Verify pin is configured as simple input when external resistor is used
-            if (!UseRealHardware)
-            {
-                VerifyPinMode(TestPin, PinMode.Input);
-            }
+            VerifyPinMode(TestPin, PinMode.Input);
         }
 
         [TestMethod]
@@ -291,7 +265,7 @@ namespace HVO.Iot.Devices.Tests
             Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
             
             // Verify LED pin state for mock controller
-            if (!UseRealHardware && _mockGpioController != null)
+            if (_mockGpioController != null)
             {
                 var ledValue = _mockGpioController.Read(TestLedPin);
                 Assert.AreEqual(PinValue.High, ledValue, "LED pin should be HIGH when LedState is On");
@@ -312,7 +286,7 @@ namespace HVO.Iot.Devices.Tests
             Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
             
             // Verify LED pin state for mock controller
-            if (!UseRealHardware && _mockGpioController != null)
+            if (_mockGpioController != null)
             {
                 var ledValue = _mockGpioController.Read(TestLedPin);
                 Assert.AreEqual(PinValue.Low, ledValue, "LED pin should be LOW when LedState is Off");
@@ -409,7 +383,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert - Should not throw
             // After disposal, events should not fire
-            if (!UseRealHardware && _mockGpioController != null)
+            if (_mockGpioController != null)
             {
                 // After disposal, pins are closed; simulate may throw. Ignore such exceptions and only assert no event fired.
                 try

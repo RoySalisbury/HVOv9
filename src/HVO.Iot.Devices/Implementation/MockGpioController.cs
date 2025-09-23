@@ -116,7 +116,15 @@ public class MockGpioController : IGpioController
     /// <inheritdoc />
     public void OpenPin(int pinNumber, PinMode mode)
     {
-        var initial = mode == PinMode.Output ? PinValue.Low : PinValue.Low;
+        // Set initial value based on mode to mimic real hardware behavior
+        var initial = mode switch
+        {
+            PinMode.InputPullUp => PinValue.High,
+            PinMode.InputPullDown => PinValue.Low,
+            PinMode.Input => PinValue.Low,
+            PinMode.Output => PinValue.Low,
+            _ => PinValue.Low
+        };
         OpenPin(pinNumber, mode, initial);
     }
 
@@ -138,10 +146,13 @@ public class MockGpioController : IGpioController
 
         pinState.IsOpen = true;
         pinState.Mode = mode;
-        pinState.Value = initialValue;
-        
-        // Set initial pin value based on mode and pull resistor configuration
-        //SetInitialPinValue(pinNumber, mode);
+        // Normalize initial value to match pull resistor behavior for inputs
+        pinState.Value = mode switch
+        {
+            PinMode.InputPullUp => PinValue.High,
+            PinMode.InputPullDown => PinValue.Low,
+            _ => initialValue
+        };
     }
 
     /// <inheritdoc />
