@@ -27,9 +27,4 @@
     <ProjectReference Include="..\HVO.Iot.Devices\HVO.Iot.Devices.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Logic/" />
-    <Folder Include="TestHelpers/" />
-  </ItemGroup>
-
 </Project>

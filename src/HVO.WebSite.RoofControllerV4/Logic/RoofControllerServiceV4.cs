@@ -87,7 +87,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // Fail-safe: stop movement immediately on fault and set error
                 StopSafetyWatchdog();
                 InternalStop(RoofControllerStopReason.EmergencyStop);
-                Status = RoofControllerStatus.Error;
+                if (Status != RoofControllerStatus.Error)
+                {
+                    Status = RoofControllerStatus.Error;
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
                 _lastCommand = "FaultStop";
             }
             else
@@ -117,6 +121,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     public virtual bool IsInitialized { get; protected set; } = false;
 
     public virtual RoofControllerStatus Status { get; protected set; } = RoofControllerStatus.NotInitialized;
+    public virtual DateTimeOffset? LastTransitionUtc { get; protected set; }
 
     /// <summary>
     /// Gets a value indicating whether the roof is currently moving (opening or closing).
@@ -466,11 +471,19 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             if (openTriggered && !closedTriggered)
             {
-                this.Status = RoofControllerStatus.Open;
+                if (this.Status != RoofControllerStatus.Open)
+                {
+                    this.Status = RoofControllerStatus.Open;
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
             }
             else if (!openTriggered && closedTriggered)
             {
-                this.Status = RoofControllerStatus.Closed;
+                if (this.Status != RoofControllerStatus.Closed)
+                {
+                    this.Status = RoofControllerStatus.Closed;
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
             }
             else if (!openTriggered && !closedTriggered)
             {
@@ -488,7 +501,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     else
                     {
                         // Operation stopped - roof is partially open
-                        this.Status = RoofControllerStatus.PartiallyOpen;
+                        if (this.Status != RoofControllerStatus.PartiallyOpen)
+                        {
+                            this.Status = RoofControllerStatus.PartiallyOpen;
+                            LastTransitionUtc = DateTimeOffset.UtcNow;
+                        }
                         this._logger.LogDebug("Roof opening operation stopped - setting to PartiallyOpen");
                     }
                 }
@@ -503,20 +520,32 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     else
                     {
                         // Operation stopped - roof is partially closed
-                        this.Status = RoofControllerStatus.PartiallyClose;
+                        if (this.Status != RoofControllerStatus.PartiallyClose)
+                        {
+                            this.Status = RoofControllerStatus.PartiallyClose;
+                            LastTransitionUtc = DateTimeOffset.UtcNow;
+                        }
                         this._logger.LogDebug("Roof closing operation stopped - setting to PartiallyClose");
                     }
                 }
                 else
                 {
                     // Unknown state - default to stopped
-                    this.Status = RoofControllerStatus.Stopped;
+                    if (this.Status != RoofControllerStatus.Stopped)
+                    {
+                        this.Status = RoofControllerStatus.Stopped;
+                        LastTransitionUtc = DateTimeOffset.UtcNow;
+                    }
                 }
             }
             else if (openTriggered && closedTriggered)
             {
                 // Error state - both switches triggered simultaneously
-                this.Status = RoofControllerStatus.Error;
+                if (this.Status != RoofControllerStatus.Error)
+                {
+                    this.Status = RoofControllerStatus.Error;
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
                 this._logger.LogError("Both limit switches are triggered simultaneously - this indicates a hardware problem");
             }
 
@@ -621,7 +650,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 var (forwardLimit, reverseLimit) = GetCurrentLimitStates();
                 if (forwardLimit && reverseLimit)
                 {
-                    this.Status = RoofControllerStatus.Error;
+                    if (this.Status != RoofControllerStatus.Error)
+                    {
+                        this.Status = RoofControllerStatus.Error;
+                        LastTransitionUtc = DateTimeOffset.UtcNow;
+                    }
                     _logger.LogError("Open command refused: both limit switches are active");
                     return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Both limit switches are active"));
                 }
@@ -634,7 +667,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     }
 
                     // If already open, just return
-                    this.Status = RoofControllerStatus.Open;
+                    if (this.Status != RoofControllerStatus.Open)
+                    {
+                        this.Status = RoofControllerStatus.Open;
+                        LastTransitionUtc = DateTimeOffset.UtcNow;
+                    }
 
                     this._logger.LogInformation($"====Open - {DateTime.Now:O}. Already Open. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -650,7 +687,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 );
 
                 // Set the status to opening
-                this.Status = RoofControllerStatus.Opening;
+                if (this.Status != RoofControllerStatus.Opening)
+                {
+                    this.Status = RoofControllerStatus.Opening;
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
                 // _lastCommand already set earlier before calling Stop()
                 this.StartSafetyWatchdog();
 
@@ -699,7 +740,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 var (forwardLimit, reverseLimit) = GetCurrentLimitStates();
                 if (forwardLimit && reverseLimit)
                 {
-                    this.Status = RoofControllerStatus.Error;
+                    if (this.Status != RoofControllerStatus.Error)
+                    {
+                        this.Status = RoofControllerStatus.Error;
+                        LastTransitionUtc = DateTimeOffset.UtcNow;
+                    }
                     _logger.LogError("Close command refused: both limit switches are active");
                     return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Both limit switches are active"));
                 }
@@ -712,7 +757,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     }
 
                     // If already closed, just return
-                    this.Status = RoofControllerStatus.Closed;
+                    if (this.Status != RoofControllerStatus.Closed)
+                    {
+                        this.Status = RoofControllerStatus.Closed;
+                        LastTransitionUtc = DateTimeOffset.UtcNow;
+                    }
 
                     this._logger.LogInformation($"====Close - {DateTime.Now:O}. Already Closed. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -728,7 +777,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
 
                 // Set the status to closing
-                this.Status = RoofControllerStatus.Closing;
+                if (this.Status != RoofControllerStatus.Closing)
+                {
+                    this.Status = RoofControllerStatus.Closing;
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
                 // _lastCommand already set earlier before calling Stop()
                 this.StartSafetyWatchdog();
 

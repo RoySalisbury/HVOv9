@@ -33,11 +33,11 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         /// <response code="200">Returns the current roof status</response>
         /// <response code="500">Internal server error occurred</response>
         [HttpGet, Route("Status", Name = nameof(GetRoofStatus))]
-        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(RoofStatusResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatus> GetRoofStatus()
+        public ActionResult<RoofStatusResponse> GetRoofStatus()
         {
-            return Ok(this._roofController.Status);
+            return Ok(CreateStatus());
         }
 
         /// <summary>
@@ -47,14 +47,14 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         /// <response code="200">Roof opening operation completed successfully</response>
         /// <response code="500">Internal server error or service state issue occurred</response>
         [HttpGet, Route("Open", Name = nameof(DoRoofOpen))]
-        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(RoofStatusResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatus> DoRoofOpen()
+        public ActionResult<RoofStatusResponse> DoRoofOpen()
         {
             var result = this._roofController.Open();
             
             return result.Match(
-                success: status => Ok(status),
+                success: status => Ok(CreateStatus(status)),
                 failure: error => error switch
                 {
                     // Service state issues should return 500
@@ -79,14 +79,14 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         /// <response code="200">Roof closing operation completed successfully</response>
         /// <response code="500">Internal server error or service state issue occurred</response>
         [HttpGet, Route("Close", Name = nameof(DoRoofClose))]
-        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(RoofStatusResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatus> DoRoofClose()
+        public ActionResult<RoofStatusResponse> DoRoofClose()
         {
             var result = this._roofController.Close();
             
             return result.Match(
-                success: status => Ok(status),
+                success: status => Ok(CreateStatus(status)),
                 failure: error => error switch
                 {
                     // Service state issues should return 500
@@ -111,14 +111,14 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         /// <response code="200">Roof stop operation completed successfully</response>
         /// <response code="500">Internal server error or service state issue occurred</response>
         [HttpGet, Route("Stop", Name = nameof(DoRoofStop))]
-        [ProducesResponseType(typeof(RoofControllerStatus), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(RoofStatusResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-        public ActionResult<RoofControllerStatus> DoRoofStop()
+        public ActionResult<RoofStatusResponse> DoRoofStop()
         {
             var result = this._roofController.Stop();
             
             return result.Match(
-                success: status => Ok(status),
+                success: status => Ok(CreateStatus(status)),
                 failure: error => error switch
                 {
                     // Service state issues should return 500
@@ -166,6 +166,15 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
                     )
                 }
             );
+        }
+        private RoofStatusResponse CreateStatus(RoofControllerStatus? overrideStatus = null)
+        {
+            // LastTransitionUtc not currently tracked in service; placeholder null for future enhancement
+            return new RoofStatusResponse(
+                overrideStatus ?? this._roofController.Status,
+                this._roofController.IsMoving,
+                this._roofController.LastStopReason,
+                null);
         }
     }
 }

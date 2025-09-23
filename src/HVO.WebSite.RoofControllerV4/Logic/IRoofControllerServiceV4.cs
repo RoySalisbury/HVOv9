@@ -27,6 +27,11 @@ public interface IRoofControllerServiceV4
         RoofControllerStopReason LastStopReason { get; }
 
         /// <summary>
+        /// UTC timestamp of the last status transition.
+        /// </summary>
+        DateTimeOffset? LastTransitionUtc { get; }
+
+        /// <summary>
         /// Initializes the roof controller hardware and prepares it for operation.
         /// </summary>
         /// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
