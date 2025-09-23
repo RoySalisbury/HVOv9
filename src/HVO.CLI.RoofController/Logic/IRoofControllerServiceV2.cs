@@ -52,21 +52,23 @@ public interface IRoofControllerServiceV2
         /// <returns>A result containing the updated roof controller status.</returns>
         Result<RoofControllerStatus> Close();
  
+        // DigitalInput1..4 events removed; use named alias events below
+
         /// <summary>
-        /// Raised when digital input 1 changes. Arg: new state (true=high).
+        /// Forward (open) limit switch state change.
         /// </summary>
-        event EventHandler<bool>? DigitalInput1Changed;
+        event EventHandler<bool>? ForwardLimitSwitchChanged;
         /// <summary>
-        /// Raised when digital input 2 changes. Arg: new state (true=high).
+        /// Reverse (close) limit switch state change.
         /// </summary>
-        event EventHandler<bool>? DigitalInput2Changed;
+        event EventHandler<bool>? ReverseLimitSwitchChanged;
         /// <summary>
-        /// Raised when digital input 3 changes. Arg: new state (true=high).
+        /// Fault notification input change.
         /// </summary>
-        event EventHandler<bool>? DigitalInput3Changed;
+        event EventHandler<bool>? FaultNotificationChanged;
         /// <summary>
-        /// Raised when digital input 4 changes. Arg: new state (true=high).
+        /// Roof movement notification input change.
         /// </summary>
-        event EventHandler<bool>? DigitalInput4Changed;
+        event EventHandler<bool>? RoofMovementNotificationChanged;
  
 }

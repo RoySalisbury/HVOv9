@@ -29,10 +29,10 @@ class Program
 
         // Do test stuff here ... the background service is still running....
     var roofController = host.Services.GetRequiredService<IRoofControllerServiceV2>();
-    roofController.DigitalInput1Changed += (_, s) => Console.WriteLine($"IN1 changed: {s}");
-    roofController.DigitalInput2Changed += (_, s) => Console.WriteLine($"IN2 changed: {s}");
-    roofController.DigitalInput3Changed += (_, s) => Console.WriteLine($"IN3 changed: {s}");
-    roofController.DigitalInput4Changed += (_, s) => Console.WriteLine($"IN4 changed: {s}");
+    roofController.ForwardLimitSwitchChanged += (_, s) => Console.WriteLine($"ForwardLimitSwitch: {s}");
+    roofController.ReverseLimitSwitchChanged += (_, s) => Console.WriteLine($"ReverseLimitSwitch: {s}");
+    roofController.FaultNotificationChanged += (_, s) => Console.WriteLine($"FaultNotification: {s}");
+    roofController.RoofMovementNotificationChanged += (_, s) => Console.WriteLine($"RoofMovementNotification: {s}");
         var status = roofController.Status;
 
         for (int i = 0; i < 10; i++)

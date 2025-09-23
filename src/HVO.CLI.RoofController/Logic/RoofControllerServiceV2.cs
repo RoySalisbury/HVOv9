@@ -28,22 +28,16 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
     private EventHandler<bool>? _hatIn3Handler;
     private EventHandler<bool>? _hatIn4Handler;
 
-    /// <summary>
-    /// Raised when digital input 1 changes. Arg: new state (true=high).
-    /// </summary>
-    public event EventHandler<bool>? DigitalInput1Changed;
-    /// <summary>
-    /// Raised when digital input 2 changes. Arg: new state (true=high).
-    /// </summary>
-    public event EventHandler<bool>? DigitalInput2Changed;
-    /// <summary>
-    /// Raised when digital input 3 changes. Arg: new state (true=high).
-    /// </summary>
-    public event EventHandler<bool>? DigitalInput3Changed;
-    /// <summary>
-    /// Raised when digital input 4 changes. Arg: new state (true=high).
-    /// </summary>
-    public event EventHandler<bool>? DigitalInput4Changed;
+    // Legacy DigitalInput1..4 events removed; use named alias events below
+
+    /// <summary>Raised when the forward (open) limit switch changes state.</summary>
+    public event EventHandler<bool>? ForwardLimitSwitchChanged;
+    /// <summary>Raised when the reverse (close) limit switch changes state.</summary>
+    public event EventHandler<bool>? ReverseLimitSwitchChanged;
+    /// <summary>Raised when fault notification input changes state.</summary>
+    public event EventHandler<bool>? FaultNotificationChanged;
+    /// <summary>Raised when roof movement notification input changes state.</summary>
+    public event EventHandler<bool>? RoofMovementNotificationChanged;
 
     public RoofControllerServiceV2(ILogger<RoofControllerServiceV2> logger, IOptions<RoofControllerOptionsV2> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
     {
@@ -114,10 +108,10 @@ public class RoofControllerServiceV2 : IRoofControllerServiceV2, IAsyncDisposabl
             // Subscribe to HAT input events and forward them if enabled
             if (_roofControllerOptions.EnableDigitalInputPolling)
             {
-                _hatIn1Handler = (_, s) => DigitalInput1Changed?.Invoke(this, s);
-                _hatIn2Handler = (_, s) => DigitalInput2Changed?.Invoke(this, s);
-                _hatIn3Handler = (_, s) => DigitalInput3Changed?.Invoke(this, s);
-                _hatIn4Handler = (_, s) => DigitalInput4Changed?.Invoke(this, s);
+                _hatIn1Handler = (_, s) => { ForwardLimitSwitchChanged?.Invoke(this, s); };
+                _hatIn2Handler = (_, s) => { ReverseLimitSwitchChanged?.Invoke(this, s); };
+                _hatIn3Handler = (_, s) => { FaultNotificationChanged?.Invoke(this, s); };
+                _hatIn4Handler = (_, s) => { RoofMovementNotificationChanged?.Invoke(this, s); };
 
                 _fourRelayFourInputHat.DigitalInput1Changed += _hatIn1Handler;
                 _fourRelayFourInputHat.DigitalInput2Changed += _hatIn2Handler;
