@@ -92,6 +92,12 @@ public partial class RoofControl : ComponentBase, IDisposable
     public bool IsStopDisabled => !RoofController.IsInitialized || !RoofController.IsMoving;
 
     /// <summary>
+    /// Gets a value indicating whether the Clear Fault button should be disabled.
+    /// Disabled when not initialized or when moving (require stop first).
+    /// </summary>
+    public bool IsClearFaultDisabled => !RoofController.IsInitialized || RoofController.IsMoving;
+
+    /// <summary>
     /// Gets the list of current notification messages.
     /// </summary>
     public IReadOnlyList<NotificationMessage> Notifications => _notifications.AsReadOnly();
@@ -323,6 +329,44 @@ public partial class RoofControl : ComponentBase, IDisposable
         {
             Logger.LogError(ex, "Exception during roof stop operation");
             AddNotification("Error", $"Exception during stop operation: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Pulses the clear-fault relay to reset controller/motor fault.
+    /// </summary>
+    public async Task ClearFaultAsync()
+    {
+        if (IsClearFaultDisabled)
+        {
+            Logger.LogWarning("ClearFaultAsync() blocked - button is disabled");
+            return;
+        }
+
+        try
+        {
+            Logger.LogInformation("User initiated clear-fault operation");
+            var result = RoofController.ClearFault();
+
+            if (result.IsSuccessful)
+            {
+                AddNotification("Maintenance", "Fault clear pulse sent", NotificationType.Info);
+                Logger.LogInformation("Clear fault pulse succeeded");
+            }
+            else
+            {
+                var errorMessage = result.Error?.Message ?? "Unknown error occurred";
+                AddNotification("Error", $"Failed to clear fault: {errorMessage}", NotificationType.Error);
+                Logger.LogError("Failed to clear fault: {Error}", errorMessage);
+            }
+
+            await UpdateStatusAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exception during clear fault operation");
+            AddNotification("Error", $"Exception during clear fault: {ex.Message}", NotificationType.Error);
         }
     }
 

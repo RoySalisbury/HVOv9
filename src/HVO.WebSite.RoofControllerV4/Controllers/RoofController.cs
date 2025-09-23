@@ -135,5 +135,37 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
                 }
             );
         }
+
+        /// <summary>
+        /// Clears controller/motor fault by pulsing the clear-fault relay.
+        /// </summary>
+        /// <param name="pulseMs">Pulse duration in milliseconds</param>
+        /// <returns>True when the pulse completed</returns>
+        /// <response code="200">Fault clear pulse issued successfully</response>
+        /// <response code="500">Internal server error or service state issue occurred</response>
+        [HttpPost, Route("ClearFault", Name = nameof(DoClearFault))]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        public ActionResult<bool> DoClearFault([FromQuery] int pulseMs = 250)
+        {
+            var result = this._roofController.ClearFault(pulseMs);
+
+            return result.Match(
+                success: ok => Ok(ok),
+                failure: error => error switch
+                {
+                    InvalidOperationException => Problem(
+                        title: "Service Error",
+                        detail: error.Message,
+                        statusCode: StatusCodes.Status500InternalServerError
+                    ),
+                    _ => Problem(
+                        title: "Internal Server Error",
+                        detail: "An error occurred while clearing fault",
+                        statusCode: StatusCodes.Status500InternalServerError
+                    )
+                }
+            );
+        }
     }
 }
