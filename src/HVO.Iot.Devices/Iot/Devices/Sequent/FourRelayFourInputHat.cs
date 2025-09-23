@@ -68,6 +68,18 @@ public class FourRelayFourInputHat : I2cRegisterDevice
     private readonly Lazy<(byte Major, byte Minor)> _hardwareRevision;
     private readonly Lazy<(byte Major, byte Minor)> _softwareRevision;
 
+    // Digital input change notification infrastructure
+    private readonly object _eventSync = new();
+    private CancellationTokenSource? _inputPollCts;
+    private Task? _inputPollTask;
+    private (bool in1, bool in2, bool in3, bool in4)? _lastInputs;
+    private TimeSpan _digitalInputPollInterval = TimeSpan.FromMilliseconds(25);
+
+    private EventHandler<bool>? _digitalInput1Changed;
+    private EventHandler<bool>? _digitalInput2Changed;
+    private EventHandler<bool>? _digitalInput3Changed;
+    private EventHandler<bool>? _digitalInput4Changed;
+
     /// <summary>
     /// Initializes a new instance using a bus number and stack index (0..7).
     /// </summary>
@@ -102,6 +114,45 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
 
         _logger.LogInformation("FourRelayFourInputHat initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
+    }
+
+    /// <summary>
+    /// Interval used when polling digital inputs for edge-change notifications.
+    /// </summary>
+    public TimeSpan DigitalInputPollInterval
+    {
+        get => _digitalInputPollInterval;
+        set
+        {
+            if (value <= TimeSpan.Zero)
+                value = TimeSpan.FromMilliseconds(1);
+            _digitalInputPollInterval = value;
+        }
+    }
+
+    /// <summary>Raised when digital input 1 changes state (true=high).</summary>
+    public event EventHandler<bool>? DigitalInput1Changed
+    {
+        add { lock (_eventSync) { _digitalInput1Changed += value; EnsureInputPolling_NoLock(); } }
+        remove { lock (_eventSync) { _digitalInput1Changed -= value; EnsureInputPolling_NoLock(); } }
+    }
+    /// <summary>Raised when digital input 2 changes state (true=high).</summary>
+    public event EventHandler<bool>? DigitalInput2Changed
+    {
+        add { lock (_eventSync) { _digitalInput2Changed += value; EnsureInputPolling_NoLock(); } }
+        remove { lock (_eventSync) { _digitalInput2Changed -= value; EnsureInputPolling_NoLock(); } }
+    }
+    /// <summary>Raised when digital input 3 changes state (true=high).</summary>
+    public event EventHandler<bool>? DigitalInput3Changed
+    {
+        add { lock (_eventSync) { _digitalInput3Changed += value; EnsureInputPolling_NoLock(); } }
+        remove { lock (_eventSync) { _digitalInput3Changed -= value; EnsureInputPolling_NoLock(); } }
+    }
+    /// <summary>Raised when digital input 4 changes state (true=high).</summary>
+    public event EventHandler<bool>? DigitalInput4Changed
+    {
+        add { lock (_eventSync) { _digitalInput4Changed += value; EnsureInputPolling_NoLock(); } }
+        remove { lock (_eventSync) { _digitalInput4Changed -= value; EnsureInputPolling_NoLock(); } }
     }
 
 
@@ -781,6 +832,106 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         {
             _logger.LogError(e, "IsLedOn failed - Led: {Led}", ledIndex);
             return Result<bool>.Failure(e);
+        }
+    }
+
+    private void EnsureInputPolling_NoLock()
+    {
+        bool any = _digitalInput1Changed is not null || _digitalInput2Changed is not null || _digitalInput3Changed is not null || _digitalInput4Changed is not null;
+        if (any)
+        {
+            // Start if not already running
+            if (_inputPollTask == null || _inputPollTask.IsCompleted)
+            {
+                _inputPollCts?.Cancel();
+                _inputPollCts?.Dispose();
+                _inputPollCts = new CancellationTokenSource();
+                var token = _inputPollCts.Token;
+                _inputPollTask = Task.Run(() => InputPollLoopAsync(token), token);
+                _logger.LogInformation("Digital input polling started (interval: {Interval} ms)", _digitalInputPollInterval.TotalMilliseconds);
+            }
+        }
+        else
+        {
+            // Stop if running
+            if (_inputPollCts != null)
+            {
+                try { _inputPollCts.Cancel(); } catch { }
+                _inputPollCts.Dispose();
+                _inputPollCts = null;
+                _inputPollTask = null;
+                _lastInputs = null;
+                _logger.LogInformation("Digital input polling stopped (no subscribers)");
+            }
+        }
+    }
+
+    private async Task InputPollLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                var result = GetAllDigitalInputs();
+                if (result.IsSuccessful)
+                {
+                    var current = result.Value;
+                    (bool in1, bool in2, bool in3, bool in4)? previous;
+                    lock (_eventSync)
+                    {
+                        previous = _lastInputs;
+                        _lastInputs = current;
+                    }
+
+                    if (previous.HasValue)
+                    {
+                        var prev = previous.Value;
+                        // Copy handlers under lock to avoid race with unsubscribe
+                        EventHandler<bool>? h1; EventHandler<bool>? h2; EventHandler<bool>? h3; EventHandler<bool>? h4;
+                        lock (_eventSync)
+                        {
+                            h1 = _digitalInput1Changed;
+                            h2 = _digitalInput2Changed;
+                            h3 = _digitalInput3Changed;
+                            h4 = _digitalInput4Changed;
+                        }
+                        if (prev.in1 != current.in1 && h1 != null) SafeRaise(h1, current.in1, 1);
+                        if (prev.in2 != current.in2 && h2 != null) SafeRaise(h2, current.in2, 2);
+                        if (prev.in3 != current.in3 && h3 != null) SafeRaise(h3, current.in3, 3);
+                        if (prev.in4 != current.in4 && h4 != null) SafeRaise(h4, current.in4, 4);
+                    }
+                }
+                else
+                {
+                    if (result.Error is not null)
+                        _logger.LogWarning(result.Error, "GetAllDigitalInputs failed while polling");
+                    else
+                        _logger.LogWarning("GetAllDigitalInputs returned failure without exception while polling");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Exception during digital input polling loop");
+            }
+
+            try { await Task.Delay(_digitalInputPollInterval, token).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private void SafeRaise(EventHandler<bool> handler, bool state, int index)
+    {
+        try
+        {
+            handler?.Invoke(this, state);
+            _logger.LogTrace("Input{Index} changed: {State}", index, state);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error raising Input{Index} changed event", index);
         }
     }
 }
