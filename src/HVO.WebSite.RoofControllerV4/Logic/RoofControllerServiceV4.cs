@@ -590,6 +590,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
                 }
 
+                // Refuse movement when a fault is active
+                if (IsFaultActive())
+                {
+                    _logger.LogWarning("Open command refused: fault is active");
+                    return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Cannot open while a fault is active. Clear fault first."));
+                }
+
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
                 this._lastCommand = "Open";
 
@@ -652,6 +659,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 if (this.IsInitialized == false)
                 {
                     return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Device not initialized"));
+                }
+
+                // Refuse movement when a fault is active
+                if (IsFaultActive())
+                {
+                    _logger.LogWarning("Close command refused: fault is active");
+                    return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Cannot close while a fault is active. Clear fault first."));
                 }
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
@@ -718,6 +732,15 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         if (this._fourRelayFourInputHat == null || _roofControllerOptions == null)
             return;
+
+        // Guard: never energize both Open and Close simultaneously; enforce safe STOP state
+        if (openRelay && closeRelay)
+        {
+            _logger.LogError("Invalid relay request: both Open and Close requested true. Forcing STOP state.");
+            stopRelay = true;
+            openRelay = false;
+            closeRelay = false;
+        }
 
         // Collect all pin operations to perform atomically
         var pinOperations = new List<(int realayId, bool relayValue, string relayName)>
@@ -826,6 +849,33 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         var (_, reverse) = GetCurrentLimitStates();
         return reverse;
+    }
+
+    protected virtual bool IsFaultActive()
+    {
+        if (InputsEventsActive && _lastIn3.HasValue)
+        {
+            return _lastIn3!.Value;
+        }
+
+        try
+        {
+            var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
+            if (!inputs.IsFailure)
+            {
+                _lastIn1 = inputs.Value.in1;
+                _lastIn2 = inputs.Value.in2;
+                _lastIn3 = inputs.Value.in3;
+                _lastIn4 = inputs.Value.in4;
+                return inputs.Value.in3;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "IsFaultActive: failed to read inputs; assuming no fault");
+        }
+
+        return false;
     }
 
     /// <summary>
