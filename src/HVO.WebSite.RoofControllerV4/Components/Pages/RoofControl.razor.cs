@@ -66,7 +66,8 @@ public partial class RoofControl : ComponentBase, IDisposable
             // Disable when not initialized, moving, opening, or already open
             var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || 
                                RoofController.Status == RoofControllerStatus.Opening || 
-                               RoofController.Status == RoofControllerStatus.Open;
+                               RoofController.Status == RoofControllerStatus.Open ||
+                               RoofController.Status == RoofControllerStatus.Error;
             return baseDisabled;
         }
     }
@@ -81,7 +82,8 @@ public partial class RoofControl : ComponentBase, IDisposable
             // Disable when not initialized, moving, closing, or already closed
             var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || 
                                RoofController.Status == RoofControllerStatus.Closing || 
-                               RoofController.Status == RoofControllerStatus.Closed;
+                               RoofController.Status == RoofControllerStatus.Closed ||
+                               RoofController.Status == RoofControllerStatus.Error;
             return baseDisabled;
         }
     }
@@ -345,6 +347,13 @@ public partial class RoofControl : ComponentBase, IDisposable
 
         try
         {
+            // optional confirm prompt
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Clear controller fault now? Ensure it is safe to proceed.");
+            if (!confirmed)
+            {
+                Logger.LogInformation("Clear fault cancelled by user");
+                return;
+            }
             Logger.LogInformation("User initiated clear-fault operation");
             var result = RoofController.ClearFault();
 

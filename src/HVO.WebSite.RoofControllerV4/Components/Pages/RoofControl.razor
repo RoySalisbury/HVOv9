@@ -57,6 +57,26 @@
         </div>
     </div>
 
+    @if (CurrentStatus == RoofControllerStatus.Error)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-danger d-flex align-items-center" role="alert">
+                    <i class="bi bi-exclamation-octagon-fill me-2"></i>
+                    <div class="flex-grow-1">
+                        <strong>Fault Detected.</strong> Roof controller reported an error. Review system and clear fault when safe.
+                    </div>
+                    <button class="btn btn-outline-light ms-3"
+                            disabled="@IsClearFaultDisabled"
+                            @onclick="ClearFaultAsync">
+                        <i class="bi bi-bandaid me-1"></i>
+                        Clear Fault
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
     <!-- Hardware Button Controls -->
     <div class="row mb-4">
         <div class="col-12">
