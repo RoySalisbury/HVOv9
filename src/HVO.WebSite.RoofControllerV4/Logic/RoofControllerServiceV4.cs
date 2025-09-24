@@ -607,7 +607,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     // Preserve Open/Close command; InternalStop stops watchdog & updates status.
                     this.InternalStop(reason);
                     
-                    this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
+                    this._logger.LogInformation("Stop Executed TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
             }
@@ -627,7 +627,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             this.LastStopReason = reason;
 
             // DON'T set status to Stopped here - let UpdateRoofStatus determine the correct status
-            this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
+            this._logger.LogInformation("InternalStop Start TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
 
             // Set all relays to safe state for STOP operation atomically
             // stopRelay=true engages the stop; open/close relays are de-energized
@@ -640,7 +640,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             // Update status based on limit switch states and last command
             this.UpdateRoofStatus();
-            this._logger.LogInformation($"====InternalStop - {DateTime.Now:O}. Reason: {reason}. Final Status: {this.Status}");
+            this._logger.LogInformation("InternalStop Complete TimeUtc={TimeUtc} Reason={Reason} FinalStatus={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
         }
     }
 
@@ -701,7 +701,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         LastTransitionUtc = DateTimeOffset.UtcNow;
                     }
 
-                    this._logger.LogInformation($"====Open - {DateTime.Now:O}. Already Open. Current Status: {this.Status}");
+                    this._logger.LogInformation("Open Command Ignored AlreadyOpen TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
@@ -723,7 +723,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // _lastCommand already set earlier before calling Stop()
                 this.StartSafetyWatchdog();
 
-                this._logger.LogInformation($"====Open - {DateTime.Now:O}. Current Status: {this.Status}");
+                this._logger.LogInformation("Open Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
 
                 return Result<RoofControllerStatus>.Success(this.Status);
             }
@@ -791,7 +791,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         LastTransitionUtc = DateTimeOffset.UtcNow;
                     }
 
-                    this._logger.LogInformation($"====Close - {DateTime.Now:O}. Already Closed. Current Status: {this.Status}");
+                    this._logger.LogInformation("Close Command Ignored AlreadyClosed TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
@@ -813,7 +813,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // _lastCommand already set earlier before calling Stop()
                 this.StartSafetyWatchdog();
 
-                this._logger.LogInformation($"====Close - {DateTime.Now:O}. Current Status: {this.Status}");
+                this._logger.LogInformation("Close Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
 
                 return Result<RoofControllerStatus>.Success(this.Status);
             }
