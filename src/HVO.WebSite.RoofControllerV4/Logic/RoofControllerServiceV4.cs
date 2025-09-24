@@ -15,6 +15,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     protected System.Timers.Timer? _safetyWatchdogTimer;
     protected System.Timers.Timer? _periodicVerificationTimer;
     protected DateTime _operationStartTime;
+    private bool _watchdogActive;
 
     protected RoofControllerCommandIntent _lastCommandIntent = RoofControllerCommandIntent.None;
     protected RoofControllerStopReason _lastStopReason = RoofControllerStopReason.None;
@@ -226,6 +227,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             AutoReset = false
         };
         _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
+        _watchdogActive = false; // reset active state on recreation
     }
 
     private void InitializeOrUpdatePeriodicVerificationTimer()
@@ -260,8 +262,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // Recreate timer instance for reliable restart
                 RecreateSafetyWatchdog_NoLock();
 
-                _operationStartTime = DateTime.Now;
+                _operationStartTime = DateTime.UtcNow;
                 _safetyWatchdogTimer.Start();
+                _watchdogActive = true;
                 _logger.LogInformation("Safety watchdog started for {timeout} seconds", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
                 TryStartPeriodicVerification_NoLock();
             }
@@ -281,11 +284,16 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     private void StopSafetyWatchdog_NoLock()
     {
-        if (_safetyWatchdogTimer != null)
+        if (_safetyWatchdogTimer != null && _watchdogActive)
         {
             _safetyWatchdogTimer.Stop();
-            var elapsed = DateTime.Now - _operationStartTime;
-            _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
+            var elapsed = DateTime.UtcNow - _operationStartTime;
+            if (elapsed.TotalSeconds >= 0 && elapsed.TotalSeconds < (_roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds * 10))
+            {
+                // Only log if the elapsed time is sane (prevents huge numbers when never started)
+                _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
+            }
+            _watchdogActive = false;
         }
         StopPeriodicVerification_NoLock();
     }
@@ -362,6 +370,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     LastTransitionUtc = DateTimeOffset.UtcNow;
                 }
                 _lastCommandIntent = RoofControllerCommandIntent.SafetyStop;
+                _watchdogActive = false;
 
 
                 _logger.LogError("Roof stopped by safety watchdog - manual intervention may be required");
