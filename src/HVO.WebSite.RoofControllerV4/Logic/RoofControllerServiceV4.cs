@@ -49,7 +49,6 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             _lastIn1 = isHigh;
             if (isHigh)
             {
-                StopSafetyWatchdog();
                 InternalStop(RoofControllerStopReason.LimitSwitchReached);
                 _lastCommand = "LimitStop";
             }
@@ -68,7 +67,6 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             _lastIn2 = isHigh;
             if (isHigh)
             {
-                StopSafetyWatchdog();
                 InternalStop(RoofControllerStopReason.LimitSwitchReached);
                 _lastCommand = "LimitStop";
             }
@@ -87,7 +85,6 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             if (isHigh)
             {
                 // Fail-safe: stop movement immediately on fault and set error
-                StopSafetyWatchdog();
                 InternalStop(RoofControllerStopReason.EmergencyStop);
                 if (Status != RoofControllerStatus.Error)
                 {
@@ -253,15 +250,17 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         lock (_syncLock)
         {
-            if (_safetyWatchdogTimer != null)
-            {
-                _safetyWatchdogTimer.Stop();
-                var elapsed = DateTime.Now - _operationStartTime;
-                _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
+            StopSafetyWatchdog_NoLock();
+        }
+    }
 
-                // Note: We don't dispose the timer here since we may need to restart it
-                // The timer will be disposed and recreated in StartSafetyWatchdog or during final disposal
-            }
+    private void StopSafetyWatchdog_NoLock()
+    {
+        if (_safetyWatchdogTimer != null)
+        {
+            _safetyWatchdogTimer.Stop();
+            var elapsed = DateTime.Now - _operationStartTime;
+            _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
         }
     }
 
@@ -600,7 +599,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     }
 
 
-        public virtual Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop)
+    public virtual Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop)
         {
             try
             {
@@ -618,14 +617,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     {
                         this._lastCommand = "Stop";
                     }
-                    // If _lastCommand was "Open" or "Close", keep it for proper status determination in UpdateRoofStatus().
-                    // To ensure InternalStop's UpdateRoofStatus sees the watchdog inactive (allowing PartiallyOpen/PartiallyClose),
-                    // stop the watchdog BEFORE calling InternalStop.
-                    this.StopSafetyWatchdog();
-
+                    // Preserve Open/Close command; InternalStop stops watchdog & updates status.
                     this.InternalStop(reason);
-
-                    // InternalStop already calls UpdateRoofStatus. A second call here would be redundant.
                     
                     this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
@@ -641,6 +634,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         lock (this._syncLock)
         {
+            // Stop watchdog first so partial states are computed immediately
+            StopSafetyWatchdog_NoLock();
             // Set the last stop reason for external access
             this.LastStopReason = reason;
 
@@ -913,7 +908,6 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 InternalStop(RoofControllerStopReason.EmergencyStop);
-                StopSafetyWatchdog();
 
                 this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, false);
                 this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, true);
