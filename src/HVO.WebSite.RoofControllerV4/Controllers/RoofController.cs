@@ -37,6 +37,7 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
         public ActionResult<RoofStatusResponse> GetRoofStatus()
         {
+            _roofController.RefreshStatus(forceHardwareRead: true);
             return Ok(CreateStatus());
         }
 

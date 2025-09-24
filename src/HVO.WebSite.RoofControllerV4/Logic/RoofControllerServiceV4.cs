@@ -436,37 +436,26 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     // Removed service-level polling; events now forwarded from HAT
 
-    protected virtual void UpdateRoofStatus()
+    protected virtual void UpdateRoofStatus(bool forceRead = false)
     {
         lock (this._syncLock)
         {
-            bool openTriggered;
-            bool closedTriggered;
-
-            if (InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue)
+            bool needRead = forceRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue);
+            if (needRead)
             {
-                openTriggered = _lastIn1.Value;
-                closedTriggered = _lastIn2.Value;
-            }
-            else
-            {
-                openTriggered = false;
-                closedTriggered = false;
                 try
                 {
                     var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
                     if (!inputs.IsFailure)
                     {
-                        openTriggered = inputs.Value.in1;
-                        closedTriggered = inputs.Value.in2;
-                        _lastIn1 = openTriggered;
-                        _lastIn2 = closedTriggered;
+                        _lastIn1 = inputs.Value.in1;
+                        _lastIn2 = inputs.Value.in2;
                         _lastIn3 = inputs.Value.in3;
                         _lastIn4 = inputs.Value.in4;
                     }
                     else if (inputs.Error is not null)
                     {
-                        _logger.LogWarning(inputs.Error, "UpdateRoofStatus: Failed to read digital inputs; using defaults");
+                        _logger.LogWarning(inputs.Error, "UpdateRoofStatus: Failed to read digital inputs; retaining last known values");
                     }
                 }
                 catch (Exception ex)
@@ -474,6 +463,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     _logger.LogError(ex, "UpdateRoofStatus: Exception while reading digital inputs");
                 }
             }
+
+            bool openTriggered = _lastIn1 ?? false;
+            bool closedTriggered = _lastIn2 ?? false;
 
             if (openTriggered && !closedTriggered)
             {
@@ -546,6 +538,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             this.Status = newStatus;
             LastTransitionUtc = DateTimeOffset.UtcNow;
         }
+    }
+
+    public void RefreshStatus(bool forceHardwareRead = false)
+    {
+        UpdateRoofStatus(forceHardwareRead);
     }
 
     /// <summary>
@@ -678,7 +675,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 // Single read to check limit states and handle the both-limits error case
-                var (forwardLimit, reverseLimit) = GetCurrentLimitStates();
+                var (forwardLimit, reverseLimit) = GetCurrentLimitStates(forceHardwareRead: true);
                 if (forwardLimit && reverseLimit)
                 {
                     if (this.Status != RoofControllerStatus.Error)
@@ -768,7 +765,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 // Single read to check limit states and handle the both-limits error case
-                var (forwardLimit, reverseLimit) = GetCurrentLimitStates();
+                var (forwardLimit, reverseLimit) = GetCurrentLimitStates(forceHardwareRead: true);
                 if (forwardLimit && reverseLimit)
                 {
                     if (this.Status != RoofControllerStatus.Error)
@@ -919,9 +916,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     /// Helper to get the immediate view of forward/reverse limits using cached events when present,
     /// otherwise performing a single read from the HAT.
     /// </summary>
-    protected virtual (bool forward, bool reverse) GetCurrentLimitStates()
+    protected virtual (bool forward, bool reverse) GetCurrentLimitStates(bool forceHardwareRead = false)
     {
-        if (InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue)
+        if (!forceHardwareRead && InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue)
         {
             return (_lastIn1!.Value, _lastIn2!.Value);
         }
@@ -948,13 +945,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     protected virtual bool IsForwardLimitActive()
     {
-        var (forward, _) = GetCurrentLimitStates();
+        var (forward, _) = GetCurrentLimitStates(forceHardwareRead: true);
         return forward;
     }
 
     protected virtual bool IsReverseLimitActive()
     {
-        var (_, reverse) = GetCurrentLimitStates();
+        var (_, reverse) = GetCurrentLimitStates(forceHardwareRead: true);
         return reverse;
     }
 

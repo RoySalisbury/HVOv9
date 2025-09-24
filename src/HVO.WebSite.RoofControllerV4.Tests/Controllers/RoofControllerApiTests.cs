@@ -28,6 +28,7 @@ public class RoofControllerApiTests
         _roofServiceMock.SetupGet(s => s.IsInitialized).Returns(true);
         _roofServiceMock.SetupGet(s => s.IsMoving).Returns(false);
         _roofServiceMock.SetupGet(s => s.LastStopReason).Returns(RoofControllerStopReason.NormalStop);
+        _roofServiceMock.Setup(s => s.RefreshStatus(It.IsAny<bool>()));
         _roofServiceMock.Setup(s => s.Initialize(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<bool>.Success(true));
 

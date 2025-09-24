@@ -56,6 +56,12 @@ public interface IRoofControllerServiceV4
         /// </summary>
         /// <returns>A result containing the updated roof controller status.</returns>
         Result<RoofControllerStatus> Close();
+
+        /// <summary>
+        /// Refresh internal cached status from hardware; when forceHardwareRead is true a direct I2C read is performed regardless of cached event values.
+        /// </summary>
+        /// <param name="forceHardwareRead">If true forces direct hardware read.</param>
+        void RefreshStatus(bool forceHardwareRead = false);
         
         /// <summary>
         /// Pulses the clear-fault relay to reset fault conditions on the motor controller asynchronously.
