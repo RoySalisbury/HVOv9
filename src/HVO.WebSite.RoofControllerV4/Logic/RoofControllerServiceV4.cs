@@ -21,6 +21,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     private readonly ILogger<RoofControllerServiceV4> _logger;
     private readonly RoofControllerOptionsV4 _roofControllerOptions;
     private readonly FourRelayFourInputHat _fourRelayFourInputHat;
+    // Cached LED mask to avoid redundant I2C writes (bits 0..2 -> OpenLimit, ClosedLimit, Fault)
+    private byte? _lastIndicatorLedMask;
 
     // Forward digital input events from the HAT
     private EventHandler<bool>? _hatIn1Handler;
@@ -551,6 +553,49 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             this._logger.LogDebug("UpdateRoofStatus: OpenTriggered={openTriggered}, ClosedTriggered={closedTriggered}, LastCommand={lastCommand}, Status={status}",
                 openTriggered, closedTriggered, _lastCommand, this.Status);
+
+            // Update indicator LEDs to reflect current limit & fault states
+            UpdateIndicatorLeds_NoLock();
+        }
+    }
+
+    /// <summary>
+    /// Updates HAT LEDs (LED1=open limit, LED2=closed limit, LED3=fault) with minimal I2C traffic.
+    /// Assumes caller holds <see cref="_syncLock"/>.
+    /// </summary>
+    private void UpdateIndicatorLeds_NoLock()
+    {
+        try
+        {
+            bool openLimit = _lastIn1 ?? false;      // Forward limit
+            bool closedLimit = _lastIn2 ?? false;    // Reverse limit
+            bool fault = _lastIn3 ?? false;          // Fault input
+
+            byte mask = 0;
+            if (openLimit) mask |= 0x01;     // LED1
+            if (closedLimit) mask |= 0x02;   // LED2
+            if (fault) mask |= 0x04;         // LED3
+
+            if (_lastIndicatorLedMask.HasValue && _lastIndicatorLedMask.Value == mask)
+                return; // No change
+
+            var result = _fourRelayFourInputHat.SetLedsMask(mask);
+            if (!result.IsSuccessful)
+            {
+                if (result.Error is not null)
+                    _logger.LogDebug(result.Error, "UpdateIndicatorLeds: failed to set LED mask {Mask}", mask);
+                else
+                    _logger.LogDebug("UpdateIndicatorLeds: failed to set LED mask {Mask} (unknown error)", mask);
+            }
+            else
+            {
+                _lastIndicatorLedMask = mask;
+                _logger.LogTrace("Indicator LEDs updated - Open:{Open} Closed:{Closed} Fault:{Fault} Mask:0x{Mask:X2}", openLimit, closedLimit, fault, mask);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "UpdateIndicatorLeds: exception while updating LEDs");
         }
     }
 
