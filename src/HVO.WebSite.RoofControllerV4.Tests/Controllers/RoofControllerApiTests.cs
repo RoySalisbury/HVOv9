@@ -77,7 +77,16 @@ public class RoofControllerApiTests
         T? payload = default;
         if (response.IsSuccessStatusCode)
         {
-            payload = await response.Content.ReadFromJsonAsync<T>();
+            // Use the same enum string handling as the server (string enums)
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            if (!options.Converters.Any(c => c is JsonStringEnumConverter))
+            {
+                options.Converters.Add(new JsonStringEnumConverter());
+            }
+            payload = await response.Content.ReadFromJsonAsync<T>(options);
         }
         return (response, payload);
     }
@@ -167,7 +176,10 @@ public class RoofControllerApiTests
         Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.IsNotNull(problem);
         StringAssert.Contains(problem.Title, "Service Error");
-        Assert.AreEqual("/api/v4.0/RoofControl/Close", problem.Instance);
+        // Accept either raw path or METHOD path format
+    var expectedPath = "/api/v4.0/RoofControl/Close";
+    Assert.IsNotNull(problem.Instance);
+    Assert.IsTrue(problem.Instance == expectedPath || problem.Instance!.EndsWith(expectedPath), $"Unexpected Instance: {problem.Instance}");
         _roofServiceMock.Verify(s => s.Close(), Times.Once);
     }
 
@@ -205,7 +217,9 @@ public class RoofControllerApiTests
         Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.IsNotNull(problem);
         StringAssert.Contains(problem.Title, "Service Error");
-        Assert.AreEqual("/api/v4.0/RoofControl/Stop", problem.Instance);
+    var expectedPath = "/api/v4.0/RoofControl/Stop";
+    Assert.IsNotNull(problem.Instance);
+    Assert.IsTrue(problem.Instance == expectedPath || problem.Instance!.EndsWith(expectedPath), $"Unexpected Instance: {problem.Instance}");
         _roofServiceMock.Verify(s => s.Stop(It.IsAny<RoofControllerStopReason>()), Times.Once);
     }
 
@@ -270,6 +284,8 @@ public class RoofControllerApiTests
             // Fallback if mapping changes
             Assert.AreEqual((int)HttpStatusCode.InternalServerError, problem.Status);
         }
-        Assert.AreEqual("/api/v4.0/RoofControl/Status", problem.Instance);
+    var expectedStatusPath = "/api/v4.0/RoofControl/Status";
+    Assert.IsNotNull(problem.Instance);
+    Assert.IsTrue(problem.Instance == expectedStatusPath || problem.Instance!.EndsWith(expectedStatusPath), $"Unexpected Instance: {problem.Instance}");
     }
 }

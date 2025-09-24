@@ -157,11 +157,15 @@ public class Program
         // Enable endpoints API explorer for OpenAPI
         services.AddEndpointsApiExplorer();
 
-        services.AddControllers()
-            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-
-        // Add MVC with Views for Blazor support
-        services.AddControllersWithViews();
+        // Add MVC + Views + JSON enum string serialization (single registration to avoid overriding options)
+        services.AddControllersWithViews()
+            .AddJsonOptions(options =>
+            {
+                if (!options.JsonSerializerOptions.Converters.Any(c => c is JsonStringEnumConverter))
+                {
+                    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+                }
+            });
 
         // Add HttpClient for API calls
         services.AddHttpClient();
