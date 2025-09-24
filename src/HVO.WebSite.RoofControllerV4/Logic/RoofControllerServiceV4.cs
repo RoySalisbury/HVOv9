@@ -477,19 +477,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             if (openTriggered && !closedTriggered)
             {
-                if (this.Status != RoofControllerStatus.Open)
-                {
-                    this.Status = RoofControllerStatus.Open;
-                    LastTransitionUtc = DateTimeOffset.UtcNow;
-                }
+                SetStatus(RoofControllerStatus.Open);
             }
             else if (!openTriggered && closedTriggered)
             {
-                if (this.Status != RoofControllerStatus.Closed)
-                {
-                    this.Status = RoofControllerStatus.Closed;
-                    LastTransitionUtc = DateTimeOffset.UtcNow;
-                }
+                SetStatus(RoofControllerStatus.Closed);
             }
             else if (!openTriggered && !closedTriggered)
             {
@@ -507,11 +499,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     else
                     {
                         // Operation stopped - roof is partially open
-                        if (this.Status != RoofControllerStatus.PartiallyOpen)
-                        {
-                            this.Status = RoofControllerStatus.PartiallyOpen;
-                            LastTransitionUtc = DateTimeOffset.UtcNow;
-                        }
+                        SetStatus(RoofControllerStatus.PartiallyOpen);
                         this._logger.LogDebug("Roof opening operation stopped - setting to PartiallyOpen");
                     }
                 }
@@ -526,32 +514,20 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     else
                     {
                         // Operation stopped - roof is partially closed
-                        if (this.Status != RoofControllerStatus.PartiallyClose)
-                        {
-                            this.Status = RoofControllerStatus.PartiallyClose;
-                            LastTransitionUtc = DateTimeOffset.UtcNow;
-                        }
+                        SetStatus(RoofControllerStatus.PartiallyClose);
                         this._logger.LogDebug("Roof closing operation stopped - setting to PartiallyClose");
                     }
                 }
                 else
                 {
                     // Unknown state - default to stopped
-                    if (this.Status != RoofControllerStatus.Stopped)
-                    {
-                        this.Status = RoofControllerStatus.Stopped;
-                        LastTransitionUtc = DateTimeOffset.UtcNow;
-                    }
+                    SetStatus(RoofControllerStatus.Stopped);
                 }
             }
             else if (openTriggered && closedTriggered)
             {
                 // Error state - both switches triggered simultaneously
-                if (this.Status != RoofControllerStatus.Error)
-                {
-                    this.Status = RoofControllerStatus.Error;
-                    LastTransitionUtc = DateTimeOffset.UtcNow;
-                }
+                SetStatus(RoofControllerStatus.Error);
                 this._logger.LogError("Both limit switches are triggered simultaneously - this indicates a hardware problem");
             }
 
@@ -560,6 +536,15 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             // Update indicator LEDs to reflect current limit & fault states
             UpdateIndicatorLeds_NoLock();
+        }
+    }
+
+    private void SetStatus(RoofControllerStatus newStatus)
+    {
+        if (this.Status != newStatus)
+        {
+            this.Status = newStatus;
+            LastTransitionUtc = DateTimeOffset.UtcNow;
         }
     }
 
