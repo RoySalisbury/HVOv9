@@ -618,13 +618,14 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     {
                         this._lastCommand = "Stop";
                     }
-                    // If _lastCommand was "Open" or "Close", keep it for proper status determination in UpdateRoofStatus()
-                    
-                    this.InternalStop(reason);
+                    // If _lastCommand was "Open" or "Close", keep it for proper status determination in UpdateRoofStatus().
+                    // To ensure InternalStop's UpdateRoofStatus sees the watchdog inactive (allowing PartiallyOpen/PartiallyClose),
+                    // stop the watchdog BEFORE calling InternalStop.
                     this.StopSafetyWatchdog();
-                    
-                    // Update status again after stopping watchdog to ensure correct status transition
-                    this.UpdateRoofStatus();
+
+                    this.InternalStop(reason);
+
+                    // InternalStop already calls UpdateRoofStatus. A second call here would be redundant.
                     
                     this._logger.LogInformation($"====Stop - {DateTime.Now:O}. Reason: {reason}. Current Status: {this.Status}");
                     return Result<RoofControllerStatus>.Success(this.Status);
