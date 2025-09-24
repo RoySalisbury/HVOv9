@@ -725,6 +725,24 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Sets all four LEDs in a single I2C transaction.
+    /// </summary>
+    /// <param name="led1">State for LED 1 (true = on).</param>
+    /// <param name="led2">State for LED 2 (true = on).</param>
+    /// <param name="led3">State for LED 3 (true = on).</param>
+    /// <param name="led4">State for LED 4 (true = on).</param>
+    /// <returns>Result indicating success or failure.</returns>
+    public Result<bool> SetAllLeds(bool led1, bool led2, bool led3, bool led4)
+    {
+        byte mask = 0;
+        if (led1) mask |= 0x01;
+        if (led2) mask |= 0x02;
+        if (led3) mask |= 0x04;
+        if (led4) mask |= 0x08;
+        return SetLedsMask(mask);
+    }
+
     public Result<byte> GetLedsMask()
     {
         try
@@ -741,34 +759,50 @@ public class FourRelayFourInputHat : I2cRegisterDevice
         }
     }
 
+    /// <summary>
+    /// Returns the on/off status of all 4 LEDs as a tuple (led1..led4).
+    /// </summary>
+    public Result<(bool led1, bool led2, bool led3, bool led4)> GetAllLeds()
+    {
+        var maskResult = GetLedsMask();
+        if (maskResult.IsFailure)
+        {
+            if (maskResult.Error is not null)
+                _logger.LogError(maskResult.Error, "GetAllLeds failed to read LED mask");
+            else
+                _logger.LogError("GetAllLeds failed - unknown error reading LED mask");
+            return Result<(bool, bool, bool, bool)>.Failure(maskResult.Error!);
+        }
+
+        byte mask = maskResult.Value; // bits 0..3 map to LEDs 1..4
+        return (
+            led1: (mask & 0x01) != 0,
+            led2: (mask & 0x02) != 0,
+            led3: (mask & 0x04) != 0,
+            led4: (mask & 0x08) != 0
+        );
+    }
+
     public Result<bool> SetLedMode(int ledIndex, LedMode mode)
     {
         if (ledIndex < 1 || ledIndex > _IN_CH_COUNT)
             return Result<bool>.Failure(new ArgumentOutOfRangeException(nameof(ledIndex), "LED number must be between 1 and 4."));
-
-        try
+        var maskResult = GetLedModesMask();
+        if (maskResult.IsFailure)
         {
-            lock (Sync)
-            {
-                int current = ReadByte(_I2C_MEM_LED_MODE);
-                if (mode == LedMode.Manual)
-                {
-                    current |= 1 << (ledIndex - 1);
-                }
-                else
-                {
-                    current &= ~(1 << (ledIndex - 1));
-                }
-                WriteByte(_I2C_MEM_LED_MODE, (byte)current);
-            }
+            if (maskResult.Error is not null)
+                _logger.LogError(maskResult.Error, "SetLedMode failed reading existing mask - Led: {Led}, Mode: {Mode}", ledIndex, mode);
+            return Result<bool>.Failure(maskResult.Error!);
+        }
+        byte mask = maskResult.Value;
+        if (mode == LedMode.Manual)
+            mask |= (byte)(1 << (ledIndex - 1));
+        else
+            mask &= (byte)~(1 << (ledIndex - 1));
+        var writeResult = SetLedModesMask(mask);
+        if (writeResult.IsSuccessful)
             _logger.LogDebug("SetLedMode - Led: {Led}, Mode: {Mode}", ledIndex, mode);
-            return true;
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "SetLedMode failed - Led: {Led}, Mode: {Mode}", ledIndex, mode);
-            return Result<bool>.Failure(e);
-        }
+        return writeResult;
     }
 
     public Result<LedMode> GetLedMode(int ledIndex)
@@ -790,6 +824,69 @@ public class FourRelayFourInputHat : I2cRegisterDevice
             _logger.LogError(e, "GetLedMode failed - Led: {Led}", ledIndex);
             return Result<LedMode>.Failure(e);
         }
+    }
+
+    // ----------------------- LED Mode Batch Operations -----------------------
+    public Result<byte> GetLedModesMask()
+    {
+        try
+        {
+            lock (Sync)
+            {
+                return (byte)ReadByte(_I2C_MEM_LED_MODE);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "GetLedModesMask failed");
+            return Result<byte>.Failure(e);
+        }
+    }
+
+    public Result<(LedMode led1, LedMode led2, LedMode led3, LedMode led4)> GetAllLedModes()
+    {
+        var maskResult = GetLedModesMask();
+        if (maskResult.IsFailure)
+        {
+            if (maskResult.Error is not null)
+                _logger.LogError(maskResult.Error, "GetAllLedModes failed to read mode mask");
+            return Result<(LedMode, LedMode, LedMode, LedMode)>.Failure(maskResult.Error!);
+        }
+        byte mask = maskResult.Value;
+        return (
+            (mask & 0x01) != 0 ? LedMode.Manual : LedMode.Auto,
+            (mask & 0x02) != 0 ? LedMode.Manual : LedMode.Auto,
+            (mask & 0x04) != 0 ? LedMode.Manual : LedMode.Auto,
+            (mask & 0x08) != 0 ? LedMode.Manual : LedMode.Auto
+        );
+    }
+
+    public Result<bool> SetLedModesMask(byte mask)
+    {
+        try
+        {
+            lock (Sync)
+            {
+                WriteByte(_I2C_MEM_LED_MODE, (byte)(mask & 0x0f));
+            }
+            _logger.LogDebug("SetLedModesMask - Mask: 0x{Mask:X2}", (byte)(mask & 0x0f));
+            return true;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "SetLedModesMask failed - Mask: 0x{Mask:X2}", (byte)(mask & 0x0f));
+            return Result<bool>.Failure(e);
+        }
+    }
+
+    public Result<bool> SetAllLedModes(LedMode led1, LedMode led2, LedMode led3, LedMode led4)
+    {
+        byte mask = 0;
+        if (led1 == LedMode.Manual) mask |= 0x01;
+        if (led2 == LedMode.Manual) mask |= 0x02;
+        if (led3 == LedMode.Manual) mask |= 0x04;
+        if (led4 == LedMode.Manual) mask |= 0x08;
+        return SetLedModesMask(mask);
     }
 
     public Result<bool> SetLed(int ledIndex, bool isOn)
@@ -818,21 +915,17 @@ public class FourRelayFourInputHat : I2cRegisterDevice
     {
         if (ledIndex < 1 || ledIndex > _IN_CH_COUNT)
             return Result<bool>.Failure(new ArgumentOutOfRangeException(nameof(ledIndex), "LED number must be between 1 and 4."));
-
-        try
+        var maskResult = GetLedsMask();
+        if (maskResult.IsFailure)
         {
-            int val;
-            lock (Sync)
-            {
-                val = ReadByte(_I2C_MEM_LED_VAL);
-            }
-            return (val & (1 << (ledIndex - 1))) != 0;
+            if (maskResult.Error is not null)
+                _logger.LogError(maskResult.Error, "IsLedOn failed - Led: {Led}", ledIndex);
+            else
+                _logger.LogError("IsLedOn failed (no exception) - Led: {Led}", ledIndex);
+            return Result<bool>.Failure(maskResult.Error!);
         }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "IsLedOn failed - Led: {Led}", ledIndex);
-            return Result<bool>.Failure(e);
-        }
+        byte mask = maskResult.Value;
+        return (mask & (1 << (ledIndex - 1))) != 0;
     }
 
     private void EnsureInputPolling_NoLock()
