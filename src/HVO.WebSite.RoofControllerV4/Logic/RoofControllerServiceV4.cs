@@ -15,7 +15,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     protected System.Timers.Timer? _safetyWatchdogTimer;
     protected DateTime _operationStartTime;
 
-    protected string _lastCommand = string.Empty;
+    protected RoofControllerCommandIntent _lastCommandIntent = RoofControllerCommandIntent.None;
     protected RoofControllerStopReason _lastStopReason = RoofControllerStopReason.None;
 
     private readonly ILogger<RoofControllerServiceV4> _logger;
@@ -50,7 +50,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             if (isHigh)
             {
                 InternalStop(RoofControllerStopReason.LimitSwitchReached);
-                _lastCommand = "LimitStop";
+                _lastCommandIntent = RoofControllerCommandIntent.LimitStop;
             }
             else
             {
@@ -68,7 +68,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             if (isHigh)
             {
                 InternalStop(RoofControllerStopReason.LimitSwitchReached);
-                _lastCommand = "LimitStop";
+                _lastCommandIntent = RoofControllerCommandIntent.LimitStop;
             }
             else
             {
@@ -91,7 +91,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     Status = RoofControllerStatus.Error;
                     LastTransitionUtc = DateTimeOffset.UtcNow;
                 }
-                _lastCommand = "FaultStop";
+                _lastCommandIntent = RoofControllerCommandIntent.FaultStop;
             }
             else
             {
@@ -283,8 +283,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return;
 
                 InternalStop(RoofControllerStopReason.SafetyWatchdogTimeout);
+                var previousStatus = Status;
                 Status = RoofControllerStatus.Error;
-                _lastCommand = "SafetyStop";
+                if (previousStatus != RoofControllerStatus.Error)
+                {
+                    LastTransitionUtc = DateTimeOffset.UtcNow;
+                }
+                _lastCommandIntent = RoofControllerCommandIntent.SafetyStop;
 
 
                 _logger.LogError("Roof stopped by safety watchdog - manual intervention may be required");
@@ -491,7 +496,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // Roof is between positions - determine based on current status and whether operation is active
                 var isOperationActive = _safetyWatchdogTimer?.Enabled ?? false;
 
-                if (this.Status == RoofControllerStatus.Opening || _lastCommand == "Open")
+                if (this.Status == RoofControllerStatus.Opening || _lastCommandIntent == RoofControllerCommandIntent.Open)
                 {
                     if (isOperationActive)
                     {
@@ -510,7 +515,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         this._logger.LogDebug("Roof opening operation stopped - setting to PartiallyOpen");
                     }
                 }
-                else if (this.Status == RoofControllerStatus.Closing || _lastCommand == "Close")
+                else if (this.Status == RoofControllerStatus.Closing || _lastCommandIntent == RoofControllerCommandIntent.Close)
                 {
                     if (isOperationActive)
                     {
@@ -550,8 +555,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 this._logger.LogError("Both limit switches are triggered simultaneously - this indicates a hardware problem");
             }
 
-            this._logger.LogDebug("UpdateRoofStatus: OpenTriggered={openTriggered}, ClosedTriggered={closedTriggered}, LastCommand={lastCommand}, Status={status}",
-                openTriggered, closedTriggered, _lastCommand, this.Status);
+            this._logger.LogDebug("UpdateRoofStatus: OpenTriggered={openTriggered}, ClosedTriggered={closedTriggered}, LastIntent={lastIntent}, Status={status}",
+                openTriggered, closedTriggered, _lastCommandIntent, this.Status);
 
             // Update indicator LEDs to reflect current limit & fault states
             UpdateIndicatorLeds_NoLock();
@@ -613,9 +618,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     }
 
                     // Preserve the previous command for status determination, only set to "Stop" if it was empty/unknown
-                    if (string.IsNullOrEmpty(this._lastCommand) || this._lastCommand == "Initialize")
+                    if (_lastCommandIntent == RoofControllerCommandIntent.None || _lastCommandIntent == RoofControllerCommandIntent.Initialize)
                     {
-                        this._lastCommand = "Stop";
+                        _lastCommandIntent = RoofControllerCommandIntent.Stop;
                     }
                     // Preserve Open/Close command; InternalStop stops watchdog & updates status.
                     this.InternalStop(reason);
@@ -678,7 +683,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
-                this._lastCommand = "Open";
+                this._lastCommandIntent = RoofControllerCommandIntent.Open;
 
                 // Always stop the current action before starting a new one.
                 var stopResult = this.Stop();
@@ -768,7 +773,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
-                this._lastCommand = "Close";
+                this._lastCommandIntent = RoofControllerCommandIntent.Close;
 
                 // Always stop the current action before starting a new one.
                 var stopResult = this.Stop();
