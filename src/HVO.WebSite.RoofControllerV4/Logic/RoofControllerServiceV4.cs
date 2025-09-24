@@ -897,32 +897,32 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
     }
 
-    public virtual Result<bool> ClearFault(int pulseMs = 250)
+    public virtual async Task<Result<bool>> ClearFault(int pulseMs = 250, CancellationToken cancellationToken = default)
     {
         pulseMs = Math.Max(0, pulseMs);
-
         try
         {
             ThrowIfDisposed();
-
+            int clearFaultRelayId;
             lock (this._syncLock)
             {
                 if (this.IsInitialized == false)
                 {
                     return Result<bool>.Failure(new InvalidOperationException("Device not initialized"));
                 }
-
                 InternalStop(RoofControllerStopReason.EmergencyStop);
-
-                this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, false);
-                this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, true);
-                Task.Delay(pulseMs).Wait();
-                this._fourRelayFourInputHat.TrySetRelayWithRetry(this._roofControllerOptions.ClearFault, false);
-
-                this._logger.LogInformation($"====ClearFault - {DateTime.Now:O}. Current Status: {this.Status}");
-
-                return true;
+                clearFaultRelayId = this._roofControllerOptions.ClearFault;
+                _fourRelayFourInputHat.TrySetRelayWithRetry(clearFaultRelayId, false);
+                _fourRelayFourInputHat.TrySetRelayWithRetry(clearFaultRelayId, true);
             }
+            if (pulseMs > 0)
+            {
+                try { await Task.Delay(pulseMs, cancellationToken).ConfigureAwait(false); }
+                catch (TaskCanceledException) { }
+            }
+            _fourRelayFourInputHat.TrySetRelayWithRetry(clearFaultRelayId, false);
+            _logger.LogInformation("====ClearFault (async) - {Time}. PulseMs={PulseMs} Status={Status}", DateTime.Now.ToString("O"), pulseMs, Status);
+            return Result<bool>.Success(true);
         }
         catch (Exception ex)
         {

@@ -36,8 +36,8 @@ public class RoofControllerApiTests
         _roofServiceMock.Setup(s => s.Close()).Returns(Result<RoofControllerStatus>.Success(RoofControllerStatus.Closing));
         _roofServiceMock.Setup(s => s.Stop(It.IsAny<RoofControllerStopReason>()))
             .Returns(Result<RoofControllerStatus>.Success(RoofControllerStatus.Stopped));
-        _roofServiceMock.Setup(s => s.ClearFault(It.IsAny<int>()))
-            .Returns(Result<bool>.Success(true));
+        _roofServiceMock.Setup(s => s.ClearFault(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<bool>.Success(true));
 
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -229,7 +229,7 @@ public class RoofControllerApiTests
     public async Task ClearFault_Success_ReturnsTrue()
     {
         // Arrange
-        _roofServiceMock.Setup(s => s.ClearFault(It.IsAny<int>())).Returns(Result<bool>.Success(true));
+    _roofServiceMock.Setup(s => s.ClearFault(It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(Result<bool>.Success(true));
 
         // Act
         var response = await _client.PostAsync("/api/v4.0/RoofControl/ClearFault?pulseMs=300", null);
@@ -238,15 +238,15 @@ public class RoofControllerApiTests
         // Assert
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsTrue(payload);
-        _roofServiceMock.Verify(s => s.ClearFault(300), Times.Once);
+    _roofServiceMock.Verify(s => s.ClearFault(300, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [TestMethod]
     public async Task ClearFault_InvalidOperation_ReturnsProblem500()
     {
         // Arrange
-        _roofServiceMock.Setup(s => s.ClearFault(It.IsAny<int>()))
-            .Returns(Result<bool>.Failure(new InvalidOperationException("Cannot clear fault while moving")));
+        _roofServiceMock.Setup(s => s.ClearFault(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<bool>.Failure(new InvalidOperationException("Cannot clear fault while moving")));
 
         // Act
         var response = await _client.PostAsync("/api/v4.0/RoofControl/ClearFault", null);
@@ -256,7 +256,7 @@ public class RoofControllerApiTests
         Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.IsNotNull(problem);
         StringAssert.Contains(problem.Title, "Service Error");
-        _roofServiceMock.Verify(s => s.ClearFault(It.IsAny<int>()), Times.Once);
+    _roofServiceMock.Verify(s => s.ClearFault(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [TestMethod]

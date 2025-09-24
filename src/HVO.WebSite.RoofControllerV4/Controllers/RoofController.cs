@@ -146,10 +146,9 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         [HttpPost, Route("ClearFault", Name = nameof(DoClearFault))]
         [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-        public ActionResult<bool> DoClearFault([FromQuery] int pulseMs = 250)
+        public async Task<ActionResult<bool>> DoClearFault([FromQuery] int pulseMs = 250, CancellationToken cancellationToken = default)
         {
-            var result = this._roofController.ClearFault(pulseMs);
-
+            var result = await this._roofController.ClearFault(pulseMs, cancellationToken).ConfigureAwait(false);
             return result.Match(
                 success: ok => Ok(ok),
                 failure: error => error switch

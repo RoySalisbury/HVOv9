@@ -58,11 +58,13 @@ public interface IRoofControllerServiceV4
         Result<RoofControllerStatus> Close();
         
         /// <summary>
-        /// Pulses the clear-fault relay to reset fault conditions on the motor controller.
+        /// Pulses the clear-fault relay to reset fault conditions on the motor controller asynchronously.
+        /// Releases internal lock during the delay period.
         /// </summary>
         /// <param name="pulseMs">Duration to hold the clear-fault relay active.</param>
-        /// <returns>A result indicating whether the clear-fault pulse completed.</returns>
-        Result<bool> ClearFault(int pulseMs = 250);
+        /// <param name="cancellationToken">Cancellation token to abort pulse wait.</param>
+        /// <returns>A task result indicating whether the clear-fault pulse completed.</returns>
+        Task<Result<bool>> ClearFault(int pulseMs = 250, CancellationToken cancellationToken = default);
  
         // DigitalInput1..4 events removed; use named alias events below
 

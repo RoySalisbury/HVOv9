@@ -355,7 +355,7 @@ public partial class RoofControl : ComponentBase, IDisposable
                 return;
             }
             Logger.LogInformation("User initiated clear-fault operation");
-            var result = RoofController.ClearFault();
+            var result = await RoofController.ClearFault();
 
             if (result.IsSuccessful)
             {
