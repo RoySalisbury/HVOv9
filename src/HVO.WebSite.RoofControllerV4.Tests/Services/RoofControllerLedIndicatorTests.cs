@@ -80,44 +80,40 @@ public class RoofControllerLedIndicatorTests
 
         // Initial: no limits, no fault -> all off
         hat.SimulateInputs(false,false,false,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x00);
 
         // Open limit only -> LED1
         hat.SimulateInputs(true,false,false,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x01);
 
         // Closed limit only -> LED2
         hat.SimulateInputs(false,true,false,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x02);
 
         // Fault only -> LED3
         hat.SimulateInputs(false,false,true,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x04);
 
         // Open + Fault -> LED1 + LED3
         hat.SimulateInputs(true,false,true,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x05);
 
         // Closed + Fault -> LED2 + LED3
         hat.SimulateInputs(false,true,true,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x06);
 
         // All three (open, closed, fault) -> LED1+2+3 (error condition)
-        hat.SimulateInputs(true,true,true,false);
-        InvokeUpdateStatus(svc);
+    hat.SimulateInputs(true,true,true,false);
+    svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x07);
     }
 
     // Use reflection to invoke protected UpdateRoofStatus to keep test non-invasive
-    private static void InvokeUpdateStatus(RoofControllerServiceV4 svc)
-    {
-        var mi = typeof(RoofControllerServiceV4).GetMethod("UpdateRoofStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        mi!.Invoke(svc, new object?[]{ false });
-    }
+    // Reflection helper removed; using internal ForceStatusRefresh instead via InternalsVisibleTo
 }

@@ -72,7 +72,7 @@ public class RoofControllerPartialStatusTests
 
         // Ensure we start with no limits active (mid-travel scenario)
         hat.SimulateInputs(false,false,false,false);
-        InvokeUpdateStatus(svc);
+    svc.ForceStatusRefresh();
         svc.Status.Should().NotBe(RoofControllerStatus.Open); // not actually at open
 
         // Issue Open command -> should enter Opening
@@ -96,7 +96,7 @@ public class RoofControllerPartialStatusTests
 
         // Mid-travel scenario
         hat.SimulateInputs(false,false,false,false);
-        InvokeUpdateStatus(svc);
+    svc.ForceStatusRefresh();
 
         var closeResult = svc.Close();
         closeResult.IsSuccessful.Should().BeTrue();
@@ -108,9 +108,5 @@ public class RoofControllerPartialStatusTests
         svc.LastStopReason.Should().Be(RoofControllerStopReason.NormalStop);
     }
 
-    private static void InvokeUpdateStatus(RoofControllerServiceV4 svc)
-    {
-        var mi = typeof(RoofControllerServiceV4).GetMethod("UpdateRoofStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        mi!.Invoke(svc, new object?[]{ false });
-    }
+    // Reflection helper removed; using internal ForceStatusRefresh instead via InternalsVisibleTo
 }

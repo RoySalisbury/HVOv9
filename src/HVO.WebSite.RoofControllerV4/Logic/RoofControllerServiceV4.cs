@@ -598,6 +598,12 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
     }
 
+    /// <summary>
+    /// Internal test helper to force a status refresh without needing reflection in tests.
+    /// </summary>
+    /// <param name="forceHardwareRead">If true, bypasses cached values and performs a hardware read.</param>
+    internal void ForceStatusRefresh(bool forceHardwareRead = false) => UpdateRoofStatus(forceHardwareRead);
+
     public void RefreshStatus(bool forceHardwareRead = false)
     {
         UpdateRoofStatus(forceHardwareRead);

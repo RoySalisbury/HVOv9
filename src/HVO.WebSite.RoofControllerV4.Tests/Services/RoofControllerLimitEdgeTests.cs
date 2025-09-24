@@ -71,14 +71,14 @@ public class RoofControllerLimitEdgeTests
 
         // Mid travel start
         hat.SimulateInputs(false,false,false,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
 
         svc.Open().IsSuccessful.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
         // Engage open limit
         hat.SimulateInputs(true,false,false,false);
-        InvokeUpdateStatus(svc);
+        svc.ForceStatusRefresh();
         svc.Status.Should().Be(RoofControllerStatus.Open);
 
         var stopResult = svc.Stop(RoofControllerStopReason.NormalStop);
@@ -93,15 +93,15 @@ public class RoofControllerLimitEdgeTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
-        hat.SimulateInputs(false,false,false,false);
-        InvokeUpdateStatus(svc);
+    hat.SimulateInputs(false,false,false,false);
+    svc.ForceStatusRefresh();
 
         svc.Close().IsSuccessful.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Closing);
 
         // Engage closed limit
-        hat.SimulateInputs(false,true,false,false);
-        InvokeUpdateStatus(svc);
+    hat.SimulateInputs(false,true,false,false);
+    svc.ForceStatusRefresh();
         svc.Status.Should().Be(RoofControllerStatus.Closed);
 
         var stopResult = svc.Stop(RoofControllerStopReason.NormalStop);
@@ -120,8 +120,8 @@ public class RoofControllerLimitEdgeTests
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
         // Engage both limits (invalid hardware state)
-        hat.SimulateInputs(true,true,false,false);
-        InvokeUpdateStatus(svc);
+    hat.SimulateInputs(true,true,false,false);
+    svc.ForceStatusRefresh();
         svc.Status.Should().Be(RoofControllerStatus.Error);
 
         var stopResult = svc.Stop(RoofControllerStopReason.NormalStop);
@@ -129,9 +129,5 @@ public class RoofControllerLimitEdgeTests
         svc.Status.Should().Be(RoofControllerStatus.Error);
     }
 
-    private static void InvokeUpdateStatus(RoofControllerServiceV4 svc)
-    {
-        var mi = typeof(RoofControllerServiceV4).GetMethod("UpdateRoofStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        mi!.Invoke(svc, new object?[]{ false });
-    }
+    // Reflection helper removed; using internal ForceStatusRefresh instead via InternalsVisibleTo
 }
