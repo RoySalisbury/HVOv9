@@ -13,6 +13,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     // Safety watchdog fields - use single lock for atomicity
     protected System.Timers.Timer? _safetyWatchdogTimer;
+    protected System.Timers.Timer? _periodicVerificationTimer;
     protected DateTime _operationStartTime;
 
     protected RoofControllerCommandIntent _lastCommandIntent = RoofControllerCommandIntent.None;
@@ -169,6 +170,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             // Initialize the safety watchdog timer
             this.InitializeSafetyWatchdog();
+            // Initialize periodic verification timer (created only if enabled)
+            this.InitializeOrUpdatePeriodicVerificationTimer();
 
             // Optionally set HAT poll interval
             try
@@ -206,15 +209,42 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         lock (_syncLock)
         {
-            if (_safetyWatchdogTimer != null)
-            {
-                _safetyWatchdogTimer.Stop();
-                _safetyWatchdogTimer.Dispose();
-            }
+            RecreateSafetyWatchdog_NoLock();
+        }
+    }
 
-            _safetyWatchdogTimer = new System.Timers.Timer(_roofControllerOptions.SafetyWatchdogTimeout.TotalMilliseconds);
-            _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
-            _safetyWatchdogTimer.AutoReset = false; // One-time trigger
+    private void RecreateSafetyWatchdog_NoLock()
+    {
+        if (_safetyWatchdogTimer != null)
+        {
+            _safetyWatchdogTimer.Stop();
+            _safetyWatchdogTimer.Elapsed -= SafetyWatchdog_Elapsed;
+            _safetyWatchdogTimer.Dispose();
+        }
+        _safetyWatchdogTimer = new System.Timers.Timer(_roofControllerOptions.SafetyWatchdogTimeout.TotalMilliseconds)
+        {
+            AutoReset = false
+        };
+        _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
+    }
+
+    private void InitializeOrUpdatePeriodicVerificationTimer()
+    {
+        lock (_syncLock)
+        {
+            if (_periodicVerificationTimer != null)
+            {
+                _periodicVerificationTimer.Stop();
+                _periodicVerificationTimer.Elapsed -= PeriodicVerification_Elapsed;
+                _periodicVerificationTimer.Dispose();
+                _periodicVerificationTimer = null;
+            }
+            if (_roofControllerOptions.EnablePeriodicVerificationWhileMoving)
+            {
+                _periodicVerificationTimer = new System.Timers.Timer(_roofControllerOptions.PeriodicVerificationInterval.TotalMilliseconds);
+                _periodicVerificationTimer.AutoReset = true;
+                _periodicVerificationTimer.Elapsed += PeriodicVerification_Elapsed;
+            }
         }
     }
 
@@ -227,18 +257,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         {
             if (_safetyWatchdogTimer != null)
             {
-                // Stop and dispose the existing timer to ensure clean restart
-                _safetyWatchdogTimer.Stop();
-                _safetyWatchdogTimer.Dispose();
-
-                // Create a new timer instance for reliable restart
-                _safetyWatchdogTimer = new System.Timers.Timer(_roofControllerOptions.SafetyWatchdogTimeout.TotalMilliseconds);
-                _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
-                _safetyWatchdogTimer.AutoReset = false; // One-time trigger
+                // Recreate timer instance for reliable restart
+                RecreateSafetyWatchdog_NoLock();
 
                 _operationStartTime = DateTime.Now;
                 _safetyWatchdogTimer.Start();
                 _logger.LogInformation("Safety watchdog started for {timeout} seconds", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
+                TryStartPeriodicVerification_NoLock();
             }
         }
     }
@@ -261,6 +286,53 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             _safetyWatchdogTimer.Stop();
             var elapsed = DateTime.Now - _operationStartTime;
             _logger.LogInformation("Safety watchdog stopped after {elapsed} seconds", elapsed.TotalSeconds);
+        }
+        StopPeriodicVerification_NoLock();
+    }
+
+    private void TryStartPeriodicVerification_NoLock()
+    {
+        if (_roofControllerOptions.EnablePeriodicVerificationWhileMoving && _periodicVerificationTimer != null)
+        {
+            if (!_periodicVerificationTimer.Enabled)
+            {
+                _periodicVerificationTimer.Start();
+                _logger.LogDebug("Periodic verification started IntervalSeconds={Interval}", _roofControllerOptions.PeriodicVerificationInterval.TotalSeconds);
+            }
+        }
+    }
+
+    private void StopPeriodicVerification_NoLock()
+    {
+        if (_periodicVerificationTimer != null && _periodicVerificationTimer.Enabled)
+        {
+            _periodicVerificationTimer.Stop();
+            _logger.LogDebug("Periodic verification stopped");
+        }
+    }
+
+    private void PeriodicVerification_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        try
+        {
+            lock (_syncLock)
+            {
+                if (_disposed) return;
+                if (Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing)
+                {
+                    _logger.LogTrace("Periodic verification tick - forcing hardware status refresh");
+                    UpdateRoofStatus(forceRead: true);
+                }
+                else
+                {
+                    // Not moving; pause until next motion
+                    StopPeriodicVerification_NoLock();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Periodic verification tick failed");
         }
     }
 
@@ -352,6 +424,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         _safetyWatchdogTimer.Dispose();
                         _safetyWatchdogTimer = null;
                     }
+                    if (_periodicVerificationTimer != null)
+                    {
+                        _periodicVerificationTimer.Stop();
+                        _periodicVerificationTimer.Elapsed -= PeriodicVerification_Elapsed;
+                        _periodicVerificationTimer.Dispose();
+                        _periodicVerificationTimer = null;
+                    }
                 }
             }
             catch (Exception ex)
@@ -441,28 +520,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         lock (this._syncLock)
         {
             bool needRead = forceRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue);
-            if (needRead)
-            {
-                try
-                {
-                    var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
-                    if (!inputs.IsFailure)
-                    {
-                        _lastIn1 = inputs.Value.in1;
-                        _lastIn2 = inputs.Value.in2;
-                        _lastIn3 = inputs.Value.in3;
-                        _lastIn4 = inputs.Value.in4;
-                    }
-                    else if (inputs.Error is not null)
-                    {
-                        _logger.LogWarning(inputs.Error, "UpdateRoofStatus: Failed to read digital inputs; retaining last known values");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "UpdateRoofStatus: Exception while reading digital inputs");
-                }
-            }
+            if (needRead) ForceReadInputs_NoLock();
 
             bool openTriggered = _lastIn1 ?? false;
             bool closedTriggered = _lastIn2 ?? false;
@@ -918,29 +976,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     /// </summary>
     protected virtual (bool forward, bool reverse) GetCurrentLimitStates(bool forceHardwareRead = false)
     {
-        if (!forceHardwareRead && InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue)
+        if (forceHardwareRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue))
         {
-            return (_lastIn1!.Value, _lastIn2!.Value);
+            ForceReadInputs_NoLock();
         }
-
-        try
-        {
-            var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
-            if (!inputs.IsFailure)
-            {
-                _lastIn1 = inputs.Value.in1;
-                _lastIn2 = inputs.Value.in2;
-                _lastIn3 = inputs.Value.in3;
-                _lastIn4 = inputs.Value.in4;
-                return (inputs.Value.in1, inputs.Value.in2);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "GetCurrentLimitStates: failed to read inputs; assuming not at limits");
-        }
-
-        return (false, false);
+        return ((_lastIn1 ?? false), (_lastIn2 ?? false));
     }
 
     protected virtual bool IsForwardLimitActive()
@@ -957,11 +997,25 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     protected virtual bool IsFaultActive()
     {
-        if (InputsEventsActive && _lastIn3.HasValue)
+        if (!(InputsEventsActive && _lastIn3.HasValue))
         {
-            return _lastIn3!.Value;
+            ForceReadInputs_NoLock();
         }
+        return _lastIn3 ?? false;
+    }
 
+    /// <summary>
+    /// Thread-safe check if the controller is disposed without throwing.
+    /// </summary>
+    /// <returns>True if disposed, false otherwise</returns>
+    protected virtual bool IsDisposed => _disposed;
+
+    /// <summary>
+    /// Performs a direct read of all digital inputs updating cached values. Caller must hold _syncLock.
+    /// </summary>
+    /// <returns>True if read succeeded, false otherwise.</returns>
+    private bool ForceReadInputs_NoLock()
+    {
         try
         {
             var inputs = _fourRelayFourInputHat.GetAllDigitalInputs();
@@ -971,20 +1025,17 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 _lastIn2 = inputs.Value.in2;
                 _lastIn3 = inputs.Value.in3;
                 _lastIn4 = inputs.Value.in4;
-                return inputs.Value.in3;
+                return true;
+            }
+            if (inputs.Error is not null)
+            {
+                _logger.LogWarning(inputs.Error, "ForceReadInputs: failed to read inputs; retaining last known values");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "IsFaultActive: failed to read inputs; assuming no fault");
+            _logger.LogError(ex, "ForceReadInputs: exception while reading digital inputs");
         }
-
         return false;
     }
-
-    /// <summary>
-    /// Thread-safe check if the controller is disposed without throwing.
-    /// </summary>
-    /// <returns>True if disposed, false otherwise</returns>
-    protected virtual bool IsDisposed => _disposed;
 }

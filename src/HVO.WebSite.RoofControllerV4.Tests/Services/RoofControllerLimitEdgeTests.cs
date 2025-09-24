@@ -132,6 +132,6 @@ public class RoofControllerLimitEdgeTests
     private static void InvokeUpdateStatus(RoofControllerServiceV4 svc)
     {
         var mi = typeof(RoofControllerServiceV4).GetMethod("UpdateRoofStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        mi!.Invoke(svc, null);
+        mi!.Invoke(svc, new object?[]{ false });
     }
 }

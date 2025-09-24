@@ -23,4 +23,15 @@ public record class RoofControllerOptionsV4
     /// Interval between input polls. Keep small for responsive edge notifications.
     /// </summary>
     public TimeSpan DigitalInputPollInterval { get; set; } = TimeSpan.FromMilliseconds(25);
+
+    /// <summary>
+    /// Enables periodic hardware verification while the roof is moving. When enabled, the service will perform
+    /// scheduled direct input reads at <see cref="PeriodicVerificationInterval"/> to detect missed edge events.
+    /// </summary>
+    public bool EnablePeriodicVerificationWhileMoving { get; set; } = true;
+
+    /// <summary>
+    /// Interval for periodic verification reads while moving. Keep coarse enough to avoid excess I2C traffic.
+    /// </summary>
+    public TimeSpan PeriodicVerificationInterval { get; set; } = TimeSpan.FromSeconds(1);
 }
