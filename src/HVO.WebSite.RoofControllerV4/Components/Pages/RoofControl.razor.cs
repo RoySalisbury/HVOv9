@@ -29,6 +29,7 @@ public partial class RoofControl : ComponentBase, IDisposable
     // Removed polling timer; updates are push-based via service events
     private readonly List<NotificationMessage> _notifications = new();
     private bool _isDisposed = false;
+    private RoofControllerStopReason _lastNotifiedStopReason = RoofControllerStopReason.None;
     
     // Simulation removed
 
@@ -140,6 +141,39 @@ public partial class RoofControl : ComponentBase, IDisposable
     /// </summary>
     public DateTimeOffset? LastTransitionUtc => RoofController.LastTransitionUtc;
 
+    /// <summary>
+    /// Convenience accessor for the last stop reason from the service.
+    /// </summary>
+    public RoofControllerStopReason LastStopReason => RoofController.LastStopReason;
+
+    /// <summary>
+    /// True when the last stop was an emergency (watchdog timeout or fault-triggered emergency).
+    /// </summary>
+    public bool WasEmergencyStop => LastStopReason is RoofControllerStopReason.EmergencyStop or RoofControllerStopReason.SafetyWatchdogTimeout;
+
+    /// <summary>
+    /// Human label for the last stop type grouping (Normal/Emergency).
+    /// </summary>
+    public string GetLastStopTypeLabel()
+    {
+        return LastStopReason switch
+        {
+            RoofControllerStopReason.EmergencyStop => "Emergency",
+            RoofControllerStopReason.SafetyWatchdogTimeout => "Emergency",
+            RoofControllerStopReason.None => "",
+            _ => "Normal"
+        };
+    }
+
+    /// <summary>
+    /// Bootstrap badge class for the last stop type grouping.
+    /// </summary>
+    public string GetLastStopTypeBadgeClass()
+    {
+        if (string.IsNullOrEmpty(GetLastStopTypeLabel())) return "d-none";
+        return WasEmergencyStop ? "badge bg-danger text-white" : "badge bg-secondary";
+    }
+
     #endregion
 
     #region Component Lifecycle
@@ -161,6 +195,7 @@ public partial class RoofControl : ComponentBase, IDisposable
 
             // UI initialized message (does not imply service initialization)
             AddNotification("UI", "Roof control UI loaded", NotificationType.Info);
+            _lastNotifiedStopReason = RoofController.LastStopReason;
             if (IsServiceDisposed)
             {
                 AddNotification("Service", "Roof controller service is unavailable (disposed).", NotificationType.Error);
@@ -214,7 +249,22 @@ public partial class RoofControl : ComponentBase, IDisposable
         if (_isDisposed) return;
         try
         {
-            // Optionally: we could use e.Status directly for UI, but service is authoritative
+            // Use event snapshot to detect notable changes for user feedback
+            var newReason = e.Status.LastStopReason;
+            if (newReason != _lastNotifiedStopReason)
+            {
+                // Notify only on emergency-related stops
+                if (newReason is RoofControllerStopReason.EmergencyStop or RoofControllerStopReason.SafetyWatchdogTimeout)
+                {
+                    var title = newReason == RoofControllerStopReason.SafetyWatchdogTimeout ? "Safety Watchdog" : "Emergency Stop";
+                    var msg = newReason == RoofControllerStopReason.SafetyWatchdogTimeout
+                        ? "Watchdog timeout triggered an automatic emergency stop."
+                        : "Fault condition triggered an emergency stop.";
+                    AddNotification(title, msg, NotificationType.Warning);
+                }
+                _lastNotifiedStopReason = newReason;
+            }
+
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -325,15 +375,15 @@ public partial class RoofControl : ComponentBase, IDisposable
 
         try
         {
-            Logger.LogInformation("User initiated emergency stop operation");
-            
-            // Direct service call (hardware-only)
-            var result = RoofController.Stop();
+            Logger.LogInformation("User initiated stop operation (NormalStop)");
+
+            // Direct service call (hardware-only) with explicit NormalStop reason
+            var result = RoofController.Stop(RoofControllerStopReason.NormalStop);
             
             if (result.IsSuccessful)
             {
-                AddNotification("Emergency Stop", "All roof movement stopped", NotificationType.Warning);
-                Logger.LogInformation("Emergency stop operation completed successfully");
+                AddNotification("Stop", "All roof movement stopped", NotificationType.Info);
+                Logger.LogInformation("Stop operation completed successfully");
             }
             else
             {

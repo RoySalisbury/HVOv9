@@ -86,6 +86,14 @@
                                         <i class="bi bi-shield-check me-1"></i>Watchdog: @Math.Ceiling(SafetyWatchdogTimeRemaining)s
                                     </span>
                             }
+
+                            <!-- Last Stop Type (Normal/Emergency) -->
+                            @if (!string.IsNullOrEmpty(GetLastStopTypeLabel()))
+                            {
+                                <span class="@GetLastStopTypeBadgeClass() ms-2" title="Last stop was a @GetLastStopTypeLabel() stop (@LastStopReason)">
+                                    <i class="bi bi-stop-circle me-1"></i>@GetLastStopTypeLabel() Stop
+                                </span>
+                            }
                         </div>
                     </div>
                 </div>
@@ -143,7 +151,7 @@
                                     disabled="@IsStopDisabled"
                                     @onclick="StopRoof">
                                 <i class="bi bi-stop-circle me-2"></i>
-                                Emergency Stop
+                                Stop
                             </button>
                             
                             <button class="@GetCloseButtonClass()" 
@@ -168,50 +176,7 @@
         </div>
     </div>
 
-    <!-- Roof Animation Section -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-secondary text-white text-center">
-                    <h4 class="mb-0">
-                        <i class="bi bi-eye me-2"></i>
-                        Observatory Visual Status
-                    </h4>
-                </div>
-                <div class="card-body text-center">
-                    <div class="observatory-animation">
-                        <div class="observatory-container">
-                            <!-- Observatory Base -->
-                            <div class="observatory-base"></div>
-                            
-                            <!-- Roof Halves -->
-                            <div class="roof-half roof-left @GetRoofAnimationClass()" 
-                                 style="transform: @GetLeftRoofTransform();"></div>
-                            <div class="roof-half roof-right @GetRoofAnimationClass()" 
-                                 style="transform: @GetRightRoofTransform();"></div>
-                            
-                            <!-- Telescope (visible when open) -->
-                            <div class="telescope @(IsRoofOpen ? "visible" : "hidden")">
-                                <div class="telescope-mount"></div>
-                                <div class="telescope-tube"></div>
-                            </div>
-                            
-                            <!-- Status Indicator -->
-                            <div class="status-indicator @GetStatusIndicatorClass()"></div>
-                        </div>
-                        
-                        <!-- Animation Legend -->
-                        <div class="animation-legend mt-3">
-                            <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>
-                                Visual representation of roof position and movement
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    
 
     <!-- Enhanced Safety Information -->
     <div class="row">
@@ -241,7 +206,7 @@
                                 <ul class="list-unstyled">
                                     <li><i class="bi bi-info-circle text-info me-1"></i>Only one operation at a time</li>
                                     <li><i class="bi bi-info-circle text-info me-1"></i>Monitor weather conditions</li>
-                                    <li><i class="bi bi-info-circle text-info me-1"></i>Use emergency stop if needed</li>
+                                    <li><i class="bi bi-info-circle text-info me-1"></i>Use Stop for normal interruption; emergency stops are automatic on fault/watchdog</li>
                                     <li><i class="bi bi-info-circle text-info me-1"></i>Watchdog auto-stops long operations</li>
                                     <li><i class="bi bi-info-circle text-info me-1"></i>System validates before each operation</li>
                                 </ul>

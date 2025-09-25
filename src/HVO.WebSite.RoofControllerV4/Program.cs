@@ -101,9 +101,6 @@ public class Program
         // Register RoofController based on configuration
         services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
 
-        // Add weather service
-        services.AddScoped<HVO.WebSite.RoofControllerV4.Services.IWeatherService, HVO.WebSite.RoofControllerV4.Services.WeatherService>();
-
         // Add exception handling middleware
         // NOTE: Use built-in exception handling instead of custom error controllers
         // This provides consistent error responses and integrates with Problem Details
@@ -211,6 +208,9 @@ public class Program
         {
             app.UseHttpsRedirection();
         }
+        
+        // Serve static web assets (including the generated .styles.css bundle)
+        app.UseStaticFiles();
         app.UseRouting();
         app.UseAntiforgery();
 

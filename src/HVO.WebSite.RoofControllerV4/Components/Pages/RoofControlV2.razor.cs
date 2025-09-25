@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Components;
 namespace HVO.WebSite.RoofControllerV4.Components.Pages;
 
 /// <summary>
-/// Modernized UI for the Roof Controller. Inherits all functionality from RoofControl,
-/// presenting it with an updated layout and visuals.
+/// Code-behind for the modernized RoofControlV2 UI. Inherits behavior from RoofControl
+/// and adds optional parameters specific to the V2 layout.
 /// </summary>
 public partial class RoofControlV2
 {
-    // All logic is inherited from RoofControl via @inherits in the Razor markup.
+    // Streaming removed; placeholder remains in the UI.
 }
