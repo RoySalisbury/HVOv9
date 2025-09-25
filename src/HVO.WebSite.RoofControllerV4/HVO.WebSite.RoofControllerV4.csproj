@@ -28,6 +28,13 @@
 
   <ItemGroup>
     <Folder Include="Services/" />
+    <Folder Include="wwwroot/css/" />
+  </ItemGroup>
+
+  <!-- Exclude legacy/unused UI assets to keep V2-only and clean static web assets -->
+  <ItemGroup>
+    <Compile Remove="Components/Pages/RoofControl.razor.cs" />
+    <Content Remove="wwwroot/css/observatory-theme.css" />
   </ItemGroup>
 
 </Project>
