@@ -7,6 +7,42 @@
 <PageTitle>Observatory Roof Control - HVOv9</PageTitle>
 
 <div class="roof-control-container">
+    <!-- Service Status Banner -->
+    @if (!IsServiceAvailable)
+    {
+        <div class="row mb-3">
+            <div class="col-12">
+                @if (IsServiceDisposed)
+                {
+                    <div class="alert service-banner service-banner-danger" role="alert">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-plug-x-fill me-2 fs-4"></i>
+                            <div class="flex-grow-1">
+                                <strong>Roof controller service is unavailable</strong>
+                                <div class="small text-muted">The underlying service was disposed or stopped. Controls are disabled until it is restored.</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert service-banner service-banner-warning" role="alert">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-hourglass-split me-2 fs-4"></i>
+                            <div class="flex-grow-1">
+                                <strong>Initializing roof controller service…</strong>
+                                <div class="small text-muted">Please wait while the service starts. Controls will enable automatically when ready.</div>
+                            </div>
+                            <div class="ms-3">
+                                <div class="spinner-border text-warning" role="status" aria-hidden="true"></div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     <!-- Header Section with Enhanced Status Display -->
     <div class="row mb-4">
         <div class="col-12">
