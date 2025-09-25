@@ -52,6 +52,11 @@ public interface IRoofControllerServiceV4
         RoofStatusResponse GetCurrentStatusSnapshot();
 
         /// <summary>
+        /// True if the underlying service has been disposed (not available for use).
+        /// </summary>
+        bool IsServiceDisposed { get; }
+
+        /// <summary>
         /// Initializes the roof controller hardware and prepares it for operation.
         /// </summary>
         /// <param name="cancellationToken">Token to monitor for cancellation requests.</param>

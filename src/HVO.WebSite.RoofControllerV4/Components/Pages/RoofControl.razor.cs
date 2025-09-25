@@ -57,6 +57,16 @@ public partial class RoofControl : ComponentBase, IDisposable
     public bool IsRoofOpen => RoofController.Status == RoofControllerStatus.Open;
 
     /// <summary>
+    /// Indicates if the underlying service has been disposed (unavailable).
+    /// </summary>
+    public bool IsServiceDisposed => RoofController.IsServiceDisposed;
+
+    /// <summary>
+    /// Indicates if the UI can operate (service initialized and not disposed).
+    /// </summary>
+    public bool IsServiceAvailable => RoofController.IsInitialized && !RoofController.IsServiceDisposed;
+
+    /// <summary>
     /// Gets a value indicating whether the Open button should be disabled using service's authoritative state.
     /// </summary>
     public bool IsOpenDisabled 
@@ -64,7 +74,7 @@ public partial class RoofControl : ComponentBase, IDisposable
         get 
         {
             // Disable when not initialized, moving, opening, or already open
-            var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || 
+            var baseDisabled = !IsServiceAvailable || RoofController.IsMoving || 
                                RoofController.Status == RoofControllerStatus.Opening || 
                                RoofController.Status == RoofControllerStatus.Open ||
                                RoofController.Status == RoofControllerStatus.Error;
@@ -80,7 +90,7 @@ public partial class RoofControl : ComponentBase, IDisposable
         get 
         {
             // Disable when not initialized, moving, closing, or already closed
-            var baseDisabled = !RoofController.IsInitialized || RoofController.IsMoving || 
+            var baseDisabled = !IsServiceAvailable || RoofController.IsMoving || 
                                RoofController.Status == RoofControllerStatus.Closing || 
                                RoofController.Status == RoofControllerStatus.Closed ||
                                RoofController.Status == RoofControllerStatus.Error;
@@ -91,13 +101,13 @@ public partial class RoofControl : ComponentBase, IDisposable
     /// <summary>
     /// Gets a value indicating whether the Stop button should be disabled using service's authoritative state.
     /// </summary>
-    public bool IsStopDisabled => !RoofController.IsInitialized || !RoofController.IsMoving;
+    public bool IsStopDisabled => !IsServiceAvailable || !RoofController.IsMoving;
 
     /// <summary>
     /// Gets a value indicating whether the Clear Fault button should be disabled.
     /// Disabled when not initialized or when moving (require stop first).
     /// </summary>
-    public bool IsClearFaultDisabled => !RoofController.IsInitialized || RoofController.IsMoving;
+    public bool IsClearFaultDisabled => !IsServiceAvailable || RoofController.IsMoving;
 
     /// <summary>
     /// Gets the list of current notification messages.
@@ -149,7 +159,16 @@ public partial class RoofControl : ComponentBase, IDisposable
             // Subscribe to service status-changed events for push updates
             RoofController.StatusChanged += OnServiceStatusChanged;
 
-            AddNotification("System", "Roof control interface initialized", NotificationType.Info);
+            // UI initialized message (does not imply service initialization)
+            AddNotification("UI", "Roof control UI loaded", NotificationType.Info);
+            if (IsServiceDisposed)
+            {
+                AddNotification("Service", "Roof controller service is unavailable (disposed).", NotificationType.Error);
+            }
+            else if (!IsInitialized)
+            {
+                AddNotification("Service", "Waiting for roof controller service to initialize...", NotificationType.Info);
+            }
         }
         catch (Exception ex)
         {
@@ -390,6 +409,7 @@ public partial class RoofControl : ComponentBase, IDisposable
         {
             var previousStatus = CurrentStatus;
             var previousInitialized = IsInitialized;
+            var previousAvailability = IsServiceAvailable;
 
             // Log status changes for debugging
             if (previousStatus != CurrentStatus)
@@ -405,7 +425,7 @@ public partial class RoofControl : ComponentBase, IDisposable
             }
 
             // Trigger UI update if status or initialization state changed
-            if (previousStatus != CurrentStatus || previousInitialized != IsInitialized)
+            if (previousStatus != CurrentStatus || previousInitialized != IsInitialized || previousAvailability != IsServiceAvailable)
             {
                 await InvokeAsync(StateHasChanged);
             }
@@ -690,12 +710,12 @@ public partial class RoofControl : ComponentBase, IDisposable
 
     public string GetHealthCheckBadgeClass()
     {
-        if (RoofController.Status == RoofControllerStatus.Error)
+        if (IsServiceDisposed || RoofController.Status == RoofControllerStatus.Error)
         {
             return "bg-danger";
         }
 
-        if (RoofController.IsInitialized)
+        if (IsServiceAvailable)
         {
             return "bg-success";
         }

@@ -154,6 +154,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     public virtual RoofControllerStatus Status { get; protected set; } = RoofControllerStatus.NotInitialized;
     public virtual DateTimeOffset? LastTransitionUtc { get; protected set; }
+    public bool IsServiceDisposed => _disposed;
 
     public RoofStatusResponse GetCurrentStatusSnapshot()
     {
