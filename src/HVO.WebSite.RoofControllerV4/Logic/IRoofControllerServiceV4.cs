@@ -6,6 +6,11 @@ namespace HVO.WebSite.RoofControllerV4.Logic;
 public interface IRoofControllerServiceV4
 {
         /// <summary>
+        /// Event raised when status or watchdog telemetry changes.
+        /// </summary>
+        event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
+
+        /// <summary>
         /// Gets a value indicating whether the roof controller has been initialized and is ready for operation.
         /// </summary>
         bool IsInitialized { get; }
@@ -40,6 +45,11 @@ public interface IRoofControllerServiceV4
         /// Gets the number of seconds remaining on the watchdog timer, or null if not active.
         /// </summary>
         double? WatchdogSecondsRemaining { get; }
+
+        /// <summary>
+        /// Returns a current snapshot of status for UI/API consumption.
+        /// </summary>
+        RoofStatusResponse GetCurrentStatusSnapshot();
 
         /// <summary>
         /// Initializes the roof controller hardware and prepares it for operation.

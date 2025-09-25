@@ -26,7 +26,7 @@ public partial class RoofControl : ComponentBase, IDisposable
 
     #region Private Fields
 
-    private System.Timers.Timer? _statusUpdateTimer;
+    // Removed polling timer; updates are push-based via service events
     private readonly List<NotificationMessage> _notifications = new();
     private bool _isDisposed = false;
     
@@ -143,14 +143,11 @@ public partial class RoofControl : ComponentBase, IDisposable
         {
             Logger.LogInformation("RoofControl component initializing");
             
-            // Get initial status
+            // Initial status update
             await UpdateStatusAsync();
 
-            // Set up status update timer (every 500ms for responsive UI)
-            _statusUpdateTimer = new System.Timers.Timer(500);
-            _statusUpdateTimer.Elapsed += async (sender, e) => await OnStatusUpdateTimerElapsed();
-            _statusUpdateTimer.AutoReset = true;
-            _statusUpdateTimer.Start();
+            // Subscribe to service status-changed events for push updates
+            RoofController.StatusChanged += OnServiceStatusChanged;
 
             AddNotification("System", "Roof control interface initialized", NotificationType.Info);
         }
@@ -170,9 +167,7 @@ public partial class RoofControl : ComponentBase, IDisposable
 
         try
         {
-            _statusUpdateTimer?.Stop();
-            _statusUpdateTimer?.Dispose();
-            _statusUpdateTimer = null;
+            RoofController.StatusChanged -= OnServiceStatusChanged;
 
             Logger.LogInformation("RoofControl component disposed");
         }
@@ -195,18 +190,17 @@ public partial class RoofControl : ComponentBase, IDisposable
     /// <summary>
     /// Handles status update timer elapsed events.
     /// </summary>
-    private async Task OnStatusUpdateTimerElapsed()
+    private async void OnServiceStatusChanged(object? sender, RoofStatusChangedEventArgs e)
     {
         if (_isDisposed) return;
-
         try
         {
-            await UpdateStatusAsync();
+            // Optionally: we could use e.Status directly for UI, but service is authoritative
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error during status update timer");
+            Logger.LogError(ex, "Error during service StatusChanged handling");
         }
     }
 

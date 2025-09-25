@@ -114,6 +114,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     }
 
 
+    public event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
+
 
     public RoofControllerServiceV4(ILogger<RoofControllerServiceV4> logger, IOptions<RoofControllerOptionsV4> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
     {
@@ -152,6 +154,21 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     public virtual RoofControllerStatus Status { get; protected set; } = RoofControllerStatus.NotInitialized;
     public virtual DateTimeOffset? LastTransitionUtc { get; protected set; }
+
+    public RoofStatusResponse GetCurrentStatusSnapshot()
+    {
+        lock (_syncLock)
+        {
+            return new RoofStatusResponse(
+                Status,
+                IsMoving,
+                LastStopReason,
+                LastTransitionUtc,
+                IsWatchdogActive,
+                WatchdogSecondsRemaining
+            );
+        }
+    }
 
     /// <summary>
     /// Gets a value indicating whether the roof is currently moving (opening or closing).
@@ -296,6 +313,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 _watchdogActive = true;
                 _logger.LogInformation("Safety watchdog started for {timeout} seconds", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
                 TryStartPeriodicVerification_NoLock();
+                RaiseStatusChanged_NoLock();
             }
         }
     }
@@ -325,6 +343,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             _watchdogActive = false;
         }
         StopPeriodicVerification_NoLock();
+        RaiseStatusChanged_NoLock();
     }
 
     private void TryStartPeriodicVerification_NoLock()
@@ -403,6 +422,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
 
                 _logger.LogError("Roof stopped by safety watchdog - manual intervention may be required");
+                RaiseStatusChanged_NoLock();
             }
         }
         catch (Exception ex)
@@ -624,6 +644,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             // Update indicator LEDs to reflect current limit & fault states
             UpdateIndicatorLeds_NoLock();
+            RaiseStatusChanged_NoLock();
         }
     }
 
@@ -1081,6 +1102,36 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             _logger.LogError(ex, "ForceReadInputs: exception while reading digital inputs");
         }
         return false;
+    }
+
+    private void RaiseStatusChanged_NoLock()
+    {
+        // Build snapshot while holding lock, then release before invoking handlers
+        RoofStatusChangedEventArgs? args = null;
+        if (StatusChanged != null)
+        {
+            var snapshot = new RoofStatusResponse(
+                Status,
+                IsMoving,
+                LastStopReason,
+                LastTransitionUtc,
+                IsWatchdogActive,
+                WatchdogSecondsRemaining
+            );
+            args = new RoofStatusChangedEventArgs(snapshot);
+        }
+        if (args != null)
+        {
+            try
+            {
+                // Invoke outside the lock to prevent deadlocks
+                Task.Run(() =>
+                {
+                    try { StatusChanged?.Invoke(this, args); } catch { }
+                });
+            }
+            catch { }
+        }
     }
 }
 }
