@@ -25,9 +25,26 @@ namespace HVO.WebSite.RoofControllerV4.HealthChecks
                 var data = new Dictionary<string, object>
                 {
                     ["IsInitialized"] = _roofController.IsInitialized,
+                    ["IsServiceDisposed"] = _roofController.IsServiceDisposed,
                     ["Status"] = _roofController.Status.ToString(),
+                    ["IsMoving"] = _roofController.IsMoving,
+                    ["LastStopReason"] = _roofController.LastStopReason.ToString(),
+                    ["LastTransitionUtc"] = _roofController.LastTransitionUtc?.UtcDateTime.ToString("O") ?? string.Empty,
+                    ["IsWatchdogActive"] = _roofController.IsWatchdogActive,
+                    ["WatchdogSecondsRemaining"] = _roofController.WatchdogSecondsRemaining ?? 0d,
+                    ["Ready"] = _roofController.IsInitialized && !_roofController.IsServiceDisposed,
                     ["CheckTime"] = DateTime.UtcNow
                 };
+
+                // Service disposed is a hard failure for readiness
+                if (_roofController.IsServiceDisposed)
+                {
+                    _logger.LogError("Roof controller service is disposed");
+                    return Task.FromResult(HealthCheckResult.Unhealthy(
+                        "Roof controller service is disposed",
+                        null,
+                        data));
+                }
 
                 // Check if the roof controller is initialized
                 if (!_roofController.IsInitialized)

@@ -1042,11 +1042,14 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     /// </summary>
     protected virtual (bool forward, bool reverse) GetCurrentLimitStates(bool forceHardwareRead = false)
     {
-        if (forceHardwareRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue))
+        lock (_syncLock)
         {
-            ForceReadInputs_NoLock();
+            if (forceHardwareRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue))
+            {
+                ForceReadInputs_NoLock();
+            }
+            return ((_lastIn1 ?? false), (_lastIn2 ?? false));
         }
-        return ((_lastIn1 ?? false), (_lastIn2 ?? false));
     }
 
     protected virtual bool IsForwardLimitActive()
@@ -1063,11 +1066,14 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     protected virtual bool IsFaultActive()
     {
-        if (!(InputsEventsActive && _lastIn3.HasValue))
+        lock (_syncLock)
         {
-            ForceReadInputs_NoLock();
+            if (!(InputsEventsActive && _lastIn3.HasValue))
+            {
+                ForceReadInputs_NoLock();
+            }
+            return _lastIn3 ?? false;
         }
-        return _lastIn3 ?? false;
     }
 
     /// <summary>

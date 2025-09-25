@@ -28,60 +28,68 @@ public class RoofControllerServiceV4Host : BackgroundService
 
         try
         {
-            while (!stoppingToken.IsCancellationRequested)
+            // Attempt initialization with backoff until successful or cancellation requested
+            while (!stoppingToken.IsCancellationRequested && !_roofControllerServiceV4.IsInitialized)
             {
                 try
                 {
-                    var initResult = await this._roofControllerServiceV4.Initialize(stoppingToken);
+                    var initResult = await _roofControllerServiceV4.Initialize(stoppingToken).ConfigureAwait(false);
                     if (!initResult.IsSuccessful)
                     {
                         _logger.LogError("Failed to initialize roof controller: {Error}", initResult.Error?.Message ?? "Unknown error");
-                        continue;
-                    }
-
-                    var logInterval = TimeSpan.FromMinutes(5);
-                    var nextLogTime = DateTime.UtcNow.Add(logInterval);
-
-                    while (!stoppingToken.IsCancellationRequested)
-                    {
-                        if (DateTime.UtcNow >= nextLogTime)
-                        {
-                            // Can setup the watchdog here.......
-
-                            _logger.LogInformation("{backgroundServiceName} is performing its work at: {time}", nameof(RoofControllerServiceV4Host), DateTimeOffset.Now);
-                            nextLogTime = DateTime.UtcNow.Add(logInterval);
-                        }
-
-                        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromSeconds(_options.RestartOnFailureWaitTime), stoppingToken).ConfigureAwait(false);
                     }
                 }
                 catch (TaskCanceledException)
                 {
-                    _logger.LogDebug("{backgroundServiceName} TaskCanceledException.", nameof(RoofControllerServiceV4Host));
+                    _logger.LogDebug("{backgroundServiceName} initialization canceled.", nameof(RoofControllerServiceV4Host));
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "{backgroundServiceName}  Error. Restarting in {RestartDelay} seconds.", nameof(RoofControllerServiceV4Host), _options.RestartOnFailureWaitTime);
+                    _logger.LogError(ex, "{backgroundServiceName} initialization error. Retrying in {RestartDelay} seconds.", nameof(RoofControllerServiceV4Host), _options.RestartOnFailureWaitTime);
                     await Task.Delay(TimeSpan.FromSeconds(_options.RestartOnFailureWaitTime), stoppingToken).ConfigureAwait(false);
                 }
-                finally
+            }
+
+            if (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("{backgroundServiceName} canceled before run loop.", nameof(RoofControllerServiceV4Host));
+                return;
+            }
+
+            var logInterval = TimeSpan.FromMinutes(5);
+            var nextLogTime = DateTime.UtcNow.Add(logInterval);
+
+            // Run loop
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
                 {
-                    // FIXED: Use async disposal for better performance
-                    if (this._roofControllerServiceV4 is IAsyncDisposable asyncDisposable)
+                    if (DateTime.UtcNow >= nextLogTime)
                     {
-                        await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                        _logger.LogInformation("{backgroundServiceName} heartbeat at: {time}", nameof(RoofControllerServiceV4Host), DateTimeOffset.Now);
+                        nextLogTime = DateTime.UtcNow.Add(logInterval);
                     }
-                    else
-                    {
-                        ((IDisposable)this._roofControllerServiceV4).Dispose();
-                    }
-                    _logger.LogDebug("{backgroundServiceName} instance disposed.", nameof(RoofControllerServiceV4Host));
+
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken).ConfigureAwait(false);
+                }
+                catch (TaskCanceledException)
+                {
+                    _logger.LogDebug("{backgroundServiceName} run loop canceled.", nameof(RoofControllerServiceV4Host));
+                    break;
                 }
             }
         }
         finally
         {
+            // Do not dispose the singleton service here; allow the host to shut down gracefully
+            try
+            {
+                _roofControllerServiceV4.Stop(RoofControllerStopReason.SystemDisposal);
+            }
+            catch { /* best-effort stop */ }
+
             _logger.LogInformation("{backgroundServiceName} has stopped.", nameof(RoofControllerServiceV4Host));
         }
     }
