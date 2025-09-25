@@ -1,0 +1,193 @@
+@page "/roof-control-v2"
+@inherits RoofControl
+@using HVO.WebSite.RoofControllerV4.Logic
+@using HVO.WebSite.RoofControllerV4.Models
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>Roof Control V2 - HVOv9</PageTitle>
+
+<div class="rc2-container">
+    <!-- Service Status Banner -->
+    @if (!IsServiceAvailable)
+    {
+        <div class="rc2-banner-row">
+            @if (IsServiceDisposed)
+            {
+                <div class="rc2-banner rc2-banner-danger" role="alert">
+                    <i class="bi bi-plug-x-fill me-2"></i>
+                    <div>
+                        <strong>Service unavailable</strong>
+                        <div class="small text-muted">The roof controller service is stopped or disposed. Controls are disabled until it is restored.</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="rc2-banner rc2-banner-warn" role="alert">
+                    <i class="bi bi-hourglass-split me-2"></i>
+                    <div class="flex-grow-1">
+                        <strong>Initializing service…</strong>
+                        <div class="small text-muted">Please wait. Controls will enable automatically when ready.</div>
+                    </div>
+                    <span class="ms-3 spinner-border spinner-border-sm text-warning" role="status" aria-hidden="true"></span>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Hero / Status -->
+    <section class="rc2-hero">
+        <div class="rc2-hero-head">
+            <div>
+                <h2 class="rc2-title"><i class="bi bi-house-door me-2"></i>HVO Roof Control</h2>
+                <div class="rc2-sub">Observatory automation dashboard</div>
+            </div>
+            <div class="rc2-badges">
+                <span class="badge rc2-badge @GetStatusBadgeClass()">@CurrentStatus</span>
+                @if (IsInitialized)
+                {
+                    <span class="badge rc2-badge bg-success"><i class="bi bi-check-circle me-1"></i>Initialized</span>
+                }
+                else
+                {
+                    <span class="badge rc2-badge bg-secondary"><i class="bi bi-dot me-1"></i>Initializing</span>
+                }
+                <span class="badge rc2-badge @GetHealthCheckBadgeClass()"><i class="bi bi-heart me-1"></i>Health</span>
+                @if (IsSafetyWatchdogRunning)
+                {
+                    <span class="badge rc2-badge @GetWatchdogBadgeClass()"><i class="bi bi-shield-check me-1"></i>@Math.Ceiling(SafetyWatchdogTimeRemaining)s</span>
+                }
+            </div>
+        </div>
+
+        @if (CurrentStatus == RoofControllerStatus.Error)
+        {
+            <div class="alert rc2-alert rc2-alert-danger" role="alert">
+                <div class="d-flex align-items-center w-100">
+                    <i class="bi bi-exclamation-octagon-fill me-2"></i>
+                    <div class="flex-grow-1">
+                        <strong>Fault detected.</strong> Review system and clear fault when safe.
+                    </div>
+                    <button class="btn btn-outline-light" disabled="@IsClearFaultDisabled" @onclick="ClearFaultAsync">
+                        <i class="bi bi-bandaid me-1"></i>Clear Fault
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
+
+    <!-- Dashboard Grid -->
+    <section class="rc2-grid">
+        <!-- Actions -->
+        <div class="rc2-card rc2-actions">
+            <div class="rc2-card-head">
+                <h5><i class="bi bi-controller me-2"></i>Controls</h5>
+                <small class="text-muted">Direct hardware control</small>
+            </div>
+            <div class="rc2-card-body">
+                <div class="rc2-action-grid">
+                    <button class="@GetOpenButtonClass() rc2-action" type="button" disabled="@IsOpenDisabled" @onclick="OpenRoof">
+                        <i class="bi bi-arrow-up-circle me-2"></i>Open
+                    </button>
+                    <button class="@GetStopButtonClass() rc2-action" type="button" disabled="@IsStopDisabled" @onclick="StopRoof">
+                        <i class="bi bi-stop-circle me-2"></i>Stop
+                    </button>
+                    <button class="@GetCloseButtonClass() rc2-action" type="button" disabled="@IsCloseDisabled" @onclick="CloseRoof">
+                        <i class="bi bi-arrow-down-circle me-2"></i>Close
+                    </button>
+                    <button class="btn btn-outline-danger btn-lg control-btn rc2-action" type="button" disabled="@IsClearFaultDisabled" @onclick="ClearFaultAsync">
+                        <i class="bi bi-bandaid me-2"></i>Clear Fault
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Watchdog -->
+        <div class="rc2-card rc2-watchdog">
+            <div class="rc2-card-head d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Safety Watchdog</h5>
+                <span class="badge rc2-badge @(IsSafetyWatchdogRunning ? "bg-warning text-dark" : "bg-success")">@(IsSafetyWatchdogRunning ? "Active" : "Standby")</span>
+            </div>
+            <div class="rc2-card-body">
+                @if (IsSafetyWatchdogRunning)
+                {
+                    <div class="rc2-progress-wrap">
+                        <div class="progress rc2-progress">
+                       <div class="@GetWatchdogProgressBarClass()" role="progressbar"
+                           style="width: @((SafetyWatchdogTimeoutSeconds - SafetyWatchdogTimeRemaining) / SafetyWatchdogTimeoutSeconds * 100)%"
+                                 aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="rc2-progress-label">
+                            @Math.Ceiling(SafetyWatchdogTimeRemaining)s remaining / @SafetyWatchdogTimeoutSeconds s
+                        </div>
+                    </div>
+                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Stops automatically at timeout to prevent runaway operations.</small>
+                }
+                else
+                {
+                    <div class="rc2-progress-wrap">
+                        <div class="progress rc2-progress">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: 100%" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="rc2-progress-label">Configured timeout: @SafetyWatchdogTimeoutSeconds s</div>
+                    </div>
+                    <small class="text-muted"><i class="bi bi-clock me-1"></i>Activates automatically during roof operations.</small>
+                }
+            </div>
+        </div>
+
+        <!-- System Details -->
+        <div class="rc2-card rc2-details">
+            <div class="rc2-card-head">
+                <h5><i class="bi bi-activity me-2"></i>System Status</h5>
+            </div>
+            <div class="rc2-card-body">
+                <div class="rc2-kpis">
+                    <div class="rc2-kpi">
+                        <div class="rc2-kpi-label">Controller</div>
+                        <div class="rc2-kpi-value">@(IsInitialized ? "Ready" : "Initializing…")</div>
+                    </div>
+                    <div class="rc2-kpi">
+                        <div class="rc2-kpi-label">Health</div>
+                        <div class="rc2-kpi-value">@GetHealthCheckStatus()</div>
+                    </div>
+                    <div class="rc2-kpi">
+                        <div class="rc2-kpi-label">Movement</div>
+                        <div class="rc2-kpi-value">@(IsMoving ? "In Progress" : "Idle")</div>
+                    </div>
+                    <div class="rc2-kpi" title="@GetLastTransitionTooltip()">
+                        <div class="rc2-kpi-label">Last Transition</div>
+                        <div class="rc2-kpi-value">@GetLastTransitionFriendly()</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Notes / Safety Tips -->
+    <section class="rc2-note">
+        <i class="bi bi-info-circle me-2"></i>
+        Only one operation at a time. Use Emergency Stop if needed. Monitor weather. The system validates before each operation.
+    </section>
+</div>
+
+<!-- Toasts -->
+<div class="toast-container position-fixed top-0 end-0 p-3">
+    @foreach (var notification in Notifications)
+    {
+        <div class="toast show @GetToastClass(notification.Type)" role="alert" style="@GetToastStyle(notification.Type)">
+            <div class="toast-header" style="background-color: rgba(255, 255, 255, 0.1) !important; color: inherit !important; border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;">
+                <i class="@GetToastIcon(notification.Type) me-2" style="color: white !important;"></i>
+                <strong class="me-auto" style="color: white !important;">@notification.Title</strong>
+                <small style="color: rgba(255, 255, 255, 0.8) !important;">@notification.Timestamp.ToString("HH:mm:ss")</small>
+                <button type="button" class="btn-close" @onclick="() => RemoveNotification(notification)" style="filter: brightness(0) invert(1) !important; opacity: 0.8 !important;"></button>
+            </div>
+            <div class="toast-body" style="color: white !important; font-weight: 500 !important;">
+                @notification.Message
+            </div>
+        </div>
+    }
+    
+</div>
