@@ -1,11 +1,12 @@
+
 using System;
 using HVO.WebSite.RoofControllerV4.Models;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace HVO.WebSite.RoofControllerV4.Logic;
-
+namespace HVO.WebSite.RoofControllerV4.Logic
+{
 public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposable, IDisposable
 {
     protected readonly object _syncLock = new object();
@@ -112,11 +113,39 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
     }
 
+
+
     public RoofControllerServiceV4(ILogger<RoofControllerServiceV4> logger, IOptions<RoofControllerOptionsV4> roofControllerOptions, FourRelayFourInputHat fourRelayFourInputHat)
     {
         this._logger = logger;
         this._roofControllerOptions = roofControllerOptions.Value;
         this._fourRelayFourInputHat = fourRelayFourInputHat;
+    }
+
+
+    /// <summary>
+    /// Returns true if the safety watchdog is currently active (roof in motion and timer running).
+    /// </summary>
+    public bool IsWatchdogActive
+    {
+        get { lock (_syncLock) { return _watchdogActive; } }
+    }
+
+    /// <summary>
+    /// Returns seconds remaining on the watchdog timer, or null if not active.
+    /// </summary>
+    public double? WatchdogSecondsRemaining
+    {
+        get
+        {
+            lock (_syncLock)
+            {
+                if (!_watchdogActive) return null;
+                var elapsed = (DateTime.UtcNow - _operationStartTime).TotalSeconds;
+                var remain = _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds - elapsed;
+                return remain > 0 ? remain : 0;
+            }
+        }
     }
 
     public virtual bool IsInitialized { get; protected set; } = false;
@@ -1053,4 +1082,5 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
         return false;
     }
+}
 }

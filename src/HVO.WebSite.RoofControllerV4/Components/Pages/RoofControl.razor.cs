@@ -113,17 +113,22 @@ public partial class RoofControl : ComponentBase, IDisposable
     /// <summary>
     /// Gets a value indicating whether the safety watchdog timer is currently running.
     /// </summary>
-    public bool IsSafetyWatchdogRunning => GetSafetyWatchdogRunningState();
+    public bool IsSafetyWatchdogRunning => RoofController.IsWatchdogActive;
 
     /// <summary>
     /// Gets the remaining time for the safety watchdog timer in seconds.
     /// </summary>
-    public double SafetyWatchdogTimeRemaining => GetSafetyWatchdogTimeRemaining();
+    public double SafetyWatchdogTimeRemaining => RoofController.WatchdogSecondsRemaining ?? 0;
 
     /// <summary>
     /// Gets the configured safety watchdog timeout in seconds.
     /// </summary>
     public double SafetyWatchdogTimeoutSeconds => RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds;
+
+    /// <summary>
+    /// Timestamp of the last status transition from the service.
+    /// </summary>
+    public DateTimeOffset? LastTransitionUtc => RoofController.LastTransitionUtc;
 
     #endregion
 
@@ -419,89 +424,7 @@ public partial class RoofControl : ComponentBase, IDisposable
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Gets the safety watchdog timer running state using reflection.
-    /// </summary>
-    private bool GetSafetyWatchdogRunningState()
-    {
-        try
-        {
-            // Access the protected _safetyWatchdogTimer field using reflection
-            var type = RoofController.GetType();
-            System.Reflection.FieldInfo? field = null;
-            
-            // Try to find the field in the current type first, then base types
-            var currentType = type;
-            while (currentType != null && field == null)
-            {
-                field = currentType.GetField("_safetyWatchdogTimer", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                currentType = currentType.BaseType;
-            }
-                
-            if (field?.GetValue(RoofController) is System.Timers.Timer timer)
-            {
-                return timer.Enabled;
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Could not get safety watchdog timer state via reflection: {Error}", ex.Message);
-        }
-        
-        // Fallback: Check if roof is moving (watchdog should be running during operations)
-        return IsMoving;
-    }
-
-    /// <summary>
-    /// Gets the safety watchdog timer remaining time using reflection.
-    /// </summary>
-    private double GetSafetyWatchdogTimeRemaining()
-    {
-        try
-        {
-            // Access the protected _operationStartTime field using reflection
-            var type = RoofController.GetType();
-            System.Reflection.FieldInfo? startTimeField = null;
-            System.Reflection.FieldInfo? timerField = null;
-            
-            // Try to find the fields in the current type first, then base types
-            var currentType = type;
-            while (currentType != null && (startTimeField == null || timerField == null))
-            {
-                if (startTimeField == null)
-                {
-                    startTimeField = currentType.GetField("_operationStartTime", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                }
-                if (timerField == null)
-                {
-                    timerField = currentType.GetField("_safetyWatchdogTimer", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                }
-                currentType = currentType.BaseType;
-            }
-                
-            if (startTimeField?.GetValue(RoofController) is DateTime operationStartTime && 
-                timerField?.GetValue(RoofController) is System.Timers.Timer timer &&
-                timer.Enabled)
-            {
-                var elapsed = DateTime.Now - operationStartTime;
-                var timeout = TimeSpan.FromSeconds(SafetyWatchdogTimeoutSeconds);
-                var remaining = timeout - elapsed;
-                var remainingSeconds = Math.Max(0, remaining.TotalSeconds);
-                
-                return remainingSeconds;
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Could not get safety watchdog time remaining via reflection: {Error}", ex.Message);
-        }
-        
-        // Return 0 if not running or error
-        return 0;
-    }
+    // Removed reflection-based watchdog helpers; now sourced from service properties
 
     // Simulation completion helpers removed
 
@@ -821,6 +744,53 @@ public partial class RoofControl : ComponentBase, IDisposable
         {
             return "Checking...";
         }
+    }
+
+    /// <summary>
+    /// Returns a Bootstrap badge class depending on the watchdog remaining time.
+    /// </summary>
+    public string GetWatchdogBadgeClass()
+    {
+        var remaining = SafetyWatchdogTimeRemaining;
+        if (IsSafetyWatchdogRunning && remaining <= 5)
+        {
+            return "badge bg-danger text-white fs-6";
+        }
+        return "badge bg-warning text-dark fs-6";
+    }
+
+    /// <summary>
+    /// Returns the progress bar class for watchdog remaining time (danger near timeout).
+    /// </summary>
+    public string GetWatchdogProgressBarClass()
+    {
+        var remaining = SafetyWatchdogTimeRemaining;
+        if (IsSafetyWatchdogRunning && remaining <= 5)
+        {
+            return "progress-bar bg-danger progress-bar-striped progress-bar-animated";
+        }
+        return "progress-bar bg-warning progress-bar-striped progress-bar-animated";
+    }
+
+    /// <summary>
+    /// Human-friendly relative time for last transition.
+    /// </summary>
+    public string GetLastTransitionFriendly()
+    {
+        if (LastTransitionUtc is null) return "n/a";
+        var delta = DateTimeOffset.UtcNow - LastTransitionUtc.Value;
+        if (delta.TotalSeconds < 60) return $"{Math.Floor(delta.TotalSeconds)}s ago";
+        if (delta.TotalMinutes < 60) return $"{Math.Floor(delta.TotalMinutes)}m ago";
+        if (delta.TotalHours < 24) return $"{Math.Floor(delta.TotalHours)}h ago";
+        return LastTransitionUtc.Value.ToLocalTime().ToString("g");
+    }
+
+    /// <summary>
+    /// Full tooltip text for last transition (UTC).
+    /// </summary>
+    public string GetLastTransitionTooltip()
+    {
+        return LastTransitionUtc?.ToString("u") ?? "unknown";
     }
 
     #endregion

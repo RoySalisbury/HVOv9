@@ -169,12 +169,13 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         }
         private RoofStatusResponse CreateStatus(RoofControllerStatus? overrideStatus = null)
         {
-            // LastTransitionUtc not currently tracked in service; placeholder null for future enhancement
             return new RoofStatusResponse(
                 overrideStatus ?? this._roofController.Status,
                 this._roofController.IsMoving,
                 this._roofController.LastStopReason,
-                null);
+                this._roofController.LastTransitionUtc,
+                this._roofController.IsWatchdogActive,
+                this._roofController.WatchdogSecondsRemaining);
         }
     }
 }

@@ -5,5 +5,7 @@ namespace HVO.WebSite.RoofControllerV4.Models
         RoofControllerStatus Status,
         bool IsMoving,
         RoofControllerStopReason LastStopReason,
-        DateTimeOffset? LastTransitionUtc);
+        DateTimeOffset? LastTransitionUtc,
+        bool IsWatchdogActive,
+        double? WatchdogSecondsRemaining);
 }

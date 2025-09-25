@@ -28,6 +28,8 @@ public class RoofControllerApiTests
         _roofServiceMock.SetupGet(s => s.IsInitialized).Returns(true);
         _roofServiceMock.SetupGet(s => s.IsMoving).Returns(false);
         _roofServiceMock.SetupGet(s => s.LastStopReason).Returns(RoofControllerStopReason.NormalStop);
+        _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(false);
+        _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns((double?)null);
         _roofServiceMock.Setup(s => s.RefreshStatus(It.IsAny<bool>()));
         _roofServiceMock.Setup(s => s.Initialize(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<bool>.Success(true));
@@ -97,6 +99,8 @@ public class RoofControllerApiTests
     {
         // Arrange
         _roofServiceMock.SetupGet(s => s.Status).Returns(RoofControllerStatus.Open);
+        _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(true);
+        _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns(42.5);
 
         // Act
     var (response, payload) = await GetJsonAsync<RoofStatusResponse>(_client, "/api/v4.0/RoofControl/Status");
@@ -106,6 +110,8 @@ public class RoofControllerApiTests
     Assert.IsNotNull(payload);
     Assert.AreEqual(RoofControllerStatus.Open, payload!.Status);
     Assert.IsFalse(payload.IsMoving);
+    Assert.IsTrue(payload.IsWatchdogActive);
+    Assert.AreEqual(42.5, payload.WatchdogSecondsRemaining);
         _roofServiceMock.VerifyGet(s => s.Status, Times.AtLeastOnce);
     }
 
@@ -115,6 +121,8 @@ public class RoofControllerApiTests
         // Arrange
     _roofServiceMock.Setup(s => s.Open()).Returns(Result<RoofControllerStatus>.Success(RoofControllerStatus.Opening));
     _roofServiceMock.SetupGet(s => s.Status).Returns(RoofControllerStatus.Opening);
+    _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(true);
+    _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns(59.9);
 
         // Act
     var (response, payload) = await GetJsonAsync<RoofStatusResponse>(_client, "/api/v4.0/RoofControl/Open");
@@ -124,6 +132,8 @@ public class RoofControllerApiTests
     Assert.IsNotNull(payload);
     Assert.AreEqual(RoofControllerStatus.Opening, payload!.Status);
     Assert.IsFalse(payload.IsMoving); // Mock reports false unless overridden
+    Assert.IsTrue(payload.IsWatchdogActive);
+    Assert.AreEqual(59.9, payload.WatchdogSecondsRemaining);
         _roofServiceMock.Verify(s => s.Open(), Times.Once);
     }
 
@@ -150,6 +160,8 @@ public class RoofControllerApiTests
         // Arrange
     _roofServiceMock.Setup(s => s.Close()).Returns(Result<RoofControllerStatus>.Success(RoofControllerStatus.Closing));
     _roofServiceMock.SetupGet(s => s.Status).Returns(RoofControllerStatus.Closing);
+    _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(true);
+    _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns(30.0);
 
         // Act
     var (response, payload) = await GetJsonAsync<RoofStatusResponse>(_client, "/api/v4.0/RoofControl/Close");
@@ -159,6 +171,8 @@ public class RoofControllerApiTests
     Assert.IsNotNull(payload);
     Assert.AreEqual(RoofControllerStatus.Closing, payload!.Status);
     Assert.IsFalse(payload.IsMoving);
+    Assert.IsTrue(payload.IsWatchdogActive);
+    Assert.AreEqual(30.0, payload.WatchdogSecondsRemaining);
         _roofServiceMock.Verify(s => s.Close(), Times.Once);
     }
 
@@ -191,6 +205,8 @@ public class RoofControllerApiTests
         _roofServiceMock.Setup(s => s.Stop(It.IsAny<RoofControllerStopReason>()))
             .Returns(Result<RoofControllerStatus>.Success(RoofControllerStatus.Stopped));
         _roofServiceMock.SetupGet(s => s.Status).Returns(RoofControllerStatus.Stopped);
+        _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(false);
+        _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns((double?)null);
 
         // Act
     var (response, payload) = await GetJsonAsync<RoofStatusResponse>(_client, "/api/v4.0/RoofControl/Stop");
@@ -200,6 +216,8 @@ public class RoofControllerApiTests
     Assert.IsNotNull(payload);
     Assert.AreEqual(RoofControllerStatus.Stopped, payload!.Status);
     Assert.IsFalse(payload.IsMoving);
+    Assert.IsFalse(payload.IsWatchdogActive);
+    Assert.IsNull(payload.WatchdogSecondsRemaining);
         _roofServiceMock.Verify(s => s.Stop(It.IsAny<RoofControllerStopReason>()), Times.Once);
     }
 

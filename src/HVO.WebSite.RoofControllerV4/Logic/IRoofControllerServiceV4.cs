@@ -32,6 +32,16 @@ public interface IRoofControllerServiceV4
         DateTimeOffset? LastTransitionUtc { get; }
 
         /// <summary>
+        /// Gets a value indicating whether the safety watchdog is currently active (roof in motion and timer running).
+        /// </summary>
+        bool IsWatchdogActive { get; }
+
+        /// <summary>
+        /// Gets the number of seconds remaining on the watchdog timer, or null if not active.
+        /// </summary>
+        double? WatchdogSecondsRemaining { get; }
+
+        /// <summary>
         /// Initializes the roof controller hardware and prepares it for operation.
         /// </summary>
         /// <param name="cancellationToken">Token to monitor for cancellation requests.</param>

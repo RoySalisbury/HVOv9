@@ -44,11 +44,11 @@
                             </span>
                             
                             <!-- Safety Watchdog Status -->
-                            @if (IsMoving)
-                            {
-                                <span class="badge bg-warning text-dark fs-6">
-                                    <i class="bi bi-shield-check me-1"></i>Safety Active
-                                </span>
+                            @if (IsSafetyWatchdogRunning)
+                                {
+                                    <span class="@GetWatchdogBadgeClass()">
+                                        <i class="bi bi-shield-check me-1"></i>Watchdog: @Math.Ceiling(SafetyWatchdogTimeRemaining)s
+                                    </span>
                             }
                         </div>
                     </div>
@@ -238,7 +238,7 @@
                                                             <strong>ACTIVE</strong> - @Math.Ceiling(SafetyWatchdogTimeRemaining)s remaining of @SafetyWatchdogTimeoutSeconds-second timeout
                                                         </span>
                                                         <div class="progress mt-1" style="height: 8px;">
-                                                            <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" 
+                                                                <div class="@GetWatchdogProgressBarClass()" 
                                                                  role="progressbar" 
                                                                  style="width: @((RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds - SafetyWatchdogTimeRemaining) / RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds * 100)%"
                                                                  aria-valuenow="@((RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds - SafetyWatchdogTimeRemaining) / RoofControllerOptions.Value.SafetyWatchdogTimeout.TotalSeconds * 100)" 
@@ -257,6 +257,14 @@
                                                     <div>
                                                         <span class="text-success">
                                                             <i class="bi bi-shield-check me-1"></i>
+                                        <div class="row mt-2">
+                                            <div class="col-12">
+                                                <small class="text-muted" title="@GetLastTransitionTooltip()">
+                                                    <i class="bi bi-clock-history me-1"></i>
+                                                    Last transition: @GetLastTransitionFriendly()
+                                                </small>
+                                            </div>
+                                        </div>
                                                             <strong>STANDBY</strong> - @SafetyWatchdogTimeoutSeconds-second timeout configured
                                                         </span>
                                                         <div class="progress mt-1" style="height: 8px;">

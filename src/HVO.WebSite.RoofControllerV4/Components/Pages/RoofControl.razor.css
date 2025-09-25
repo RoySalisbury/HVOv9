@@ -390,6 +390,11 @@
     letter-spacing: 0.5px;
 }
 
+/* Watchdog near-timeout badge subtle pulse */
+.bg-danger.text-white {
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
 /* Health Check Indicators */
 .alert-info {
     background: linear-gradient(135deg, rgba(13, 202, 240, 0.1), rgba(13, 110, 253, 0.1));
