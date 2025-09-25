@@ -206,7 +206,11 @@ public class Program
             app.UseDeveloperExceptionPage();
         }
 
-        app.UseHttpsRedirection();
+        // In Development, disable HTTPS redirection to avoid cert prompts and warnings
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
         app.UseRouting();
         app.UseAntiforgery();
 
@@ -257,8 +261,6 @@ public class Program
         {
             Predicate = _ => false // Always returns healthy for liveness
         });
-
-        app.MapControllers();
 
         // Map Razor components for Blazor Server
         app.MapRazorComponents<Components.App>()
