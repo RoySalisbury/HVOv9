@@ -53,9 +53,35 @@ RoofController automates a motorized roof using a Raspberry Pi 5. The Pi control
 - **Safety Watchdog:** One‑shot timer restarted on motion. **Code default: 90 seconds.** Current configuration: Development = 120 s, Production = 150 s (see `appsettings*.json`). Timeout triggers emergency stop + status `Error` + stop reason `SafetyWatchdogTimeout`.
 - **Optional MODBUS/RS‑485 (future):** Placeholder only; not active in current code.
 
+### Hardware vs Software Layer Distinction
+| Aspect | Hardware (Physical / Electrical) | Software (Logical / API) |
+|--------|----------------------------------|---------------------------|
+| Limit Switch Wiring | ME‑8108 NC continuity until pressed (RAW HIGH = normal, LOW = pressed) | Logical boolean: TRUE = limit reached (polarity independent) |
+| Fault Indication | VFD fault relay / output changes electrical level | Logical IN3 TRUE => Status=Error + EmergencyStop semantics |
+| Motion Command | Energize RLY1/RLY2 applies run input to drive | Status transitions to Opening/Closing + watchdog start |
+| Inhibit / Stop | RLY4 opens enable/stop path when energized | All non-motion states keep RLY4 energized (fail-safe hold) |
+| Position Feedback | Only end-stop discrete contacts (no encoder) | Partial vs full inferred from last command + limits |
+| Speed Feedback | TB‑14 open-collector sink asserts at speed | IN4 AtSpeed informational (not state driver) |
+| Safety Timeout | None inherent (apart from VFD internal) | Software watchdog enforces max motion time |
+| Polarity Change | Rewire NC→NO or vice versa | Config flag `UseNormallyClosedLimitSwitches` preserves logical semantics |
+| Electrical Failure Mode | Broken NC wire looks like permanent limit reached (safe) | Treated as limit TRUE; motion in that direction inhibited |
+
+RAW references = direct voltage/level; LOGICAL = interpreted boolean after polarity handling.
+
 ---
 
 ## 4) Normal operation (current implementation)
+### Quick Start / First Power-Up Checklist
+1. Verify wiring vs diagrams; ensure both limits not mechanically pressed.
+2. Power VFD then Pi; wait for service startup.
+3. GET `/health` until `Ready:true` and `Status` not `NotInitialized`.
+4. Manually actuate each limit (press/release) and GET `/api/v4.0/RoofControl/Status` verifying IN1/IN2 logical toggles.
+5. Issue Open: `/api/v4.0/RoofControl/Open`; confirm Status=Opening, watchdog active.
+6. Trip open limit (or let travel) → Status=Open, RLY1 de‑energized, RLY4 energized.
+7. Issue Close and verify symmetrical behavior.
+8. Simulate fault (drive fault output) → Status=Error, LastStopReason=EmergencyStop.
+9. POST `/api/v4.0/RoofControl/ClearFault` (pulse default 250 ms) after resolving root cause.
+10. Record open & close durations for watchdog tuning (see Watchdog Guidance).
 ### State model
 The controller exposes these operational states:
 
@@ -138,6 +164,30 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 - **Relays:** RLY1=Open (FWD), RLY2=Close (REV), RLY3=ClearFault (momentary), RLY4=Stop (energize to interrupt TB‑1)
 - **Inputs (logical in code):** IN1=OpenLimit (**TRUE when reached**), IN2=ClosedLimit (**TRUE when reached**), IN3=Fault (**TRUE fault**), IN4=**AtSpeed** (**TRUE at commanded speed**)
 
+### LED / Relay / Input Logical Mapping
+| Element | Hardware Reference | Logical Representation | Notes |
+|---------|--------------------|------------------------|-------|
+| RLY1 | RunFwd (TB-13A) | TRUE when energized (Opening) | Drops immediately on limit/stop |
+| RLY2 | RunRev (TB-13B) | TRUE when energized (Closing) | Symmetric to RLY1 |
+| RLY3 | ClearFault (TB-13C) | Pulsed TRUE during fault clear | Pulse width configurable (default 250 ms) |
+| RLY4 | Stop/Enable path | TRUE (energized) in non-motion | Fail-safe hold strategy |
+| LED1 | HAT LED bit0 | Mirrors logical Open limit | Set via LED mask update |
+| LED2 | HAT LED bit1 | Mirrors logical Closed limit |  |
+| LED3 | HAT LED bit2 | Mirrors logical Fault |  |
+| IN1 | Forward limit raw | Logical OpenLimit TRUE when limit reached | Polarity applied |
+| IN2 | Reverse limit raw | Logical ClosedLimit TRUE when limit reached | Polarity applied |
+| IN3 | Fault raw | Logical Fault TRUE when asserted | Drives Error status |
+| IN4 | AtSpeed raw | Logical AtSpeed TRUE at commanded speed | Informational only |
+
+### Hardware vs Logical Position Examples
+| Scenario | RAW IN1 | RAW IN2 | Logical OpenLimit | Logical ClosedLimit | Software Status (idle) |
+|----------|---------|---------|-------------------|---------------------|------------------------|
+| Mid travel | HIGH | HIGH | FALSE | FALSE | Stopped / Partial* |
+| Fully open | LOW | HIGH | TRUE | FALSE | Open |
+| Fully closed | HIGH | LOW | FALSE | TRUE | Closed |
+| Dual limit anomaly | LOW | LOW | TRUE | TRUE | Error |
+*Partial vs Stopped depends on interruption history.
+
 ---
 
 ## 7) Truth table — runtime (logical view)
@@ -166,6 +216,63 @@ Inhibits: Refuse **Open** when IN1 TRUE; refuse **Close** when IN2 TRUE. All non
 - **Close roof:** press *Close* → REV runs until logical Closed limit TRUE (RAW LOW when NC) or *Stop* is pressed.  
 - **Stop:** press *Stop* → RLY4 energizes; drive ramps to stop.  
 - **Clear fault:** investigate cause, ensure safe state, press *Clear* → brief RLY3 pulse. If **IN3** stays HIGH, inspect VFD.
+
+### Power Loss / Recovery Behavior
+| Event | Hardware Effect | Software Effect | Operator Guidance |
+|-------|-----------------|-----------------|-------------------|
+| Pi power loss | All relays de-energize (motion stops) | Service offline | Verify roof stable before restart |
+| Pi reboot mid-travel | Motion relays drop, coast to stop | Re-initializes, recalculates from limits | If between limits, expect Partial/Stopped |
+| VFD power loss | Run commands ignored, AtSpeed FALSE | Potential Error if fault output asserts | Restore drive power, check faults |
+| Limit wiring open (NC) | Appears limit reached (raw LOW unreachable) | Logical limit may appear stuck TRUE | Investigate continuity before forcing motion |
+| Fault latch persists | Fault output stays asserted | Status Error remains | Diagnose drive or upstream interlocks |
+
+## 9) REST API Endpoint Summary
+All endpoints versioned under `/api/v1.0/roof` (example base path; adjust if deployment path differs). JSON responses use camelCase.
+
+| Method | Route | Description | Success Response | Error Modes |
+|--------|-------|-------------|------------------|-------------|
+| GET | `/status` | Current status snapshot (idempotent) | 200 + status object | 500 on internal failure |
+| POST | `/open` | Initiate open sequence | 202 Accepted + status | 409 if already opening/open; 500 internal |
+| POST | `/close` | Initiate close sequence | 202 Accepted + status | 409 if already closing/closed; 500 internal |
+| POST | `/stop` | Immediate controlled stop | 200 + status | 409 if already stopped; 500 internal |
+| POST | `/clear-fault` | Clear latched drive fault (RLY3 pulse) | 200 + status | 409 if not in Error state; 500 internal |
+
+Status Object (representative):
+```
+{
+  "status": "Opening|Closing|Open|Closed|Partial|Error|Stopped|Unknown|NotInitialized",
+  "isReady": true,
+  "limits": { "isOpen": false, "isClosed": true },
+  "watchdog": { "lastKickUtc": "2025-01-01T00:00:00Z", "isHealthy": true },
+  "lastCommandUtc": "2025-01-01T00:00:00Z",
+  "stopReason": "None|Commanded|Fault|Watchdog|SafetyInterlock",
+  "error": null
+}
+```
+
+Notes:
+- 202 (Accepted) used for motion start where completion is asynchronous.
+- 409 (Conflict) used for state-incompatible commands (idempotent safety).
+- Fault clearing only allowed when controller is in Error status and fault line indicates latched condition.
+
+## 10) Operator Quick Reference (Cheat Sheet)
+| Task | Action | Expected Indicators | If Unexpected |
+|------|--------|--------------------|---------------|
+| Start Opening | Press Open / POST /open | RLY1 energizes, Open LED flashes, Status Opening | If no relay: check watchdog health & service logs |
+| Start Closing | Press Close / POST /close | RLY2 energizes, Close LED flashes, Status Closing | If both relays off: verify limits not both TRUE |
+| Stop Motion | Press Stop / POST /stop | Motion relay drops, Status Stopped, Stop reason Commanded | If continues moving: kill motor power, investigate relay weld |
+| Clear Fault | Press Clear / POST /clear-fault | RLY3 brief pulse | If pulse absent: confirm Error state and fault line asserted |
+| After Power Loss | Wait for service ready | Status transitions NotInitialized → (Closed/Open/Partial) | If stuck NotInitialized: verify GPIO hat detected |
+| Verify Limits | Observe limit LEDs | Only one limit TRUE at extremes | If both TRUE: wiring fault or mis-adjusted cams |
+| Watchdog Check | Review health endpoint | isHealthy true | If false frequently: tune interval or investigate thread stalls |
+
+Minimal Decision Flow:
+1. Is status Error? → Clear Fault (once) → persists? Inspect drive.
+2. Is status Partial when at physical limit? → Calibrate limit switch or check polarity config.
+3. Are both limits TRUE? → Electrical fault; halt motion until resolved.
+4. No motion on command? → Check watchdog health, then relay outputs, then VFD enable power.
+
+
 
 ---
 
