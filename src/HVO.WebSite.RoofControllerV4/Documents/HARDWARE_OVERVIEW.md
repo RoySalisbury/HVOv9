@@ -412,6 +412,25 @@ Error example (fault asserted):
 }
 ```
 
+Extended (future enhancement) sample with interval-based watchdog metrics:
+```json
+{
+  "IsInitialized": true,
+  "Status": "Opening",
+  "IsWatchdogActive": true,
+  "WatchdogSecondsRemaining": 2.61,
+  "Watchdog": {
+    "KickIntervalMs": 440,
+    "MissThreshold": 6,
+    "MissedCount": 0,
+    "Jitter": { "P95Ms": 37, "P99Ms": 54 },
+    "LastKickUtc": "2025-09-26T19:07:11.441Z"
+  },
+  "Ready": true,
+  "CheckTime": "2025-09-26T19:07:11.512Z"
+}
+```
+
 ---
 
 ## 13) Configuration Summary
