@@ -1,5 +1,11 @@
 # RoofController — Project Overview (v1.3.1)
 
+> Related Documents (proposed new companion files):
+> - `API_REFERENCE.md` – Detailed REST endpoints, request/response schemas, error codes
+> - `LOGGING_REFERENCE.md` – Structured log event catalog + sample correlation flows
+> - `OPERATOR_CHEAT_SHEET.md` – Printable one-page operational quick reference
+> - `TROUBLESHOOTING_GUIDE.md` – Common symptoms, root causes, escalation steps
+
 **Date:** September 26, 2025  
 **Owner:** Roy Salisbury  
 **System:** Raspberry Pi 5 + Sequent Microsystems SM‑I‑010 + Lenze AC Tech SMVector VFD + ME‑8108 limit switches
@@ -271,6 +277,52 @@ Minimal Decision Flow:
 2. Is status Partial when at physical limit? → Calibrate limit switch or check polarity config.
 3. Are both limits TRUE? → Electrical fault; halt motion until resolved.
 4. No motion on command? → Check watchdog health, then relay outputs, then VFD enable power.
+
+## 11) Watchdog Tuning Guidelines
+The watchdog prevents uncontrolled motion by enforcing an upper bound on continuous travel time. Proper tuning balances fast fault detection with resilience to transient CPU delays.
+
+### Goal
+Detect genuine stalls in <15% of nominal travel time while avoiding false positives under load.
+
+### Core Concepts
+- Kick interval: Expected cadence of healthy progress (internal loop / timer events).
+- Miss threshold: Number of missed kicks before declaring a timeout.
+- Effective timeout = KickInterval * MissThreshold.
+
+### Parameter Selection Heuristic
+Let T = measured single-direction travel time (seconds). Choose:
+  KickInterval = clamp( 0.02 * T , 0.25 , 1.00 ) seconds
+  MissThreshold = clamp( round( (0.12 * T) / KickInterval ), 3, 8 )
+Thus EffectiveTimeout ≈ 0.10–0.15 * T.
+
+### Example
+Measured T = 22 s
+KickInterval = 0.02 * 22 = 0.44 s → 0.44 s
+MissThreshold = (0.12 * 22) / 0.44 ≈ 6.0 → 6
+EffectiveTimeout ≈ 2.64 s
+
+### Validation Steps
+1. Record baseline: 10 consecutive open/close cycles – ensure no watchdog trips.
+2. Induce load (CPU stress) – still zero false trips over 5+ cycles.
+3. Simulate stall (mechanically block or disable drive output) – timeout within target window.
+4. Inspect logs: single Warning + contextual Debug (no duplicate cascade).
+
+### Observability Enhancements (Optional)
+- Log jitter stats every N (e.g., 60) kicks: avg, p95, p99.
+- Expose current KickInterval & MissThreshold in `/health` to support remote tuning.
+- Provide dynamic adjustment endpoint (guarded) for field experimentation.
+
+### When to Retune
+- Material change in travel time (mechanical changes, speed parameter P131).
+- Frequent GC pauses or CPU contention increasing jitter past 40% of KickInterval.
+- Added synchronous I/O in motion loop.
+
+### Anti‑Patterns
+- Setting EffectiveTimeout close to full travel (delays fault detection).
+- Using very small KickInterval (<250 ms) without evidence of needed granularity.
+- Adjusting MissThreshold > 8 (masks real stalls).
+
+> NOTE: Current documented production defaults (150 s global motion watchdog) act as a macro-fail-safe. The fine-grained interval-based watchdog above is a potential enhancement path if higher reactivity is required.
 
 
 
