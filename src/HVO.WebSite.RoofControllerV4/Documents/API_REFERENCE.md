@@ -160,6 +160,7 @@ The API uses RFC 7807 ProblemDetails style objects.
 Typical `type` patterns (suggested):
 ```
 /errors/roof/invalid-state
+/errors/roof/fault-active
 a/errors/roof/fault-active
 /errors/roof/not-initialized
 /errors/roof/internal

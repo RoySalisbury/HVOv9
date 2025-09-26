@@ -81,12 +81,12 @@ RAW references = direct voltage/level; LOGICAL = interpreted boolean after polar
 1. Verify wiring vs diagrams; ensure both limits not mechanically pressed.
 2. Power VFD then Pi; wait for service startup.
 3. GET `/health` until `Ready:true` and `Status` not `NotInitialized`.
-4. Manually actuate each limit (press/release) and GET `/api/v4.0/RoofControl/Status` verifying IN1/IN2 logical toggles.
-5. Issue Open: `/api/v4.0/RoofControl/Open`; confirm Status=Opening, watchdog active.
+4. Manually actuate each limit (press/release) and GET `/api/v1.0/roof/status` verifying IN1/IN2 logical toggles.
+5. Issue Open: `POST /api/v1.0/roof/open`; confirm Status=Opening, watchdog active.
 6. Trip open limit (or let travel) → Status=Open, RLY1 de‑energized, RLY4 energized.
 7. Issue Close and verify symmetrical behavior.
 8. Simulate fault (drive fault output) → Status=Error, LastStopReason=EmergencyStop.
-9. POST `/api/v4.0/RoofControl/ClearFault` (pulse default 250 ms) after resolving root cause.
+9. POST `/api/v1.0/roof/clear-fault` (pulse default 250 ms) after resolving root cause.
 10. Record open & close durations for watchdog tuning (see Watchdog Guidance).
 ### State model
 The controller exposes these operational states:
@@ -124,7 +124,7 @@ The service exposes a logical abstraction and includes a configuration option:
 When true: RAW LOW → logical TRUE (limit reached).  
 When false (Normally Open hardware): RAW HIGH → logical TRUE.
 
-**AppSettings example:**
+**AppSettings example (matches Config Table "Example Dev"):**
 ```
 "RoofControllerOptionsV4": {
   "SafetyWatchdogTimeout": "00:02:00",
