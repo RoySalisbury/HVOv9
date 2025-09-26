@@ -76,6 +76,33 @@ None | NormalStop | LimitSwitchReached | EmergencyStop | StopButtonPressed | Saf
 
 ---
 ## 3. Endpoint Details
+### 3.0 GET /health (Platform Health Aggregation)
+The application exposes a standard ASP.NET Core health endpoint returning an aggregate JSON. A RoofController entry is included with extended data.
+
+Example filtered excerpt:
+```json
+{
+  "status": "Healthy",
+  "checks": [
+    {
+      "name": "RoofController",
+      "status": "Healthy",
+      "data": {
+        "IsInitialized": true,
+        "IsServiceDisposed": false,
+        "Status": "Opening",
+        "LastStopReason": "NormalStop",
+        "IsMoving": true,
+        "IsWatchdogActive": true,
+        "WatchdogSecondsRemaining": 81.9,
+        "Ready": true,
+        "CheckTime": "2025-09-26T19:21:11.512Z"
+      }
+    }
+  ]
+}
+```
+Poll `/health` less frequently than `/status` (recommendation: 10–30 s). Use `/status` for UI animation / progress updates.
 ### 3.1 GET /status
 Returns latest snapshot.
 

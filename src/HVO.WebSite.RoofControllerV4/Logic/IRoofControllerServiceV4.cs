@@ -47,6 +47,11 @@ public interface IRoofControllerServiceV4
         double? WatchdogSecondsRemaining { get; }
 
         /// <summary>
+        /// True when the drive signals it is at commanded speed (AtSpeed/Run, IN4 logical state).
+        /// </summary>
+        bool AtSpeedRun { get; }
+
+        /// <summary>
         /// Returns a current snapshot of status for UI/API consumption.
         /// </summary>
         RoofStatusResponse GetCurrentStatusSnapshot();

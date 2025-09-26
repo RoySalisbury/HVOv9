@@ -169,13 +169,16 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         }
         private RoofStatusResponse CreateStatus(RoofControllerStatus? overrideStatus = null)
         {
+            // Force a refresh so AtSpeed/Run input is current
+            this._roofController.RefreshStatus(forceHardwareRead: false);
             return new RoofStatusResponse(
                 overrideStatus ?? this._roofController.Status,
                 this._roofController.IsMoving,
                 this._roofController.LastStopReason,
                 this._roofController.LastTransitionUtc,
                 this._roofController.IsWatchdogActive,
-                this._roofController.WatchdogSecondsRemaining);
+                this._roofController.WatchdogSecondsRemaining,
+                this._roofController.AtSpeedRun);
         }
     }
 }

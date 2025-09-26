@@ -158,6 +158,22 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     public virtual DateTimeOffset? LastTransitionUtc { get; protected set; }
     public bool IsServiceDisposed => _disposed;
 
+    public bool AtSpeedRun
+    {
+        get
+        {
+            lock (_syncLock)
+            {
+                if (!(InputsEventsActive && _lastIn4.HasValue))
+                {
+                    // lightweight refresh
+                    ForceReadInputs_NoLock();
+                }
+                return _lastIn4 ?? false;
+            }
+        }
+    }
+
     public RoofStatusResponse GetCurrentStatusSnapshot()
     {
         lock (_syncLock)
@@ -168,7 +184,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 LastStopReason,
                 LastTransitionUtc,
                 IsWatchdogActive,
-                WatchdogSecondsRemaining
+                WatchdogSecondsRemaining,
+                _lastIn4 ?? false
             );
         }
     }
@@ -1136,7 +1153,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 LastStopReason,
                 LastTransitionUtc,
                 IsWatchdogActive,
-                WatchdogSecondsRemaining
+                WatchdogSecondsRemaining,
+                _lastIn4 ?? false
             );
             args = new RoofStatusChangedEventArgs(snapshot);
         }

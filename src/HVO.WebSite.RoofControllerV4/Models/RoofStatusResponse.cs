@@ -7,5 +7,6 @@ namespace HVO.WebSite.RoofControllerV4.Models
         RoofControllerStopReason LastStopReason,
         DateTimeOffset? LastTransitionUtc,
         bool IsWatchdogActive,
-        double? WatchdogSecondsRemaining);
+        double? WatchdogSecondsRemaining,
+        bool AtSpeedRun);
 }
