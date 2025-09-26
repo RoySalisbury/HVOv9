@@ -34,4 +34,13 @@ public record class RoofControllerOptionsV4
     /// Interval for periodic verification reads while moving. Keep coarse enough to avoid excess I2C traffic.
     /// </summary>
     public TimeSpan PeriodicVerificationInterval { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// When true (default), limit switches are treated as Normally Closed (NC) so that a RAW LOW electrical level
+    /// indicates the limit switch has been actuated (circuit opened). When false, switches are treated as Normally Open (NO)
+    /// and a RAW HIGH level indicates the limit is reached. All public surface area (status snapshots, APIs, LEDs) exposes
+    /// a logical view where <c>true</c> means "limit reached" regardless of polarity. This option only affects how raw
+    /// inputs are translated into that logical view.
+    /// </summary>
+    public bool UseNormallyClosedLimitSwitches { get; set; } = true;
 }

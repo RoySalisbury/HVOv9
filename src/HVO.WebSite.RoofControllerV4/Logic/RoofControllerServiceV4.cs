@@ -45,12 +45,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     // Event hooks are handled internally and exposed via protected virtual methods instead of public events
     protected virtual void OnForwardLimitSwitchChanged(bool isHigh)
     {
-        // Treat high = switch contacted
+        // Interpret raw state based on configured polarity. For NC: HIGH = normal (not at limit), LOW = limit reached.
         lock (_syncLock)
         {
-            _logger.LogDebug("ForwardLimitSwitchChanged: {State}", isHigh);
-            _lastIn1 = isHigh;
-            if (isHigh)
+            _logger.LogDebug("ForwardLimitSwitchChanged RawHigh={State}", isHigh);
+            _lastIn1 = isHigh; // store raw electrical level (HIGH = circuit closed / not at limit)
+            bool limitReached = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !isHigh : isHigh;
+            if (limitReached)
             {
                 InternalStop(RoofControllerStopReason.LimitSwitchReached);
                 _lastCommandIntent = RoofControllerCommandIntent.LimitStop;
@@ -63,12 +64,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     }
     protected virtual void OnReverseLimitSwitchChanged(bool isHigh)
     {
-        // Treat high = switch contacted
+        // Interpret raw state based on configured polarity (see forward handler).
         lock (_syncLock)
         {
-            _logger.LogDebug("ReverseLimitSwitchChanged: {State}", isHigh);
+            _logger.LogDebug("ReverseLimitSwitchChanged RawHigh={State}", isHigh);
             _lastIn2 = isHigh;
-            if (isHigh)
+            bool limitReached = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !isHigh : isHigh;
+            if (limitReached)
             {
                 InternalStop(RoofControllerStopReason.LimitSwitchReached);
                 _lastCommandIntent = RoofControllerCommandIntent.LimitStop;
@@ -581,8 +583,12 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             bool needRead = forceRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue);
             if (needRead) ForceReadInputs_NoLock();
 
-            bool openTriggered = _lastIn1 ?? false;
-            bool closedTriggered = _lastIn2 ?? false;
+            // Translate raw electrical levels to logical limit states based on polarity configuration.
+            // Logical value (openTriggered/closedTriggered) is TRUE when the corresponding limit is reached regardless of physical wiring.
+            bool rawForward = _lastIn1 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false); // assume normal state
+            bool rawReverse = _lastIn2 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
+            bool openTriggered = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawForward : rawForward;
+            bool closedTriggered = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawReverse : rawReverse;
 
             if (openTriggered && !closedTriggered)
             {
@@ -677,8 +683,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         try
         {
-            bool openLimit = _lastIn1 ?? false;      // Forward limit
-            bool closedLimit = _lastIn2 ?? false;    // Reverse limit
+            // Display LEDs when logical limit ACTIVE (true = at limit) regardless of polarity selection
+            bool rawForward = _lastIn1 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
+            bool rawReverse = _lastIn2 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
+            bool openLimit = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawForward : rawForward;
+            bool closedLimit = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawReverse : rawReverse;
             bool fault = _lastIn3 ?? false;          // Fault input
 
             byte mask = 0;
@@ -1048,20 +1057,24 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             {
                 ForceReadInputs_NoLock();
             }
-            return ((_lastIn1 ?? false), (_lastIn2 ?? false));
+            bool rawForward = _lastIn1 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
+            bool rawReverse = _lastIn2 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
+            bool forwardLimitActive = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawForward : rawForward;
+            bool reverseLimitActive = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawReverse : rawReverse;
+            return (forwardLimitActive, reverseLimitActive);
         }
     }
 
     protected virtual bool IsForwardLimitActive()
     {
         var (forward, _) = GetCurrentLimitStates(forceHardwareRead: true);
-        return forward;
+        return forward; // logical active
     }
 
     protected virtual bool IsReverseLimitActive()
     {
         var (_, reverse) = GetCurrentLimitStates(forceHardwareRead: true);
-        return reverse;
+        return reverse; // logical active
     }
 
     protected virtual bool IsFaultActive()

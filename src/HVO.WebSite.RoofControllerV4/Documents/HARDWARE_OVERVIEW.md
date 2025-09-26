@@ -1,4 +1,4 @@
-# RoofController — Project Overview (v1.1)
+# RoofController — Project Overview (v1.2)
 
 **Date:** September 26, 2025  
 **Owner:** Roy Salisbury 
@@ -55,15 +55,32 @@ RoofController automates a motorized roof using a Raspberry Pi 5. The Pi control
 ---
 
 ## 4) Normal operation (current implementation)
-### Input polarity (as interpreted in code)
-| Input | Code Meaning (bool TRUE) | FALSE meaning |
-|-------|--------------------------|---------------|
+### Input polarity (logical view, v1.2)
+| Input | Logical TRUE (service/API) | Logical FALSE |
+|-------|---------------------------|---------------|
 | IN1   | Forward/Open limit reached | Not at forward limit |
 | IN2   | Reverse/Closed limit reached | Not at reverse limit |
 | IN3   | Fault present | No fault |
 | IN4   | Movement/At‑speed advisory | Inactive |
 
-> If physical wiring uses NC so that the electrical level goes LOW on limit, inversion (hardware or software) is required. The service presently treats HIGH as limit asserted.
+Physical layer default: **Normally Closed (NC)** limit switches. Raw electrical levels therefore are:
+- NC not pressed (travel region) = HIGH
+- NC pressed (at limit) = LOW
+
+The service now exposes a logical abstraction and includes a configuration option:
+
+`UseNormallyClosedLimitSwitches` (default: true)
+
+When true: RAW LOW → logical TRUE (limit reached).  
+When false (Normally Open hardware): RAW HIGH → logical TRUE.
+
+AppSettings example:
+```
+"RoofControllerOptionsV4": {
+  "SafetyWatchdogTimeout": "00:02:00",
+  "UseNormallyClosedLimitSwitches": true
+}
+```
 
 ### Commands
 - **Open:** Refuse if IN3 (fault) TRUE or IN1 (open limit) TRUE. Issue internal stop, energize RLY1, start watchdog, set status `Opening`. On IN1 TRUE → stop & status `Open`.
@@ -125,8 +142,8 @@ Inhibits: Refuse Open when IN1 TRUE; refuse Close when IN2 TRUE.
 ---
 
 ## 8) Operator procedures
-- **Open roof:** press *Open* → FWD runs until **IN1=LOW** or *Stop* is pressed.  
-- **Close roof:** press *Close* → REV runs until **IN2=LOW** or *Stop* is pressed.  
+- **Open roof:** press *Open* → FWD runs until logical Open limit TRUE (RAW LOW when NC) or *Stop* is pressed.  
+- **Close roof:** press *Close* → REV runs until logical Closed limit TRUE (RAW LOW when NC) or *Stop* is pressed.  
 - **Stop:** press *Stop* → RLY4 energizes; drive ramps to stop.  
 - **Clear fault:** investigate cause, ensure safe state, press *Clear* → brief RLY3 pulse. If **IN3** stays HIGH, inspect VFD.
 
@@ -143,7 +160,8 @@ Inhibits: Refuse Open when IN1 TRUE; refuse Close when IN2 TRUE.
 ---
 
 ## 10) Change log
-- **v1.1** — Align with current code (input polarity HIGH=limit, watchdog, .NET 9, updated truth table, clarified RLY de‑energize on limit, advisory IN4).
+- **v1.2** — Restored NC (LOW=limit) semantics in code, added config `UseNormallyClosedLimitSwitches`, updated polarity tables & operator procedures.
+- **v1.1** — Interim code alignment (input polarity HIGH=limit, watchdog, .NET 9, updated truth table, clarified RLY de‑energize on limit, advisory IN4).
 - **v1.0** — Initial project overview; matches wiring bundle v1.0 diagrams.
 
 
