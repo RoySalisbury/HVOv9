@@ -67,7 +67,7 @@ RoofController automates a motorized roof using a Raspberry Pi 5. The Pi control
 | Motion Command | Energize RLY1/RLY2 applies run input to drive | Status transitions to Opening/Closing + watchdog start |
 | Inhibit / Stop | RLY4 opens enable/stop path when energized | All non-motion states keep RLY4 energized (fail-safe hold) |
 | Position Feedback | Only end-stop discrete contacts (no encoder) | Partial vs full inferred from last command + limits |
-| Speed Feedback | TB‑14 open-collector sink asserts at speed | IN4 AtSpeed informational (not state driver) |
+| Speed Feedback | TB‑14 open-collector sink asserts at speed | IN4 AtSpeed/Run informational (not state driver) |
 | Safety Timeout | None inherent (apart from VFD internal) | Software watchdog enforces max motion time |
 | Polarity Change | Rewire NC→NO or vice versa | Config flag `UseNormallyClosedLimitSwitches` preserves logical semantics |
 | Electrical Failure Mode | Broken NC wire looks like permanent limit reached (safe) | Treated as limit TRUE; motion in that direction inhibited |
@@ -111,7 +111,7 @@ All non‑motion states (everything except Opening/Closing) energize the Stop re
 | IN1   | Forward/Open limit reached | Not at forward limit |
 | IN2   | Reverse/Closed limit reached | Not at reverse limit |
 | IN3   | Fault present | No fault |
-| IN4   | **AtSpeed** (at commanded speed) | Not at speed |
+| IN4   | **AtSpeed/Run** (at commanded speed) | Not at speed |
 
 Physical layer default: **Normally Closed (NC)** limit switches. Raw electrical levels therefore are:
 - NC not pressed (travel region) = HIGH
@@ -168,7 +168,7 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 
 ## 6) I/O naming (signals)
 - **Relays:** RLY1=Open (FWD), RLY2=Close (REV), RLY3=ClearFault (momentary), RLY4=Stop (energize to interrupt TB‑1)
-- **Inputs (logical in code):** IN1=OpenLimit (**TRUE when reached**), IN2=ClosedLimit (**TRUE when reached**), IN3=Fault (**TRUE fault**), IN4=**AtSpeed** (**TRUE at commanded speed**)
+- **Inputs (logical in code):** IN1=OpenLimit (**TRUE when reached**), IN2=ClosedLimit (**TRUE when reached**), IN3=Fault (**TRUE fault**), IN4=**AtSpeed/Run** (**TRUE at commanded speed**)
 
 ### LED / Relay / Input Logical Mapping
 | Element | Hardware Reference | Logical Representation | Notes |
@@ -183,7 +183,7 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 | IN1 | Forward limit raw | Logical OpenLimit TRUE when limit reached | Polarity applied |
 | IN2 | Reverse limit raw | Logical ClosedLimit TRUE when limit reached | Polarity applied |
 | IN3 | Fault raw | Logical Fault TRUE when asserted | Drives Error status |
-| IN4 | AtSpeed raw | Logical AtSpeed TRUE at commanded speed | Informational only |
+| IN4 | AtSpeed/Run raw | Logical AtSpeed/Run TRUE at commanded speed | Informational only |
 
 ### Hardware vs Logical Position Examples
 | Scenario | RAW IN1 | RAW IN2 | Logical OpenLimit | Logical ClosedLimit | Software Status (idle) |
@@ -199,7 +199,7 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 ## 7) Truth table — runtime (logical view)
 Legend: ON = relay energized / input TRUE; OFF = de‑energized / input FALSE.
 
-| State | RLY1 | RLY2 | RLY3 | RLY4 | IN1 (OpenLimit) | IN2 (ClosedLimit) | IN3 (Fault) | IN4 (**AtSpeed**) |
+| State | RLY1 | RLY2 | RLY3 | RLY4 | IN1 (OpenLimit) | IN2 (ClosedLimit) | IN3 (Fault) | IN4 (**AtSpeed/Run**) |
 |-------|------|------|------|------|------------------|-------------------|-------------|-------------------|
 | Opening | ON | OFF | OFF | OFF | FALSE | FALSE | FALSE | FALSE→TRUE* |
 | Open (limit) | OFF | OFF | OFF | ON | TRUE | FALSE | FALSE | FALSE |
@@ -228,7 +228,7 @@ Inhibits: Refuse **Open** when IN1 TRUE; refuse **Close** when IN2 TRUE. All non
 |-------|-----------------|-----------------|-------------------|
 | Pi power loss | All relays de-energize (motion stops) | Service offline | Verify roof stable before restart |
 | Pi reboot mid-travel | Motion relays drop, coast to stop | Re-initializes, recalculates from limits | If between limits, expect Partial/Stopped |
-| VFD power loss | Run commands ignored, AtSpeed FALSE | Potential Error if fault output asserts | Restore drive power, check faults |
+| VFD power loss | Run commands ignored, AtSpeed/Run FALSE | Potential Error if fault output asserts | Restore drive power, check faults |
 | Limit wiring open (NC) | Appears limit reached (raw LOW unreachable) | Logical limit may appear stuck TRUE | Investigate continuity before forcing motion |
 | Fault latch persists | Fault output stays asserted | Status Error remains | Diagnose drive or upstream interlocks |
 
@@ -465,7 +465,7 @@ Note: Changing `UseNormallyClosedLimitSwitches` during active motion may yield t
 | Version | Summary |
 |---------|---------|
 | v1.3.1 | Added state model, clarified watchdog defaults, enforced RLY4 behavior documentation, truth table corrections, fail‑safe philosophy, stop reasons, health & config sections. |
-| v1.3 | AtSpeed naming, wiring clarifications, added explicit RLY3 COM source, diagram bundle zip. |
+| v1.3 | AtSpeed/Run naming, wiring clarifications, added explicit RLY3 COM source, diagram bundle zip. |
 | v1.2 | Restored NC (LOW=limit) semantics, added `UseNormallyClosedLimitSwitches`. |
 | v1.1 | Interim logic (HIGH=limit) alignment, watchdog + truth table refresh. |
 | v1.0 | Initial project overview & base diagrams. |

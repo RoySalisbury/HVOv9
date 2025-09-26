@@ -42,7 +42,7 @@ Representative payload (fields may expand – additive changes only):
     "raw": false
   },
   "telemetry": {
-    "atSpeed": false
+    "atSpeedRun": false
   }
 }
 ```
@@ -72,7 +72,7 @@ None | NormalStop | LimitSwitchReached | EmergencyStop | StopButtonPressed | Saf
 | lastCommandUtc | string | Timestamp of last successfully accepted motion command |
 | fault.isFaulted | bool | True when IN3 indicates a drive or chain fault |
 | fault.raw | bool | Raw electrical fault line (before interpretation – may be same as `isFaulted`) |
-| telemetry.atSpeed | bool | True when IN4 (At Speed output) asserted |
+| telemetry.atSpeedRun | bool | True when IN4 (AtSpeed/Run P142=6) asserted |
 
 ---
 ## 3. Endpoint Details
@@ -161,7 +161,6 @@ Typical `type` patterns (suggested):
 ```
 /errors/roof/invalid-state
 /errors/roof/fault-active
-a/errors/roof/fault-active
 /errors/roof/not-initialized
 /errors/roof/internal
 ```

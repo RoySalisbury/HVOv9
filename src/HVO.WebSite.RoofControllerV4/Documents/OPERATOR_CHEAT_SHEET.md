@@ -32,13 +32,13 @@ Intended Use: Printed quick reference for field operators
 | OpenLimit | At open end limit | If stuck TRUE mid-travel → wiring fault |
 | ClosedLimit | At closed end limit | If stuck TRUE mid-travel → wiring fault |
 | Fault | Drive or interlock fault present | Inspect drive panel + logs |
-| AtSpeed | Drive at commanded speed | May be FALSE during accel/decel |
+| AtSpeed/Run | Drive at commanded speed (VFD P142=6 output) | May be FALSE during accel/decel |
 
 ---
 ## 4. Normal Motion Cycle
 1. Issue Open/Close.
 2. Motion relay energizes (RLY1 or RLY2).
-3. AtSpeed may assert (informational).
+3. AtSpeed/Run may assert (informational).
 4. Limit reached → motion relay drops, Stop relay engaged.
 5. Status becomes Open/Closed.
 
@@ -48,7 +48,7 @@ Intended Use: Printed quick reference for field operators
 |---------|--------------|-------|
 | Status=Error immediately on motion | Fault input active | Inspect drive, clear external fault |
 | Both limits TRUE | Wiring short or mis-adjusted cams | Physically inspect both switches |
-| Watchdog timeout | Mechanical jam or mis-tuned timeout | Inspect roof path, verify limit operation |
+| Watchdog timeout | Mechanical jam or mis-tuned timeout | Inspect roof path, verify limit operation; GET /health for remaining time/context |
 | Cannot Clear Fault (remains Error) | Persistent drive fault | Check drive display / diagnostics |
 
 Procedure:
@@ -67,7 +67,7 @@ Partial but physically at limit?
 Both limits TRUE?
   -> Stop. Diagnose wiring.
 No motion on Open/Close?
-  -> Check Fault, then Status, then relays.
+  -> Check Fault, then Status, then relays. GET /health to confirm Ready=true.
 ```
 
 ---
