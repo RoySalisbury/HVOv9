@@ -3,8 +3,10 @@ using Microsoft.JSInterop;
 using Microsoft.Extensions.Options;
 using HVO.WebSite.RoofControllerV4.Logic;
 using HVO.WebSite.RoofControllerV4.Models;
+using HVO.WebSite.RoofControllerV4.Services;
 using HVO;
 using System.Timers;
+using System.Linq;
 
 namespace HVO.WebSite.RoofControllerV4.Components.Pages;
 
@@ -20,6 +22,7 @@ public class RoofControlBase : ComponentBase, IDisposable
     [Inject] protected ILogger<RoofControlBase> Logger { get; set; } = default!;
     [Inject] protected IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] protected IOptions<RoofControllerOptionsV4> RoofControllerOptions { get; set; } = default!;
+    [Inject] protected FooterStatusService? FooterStatusService { get; set; }
 
     #endregion
 
@@ -29,6 +32,7 @@ public class RoofControlBase : ComponentBase, IDisposable
     protected readonly List<NotificationMessage> _notifications = new();
     protected bool _isDisposed = false;
     protected RoofControllerStopReason _lastNotifiedStopReason = RoofControllerStopReason.None;
+    private bool _footerStatusReady;
     
     #endregion
 
@@ -123,11 +127,32 @@ public class RoofControlBase : ComponentBase, IDisposable
         }
     }
 
+    protected override void OnParametersSet()
+    {
+        if (!_footerStatusReady && FooterStatusService is not null)
+        {
+            _footerStatusReady = true;
+            UpdateFooterStatus();
+        }
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_footerStatusReady && FooterStatusService is not null)
+        {
+            _footerStatusReady = true;
+            UpdateFooterStatus();
+        }
+
+        return Task.CompletedTask;
+    }
+
     public void Dispose()
     {
         if (_isDisposed) return;
         _isDisposed = true;
         RoofController.StatusChanged -= OnServiceStatusChanged;
+    FooterStatusService?.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -159,6 +184,7 @@ public class RoofControlBase : ComponentBase, IDisposable
     {
         try
         {
+            UpdateFooterStatus();
             await InvokeAsync(StateHasChanged);
         }
         catch (ObjectDisposedException)
@@ -203,24 +229,6 @@ public class RoofControlBase : ComponentBase, IDisposable
         if (percent < 85) return "progress-bar bg-warning text-dark";
         return "progress-bar bg-danger";
     }
-
-    public string GetToastClass(NotificationType type) => type switch
-    {
-        NotificationType.Error => "text-bg-danger",
-        NotificationType.Warning => "text-bg-warning",
-        NotificationType.Success => "text-bg-success",
-        _ => "text-bg-dark"
-    };
-
-    public string GetToastStyle(NotificationType type) => "background-color: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.15);";
-    public string GetToastIcon(NotificationType type) => type switch
-    {
-        NotificationType.Error => "bi bi-exclamation-triangle-fill",
-        NotificationType.Warning => "bi bi-exclamation-circle-fill",
-        NotificationType.Success => "bi bi-check-circle-fill",
-        NotificationType.Info => "bi bi-info-circle-fill",
-        _ => "bi bi-bell-fill"
-    };
 
     public string GetLastTransitionFriendly()
     {
@@ -317,12 +325,14 @@ public class RoofControlBase : ComponentBase, IDisposable
         {
             _notifications.RemoveAt(_notifications.Count - 1);
         }
+        UpdateFooterStatus();
         _ = InvokeAsync(StateHasChanged);
     }
 
     protected void RemoveNotification(NotificationMessage message)
     {
         _notifications.Remove(message);
+        UpdateFooterStatus();
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -346,6 +356,50 @@ public class RoofControlBase : ComponentBase, IDisposable
         Warning,
         Error
     }
+
+    #endregion
+
+    #region Footer Synchronization
+
+    private void UpdateFooterStatus()
+    {
+        if (FooterStatusService is null)
+        {
+            return;
+        }
+
+        var footerNotifications = _notifications
+            .Select(n => new FooterNotification(n.Title, n.Message, MapLevel(n.Type), n.Timestamp))
+            .ToArray();
+
+        FooterStatusService.SetLeftNotifications(footerNotifications);
+
+        FooterStatusService.SetCenterMessage(new FooterStatusMessage($"Status: {CurrentStatus}", MapStatusLevel(CurrentStatus)));
+
+        var watchdogMessage = IsSafetyWatchdogRunning
+            ? $"Watchdog: {Math.Ceiling(SafetyWatchdogTimeRemaining)}s remaining"
+            : $"Watchdog: standby ({SafetyWatchdogTimeoutSeconds}s)";
+        var watchdogLevel = IsSafetyWatchdogRunning ? FooterStatusLevel.Warning : FooterStatusLevel.Info;
+        FooterStatusService.SetRightMessage(new FooterStatusMessage(watchdogMessage, watchdogLevel));
+    }
+
+    private static FooterStatusLevel MapLevel(NotificationType type) => type switch
+    {
+        NotificationType.Error => FooterStatusLevel.Error,
+        NotificationType.Warning => FooterStatusLevel.Warning,
+        NotificationType.Success => FooterStatusLevel.Success,
+        _ => FooterStatusLevel.Info
+    };
+
+    private static FooterStatusLevel MapStatusLevel(RoofControllerStatus status) => status switch
+    {
+        RoofControllerStatus.Error => FooterStatusLevel.Error,
+        RoofControllerStatus.Opening => FooterStatusLevel.Warning,
+        RoofControllerStatus.Closing => FooterStatusLevel.Warning,
+        RoofControllerStatus.Open => FooterStatusLevel.Success,
+        RoofControllerStatus.Closed => FooterStatusLevel.Info,
+        _ => FooterStatusLevel.Info
+    };
 
     #endregion
 }

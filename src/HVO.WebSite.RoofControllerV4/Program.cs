@@ -13,6 +13,7 @@ using HVO.Iot.Devices.Implementation;
 
 using System.Runtime.Loader;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
+using HVO.WebSite.RoofControllerV4.Services;
 
 namespace HVO.WebSite.RoofControllerV4;
 
@@ -98,7 +99,8 @@ public class Program
         services.AddHostedService<RoofControllerServiceV4Host>();
 
         // Register RoofController based on configuration
-        services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
+    services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
+    services.AddSingleton<FooterStatusService>();
 
         // Add exception handling middleware
         // NOTE: Use built-in exception handling instead of custom error controllers

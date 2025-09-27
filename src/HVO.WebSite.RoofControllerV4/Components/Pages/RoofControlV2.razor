@@ -170,22 +170,3 @@
         Only one operation at a time. Use Stop for normal interruption; emergency stops are automatic on fault/watchdog.
     </div>
 </div>
-
-<!-- Toasts -->
-<div class="toast-container position-fixed top-0 end-0 p-3">
-    @foreach (var notification in Notifications)
-    {
-        <div class="toast show @GetToastClass(notification.Type)" role="alert" style="@GetToastStyle(notification.Type)">
-            <div class="toast-header" style="background-color: rgba(255, 255, 255, 0.1) !important; color: inherit !important; border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;">
-                <i class="@GetToastIcon(notification.Type) me-2" style="color: white !important;"></i>
-                <strong class="me-auto" style="color: white !important;">@notification.Title</strong>
-                <small style="color: rgba(255, 255, 255, 0.8) !important;">@notification.Timestamp.ToString("HH:mm:ss")</small>
-                <button type="button" class="btn-close" @onclick="() => RemoveNotification(notification)" style="filter: brightness(0) invert(1) !important; opacity: 0.8 !important;"></button>
-            </div>
-            <div class="toast-body" style="color: white !important; font-weight: 500 !important;">
-                @notification.Message
-            </div>
-        </div>
-    }
-    
-</div>
