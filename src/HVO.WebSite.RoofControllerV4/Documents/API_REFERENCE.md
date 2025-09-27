@@ -1,3 +1,202 @@
+# RoofController REST API Reference (v4.0)
+
+Date: September 27, 2025  
+Scope: Roof motion control / status / fault management  
+Base Path (default deployment): `/api/v4.0/RoofControl`
+
+> Host name / path base will depend on the environment (reverse proxy, container, etc.). All responses are JSON (`application/json; charset=utf-8`).
+
+---
+## 1. Resource Overview
+| Endpoint | Method | Summary | Idempotent | Typical Success | Notes |
+|----------|--------|---------|------------|-----------------|-------|
+| `/Status` | GET | Current controller snapshot | YES | 200 (RoofStatusResponse) | Safe for UI refresh / polling |
+| `/Open` | GET | Begin open motion | YES<sup>*</sup> | 200 (RoofStatusResponse) | Returns immediately; no-op if already Open/Opening |
+| `/Close` | GET | Begin close motion | YES<sup>*</sup> | 200 (RoofStatusResponse) | Returns immediately; no-op if already Closed/Closing |
+| `/Stop` | GET | Graceful stop & inhibit | YES | 200 (RoofStatusResponse) | Drops motion relays and recomputes status |
+| `/ClearFault` | POST | Pulse Clear-Fault relay | NO | 200 (bool) | Body is `true` on success; requires `Status=Error` |
+
+<sup>*</sup>Open/Close ignore duplicate requests for the same direction while motion is already in progress or at the corresponding limit, so the operations behave idempotently from the client perspective.
+
+---
+## 2. Status Model (`RoofStatusResponse`)
+Representative payload (fields are additive forward-compatible):
+```json
+{
+  "status": "Opening",
+  "isMoving": true,
+  "lastStopReason": "NormalStop",
+  "lastTransitionUtc": "2025-09-26T19:05:31.044Z",
+  "isWatchdogActive": true,
+  "watchdogSecondsRemaining": 83.4,
+  "isAtSpeed": false
+}
+```
+
+### 2.1 Enumerations
+`status` one of:
+```
+NotInitialized | Unknown | Opening | Closing | Open | Closed | PartiallyOpen | PartiallyClose | Stopped | Error
+```
+`lastStopReason` one of (may be `None` while moving):
+```
+None | NormalStop | LimitSwitchReached | EmergencyStop | StopButtonPressed | SafetyWatchdogTimeout | SystemDisposal
+```
+
+### 2.2 Field Notes
+| Field | Type | Description |
+|-------|------|-------------|
+| status | string | Current state machine status |
+| isMoving | bool | `true` when status is Opening or Closing |
+| lastStopReason | string | Reason recorded when the controller last transitioned out of motion |
+| lastTransitionUtc | string (UTC ISO8601) | Timestamp of the most recent state transition |
+| isWatchdogActive | bool | `true` while the motion watchdog timer is running |
+| watchdogSecondsRemaining | number\|null | Seconds remaining before watchdog would trigger; `null` when inactive |
+| isAtSpeed | bool | `true` when the VFD indicates the drive is at commanded speed (TB-14 → IN4) |
+
+---
+## 3. Endpoint Details
+
+### 3.1 GET `/Status`
+Returns the latest `RoofStatusResponse` snapshot. The service performs a lightweight refresh prior to returning the snapshot to include the latest AtSpeed telemetry.
+
+**Success (200)**  
+Body = `RoofStatusResponse`
+
+**Failure**  
+500 — Internal error / service not initialized (ProblemDetails)
+
+---
+### 3.2 GET `/Open`
+Initiates opening motion when safe. The controller enforces STOP-first sequencing and hardware interlocks.
+
+| Code | Meaning |
+|------|---------|
+| 200 | Command accepted or already opening/open; body contains updated `RoofStatusResponse` |
+| 500 | Service error (ProblemDetails) |
+
+---
+### 3.3 GET `/Close`
+Mirrors `/Open` for the closing direction.
+
+| Code | Meaning |
+|------|---------|
+| 200 | Command accepted or already closing/closed |
+| 500 | Service error (ProblemDetails) |
+
+---
+### 3.4 GET `/Stop`
+Requests an immediate controlled stop (releases motion relays, maintains STOP inhibit).
+
+| Code | Meaning |
+|------|---------|
+| 200 | Stop processed (idempotent) |
+| 500 | Service error (ProblemDetails) |
+
+---
+### 3.5 POST `/ClearFault`
+Pulses the clear-fault relay (default 250 ms) after issuing an emergency stop.
+
+| Code | Meaning |
+|------|---------|
+| 200 | Pulse completed; body is `true`/`false` indicating whether the pulse executed |
+| 500 | Service error (ProblemDetails) |
+
+**Query Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `pulseMs` | int | 250 | Duration (milliseconds) to hold the Clear-Fault relay active |
+
+---
+### 3.6 GET `/health`
+Standard ASP.NET Core health endpoint. The RoofController registration is tagged with `"roof"` and `"hardware"`.
+
+Excerpt:
+```json
+{
+  "status": "Healthy",
+  "checks": [
+    {
+      "name": "roof_controller",
+      "status": "Healthy",
+      "data": {
+        "IsInitialized": true,
+        "IsServiceDisposed": false,
+        "Status": "Opening",
+        "LastStopReason": "NormalStop",
+        "IsMoving": true,
+        "IsWatchdogActive": true,
+        "WatchdogSecondsRemaining": 81.9,
+        "Ready": true,
+        "IgnorePhysicalLimitSwitches": true,
+        "CheckTime": "2025-09-26T19:21:11.512Z"
+      }
+    }
+  ]
+}
+```
+
+Use `/health/ready` for readiness probes (filters `"hardware"` tagged checks) and `/health/live` for basic liveness.
+
+---
+## 4. Error Representation
+The API uses RFC 7807 ProblemDetails objects for failures.
+```json
+{
+  "type": "https://example.com/errors/roof/internal",
+  "title": "Service Error",
+  "status": 500,
+  "detail": "Device not initialized",
+  "traceId": "00-a1c7f9c2c2c5413e8d0f7b2a1efc3948-91f0c2d4b6d6f44d-01"
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| type | Stable URI/identifier for the error class |
+| title | Human readable summary |
+| status | HTTP status code |
+| detail | Contextual description |
+| traceId | Correlates with server logs / distributed tracing |
+
+---
+## 5. Versioning Strategy
+- URL segment versioning (currently `v4.0`).
+- Additive response fields are considered non-breaking.
+- Breaking changes will increment the major version (e.g., `/api/v5.0/...`).
+
+---
+## 6. Polling Guidance
+| Use Case | Recommended Interval |
+|----------|---------------------|
+| UI status updates during motion | 500–1000 ms |
+| Idle dashboard refresh | 2–5 s |
+| Health monitoring / readiness | 10–30 s |
+
+---
+## 7. Security & Hardening (Roadmap)
+| Concern | Planned Mitigation |
+|---------|-------------------|
+| Unauthorized motion | Authentication/Authorization (JWT or API key) |
+| Replay of motion command | Nonce or short-lived signed tokens |
+| Tampering | HTTPS + HSTS |
+| Flood / abuse | Rate limiting (429) |
+
+---
+## 8. Change Log
+| Version | Notes |
+|---------|-------|
+| 1.1 | Updated for v4 endpoints, payload shape, and health data |
+| 1.0 | Initial extraction from `HARDWARE_OVERVIEW.md` |
+
+---
+## 9. References
+- `HARDWARE_OVERVIEW.md`
+- `LOGGING_REFERENCE.md`
+- `TROUBLESHOOTING_GUIDE.md`
+- `OPERATOR_CHEAT_SHEET.md`
+
 # RoofController REST API Reference (v1.0)
 
 Date: September 26, 2025  

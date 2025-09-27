@@ -128,9 +128,12 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 ```
 "RoofControllerOptionsV4": {
   "SafetyWatchdogTimeout": "00:02:00",
-  "UseNormallyClosedLimitSwitches": true
+  "UseNormallyClosedLimitSwitches": true,
+  "IgnorePhysicalLimitSwitches": true // DEVELOPMENT ONLY – bypasses hard limit wiring checks
 }
 ```
+
+> **Fail-safe note:** Even when `IgnorePhysicalLimitSwitches` is enabled for development, the Lenze SMVector still honors the physical NC limit wiring in the drive’s safety loop. Properly wired limits will continue to open the stop/run circuit directly at the VFD, so fail-safe interlocks remain active even if the HAT inputs are floating.
 
 **TB‑14 note:** The SMVector **TB‑14** output is an **NPN/open‑collector sink** for “At Speed” (set by **P142=6**). With **HV‑IN4** tied to **DB‑01 (+12 V)** and **IN4‑COM** to **TB‑14**, **IN4 = TRUE** when the drive reaches speed and TB‑14 pulls low. If your unit is PNP/sourcing, swap the IN4 wiring as noted in the diagrams.
 

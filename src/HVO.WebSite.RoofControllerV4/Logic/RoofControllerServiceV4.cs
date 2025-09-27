@@ -57,6 +57,14 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         // Interpret raw state based on configured polarity. For NC: HIGH = normal (not at limit), LOW = limit reached.
         lock (_syncLock)
         {
+            if (_roofControllerOptions.IgnorePhysicalLimitSwitches)
+            {
+                _logger.LogTrace("Ignoring forward limit switch change due to configuration. RawHigh={State}", isHigh);
+                _lastIn1 = isHigh;
+                UpdateRoofStatus();
+                return;
+            }
+
             _logger.LogDebug("ForwardLimitSwitchChanged RawHigh={State}", isHigh);
 
             if (!ShouldProcessLimitEvent(RoofControllerCommandIntent.Open))
@@ -85,6 +93,14 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         // Interpret raw state based on configured polarity (see forward handler).
         lock (_syncLock)
         {
+            if (_roofControllerOptions.IgnorePhysicalLimitSwitches)
+            {
+                _logger.LogTrace("Ignoring reverse limit switch change due to configuration. RawHigh={State}", isHigh);
+                _lastIn2 = isHigh;
+                UpdateRoofStatus();
+                return;
+            }
+
             _logger.LogDebug("ReverseLimitSwitchChanged RawHigh={State}", isHigh);
 
             if (!ShouldProcessLimitEvent(RoofControllerCommandIntent.Close))
@@ -308,13 +324,17 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             // Subscribe to HAT input events and forward them if enabled
             if (_roofControllerOptions.EnableDigitalInputPolling)
             {
-                _hatIn1Handler = (_, s) => OnForwardLimitSwitchChanged(s);
-                _hatIn2Handler = (_, s) => OnReverseLimitSwitchChanged(s);
+                if (!_roofControllerOptions.IgnorePhysicalLimitSwitches)
+                {
+                    _hatIn1Handler = (_, s) => OnForwardLimitSwitchChanged(s);
+                    _hatIn2Handler = (_, s) => OnReverseLimitSwitchChanged(s);
+                    _fourRelayFourInputHat.DigitalInput1Changed += _hatIn1Handler;
+                    _fourRelayFourInputHat.DigitalInput2Changed += _hatIn2Handler;
+                }
+
                 _hatIn3Handler = (_, s) => OnFaultNotificationChanged(s);
                 _hatIn4Handler = (_, s) => OnAtSpeedChanged(s);
 
-                _fourRelayFourInputHat.DigitalInput1Changed += _hatIn1Handler;
-                _fourRelayFourInputHat.DigitalInput2Changed += _hatIn2Handler;
                 _fourRelayFourInputHat.DigitalInput3Changed += _hatIn3Handler;
                 _fourRelayFourInputHat.DigitalInput4Changed += _hatIn4Handler;
             }
@@ -804,10 +824,22 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             // Translate raw electrical levels to logical limit states based on polarity configuration.
             // Logical value (openTriggered/closedTriggered) is TRUE when the corresponding limit is reached regardless of physical wiring.
-            bool rawForward = _lastIn1 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false); // assume normal state
-            bool rawReverse = _lastIn2 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
-            bool openTriggered = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawForward : rawForward;
-            bool closedTriggered = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawReverse : rawReverse;
+            bool assumedNormal = _roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false;
+            bool rawForward = _lastIn1 ?? assumedNormal; // assume normal state
+            bool rawReverse = _lastIn2 ?? assumedNormal;
+            bool openTriggered;
+            bool closedTriggered;
+
+            if (_roofControllerOptions.IgnorePhysicalLimitSwitches)
+            {
+                openTriggered = false;
+                closedTriggered = false;
+            }
+            else
+            {
+                openTriggered = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawForward : rawForward;
+                closedTriggered = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !rawReverse : rawReverse;
+            }
 
             if (openTriggered && !closedTriggered)
             {
@@ -901,6 +933,22 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         try
         {
+            if (_roofControllerOptions.IgnorePhysicalLimitSwitches)
+            {
+                if (_lastIndicatorLedMask.HasValue && _lastIndicatorLedMask.Value == 0)
+                {
+                    return;
+                }
+
+                var resetResult = _fourRelayFourInputHat.SetLedsMask(0);
+                if (!resetResult.IsSuccessful && resetResult.Error is not null)
+                {
+                    _logger.LogTrace(resetResult.Error, "UpdateIndicatorLeds: failed to reset LED mask while ignoring limit switches");
+                }
+                _lastIndicatorLedMask = 0;
+                return;
+            }
+
             // Display LEDs when logical limit ACTIVE (true = at limit) regardless of polarity selection
             bool rawForward = _lastIn1 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
             bool rawReverse = _lastIn2 ?? (_roofControllerOptions.UseNormallyClosedLimitSwitches ? true : false);
@@ -1348,6 +1396,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         lock (_syncLock)
         {
+            if (_roofControllerOptions.IgnorePhysicalLimitSwitches)
+            {
+                return (false, false);
+            }
+
             if (forceHardwareRead || !(InputsEventsActive && _lastIn1.HasValue && _lastIn2.HasValue))
             {
                 ForceReadInputs_NoLock();

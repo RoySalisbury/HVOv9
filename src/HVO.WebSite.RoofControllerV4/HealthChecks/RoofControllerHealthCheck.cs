@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using HVO.WebSite.RoofControllerV4.Logic;
 using HVO.WebSite.RoofControllerV4.Models;
 
@@ -11,11 +12,13 @@ namespace HVO.WebSite.RoofControllerV4.HealthChecks
     {
         private readonly IRoofControllerServiceV4 _roofController;
         private readonly ILogger<RoofControllerHealthCheck> _logger;
+        private readonly RoofControllerOptionsV4 _options;
 
-        public RoofControllerHealthCheck(IRoofControllerServiceV4 roofController, ILogger<RoofControllerHealthCheck> logger)
+        public RoofControllerHealthCheck(IRoofControllerServiceV4 roofController, ILogger<RoofControllerHealthCheck> logger, IOptions<RoofControllerOptionsV4> options)
         {
             _roofController = roofController;
             _logger = logger;
+            _options = options.Value;
         }
 
         public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -33,7 +36,8 @@ namespace HVO.WebSite.RoofControllerV4.HealthChecks
                     ["IsWatchdogActive"] = _roofController.IsWatchdogActive,
                     ["WatchdogSecondsRemaining"] = _roofController.WatchdogSecondsRemaining ?? 0d,
                     ["Ready"] = _roofController.IsInitialized && !_roofController.IsServiceDisposed,
-                    ["CheckTime"] = DateTime.UtcNow
+                    ["CheckTime"] = DateTime.UtcNow,
+                    ["IgnorePhysicalLimitSwitches"] = _options.IgnorePhysicalLimitSwitches
                 };
 
                 // Service disposed is a hard failure for readiness

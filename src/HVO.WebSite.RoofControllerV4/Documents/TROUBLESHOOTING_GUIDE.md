@@ -5,8 +5,8 @@ Scope: Rapid diagnostic mapping between observed symptoms, /health fields, and c
 
 ---
 ## 1. How to Use
-1. Query runtime status: `GET /api/v1.0/roof/status` (or legacy `/api/v4.0/RoofControl/Status` during transition).
-2. Query health snapshot: `GET /health` (look for the RoofController entry data block).
+1. Query runtime status: `GET /api/v4.0/RoofControl/Status`.
+2. Query health snapshot: `GET /health` (look for the `roof_controller` entry data block).
 3. Match fields & symptoms below; apply corrective action.
 
 ---
@@ -21,20 +21,21 @@ Scope: Rapid diagnostic mapping between observed symptoms, /health fields, and c
 | IsWatchdogActive | Watchdog timing motion | true only while moving |
 | WatchdogSecondsRemaining | Remaining motion allowance | >0 and decreasing while moving |
 | Ready | Aggregated readiness flag | true when safe for commands |
+| IgnorePhysicalLimitSwitches | Dev-mode bypass of HAT limit inputs | true only in lab scenarios |
 
 ---
 ## 3. Symptom → Diagnosis
 | Symptom | /health Clues | Root Cause Candidates | Corrective Action |
 |---------|---------------|-----------------------|------------------|
-| Cannot issue Open (ignored) | Status=Open OR limits.isOpen=true | Already open | None (idempotent) |
-| Cannot issue Close (ignored) | Status=Closed OR limits.isClosed=true | Already closed | None (idempotent) |
-| Immediate Error after command | Status=Error, LastStopReason=EmergencyStop, Fault line asserted | Drive fault, external interlock | Inspect drive panel; clear fault; POST /clear-fault |
-| Dual-limit anomaly | Status=Error, both limits true (if exposed) | Wiring short, mis-adjusted switches | Inspect limit wiring and mechanical cams |
+| Open command immediately returns without motion | Status=Open or Status=Opening | Already open or opening | None (idempotent) |
+| Close command immediately returns without motion | Status=Closed or Status=Closing | Already closed or closing | None (idempotent) |
+| Immediate Error after command | Status=Error, LastStopReason=EmergencyStop, Fault asserted | Drive fault, external interlock | Inspect drive panel; clear fault; `POST /api/v4.0/RoofControl/ClearFault` |
+| Dual-limit anomaly (sudden Error) | Status=Error, LastStopReason=LimitSwitchReached, Ready=false | Wiring short, mis-adjusted switches | Inspect limit wiring and mechanical cams |
 | Watchdog timeout | LastStopReason=SafetyWatchdogTimeout, IsWatchdogActive=false | Mechanical jam, mis-tuned timeout | Inspect mechanism; adjust `SafetyWatchdogTimeout` |
 | Stuck NotInitialized | IsInitialized=false | Hardware HAT not detected, init exception | Review logs; verify I2C / power; restart service |
 | Frequent partial stops | LastStopReason=NormalStop repeatedly mid-travel | Operator stops, marginal power, vibration hits limit | Confirm limits, reduce nuisance stops, inspect drive |
-| Fault persists after clear | Status=Error after /clear-fault | True drive fault (active) | Retrieve drive fault code; clear at drive then retry |
-| AtSpeed/Run never true | telemetry.atSpeedRun=false while moving | P142 mis-config, wiring TB-14, low speed below threshold | Verify VFD P142=6, wiring to IN4, speed setpoint |
+| Fault persists after clear | Status=Error after `ClearFault` | True drive fault (active) | Retrieve drive fault code; clear at drive then retry |
+| isAtSpeed never true | `isAtSpeed=false` while moving | P142 mis-config, wiring TB-14, low speed below threshold | Verify VFD P142=6, wiring to IN4, speed setpoint |
 | Status flickers Unknown | Transient initialization or race | Rare snapshot overlap | If persistent: enable Trace logs and capture sequence |
 | Both limits false but physically at limit | Limit wiring open / wrong polarity | Wrong polarity setting | Check `UseNormallyClosedLimitSwitches` vs hardware |
 | Ready=false while not Error | IsServiceDisposed=true OR IsInitialized=false | Shutdown or still starting | Wait or restart service |
@@ -50,7 +51,7 @@ Scope: Rapid diagnostic mapping between observed symptoms, /health fields, and c
 ### 4.2 Fault Recovery
 1. Identify underlying drive/interlock fault (panel indicators).
 2. Resolve cause (e.g., overload, overcurrent, undervoltage).
-3. POST `/api/v1.0/roof/clear-fault`.
+3. `POST /api/v4.0/RoofControl/ClearFault`.
 4. Confirm Status!=Error and proceed.
 
 ### 4.3 Watchdog Tuning Snapshot

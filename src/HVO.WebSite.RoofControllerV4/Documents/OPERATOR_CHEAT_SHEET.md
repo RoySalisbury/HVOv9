@@ -19,11 +19,11 @@ Intended Use: Printed quick reference for field operators
 ## 2. Buttons / API
 | Action | Local Button | API | Effect |
 |--------|--------------|-----|-------|
-| Open | Open | POST /open | Energize FWD relay until open limit |
-| Close | Close | POST /close | Energize REV relay until closed limit |
-| Stop | Stop | POST /stop | Drop motion relay, hold inhibited |
-| Clear Fault | Clear Fault | POST /clear-fault | Pulse fault clear relay |
-| Status | (N/A) | GET /status | JSON snapshot |
+| Open | Open | `GET /api/v4.0/RoofControl/Open` | Energize FWD relay until open limit |
+| Close | Close | `GET /api/v4.0/RoofControl/Close` | Energize REV relay until closed limit |
+| Stop | Stop | `GET /api/v4.0/RoofControl/Stop` | Drop motion relay, hold inhibited |
+| Clear Fault | Clear Fault | `POST /api/v4.0/RoofControl/ClearFault` | Pulse fault clear relay |
+| Status | (N/A) | `GET /api/v4.0/RoofControl/Status` | JSON snapshot |
 
 ---
 ## 3. Indicators (Logical)
@@ -32,7 +32,7 @@ Intended Use: Printed quick reference for field operators
 | OpenLimit | At open end limit | If stuck TRUE mid-travel → wiring fault |
 | ClosedLimit | At closed end limit | If stuck TRUE mid-travel → wiring fault |
 | Fault | Drive or interlock fault present | Inspect drive panel + logs |
-| AtSpeed/Run | Drive at commanded speed (VFD P142=6 output) | May be FALSE during accel/decel |
+| IsAtSpeed | Drive at commanded speed (VFD P142=6 output) | May be FALSE during accel/decel |
 
 ---
 ## 4. Normal Motion Cycle

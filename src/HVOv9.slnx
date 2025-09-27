@@ -1,8 +1,5 @@
 <Solution>
   <Folder Name="/RoofController/">
-    <Project Path="HVO.CLI.RoofController/HVO.CLI.RoofController.csproj" />
-    <Project Path="HVO.Infrastucture.RoofController/HVO.Infrastucture.RoofController.csproj" />
-    <Project Path="HVO.Services.RoofController/HVO.Services.RoofController.csproj" />
     <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />
     <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
   </Folder>

@@ -69,4 +69,10 @@ public record class RoofControllerOptionsV4
     /// so this window suppresses rapid consecutive transitions. Set to <see cref="TimeSpan.Zero"/> to disable.
     /// </summary>
     public TimeSpan LimitSwitchDebounce { get; set; } = TimeSpan.FromMilliseconds(25);
+
+    /// <summary>
+    /// When true, limit switch inputs are ignored and treated as inactive. This is useful for development environments
+    /// where the physical limit circuits are not present or are intentionally disconnected. Never enable in production.
+    /// </summary>
+    public bool IgnorePhysicalLimitSwitches { get; set; }
 }

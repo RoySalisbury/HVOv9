@@ -8,12 +8,12 @@ This test project validates safety, motion control, and API-facing status semant
   - IN1: Forward/Open limit
   - IN2: Reverse/Closed limit
   - IN3: Fault notification (active HIGH)
-  - IN4: AtSpeedRun (roof movement velocity threshold reached)
+  - IN4: IsAtSpeed (roof movement velocity threshold reached)
 - Relays:
-  - RLY1: STOP (fail‑safe). De‑energized asserts STOP; energized permits motion.
-  - RLY2: OPEN direction
-  - RLY3: CLOSE direction
-  - RLY4: CLEAR FAULT pulse output
+  - RLY1: OPEN direction
+  - RLY2: CLOSE direction
+  - RLY3: CLEAR FAULT pulse output
+  - RLY4: STOP / fail-safe enable (de-energized asserts STOP)
 
 ## Status Model
 | Status | Meaning |
@@ -40,7 +40,7 @@ Ensures timers start/stop correctly and emergency stop transitions to `Error`.
 - Open / Close sequencing (STOP + direction energized, then drop) 
 - Manual Stop mid‑travel transitions to partial states
 - Fault trip behavior and refusal of new commands until cleared
-- AtSpeedRun propagation during motion
+- IsAtSpeed propagation during motion
 
 ### 5. Negative / Defensive Scenarios
 `RoofControllerNegativeTests` adds:
@@ -81,7 +81,7 @@ dotnet test --filter FullyQualifiedName~RoofControllerV4
 ## Future Enhancements
 - Add explicit watchdog timeout negative test in negative suite with shortened timeout for determinism.
 - Introduce fuzz tests for random input sequences ensuring no invalid relay combinations.
-- Add API contract tests asserting JSON field names (e.g., `atSpeedRun`).
+- Add API contract tests asserting JSON field names (e.g., `isAtSpeed`).
 
 ---
 Maintained as part of safety‑critical validation for Roof Controller V4.
