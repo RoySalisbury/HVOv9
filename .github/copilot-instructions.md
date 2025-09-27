@@ -82,11 +82,11 @@ namespace HVO.ProjectName
 
 ### 7. Blazor Component Development (Following Microsoft Best Practices)
 - Use Blazor Server for interactive components with `@rendermode InteractiveServer`
-- **Always create code-behind files (.razor.cs) for all Razor components and pages** - Separate markup from logic for better maintainability and testability
+- **Create code-behind files (.razor.cs) for any component that contains logic, parameters, or lifecycle code** to keep markup clean and testable. Purely static pages (for example simple landing pages) may remain markup-only.
 - **Use Blazor Scoped CSS (.razor.css) for component-specific styling** - Automatically scoped to prevent style conflicts
 - **Use Blazor Scoped JavaScript (.razor.js) for component-specific client-side behavior** - Isolated JavaScript modules
-- **NO inline CSS in Razor markup** - All styling must be in scoped CSS files
-- **NO inline JavaScript in Razor markup** - All client-side code must be in scoped JS files or code-behind
+- **Prefer scoped CSS over inline styling.** Reserve inline `style` attributes for cases where values are dynamically generated at runtime.
+- **Avoid inline JavaScript in Razor markup.** Place client-side code in scoped JS files or the component code-behind; tiny `onclick` or `data-*` attributes are acceptable only when no alternative exists.
 - **Component File Structure Pattern**:
   ```
   ComponentName.razor      # Markup only - no <style> or <script> blocks
@@ -309,7 +309,10 @@ namespace HVO.ProjectName
 
 ## GitHub & CI/CD
 - Use GitHub for repo hosting and pull requests
-- For CI/CD, use GitHub Actions (not configured here). If needed later, add workflows under `.github/workflows/`
+- GitHub Actions workflows are already configured under `.github/workflows/`:
+  - `dotnet.yml` runs build and test across the solution
+  Update or extend these instead of creating duplicate pipelines.
+- Use `.github/scripts/cleanup-workflow-runs.sh` with the GitHub CLI when you need an on-demand cleanup of older workflow runs beyond the scheduled job.
 
 ## Deployment
 - Support containerization with Docker when appropriate
