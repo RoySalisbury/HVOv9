@@ -178,7 +178,7 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
                 this._roofController.LastTransitionUtc,
                 this._roofController.IsWatchdogActive,
                 this._roofController.WatchdogSecondsRemaining,
-                this._roofController.AtSpeedRun);
+                this._roofController.IsAtSpeed);
         }
     }
 }

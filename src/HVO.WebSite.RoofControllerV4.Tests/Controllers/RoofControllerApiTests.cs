@@ -30,7 +30,7 @@ public class RoofControllerApiTests
         _roofServiceMock.SetupGet(s => s.LastStopReason).Returns(RoofControllerStopReason.NormalStop);
         _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(false);
         _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns((double?)null);
-    _roofServiceMock.SetupGet(s => s.AtSpeedRun).Returns(false);
+    _roofServiceMock.SetupGet(s => s.IsAtSpeed).Returns(false);
     _roofServiceMock.SetupGet(s => s.LastTransitionUtc).Returns(DateTimeOffset.UtcNow);
     _roofServiceMock.SetupGet(s => s.LastTransitionUtc).Returns(DateTimeOffset.UtcNow);
         _roofServiceMock.Setup(s => s.RefreshStatus(It.IsAny<bool>()));
@@ -104,7 +104,7 @@ public class RoofControllerApiTests
         _roofServiceMock.SetupGet(s => s.Status).Returns(RoofControllerStatus.Open);
         _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(true);
         _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns(42.5);
-    _roofServiceMock.SetupGet(s => s.AtSpeedRun).Returns(true);
+    _roofServiceMock.SetupGet(s => s.IsAtSpeed).Returns(true);
         _roofServiceMock.SetupGet(s => s.LastTransitionUtc).Returns(DateTimeOffset.UtcNow.AddMinutes(-1));
 
         // Act

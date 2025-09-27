@@ -292,10 +292,10 @@ public class RoofControllerRelayBehaviorTests
         var openSequence = openWrites.Skip(Math.Max(0, openWrites.Count - 3)).ToArray();
         openSequence.Should().Equal(new[]
         {
+            ((byte)0x01, (byte)StopRelayIndex),
             ((byte)0x02, (byte)CloseRelayIndex),
-            ((byte)0x01, (byte)OpenRelayIndex),
-            ((byte)0x01, (byte)StopRelayIndex)
-        }, "Open command should establish direction before energizing STOP");
+            ((byte)0x01, (byte)OpenRelayIndex)
+        }, "Open command should enable STOP before establishing direction");
 
         // Simulate limit reached: raw LOW on IN1 for NC
 	    hat.ClearRelayWriteLog();
@@ -319,6 +319,28 @@ public class RoofControllerRelayBehaviorTests
     }
 
     [TestMethod]
+    public async Task OpenCommand_WhenAlreadyOpening_ShouldAvoidRedundantWrites()
+    {
+        var hat = new FakeHat();
+        hat.SetInputs(true, true, false, false);
+        var svc = Create(hat);
+        (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
+
+        hat.ClearRelayWriteLog();
+        svc.Open().IsSuccessful.Should().BeTrue();
+        var writesAfterFirst = hat.RelayWriteLog.Count;
+        writesAfterFirst.Should().BeGreaterThan(0, "First open should issue relay commands");
+        var stopCountAfterFirst = svc.InternalStopCallCount;
+        svc.IsWatchdogActive.Should().BeTrue();
+
+        svc.Open().IsSuccessful.Should().BeTrue("Second open while opening should succeed");
+
+        hat.RelayWriteLog.Count.Should().Be(writesAfterFirst, "Second open should not issue additional relay writes");
+        svc.InternalStopCallCount.Should().Be(stopCountAfterFirst, "Second open should not call Stop");
+        svc.IsWatchdogActive.Should().BeTrue();
+    }
+
+    [TestMethod]
     public async Task CloseSequence_ShouldEnergizeStopAndCloseRelays_ThenDropAtLimit()
     {
         var hat = new FakeHat();
@@ -338,10 +360,10 @@ public class RoofControllerRelayBehaviorTests
         var closeSequence = closeWrites.Skip(Math.Max(0, closeWrites.Count - 3)).ToArray();
         closeSequence.Should().Equal(new[]
         {
+            ((byte)0x01, (byte)StopRelayIndex),
             ((byte)0x02, (byte)OpenRelayIndex),
-            ((byte)0x01, (byte)CloseRelayIndex),
-            ((byte)0x01, (byte)StopRelayIndex)
-        }, "Close command should align direction before energizing STOP");
+            ((byte)0x01, (byte)CloseRelayIndex)
+        }, "Close command should enable STOP before aligning direction");
 
         // Simulate reverse/closed limit reached: raw LOW on IN2
 	    hat.ClearRelayWriteLog();
@@ -361,6 +383,28 @@ public class RoofControllerRelayBehaviorTests
             ((byte)0x02, (byte)CloseRelayIndex),
             ((byte)0x02, (byte)StopRelayIndex)
         }, "Close limit stop should drop direction before disabling STOP");
+    }
+
+    [TestMethod]
+    public async Task CloseCommand_WhenAlreadyClosing_ShouldAvoidRedundantWrites()
+    {
+        var hat = new FakeHat();
+        hat.SetInputs(true, true, false, false);
+        var svc = Create(hat);
+        (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
+
+        hat.ClearRelayWriteLog();
+        svc.Close().IsSuccessful.Should().BeTrue();
+        var writesAfterFirst = hat.RelayWriteLog.Count;
+        writesAfterFirst.Should().BeGreaterThan(0, "First close should issue relay commands");
+        var stopCountAfterFirst = svc.InternalStopCallCount;
+        svc.IsWatchdogActive.Should().BeTrue();
+
+        svc.Close().IsSuccessful.Should().BeTrue("Second close while closing should succeed");
+
+        hat.RelayWriteLog.Count.Should().Be(writesAfterFirst, "Second close should not issue additional relay writes");
+        svc.InternalStopCallCount.Should().Be(stopCountAfterFirst, "Second close should not call Stop");
+        svc.IsWatchdogActive.Should().BeTrue();
     }
 
     [TestMethod]
@@ -416,7 +460,7 @@ public class RoofControllerRelayBehaviorTests
     }
 
     [TestMethod]
-    public async Task AtSpeedTransition_ShouldUpdateAtSpeedRunDuringMotion()
+    public async Task AtSpeedTransition_ShouldUpdateIsAtSpeedDuringMotion()
     {
         var hat = new FakeHat();
         hat.SetInputs(true,true,false,false); // mid-travel
@@ -424,14 +468,14 @@ public class RoofControllerRelayBehaviorTests
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
     svc.Open().IsSuccessful.Should().BeTrue();
-    svc.AtSpeedRun.Should().BeFalse();
+    svc.IsAtSpeed.Should().BeFalse();
 
     // Simulate at-speed raw HIGH transition (set hardware input and invoke handler)
     hat.SetInputs(true,true,false,true); // set IN4 HIGH in hardware
     svc.SimAtSpeedRaw(true);
     // Force refresh to read hardware if needed
     svc.ForceStatusRefresh(true);
-    svc.AtSpeedRun.Should().BeTrue();
+    svc.IsAtSpeed.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Opening, "status remains Opening while watchdog active");
 
     // Simulate reaching open limit

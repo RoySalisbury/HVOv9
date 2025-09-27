@@ -19,7 +19,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     protected System.Timers.Timer? _safetyWatchdogTimer;
     private CancellationTokenSource? _periodicVerificationCts;
     private Task? _periodicVerificationTask;
-    protected DateTime _operationStartTime;
+    protected DateTimeOffset _operationStartTime;
     private bool _watchdogActive;
 
     protected RoofControllerCommandIntent _lastCommandIntent = RoofControllerCommandIntent.None;
@@ -203,7 +203,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             lock (_syncLock)
             {
                 if (!_watchdogActive) return null;
-                var elapsed = (DateTime.UtcNow - _operationStartTime).TotalSeconds;
+                var elapsed = (DateTimeOffset.UtcNow - _operationStartTime).TotalSeconds;
                 var remain = _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds - elapsed;
                 return remain > 0 ? remain : 0;
             }
@@ -216,7 +216,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     public virtual DateTimeOffset? LastTransitionUtc { get; protected set; }
     public bool IsServiceDisposed => _disposed;
 
-    public bool AtSpeedRun
+    public bool IsAtSpeed
     {
         get
         {
@@ -409,7 +409,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // Recreate timer instance for reliable restart
                 RecreateSafetyWatchdog_NoLock();
 
-                _operationStartTime = DateTime.UtcNow;
+                _operationStartTime = DateTimeOffset.UtcNow;
                 _safetyWatchdogTimer.Start();
                 _watchdogActive = true;
                 _logger.LogInformation("Safety watchdog started for {timeout} seconds", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
@@ -435,7 +435,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         if (_safetyWatchdogTimer != null && _watchdogActive)
         {
             _safetyWatchdogTimer.Stop();
-            var elapsed = DateTime.UtcNow - _operationStartTime;
+            var elapsed = DateTimeOffset.UtcNow - _operationStartTime;
             if (elapsed.TotalSeconds >= 0 && elapsed.TotalSeconds < (_roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds * 10))
             {
                 // Only log if the elapsed time is sane (prevents huge numbers when never started)
@@ -960,7 +960,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        this._logger.LogInformation("Stop Executed TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+                        var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                        this._logger.LogInformation("Stop Executed TimeUtc={TimeUtc} Reason={Reason} Status={Status}", timestamp, reason, this.Status);
                     }
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
@@ -983,7 +984,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             // DON'T set status to Stopped here - let UpdateRoofStatus determine the correct status
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                this._logger.LogInformation("InternalStop Start TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+                var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                this._logger.LogInformation("InternalStop Start TimeUtc={TimeUtc} Reason={Reason} Status={Status}", timestamp, reason, this.Status);
             }
 
             // Set all relays to safe state for STOP operation atomically
@@ -999,7 +1001,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             this.UpdateRoofStatus();
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                this._logger.LogInformation("InternalStop Complete TimeUtc={TimeUtc} Reason={Reason} FinalStatus={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+                var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                this._logger.LogInformation("InternalStop Complete TimeUtc={TimeUtc} Reason={Reason} FinalStatus={Status}", timestamp, reason, this.Status);
             }
         }
     }
@@ -1022,6 +1025,15 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 {
                     _logger.LogWarning("Open command refused: fault is active");
                     return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Cannot open while a fault is active. Clear fault first."));
+                }
+
+                if (this.Status == RoofControllerStatus.Opening && _watchdogActive)
+                {
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug("Open command ignored: already opening");
+                    }
+                    return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
@@ -1063,7 +1075,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        this._logger.LogInformation("Open Command Ignored AlreadyOpen TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                        var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                        this._logger.LogInformation("Open Command Ignored AlreadyOpen TimeUtc={TimeUtc} Status={Status}", timestamp, this.Status);
                     }
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
@@ -1088,7 +1101,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
-                    this._logger.LogInformation("Open Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                    var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                    this._logger.LogInformation("Open Command Started TimeUtc={TimeUtc} Status={Status}", timestamp, this.Status);
                 }
 
                 return Result<RoofControllerStatus>.Success(this.Status);
@@ -1118,6 +1132,15 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 {
                     _logger.LogWarning("Close command refused: fault is active");
                     return Result<RoofControllerStatus>.Failure(new InvalidOperationException("Cannot close while a fault is active. Clear fault first."));
+                }
+
+                if (this.Status == RoofControllerStatus.Closing && _watchdogActive)
+                {
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug("Close command ignored: already closing");
+                    }
+                    return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
@@ -1159,7 +1182,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        this._logger.LogInformation("Close Command Ignored AlreadyClosed TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                        var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                        this._logger.LogInformation("Close Command Ignored AlreadyClosed TimeUtc={TimeUtc} Status={Status}", timestamp, this.Status);
                     }
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
@@ -1184,7 +1208,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
-                    this._logger.LogInformation("Close Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                    var timestamp = DateTimeOffset.UtcNow.ToString("O");
+                    this._logger.LogInformation("Close Command Started TimeUtc={TimeUtc} Status={Status}", timestamp, this.Status);
                 }
 
                 return Result<RoofControllerStatus>.Success(this.Status);
@@ -1251,7 +1276,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
         if (stopRelay)
         {
-            // Starting motion (or maintaining watchdog-enabled state): ensure direction is settled before enabling STOP
+            // Starting motion: allow the enable path first, then assert the selected direction
+            ApplyRelay(stopRelayId, true, "Stop");
+
             if (closeRelay)
             {
                 ApplyRelay(openRelayId, false, "Open");
@@ -1267,8 +1294,6 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 ApplyRelay(openRelayId, false, "Open");
                 ApplyRelay(closeRelayId, false, "Close");
             }
-
-            ApplyRelay(stopRelayId, true, "Stop");
         }
         else
         {

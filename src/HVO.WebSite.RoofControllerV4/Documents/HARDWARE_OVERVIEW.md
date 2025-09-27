@@ -342,7 +342,7 @@ The control strategy prioritizes a safe, electrically inhibited state whenever m
 
 Principles:
 - **Energize-to-run:** Motion relays (RLY1/RLY2) are only energized during commanded movement.
-- **Fail‑safe hold:** Stop relay (RLY4) remains energized in all non‑motion states to hold the drive’s enable path open (prevents unintended restart after power glitches).
+- **Fail‑safe hold:** Stop relay (RLY4) is de-energized whenever motion isn’t commanded; energize it to allow motion.
 - **Normally Closed limits:** Loss of a limit circuit wire (open) is interpreted as limit reached, preventing further travel in that direction.
 - **Single-path intent:** Only one direction relay can be energized; simultaneous Open+Close requests are auto‑sanitized to STOP.
 - **Immediate interlock response:** Limits, fault input, watchdog timeout each force an InternalStop (with RLY4 engaged) before status recomputation.

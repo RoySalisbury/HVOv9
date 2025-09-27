@@ -49,7 +49,7 @@ public interface IRoofControllerServiceV4
         /// <summary>
         /// True when the drive signals it is at commanded speed (AtSpeed/Run, IN4 logical state).
         /// </summary>
-        bool AtSpeedRun { get; }
+        bool IsAtSpeed { get; }
 
         /// <summary>
         /// Returns a current snapshot of status for UI/API consumption.
