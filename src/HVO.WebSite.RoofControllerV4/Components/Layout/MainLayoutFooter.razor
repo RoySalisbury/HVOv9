@@ -7,18 +7,10 @@
         <section class="global-footer__section global-footer__section--left">
             @if (_status.LeftNotifications.Count > 0)
             {
-                foreach (var notification in _status.LeftNotifications.Take(3))
-                {
-                    <div class="footer-note @GetNotificationCss(notification.Level)">
-                        <span class="footer-note__icon">
-                            <i class="@GetLevelIcon(notification.Level)"></i>
-                        </span>
-                        <div class="footer-note__content">
-                            <span class="footer-note__title">@notification.Title</span>
-                            <span class="footer-note__message">@notification.Message</span>
-                        </div>
-                    </div>
-                }
+                var notification = _status.LeftNotifications[0];
+                <span class="footer-chip @GetChipCss(notification.Level)">
+                    <i class="@GetLevelIcon(notification.Level) me-2"></i>@FormatNotification(notification)
+                </span>
             }
             else
             {
@@ -78,14 +70,6 @@
         FooterStatusService.Reset();
     }
 
-    private static string GetNotificationCss(FooterStatusLevel level) => level switch
-    {
-        FooterStatusLevel.Error => "footer-note footer-note--error",
-        FooterStatusLevel.Warning => "footer-note footer-note--warning",
-        FooterStatusLevel.Success => "footer-note footer-note--success",
-        _ => "footer-note footer-note--info"
-    };
-
     private static string GetChipCss(FooterStatusLevel level) => level switch
     {
         FooterStatusLevel.Error => "footer-chip footer-chip--error",
@@ -101,4 +85,16 @@
         FooterStatusLevel.Success => "bi bi-check-circle-fill",
         _ => "bi bi-info-circle-fill"
     };
+
+    private static string FormatNotification(FooterNotification notification)
+    {
+        if (string.IsNullOrWhiteSpace(notification.Title))
+        {
+            return notification.Message;
+        }
+
+        return string.IsNullOrWhiteSpace(notification.Message)
+            ? notification.Title
+            : $"{notification.Title}: {notification.Message}";
+    }
 }

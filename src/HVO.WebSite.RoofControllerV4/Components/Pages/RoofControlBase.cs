@@ -78,14 +78,20 @@ public class RoofControlBase : ComponentBase, IDisposable
     public DateTimeOffset? LastTransitionUtc => RoofController.LastTransitionUtc;
     public RoofControllerStopReason LastStopReason => RoofController.LastStopReason;
     public bool WasEmergencyStop => LastStopReason is RoofControllerStopReason.EmergencyStop or RoofControllerStopReason.SafetyWatchdogTimeout;
+    public bool IsInStopState => CurrentStatus is RoofControllerStatus.Stopped or RoofControllerStatus.PartiallyOpen or RoofControllerStatus.PartiallyClose;
 
     public string GetLastStopTypeLabel()
     {
+        if (!IsInStopState)
+        {
+            return string.Empty;
+        }
+
         return LastStopReason switch
         {
+            RoofControllerStopReason.None => "",
             RoofControllerStopReason.EmergencyStop => "Emergency",
             RoofControllerStopReason.SafetyWatchdogTimeout => "Emergency",
-            RoofControllerStopReason.None => "",
             _ => "Normal"
         };
     }

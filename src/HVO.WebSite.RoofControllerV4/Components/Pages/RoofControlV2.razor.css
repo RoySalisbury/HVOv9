@@ -27,15 +27,11 @@
 .rc2-camera-placeholder i { font-size: 2rem; opacity: .85; }
 
 .rc2-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; margin-top: 1rem; }
-.rc2-panel { grid-column: span 6; }
+.rc2-panel { grid-column: span 12; }
 .rc2-details { grid-column: span 12; }
 
-.rc2-action-grid { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: .75rem; }
+.rc2-action-grid { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: .75rem; }
 .rc2-action { width: 100%; min-height: 72px; }
-
-.rc2-progress-wrap { display: grid; gap: .35rem; }
-.rc2-progress { height: 10px; border-radius: 999px; }
-.rc2-progress-label { font-size: .9rem; font-weight: 500; color: rgba(255,255,255,.7); }
 
 .rc2-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
 .rc2-kpi { background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); padding: .85rem 1rem; border-radius: 12px; border: 1px solid rgba(255,255,255,.08); }
@@ -49,7 +45,6 @@
 }
 
 @media (max-width: 992px) {
-  .rc2-panel { grid-column: span 12; }
   .rc2-action-grid { grid-template-columns: 1fr; }
   .rc2-kpis { grid-template-columns: repeat(2, 1fr); }
 }
