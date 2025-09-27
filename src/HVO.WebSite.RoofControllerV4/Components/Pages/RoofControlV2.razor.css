@@ -1,44 +1,160 @@
 /* Dark, glassy layout for RoofControlV2 */
 
-.rc2-shell { max-width: 1280px; margin: 0 auto; padding: 1.25rem; color: #e8eaf0; }
+.rc2-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.25rem;
+  color: #e8eaf0;
+}
 
-.rc2-top { display: grid; grid-template-columns: 1.2fr .8fr; gap: 1rem; align-items: stretch; }
-.rc2-intro { background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.25)); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 1rem 1.25rem; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-.rc2-intro-title { margin: 0 0 .25rem 0; font-weight: 700; letter-spacing: .3px; }
-.rc2-intro-text { color: rgba(255,255,255,.85); }
+.rc2-top {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1rem;
+  align-items: stretch;
+}
 
-.rc2-status-pill { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
-.rc2-badge { border-radius: .6rem; padding: .35rem .6rem; font-size: .85rem; }
+.rc2-intro {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.25));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
 
-.rc2-banner-row { margin-top: .75rem; }
-.rc2-banner { display: flex; align-items: center; gap: .6rem; border-radius: 12px; padding: .7rem .9rem; border: 1px solid rgba(255,255,255,.12); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03)); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+.rc2-intro-title {
+  margin: 0 0 0.25rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.rc2-intro-text { color: rgba(255, 255, 255, 0.85); }
+
+.rc2-status-pill {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.rc2-badge {
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.rc2-banner-row { margin-top: 0.75rem; }
+
+.rc2-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 .rc2-banner-warn { border-left: 3px solid #ffc107; }
 .rc2-banner-danger { border-left: 3px solid #dc3545; }
 
-.rc2-card { background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.3)); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25); color: #e8eaf0; overflow: hidden; }
-.rc2-card--glass { background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.25)); }
-.rc2-card-head { padding: .9rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); }
+.rc2-card {
+  color: #e8eaf0;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.3));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.rc2-card--glass { background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.25)); }
+
+.rc2-card-head {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
 .rc2-card-body { padding: 1rem; }
 
 .rc2-camera .rc2-card-body { padding: 0; }
-.rc2-camera-body { position: relative; aspect-ratio: 16/9; background: rgba(0,0,0,.5); }
-.rc2-camera-video { width: 100%; height: 100%; object-fit: cover; display: block; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; }
-.rc2-camera-placeholder { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: rgba(255,255,255,.75); gap: .35rem; font-weight: 600; }
-.rc2-camera-placeholder i { font-size: 2rem; opacity: .85; }
 
-.rc2-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; margin-top: 1rem; }
+.rc2-camera-body {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.rc2-camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.rc2-camera-placeholder i {
+  font-size: 2rem;
+  opacity: 0.85;
+}
+
+.rc2-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
 .rc2-panel { grid-column: span 12; }
 .rc2-details { grid-column: span 12; }
 
-.rc2-action-grid { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: .75rem; }
-.rc2-action { width: 100%; min-height: 72px; }
+.rc2-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
 
-.rc2-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
-.rc2-kpi { background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); padding: .85rem 1rem; border-radius: 12px; border: 1px solid rgba(255,255,255,.08); }
-.rc2-kpi-label { font-size: .8rem; color: rgba(255,255,255,.7); }
-.rc2-kpi-value { font-weight: 600; font-size: 1.05rem; color: #fff; }
+.rc2-action {
+  width: 100%;
+  min-height: 72px;
+}
 
-.rc2-note { margin-top: 1rem; padding: .75rem 1rem; border-left: 3px solid #0d6efd; background: rgba(13,110,253,.12); border-radius: 8px; color: #e8eaf0; }
+.rc2-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.rc2-kpi {
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.rc2-kpi-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.rc2-kpi-value {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #fff;
+}
+
+.rc2-note {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  color: #e8eaf0;
+  border-left: 3px solid #0d6efd;
+  border-radius: 8px;
+  background: rgba(13, 110, 253, 0.12);
+}
 
 @media (max-width: 1100px) {
   .rc2-top { grid-template-columns: 1fr; }
