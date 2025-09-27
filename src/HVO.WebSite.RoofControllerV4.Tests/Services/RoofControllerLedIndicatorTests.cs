@@ -63,10 +63,12 @@ public class RoofControllerLedIndicatorTests
             EnableDigitalInputPolling = false,
             DigitalInputPollInterval = System.TimeSpan.FromMilliseconds(10),
             SafetyWatchdogTimeout = System.TimeSpan.FromSeconds(10),
-            StopRelayId = 1,
-            OpenRelayId = 2,
-            CloseRelayId = 3,
-            ClearFault = 4
+            UseNormallyClosedLimitSwitches = true,
+            // Standard mapping: 1=Open 2=Close 3=ClearFault 4=Stop
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4
         });
         return new RoofControllerServiceV4(new NullLogger<RoofControllerServiceV4>(), options, hat);
     }
@@ -78,38 +80,38 @@ public class RoofControllerLedIndicatorTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
-        // Initial: no limits, no fault -> all off
-        hat.SimulateInputs(false,false,false,false);
+    // Initial (NC): mid-travel (no limits) -> inputs HIGH/HIGH, no fault -> all off
+    hat.SimulateInputs(true,true,false,false);
         svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x00);
 
-        // Open limit only -> LED1
-        hat.SimulateInputs(true,false,false,false);
+    // Open limit only (NC: open limit actuated => IN1 LOW, IN2 HIGH) -> LED1
+    hat.SimulateInputs(false,true,false,false);
         svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x01);
 
-        // Closed limit only -> LED2
-        hat.SimulateInputs(false,true,false,false);
+    // Closed limit only (NC: closed limit actuated => IN2 LOW, IN1 HIGH) -> LED2
+    hat.SimulateInputs(true,false,false,false);
         svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x02);
 
-        // Fault only -> LED3
-        hat.SimulateInputs(false,false,true,false);
+    // Fault only (NC mid-travel = IN1 HIGH, IN2 HIGH, fault HIGH) -> LED3
+    hat.SimulateInputs(true,true,true,false);
         svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x04);
 
-        // Open + Fault -> LED1 + LED3
-        hat.SimulateInputs(true,false,true,false);
+    // Open + Fault (open limit LOW, closed HIGH, fault HIGH) -> LED1 + LED3
+    hat.SimulateInputs(false,true,true,false);
         svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x05);
 
-        // Closed + Fault -> LED2 + LED3
-        hat.SimulateInputs(false,true,true,false);
+    // Closed + Fault (closed limit LOW, open HIGH, fault HIGH) -> LED2 + LED3
+    hat.SimulateInputs(true,false,true,false);
         svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x06);
 
-        // All three (open, closed, fault) -> LED1+2+3 (error condition)
-    hat.SimulateInputs(true,true,true,false);
+    // All three (both limits LOW simultaneously + fault) -> LED1+2+3 (error condition)
+	hat.SimulateInputs(false,false,true,false);
     svc.ForceStatusRefresh();
         hat.LastLedsMask.Should().Be(0x07);
     }

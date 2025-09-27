@@ -48,7 +48,7 @@ public class RoofControllerLimitPolarityTests
             SafetyWatchdogTimeout = System.TimeSpan.FromSeconds(30),
             OpenRelayId = 1,
             CloseRelayId = 2,
-            ClearFault = 3,
+            ClearFaultRelayId = 3,
             StopRelayId = 4
         });
         return new RoofControllerServiceV4(new NullLogger<RoofControllerServiceV4>(), options, hat);

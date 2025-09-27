@@ -104,10 +104,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             }
         }
     }
-    protected virtual void OnRoofMovementNotificationChanged(bool isHigh)
+    protected virtual void OnAtSpeedChanged(bool isHigh)
     {
-        _logger.LogDebug("RoofMovementNotificationChanged: {State}", isHigh);
-        // Movement notification can help infer motion between limits
+        _logger.LogDebug("AtSpeedChanged: {State}", isHigh);
+        // AtSpeed notification can help infer motion between limits
         lock (_syncLock)
         {
             _lastIn4 = isHigh;
@@ -253,7 +253,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 _hatIn1Handler = (_, s) => OnForwardLimitSwitchChanged(s);
                 _hatIn2Handler = (_, s) => OnReverseLimitSwitchChanged(s);
                 _hatIn3Handler = (_, s) => OnFaultNotificationChanged(s);
-                _hatIn4Handler = (_, s) => OnRoofMovementNotificationChanged(s);
+                _hatIn4Handler = (_, s) => OnAtSpeedChanged(s);
 
                 _fourRelayFourInputHat.DigitalInput1Changed += _hatIn1Handler;
                 _fourRelayFourInputHat.DigitalInput2Changed += _hatIn2Handler;
@@ -780,12 +780,12 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             this._logger.LogInformation("InternalStop Start TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
 
             // Set all relays to safe state for STOP operation atomically
-            // stopRelay=true engages the stop; open/close relays are de-energized
-            SetRelayStatesAtomically(
-                stopRelay: true,
-                openRelay: false,
-                closeRelay: false
-            );
+                // stopRelay=false de-energizes STOP relay (fail-safe: STOP asserted)
+                SetRelayStatesAtomically(
+                    stopRelay: false,
+                    openRelay: false,
+                    closeRelay: false
+                );
 
 
             // Update status based on limit switch states and last command
@@ -857,12 +857,12 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
 
                 // Start the motors to open the roof atomically
-                // stopRelay=false releases stop; openRelay=true energizes open; closeRelay=false
-                SetRelayStatesAtomically(
-                    stopRelay: false,
-                    openRelay: true,
-                    closeRelay: false
-                );
+                    // stopRelay=true energizes STOP relay (motion allowed); openRelay=true energizes open; closeRelay=false
+                    SetRelayStatesAtomically(
+                        stopRelay: true,
+                        openRelay: true,
+                        closeRelay: false
+                    );
 
                 // Set the status to opening
                 if (this.Status != RoofControllerStatus.Opening)
@@ -946,12 +946,12 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 }
 
                 // Start the motors to close the roof atomically
-                // stopRelay=false releases stop; closeRelay=true energizes close; openRelay=false
-                SetRelayStatesAtomically(
-                    stopRelay: false,
-                    openRelay: false,
-                    closeRelay: true
-                );
+                    // stopRelay=true energizes STOP relay (motion allowed); closeRelay=true energizes close; openRelay=false
+                    SetRelayStatesAtomically(
+                        stopRelay: true,
+                        openRelay: false,
+                        closeRelay: true
+                    );
 
 
                 // Set the status to closing
@@ -997,7 +997,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
 
         // Collect all pin operations to perform atomically
-        var pinOperations = new List<(int realayId, bool relayValue, string relayName)>
+        // Collect relay operations (tuple element names spelled correctly for clarity)
+        var pinOperations = new List<(int relayId, bool relayValue, string relayName)>
             {
                 (_roofControllerOptions.StopRelayId, stopRelay, "Stop"),
                 (_roofControllerOptions.OpenRelayId, openRelay, "Open"),
@@ -1035,7 +1036,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         try
         {
             ThrowIfDisposed();
-            int clearFaultRelayId;
+                int clearFaultRelayId;
             lock (this._syncLock)
             {
                 if (this.IsInitialized == false)
@@ -1043,7 +1044,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     return Result<bool>.Failure(new InvalidOperationException("Device not initialized"));
                 }
                 InternalStop(RoofControllerStopReason.EmergencyStop);
-                clearFaultRelayId = this._roofControllerOptions.ClearFault;
+                clearFaultRelayId = this._roofControllerOptions.ClearFaultRelayId;
                 _fourRelayFourInputHat.TrySetRelayWithRetry(clearFaultRelayId, false);
                 _fourRelayFourInputHat.TrySetRelayWithRetry(clearFaultRelayId, true);
             }

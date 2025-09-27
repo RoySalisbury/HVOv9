@@ -49,10 +49,12 @@ public class RoofControllerWatchdogTests
             EnableDigitalInputPolling = false,
             DigitalInputPollInterval = TimeSpan.FromMilliseconds(5),
             SafetyWatchdogTimeout = watchdog,
-            StopRelayId = 1,
-            OpenRelayId = 2,
-            CloseRelayId = 3,
-            ClearFault = 4
+            UseNormallyClosedLimitSwitches = true,
+            // Standard mapping: 1=Open 2=Close 3=ClearFault 4=Stop
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4
         });
         return new RoofControllerServiceV4(new NullLogger<RoofControllerServiceV4>(), options, hat);
     }
@@ -61,8 +63,8 @@ public class RoofControllerWatchdogTests
     public async Task WatchdogTimeout_ShouldTransitionToErrorAndSetTimestamp()
     {
         var hat = new FakeHat();
-        // Mid-travel (no limits)
-        hat.SetInputs(false,false,false,false);
+    // Mid-travel (no limits) NC => HIGH/HIGH
+    hat.SetInputs(true,true,false,false);
         var svc = CreateService(hat, TimeSpan.FromMilliseconds(120));
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 

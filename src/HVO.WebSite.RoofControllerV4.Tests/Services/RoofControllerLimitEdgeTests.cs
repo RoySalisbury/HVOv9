@@ -54,10 +54,12 @@ public class RoofControllerLimitEdgeTests
             EnableDigitalInputPolling = false,
             DigitalInputPollInterval = System.TimeSpan.FromMilliseconds(10),
             SafetyWatchdogTimeout = System.TimeSpan.FromSeconds(30),
-            StopRelayId = 1,
-            OpenRelayId = 2,
-            CloseRelayId = 3,
-            ClearFault = 4
+            UseNormallyClosedLimitSwitches = true,
+            // Standard mapping: 1=Open 2=Close 3=ClearFault 4=Stop
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4
         });
         return new RoofControllerServiceV4(new NullLogger<RoofControllerServiceV4>(), options, hat);
     }
@@ -69,15 +71,15 @@ public class RoofControllerLimitEdgeTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
-        // Mid travel start
-        hat.SimulateInputs(false,false,false,false);
+    // Mid travel start (NC: both limits not actuated -> HIGH/HIGH)
+    hat.SimulateInputs(true,true,false,false);
         svc.ForceStatusRefresh();
 
         svc.Open().IsSuccessful.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
-        // Engage open limit
-        hat.SimulateInputs(true,false,false,false);
+    // Engage open limit (IN1 LOW, IN2 HIGH)
+    hat.SimulateInputs(false,true,false,false);
         svc.ForceStatusRefresh();
         svc.Status.Should().Be(RoofControllerStatus.Open);
 
@@ -93,14 +95,15 @@ public class RoofControllerLimitEdgeTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
-    hat.SimulateInputs(false,false,false,false);
+    // Mid travel start (NC)
+    hat.SimulateInputs(true,true,false,false);
     svc.ForceStatusRefresh();
 
         svc.Close().IsSuccessful.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Closing);
 
-        // Engage closed limit
-    hat.SimulateInputs(false,true,false,false);
+        // Engage closed limit (IN2 LOW, IN1 HIGH)
+    hat.SimulateInputs(true,false,false,false);
     svc.ForceStatusRefresh();
         svc.Status.Should().Be(RoofControllerStatus.Closed);
 
@@ -116,11 +119,15 @@ public class RoofControllerLimitEdgeTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
+        // Ensure starting from mid-travel (no limits active under NC => HIGH/HIGH)
+        hat.SimulateInputs(true,true,false,false);
+        svc.ForceStatusRefresh();
+
         svc.Open().IsSuccessful.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
-        // Engage both limits (invalid hardware state)
-    hat.SimulateInputs(true,true,false,false);
+    // Engage both limits (invalid hardware state) (both LOW)
+	hat.SimulateInputs(false,false,false,false);
     svc.ForceStatusRefresh();
         svc.Status.Should().Be(RoofControllerStatus.Error);
 

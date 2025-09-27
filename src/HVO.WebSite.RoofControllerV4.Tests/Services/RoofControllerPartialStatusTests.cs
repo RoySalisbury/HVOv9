@@ -55,10 +55,12 @@ public class RoofControllerPartialStatusTests
             EnableDigitalInputPolling = false,
             DigitalInputPollInterval = System.TimeSpan.FromMilliseconds(10),
             SafetyWatchdogTimeout = System.TimeSpan.FromSeconds(30), // ample time so watchdog considered active during motion
-            StopRelayId = 1,
-            OpenRelayId = 2,
-            CloseRelayId = 3,
-            ClearFault = 4
+            UseNormallyClosedLimitSwitches = true,
+            // Standard mapping: 1=Open 2=Close 3=ClearFault 4=Stop
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4
         });
         return new RoofControllerServiceV4(new NullLogger<RoofControllerServiceV4>(), options, hat);
     }
@@ -70,8 +72,8 @@ public class RoofControllerPartialStatusTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
-        // Ensure we start with no limits active (mid-travel scenario)
-        hat.SimulateInputs(false,false,false,false);
+    // Ensure we start with no limits active (mid-travel scenario, NC => HIGH/HIGH)
+    hat.SimulateInputs(true,true,false,false);
     svc.ForceStatusRefresh();
         svc.Status.Should().NotBe(RoofControllerStatus.Open); // not actually at open
 
@@ -94,8 +96,8 @@ public class RoofControllerPartialStatusTests
         var svc = CreateService(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
-        // Mid-travel scenario
-        hat.SimulateInputs(false,false,false,false);
+    // Mid-travel scenario (NC => HIGH/HIGH)
+    hat.SimulateInputs(true,true,false,false);
     svc.ForceStatusRefresh();
 
         var closeResult = svc.Close();

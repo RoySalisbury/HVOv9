@@ -149,7 +149,7 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<bool>> DoClearFault([FromQuery] int pulseMs = 250, CancellationToken cancellationToken = default)
         {
-            var result = await this._roofController.ClearFault(pulseMs, cancellationToken).ConfigureAwait(false);
+            var result = await this._roofController.ClearFault(pulseMs, cancellationToken).ConfigureAwait(false); // ClearFaultRelayId used internally
             return result.Match(
                 success: ok => Ok(ok),
                 failure: error => error switch

@@ -49,10 +49,12 @@ public class RoofControllerPeriodicVerificationTests
             EnableDigitalInputPolling = false, // Simulate missed event scenario; rely on periodic reads
             DigitalInputPollInterval = TimeSpan.FromMilliseconds(5),
             SafetyWatchdogTimeout = TimeSpan.FromSeconds(5),
-            StopRelayId = 1,
-            OpenRelayId = 2,
-            CloseRelayId = 3,
-            ClearFault = 4,
+            UseNormallyClosedLimitSwitches = true,
+            // Standard mapping: 1=Open(FWD) 2=Close(REV) 3=ClearFault 4=Stop
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4,
             EnablePeriodicVerificationWhileMoving = true,
             PeriodicVerificationInterval = verificationInterval
         });
@@ -63,7 +65,7 @@ public class RoofControllerPeriodicVerificationTests
     public async Task PeriodicVerification_ShouldDetectLimitWithoutEvent()
     {
         var hat = new FakeHat();
-        hat.SetInputs(false,false,false,false); // Mid travel
+    hat.SetInputs(true,true,false,false); // Mid travel (NC: both HIGH)
         var svc = CreateService(hat, TimeSpan.FromMilliseconds(120));
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
@@ -71,8 +73,8 @@ public class RoofControllerPeriodicVerificationTests
         openResult.IsSuccessful.Should().BeTrue();
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
-        // Now simulate we reached open limit but no event fired (because polling disabled)
-        hat.SetInputs(true,false,false,false);
+    // Now simulate we reached open limit (IN1 LOW) but no event fired (because polling disabled)
+    hat.SetInputs(false,true,false,false);
 
         // Wait a bit longer than the verification interval for tick to occur
         await Task.Delay(350);

@@ -2,6 +2,12 @@ namespace HVO.WebSite.RoofControllerV4.Models;
 
 public record class RoofControllerOptionsV4
 {
+    // DEFAULT RELAY MAPPING (aligned with HARDWARE_OVERVIEW.md section 6)
+    // 1 = Open (Forward)  RLY1 -> RunFwd (TB-13A)
+    // 2 = Close (Reverse) RLY2 -> RunRev (TB-13B)
+    // 3 = ClearFault pulse RLY3 -> ClearFault (TB-13C)
+    // 4 = Stop/Enable     RLY4 -> Fail-safe stop/enable path
+    // If boards are re-wired, override these in configuration.
     /// <summary>
     /// Maximum time the roof can run continuously in either direction before the safety watchdog stops it.
     /// This prevents runaway operations that could damage the roof or motors.
@@ -10,7 +16,21 @@ public record class RoofControllerOptionsV4
 
     public int OpenRelayId { get; set; } = 1; // FWD
     public int CloseRelayId { get; set; } = 2; // REV
-    public int ClearFault { get; set; } = 3;
+    /// <summary>
+    /// Relay index used to pulse the Clear-Fault function.
+    /// Prefer <see cref="ClearFaultRelayId"/>; <see cref="ClearFault"/> retained for backward compatibility.
+    /// </summary>
+    public int ClearFaultRelayId { get; set; } = 3;
+
+    /// <summary>
+    /// Backward compatible alias (deprecated). Use <see cref="ClearFaultRelayId"/> instead.
+    /// </summary>
+    [Obsolete("Use ClearFaultRelayId instead.")]
+    public int ClearFault
+    {
+        get => ClearFaultRelayId;
+        set => ClearFaultRelayId = value;
+    }
     public int StopRelayId { get; set; } = 4;
 
     /// <summary>
