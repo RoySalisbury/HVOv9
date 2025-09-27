@@ -21,37 +21,13 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        // AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-        // {
-        //     try { Console.WriteLine("AppDomain.CurrentDomain.UnhandledException"); }
-        //     catch { /* swallow */ }
-        // };
-
-        // AppDomain.CurrentDomain.ProcessExit += (s, e) =>
-        // {
-        //     try { Console.WriteLine("AppDomain.CurrentDomain.ProcessExit"); }
-        //     catch { /* swallow */ }
-        // };
-
-        // TaskScheduler.UnobservedTaskException += (s, e) =>
-        // {
-        //     try { Console.WriteLine("TaskScheduler.UnobservedTaskException"); }
-        //     catch { /* swallow */ }
-        // };
-
-        // AssemblyLoadContext.Default.Unloading += _ =>
-        // {
-        //     try { Console.WriteLine("AssemblyLoadContext.Default.Unloading"); }
-        //     catch { /* swallow */ }
-        // };
-
         var builder = WebApplication.CreateBuilder(args);
         ConfigureServices(builder.Services, builder.Configuration, builder.Environment);
 
         var app = builder.Build();
 
         var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-        lifetime.ApplicationStopping.Register(() => Console.WriteLine("IHostApplicationLifetime.Register"));        
+        lifetime.ApplicationStopping.Register(() => Console.WriteLine("IHostApplicationLifetime - ApplicationStopping"));
 
         Configure(app);
 
@@ -61,28 +37,9 @@ public class Program
 
     private static void ConfigureServices(IServiceCollection services, ConfigurationManager Configuration, IWebHostEnvironment Environment)
     {
-        // ============================================================================
-        // ASP.NET CORE BUILT-IN FUNCTIONALITY GUIDELINES
-        // ============================================================================
-        // Always use built-in ASP.NET Core endpoints and middleware instead of 
-        // creating custom controllers for standard functionality:
-        //
-        // ✅ Health Checks: Use MapHealthChecks() - NOT custom HealthController
-        // ✅ OpenAPI/Swagger: Use AddOpenApi() - NOT custom documentation endpoints  
-        // ✅ Exception Handling: Use AddExceptionHandler() - NOT custom error controllers
-        // ✅ Problem Details: Use AddProblemDetails() - NOT custom error responses
-        // ✅ Static Files: Use UseStaticFiles() - NOT custom file serving controllers
-        // ✅ CORS: Use AddCors() - NOT custom CORS controllers
-        // ✅ Authentication: Use AddAuthentication() - NOT custom auth controllers
-        // ✅ Authorization: Use AddAuthorization() - NOT custom authz controllers
-        // ✅ Rate Limiting: Use AddRateLimiter() - NOT custom rate limiting controllers
-        // ✅ Caching: Use AddResponseCaching() - NOT custom cache controllers
-        // ✅ API Versioning: Use AddApiVersioning() - NOT custom version controllers
-        // ============================================================================
-
-    services.AddOptions();
-    services.Configure<RoofControllerOptionsV4>(Configuration.GetSection(nameof(RoofControllerOptionsV4)));
-    services.AddSingleton<IValidateOptions<RoofControllerOptionsV4>, RoofControllerOptionsV4Validator>();
+        services.AddOptions();
+        services.Configure<RoofControllerOptionsV4>(Configuration.GetSection(nameof(RoofControllerOptionsV4)));
+        services.AddSingleton<IValidateOptions<RoofControllerOptionsV4>, RoofControllerOptionsV4Validator>();
         services.Configure<RoofControllerHostOptionsV4>(Configuration.GetSection(nameof(RoofControllerHostOptionsV4)));
 
         // Add Razor Components for Blazor Server
@@ -99,8 +56,8 @@ public class Program
         services.AddHostedService<RoofControllerServiceV4Host>();
 
         // Register RoofController based on configuration
-    services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
-    services.AddSingleton<FooterStatusService>();
+        services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
+        services.AddScoped<FooterStatusService>();
 
         // Add exception handling middleware
         // NOTE: Use built-in exception handling instead of custom error controllers
@@ -174,18 +131,6 @@ public class Program
 
     private static void Configure(WebApplication app)
     {
-        // ============================================================================
-        // MIDDLEWARE PIPELINE CONFIGURATION
-        // ============================================================================
-        // Use built-in ASP.NET Core middleware in the correct order:
-        // 1. Exception handling (UseExceptionHandler)
-        // 2. Status code pages (UseStatusCodePages) 
-        // 3. HTTPS redirection (UseHttpsRedirection)
-        // 4. Authentication (UseAuthentication)
-        // 5. Authorization (UseAuthorization)
-        // 6. Endpoint mapping (MapControllers, MapHealthChecks, etc.)
-        // ============================================================================
-
         // Add exception handling middleware
         app.UseExceptionHandler();
 
@@ -209,7 +154,7 @@ public class Program
         {
             app.UseHttpsRedirection();
         }
-        
+
         // Serve static web assets (including the generated .styles.css bundle)
         app.UseStaticFiles();
         app.UseRouting();
@@ -266,28 +211,6 @@ public class Program
         // Map Razor components for Blazor Server
         app.MapRazorComponents<Components.App>()
             .AddInteractiveServerRenderMode();
-
-        // ============================================================================
-        // COMMENTED OUT CODE - Examples of other built-in ASP.NET Core functionality
-        // ============================================================================
-        // Uncomment and configure as needed for your application:
-
-        // Built-in Swagger UI (alternative to Scalar):
-        // app.UseSwagger();
-        // app.UseSwaggerUI(options =>
-        // {
-        //     var descriptions = app.DescribeApiVersions();
-        //     foreach (var description in descriptions)
-        //     {
-        //         options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
-        //     }
-        // });
-
-        // Built-in static file serving (for wwwroot folder):
-        // app.UseStaticFiles();
-
-        // Built-in anti-forgery token support:
-        // app.UseAntiforgery();
 
         app.MapControllers();
     }
