@@ -1,5 +1,8 @@
 
 using System;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using HVO.WebSite.RoofControllerV4.Models;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
 using Microsoft.Extensions.Logging;
@@ -14,7 +17,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     // Safety watchdog fields - use single lock for atomicity
     protected System.Timers.Timer? _safetyWatchdogTimer;
-    protected System.Timers.Timer? _periodicVerificationTimer;
+    private CancellationTokenSource? _periodicVerificationCts;
+    private Task? _periodicVerificationTask;
     protected DateTime _operationStartTime;
     private bool _watchdogActive;
 
@@ -24,8 +28,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     private readonly ILogger<RoofControllerServiceV4> _logger;
     private readonly RoofControllerOptionsV4 _roofControllerOptions;
     private readonly FourRelayFourInputHat _fourRelayFourInputHat;
+    private readonly long _limitDebounceTicks;
     // Cached LED mask to avoid redundant I2C writes (bits 0..2 -> OpenLimit, ClosedLimit, Fault)
     private byte? _lastIndicatorLedMask;
+    private RoofStatusResponse? _lastPublishedStatus;
 
     // Forward digital input events from the HAT
     private EventHandler<bool>? _hatIn1Handler;
@@ -40,6 +46,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     private bool? _lastIn3;
     private bool? _lastIn4;
 
+    private long _lastLimitEventTicks;
+    private RoofControllerCommandIntent _lastLimitEventIntent = RoofControllerCommandIntent.None;
+
     // Legacy DigitalInput1..4 events removed; use named alias events below
 
     // Event hooks are handled internally and exposed via protected virtual methods instead of public events
@@ -49,6 +58,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         lock (_syncLock)
         {
             _logger.LogDebug("ForwardLimitSwitchChanged RawHigh={State}", isHigh);
+
+            if (!ShouldProcessLimitEvent(RoofControllerCommandIntent.Open))
+            {
+                _logger.LogTrace("ForwardLimitSwitchChanged debounced - ignoring transition");
+                return;
+            }
+
             _lastIn1 = isHigh; // store raw electrical level (HIGH = circuit closed / not at limit)
             bool limitReached = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !isHigh : isHigh;
             if (limitReached)
@@ -60,6 +76,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             {
                 UpdateRoofStatus();
             }
+
+            RecordLimitEvent(RoofControllerCommandIntent.Open);
         }
     }
     protected virtual void OnReverseLimitSwitchChanged(bool isHigh)
@@ -68,6 +86,13 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         lock (_syncLock)
         {
             _logger.LogDebug("ReverseLimitSwitchChanged RawHigh={State}", isHigh);
+
+            if (!ShouldProcessLimitEvent(RoofControllerCommandIntent.Close))
+            {
+                _logger.LogTrace("ReverseLimitSwitchChanged debounced - ignoring transition");
+                return;
+            }
+
             _lastIn2 = isHigh;
             bool limitReached = _roofControllerOptions.UseNormallyClosedLimitSwitches ? !isHigh : isHigh;
             if (limitReached)
@@ -79,6 +104,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             {
                 UpdateRoofStatus();
             }
+
+            RecordLimitEvent(RoofControllerCommandIntent.Close);
         }
     }
     protected virtual void OnFaultNotificationChanged(bool isHigh)
@@ -115,6 +142,35 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         }
     }
 
+    private bool ShouldProcessLimitEvent(RoofControllerCommandIntent intent)
+    {
+        if (_limitDebounceTicks <= 0)
+        {
+            return true;
+        }
+
+        var timestamp = Stopwatch.GetTimestamp();
+        var lastTicks = _lastLimitEventTicks;
+
+        if (lastTicks > 0 && (timestamp - lastTicks) < _limitDebounceTicks && _lastLimitEventIntent == intent)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void RecordLimitEvent(RoofControllerCommandIntent intent)
+    {
+        if (_limitDebounceTicks <= 0)
+        {
+            return;
+        }
+
+        _lastLimitEventTicks = Stopwatch.GetTimestamp();
+        _lastLimitEventIntent = intent;
+    }
+
 
     public event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
 
@@ -123,7 +179,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     {
         this._logger = logger;
         this._roofControllerOptions = roofControllerOptions.Value;
-        this._fourRelayFourInputHat = fourRelayFourInputHat;
+    this._fourRelayFourInputHat = fourRelayFourInputHat;
+    var debounce = _roofControllerOptions.LimitSwitchDebounce;
+    _limitDebounceTicks = debounce > TimeSpan.Zero ? (long)(debounce.TotalSeconds * Stopwatch.Frequency) : 0;
     }
 
 
@@ -298,20 +356,43 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     private void InitializeOrUpdatePeriodicVerificationTimer()
     {
+        CancellationTokenSource? ctsToCancel = null;
+        Task? taskToAwait = null;
+
         lock (_syncLock)
         {
-            if (_periodicVerificationTimer != null)
+            if (_periodicVerificationCts is not null)
             {
-                _periodicVerificationTimer.Stop();
-                _periodicVerificationTimer.Elapsed -= PeriodicVerification_Elapsed;
-                _periodicVerificationTimer.Dispose();
-                _periodicVerificationTimer = null;
+                ctsToCancel = _periodicVerificationCts;
+                _periodicVerificationCts = null;
             }
-            if (_roofControllerOptions.EnablePeriodicVerificationWhileMoving)
+
+            if (_periodicVerificationTask is not null)
             {
-                _periodicVerificationTimer = new System.Timers.Timer(_roofControllerOptions.PeriodicVerificationInterval.TotalMilliseconds);
-                _periodicVerificationTimer.AutoReset = true;
-                _periodicVerificationTimer.Elapsed += PeriodicVerification_Elapsed;
+                taskToAwait = _periodicVerificationTask;
+                _periodicVerificationTask = null;
+            }
+
+            if (!_roofControllerOptions.EnablePeriodicVerificationWhileMoving)
+            {
+                return;
+            }
+        }
+
+        if (ctsToCancel is not null && !ctsToCancel.IsCancellationRequested)
+        {
+            ctsToCancel.Cancel();
+        }
+
+        if (taskToAwait is not null)
+        {
+            try
+            {
+                taskToAwait.Wait();
+            }
+            catch (AggregateException ex)
+            {
+                ex.Handle(static inner => inner is OperationCanceledException);
             }
         }
     }
@@ -368,47 +449,141 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     private void TryStartPeriodicVerification_NoLock()
     {
-        if (_roofControllerOptions.EnablePeriodicVerificationWhileMoving && _periodicVerificationTimer != null)
+        if (!_roofControllerOptions.EnablePeriodicVerificationWhileMoving)
         {
-            if (!_periodicVerificationTimer.Enabled)
-            {
-                _periodicVerificationTimer.Start();
-                _logger.LogDebug("Periodic verification started IntervalSeconds={Interval}", _roofControllerOptions.PeriodicVerificationInterval.TotalSeconds);
-            }
+            return;
         }
+
+        if (_periodicVerificationCts is not null)
+        {
+            if (!_periodicVerificationCts.IsCancellationRequested)
+            {
+                return; // already running
+            }
+
+            _periodicVerificationCts = null;
+        }
+
+        var interval = _roofControllerOptions.PeriodicVerificationInterval;
+        var cts = new CancellationTokenSource();
+        var loopTask = RunPeriodicVerificationLoopAsync(cts, interval);
+
+        _periodicVerificationCts = cts;
+        _periodicVerificationTask = loopTask;
+
+        loopTask.ContinueWith(t =>
+        {
+            lock (_syncLock)
+            {
+                if (ReferenceEquals(_periodicVerificationTask, t))
+                {
+                    _periodicVerificationTask = null;
+                }
+                if (ReferenceEquals(_periodicVerificationCts, cts))
+                {
+                    _periodicVerificationCts = null;
+                }
+            }
+
+            if (t.IsFaulted && t.Exception is not null)
+            {
+                foreach (var ex in t.Exception.Flatten().InnerExceptions)
+                {
+                    _logger.LogWarning(ex, "Periodic verification loop faulted");
+                }
+            }
+            else if (t.IsCanceled)
+            {
+                _logger.LogDebug("Periodic verification loop canceled");
+            }
+            else
+            {
+                _logger.LogDebug("Periodic verification loop completed");
+            }
+        }, TaskScheduler.Default);
+
+        _logger.LogDebug("Periodic verification started IntervalSeconds={Interval}", interval.TotalSeconds);
     }
 
     private void StopPeriodicVerification_NoLock()
     {
-        if (_periodicVerificationTimer != null && _periodicVerificationTimer.Enabled)
+        if (_periodicVerificationCts is null)
         {
-            _periodicVerificationTimer.Stop();
-            _logger.LogDebug("Periodic verification stopped");
+            return;
         }
+
+        var cts = _periodicVerificationCts;
+        _periodicVerificationCts = null;
+
+        if (!cts.IsCancellationRequested)
+        {
+            cts.Cancel();
+        }
+
+        _logger.LogDebug("Periodic verification cancellation requested");
     }
 
-    private void PeriodicVerification_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    private async Task RunPeriodicVerificationLoopAsync(CancellationTokenSource cts, TimeSpan interval)
     {
+        using var timer = new PeriodicTimer(interval);
+
         try
         {
-            lock (_syncLock)
+            while (await timer.WaitForNextTickAsync(cts.Token).ConfigureAwait(false))
             {
-                if (_disposed) return;
-                if (Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing)
+                var shouldContinue = true;
+
+                try
                 {
-                    _logger.LogTrace("Periodic verification tick - forcing hardware status refresh");
-                    UpdateRoofStatus(forceRead: true);
+                    lock (_syncLock)
+                    {
+                        if (_disposed)
+                        {
+                            return;
+                        }
+
+                        if (Status == RoofControllerStatus.Opening || Status == RoofControllerStatus.Closing)
+                        {
+                            _logger.LogTrace("Periodic verification tick - forcing hardware status refresh");
+                            UpdateRoofStatus(forceRead: true);
+                        }
+                        else
+                        {
+                            _logger.LogTrace("Periodic verification loop pausing - roof not moving");
+                            StopPeriodicVerification_NoLock();
+                            shouldContinue = false;
+                        }
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    // Not moving; pause until next motion
-                    StopPeriodicVerification_NoLock();
+                    _logger.LogWarning(ex, "Periodic verification tick failed");
+                }
+
+                if (!shouldContinue)
+                {
+                    break;
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Expected when cancellation is requested
+        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Periodic verification tick failed");
+            _logger.LogWarning(ex, "Periodic verification loop terminated unexpectedly");
+        }
+        finally
+        {
+            try
+            {
+                cts.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // already disposed elsewhere; ignore
+            }
         }
     }
 
@@ -490,7 +665,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 _logger.LogError(ex, "Error unsubscribing from HAT input events");
             }
 
-            // 3. Stop and dispose the safety watchdog timer
+            // 3. Stop and dispose the safety watchdog timer and periodic verification loop
+            CancellationTokenSource? periodicCts = null;
+            Task? periodicTask = null;
+
             try
             {
                 lock (_syncLock)
@@ -502,14 +680,38 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         _safetyWatchdogTimer.Dispose();
                         _safetyWatchdogTimer = null;
                     }
-                    if (_periodicVerificationTimer != null)
+
+                    if (_periodicVerificationCts is not null)
                     {
-                        _periodicVerificationTimer.Stop();
-                        _periodicVerificationTimer.Elapsed -= PeriodicVerification_Elapsed;
-                        _periodicVerificationTimer.Dispose();
-                        _periodicVerificationTimer = null;
+                        periodicCts = _periodicVerificationCts;
+                        _periodicVerificationCts = null;
+                    }
+
+                    if (_periodicVerificationTask is not null)
+                    {
+                        periodicTask = _periodicVerificationTask;
+                        _periodicVerificationTask = null;
                     }
                 }
+
+                if (periodicCts is not null && !periodicCts.IsCancellationRequested)
+                {
+                    periodicCts.Cancel();
+                }
+
+                if (periodicTask is not null)
+                {
+                    try
+                    {
+                        periodicTask.Wait();
+                    }
+                    catch (AggregateException ex)
+                    {
+                        ex.Handle(static inner => inner is OperationCanceledException);
+                    }
+                }
+
+                periodicCts?.Dispose();
             }
             catch (Exception ex)
             {
@@ -756,7 +958,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                     // Preserve Open/Close command; InternalStop stops watchdog & updates status.
                     this.InternalStop(reason);
                     
-                    this._logger.LogInformation("Stop Executed TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        this._logger.LogInformation("Stop Executed TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+                    }
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
             }
@@ -776,7 +981,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             this.LastStopReason = reason;
 
             // DON'T set status to Stopped here - let UpdateRoofStatus determine the correct status
-            this._logger.LogInformation("InternalStop Start TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                this._logger.LogInformation("InternalStop Start TimeUtc={TimeUtc} Reason={Reason} Status={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+            }
 
             // Set all relays to safe state for STOP operation atomically
                 // stopRelay=false de-energizes STOP relay (fail-safe: STOP asserted)
@@ -789,7 +997,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
             // Update status based on limit switch states and last command
             this.UpdateRoofStatus();
-            this._logger.LogInformation("InternalStop Complete TimeUtc={TimeUtc} Reason={Reason} FinalStatus={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                this._logger.LogInformation("InternalStop Complete TimeUtc={TimeUtc} Reason={Reason} FinalStatus={Status}", DateTime.UtcNow.ToString("O"), reason, this.Status);
+            }
         }
     }
 
@@ -850,7 +1061,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         LastTransitionUtc = DateTimeOffset.UtcNow;
                     }
 
-                    this._logger.LogInformation("Open Command Ignored AlreadyOpen TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        this._logger.LogInformation("Open Command Ignored AlreadyOpen TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                    }
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
@@ -872,7 +1086,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // _lastCommand already set earlier before calling Stop()
                 this.StartSafetyWatchdog();
 
-                this._logger.LogInformation("Open Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    this._logger.LogInformation("Open Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                }
 
                 return Result<RoofControllerStatus>.Success(this.Status);
             }
@@ -940,7 +1157,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                         LastTransitionUtc = DateTimeOffset.UtcNow;
                     }
 
-                    this._logger.LogInformation("Close Command Ignored AlreadyClosed TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        this._logger.LogInformation("Close Command Ignored AlreadyClosed TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                    }
                     return Result<RoofControllerStatus>.Success(this.Status);
                 }
 
@@ -962,7 +1182,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 // _lastCommand already set earlier before calling Stop()
                 this.StartSafetyWatchdog();
 
-                this._logger.LogInformation("Close Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    this._logger.LogInformation("Close Command Started TimeUtc={TimeUtc} Status={Status}", DateTime.UtcNow.ToString("O"), this.Status);
+                }
 
                 return Result<RoofControllerStatus>.Success(this.Status);
             }
@@ -995,37 +1218,64 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             closeRelay = false;
         }
 
-        // Collect all pin operations to perform atomically
-        // Collect relay operations (tuple element names spelled correctly for clarity)
-        var pinOperations = new List<(int relayId, bool relayValue, string relayName)>
-            {
-                (_roofControllerOptions.StopRelayId, stopRelay, "Stop"),
-                (_roofControllerOptions.OpenRelayId, openRelay, "Open"),
-                (_roofControllerOptions.CloseRelayId, closeRelay, "Close")
-            };
+    // NOTE: FourRelayFourInputHat exposes SetRelaysMask for a single I2C transaction, but we intentionally
+    // drive each relay individually via TrySetRelayWithRetry. This keeps the built-in verification/retry
+    // semantics, preserves detailed logging per relay, and still guarantees a safe sequence even if one
+    // operation fails (mask writes would be all-or-nothing without granular feedback).
+        var stopRelayId = _roofControllerOptions.StopRelayId;
+        var openRelayId = _roofControllerOptions.OpenRelayId;
+        var closeRelayId = _roofControllerOptions.CloseRelayId;
 
-        // Apply all operations or log failures individually to prevent partial states
-        foreach (var (relayId, relayValue, relayName) in pinOperations)
+        void ApplyRelay(int relayId, bool desiredState, string relayName)
         {
             try
             {
-                var result = _fourRelayFourInputHat.TrySetRelayWithRetry(relayId, relayValue);
+                var result = _fourRelayFourInputHat.TrySetRelayWithRetry(relayId, desiredState);
                 if (result.IsFailure || result.Value == false)
                 {
                     if (result.IsFailure && result.Error is not null)
                     {
-                        _logger.LogError(result.Error, "Failed to set {RelayName} relay pin {Pin} to {Value} ", relayName, relayId, relayValue);
+                        _logger.LogError(result.Error, "Failed to set {RelayName} relay pin {Pin} to {Value} ", relayName, relayId, desiredState);
                     }
                     else
                     {
-                        _logger.LogError("Failed to verify {RelayName} relay pin {Pin} to {Value}", relayName, relayId, relayValue);
+                        _logger.LogError("Failed to verify {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to set {RelayName} relay pin {Pin} to {Value}", relayName, relayId, relayValue);
+                _logger.LogError(ex, "Failed to set {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
             }
+        }
+
+        if (stopRelay)
+        {
+            // Starting motion (or maintaining watchdog-enabled state): ensure direction is settled before enabling STOP
+            if (closeRelay)
+            {
+                ApplyRelay(openRelayId, false, "Open");
+                ApplyRelay(closeRelayId, true, "Close");
+            }
+            else if (openRelay)
+            {
+                ApplyRelay(closeRelayId, false, "Close");
+                ApplyRelay(openRelayId, true, "Open");
+            }
+            else
+            {
+                ApplyRelay(openRelayId, false, "Open");
+                ApplyRelay(closeRelayId, false, "Close");
+            }
+
+            ApplyRelay(stopRelayId, true, "Stop");
+        }
+        else
+        {
+            // Stopping motion: drop any direction first, then de-energize STOP for fail-safe state
+            ApplyRelay(openRelayId, false, "Open");
+            ApplyRelay(closeRelayId, false, "Close");
+            ApplyRelay(stopRelayId, false, "Stop");
         }
     }
 
@@ -1053,7 +1303,10 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 catch (TaskCanceledException) { }
             }
             _fourRelayFourInputHat.TrySetRelayWithRetry(clearFaultRelayId, false);
-            _logger.LogInformation("====ClearFault (async) - {Time}. PulseMs={PulseMs} Status={Status}", DateTime.Now.ToString("O"), pulseMs, Status);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("====ClearFault (async) - {Time}. PulseMs={PulseMs} Status={Status}", DateTimeOffset.UtcNow.ToString("O"), pulseMs, Status);
+            }
             return Result<bool>.Success(true);
         }
         catch (Exception ex)
@@ -1143,9 +1396,11 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
     private void RaiseStatusChanged_NoLock()
     {
-        // Build snapshot while holding lock, then release before invoking handlers
+        // Build snapshot and capture handlers while holding lock, then release before invoking
+        var handler = StatusChanged;
         RoofStatusChangedEventArgs? args = null;
-        if (StatusChanged != null)
+
+        if (handler is not null)
         {
             var snapshot = new RoofStatusResponse(
                 Status,
@@ -1156,16 +1411,25 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 WatchdogSecondsRemaining,
                 _lastIn4 ?? false
             );
-            args = new RoofStatusChangedEventArgs(snapshot);
+
+            if (_lastPublishedStatus is null || !_lastPublishedStatus.Equals(snapshot))
+            {
+                _lastPublishedStatus = snapshot;
+                args = new RoofStatusChangedEventArgs(snapshot);
+            }
         }
-        if (args != null)
+
+        if (handler is not null && args is not null)
         {
+            var capturedHandler = handler;
+            var capturedArgs = args;
+
             try
             {
                 // Invoke outside the lock to prevent deadlocks
                 Task.Run(() =>
                 {
-                    try { StatusChanged?.Invoke(this, args); } catch { }
+                    try { capturedHandler(this, capturedArgs); } catch { }
                 });
             }
             catch { }

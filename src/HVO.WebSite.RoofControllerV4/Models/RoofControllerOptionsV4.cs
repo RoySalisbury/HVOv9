@@ -63,4 +63,10 @@ public record class RoofControllerOptionsV4
     /// inputs are translated into that logical view.
     /// </summary>
     public bool UseNormallyClosedLimitSwitches { get; set; } = true;
+
+    /// <summary>
+    /// Optional debounce window applied to limit switch edge events. Mechanical switches tend to chatter when toggling,
+    /// so this window suppresses rapid consecutive transitions. Set to <see cref="TimeSpan.Zero"/> to disable.
+    /// </summary>
+    public TimeSpan LimitSwitchDebounce { get; set; } = TimeSpan.FromMilliseconds(25);
 }

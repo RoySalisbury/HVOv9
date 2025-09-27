@@ -81,8 +81,9 @@ public class Program
         // ✅ API Versioning: Use AddApiVersioning() - NOT custom version controllers
         // ============================================================================
 
-        services.AddOptions();
-        services.Configure<RoofControllerOptionsV4>(Configuration.GetSection(nameof(RoofControllerOptionsV4)));
+    services.AddOptions();
+    services.Configure<RoofControllerOptionsV4>(Configuration.GetSection(nameof(RoofControllerOptionsV4)));
+    services.AddSingleton<IValidateOptions<RoofControllerOptionsV4>, RoofControllerOptionsV4Validator>();
         services.Configure<RoofControllerHostOptionsV4>(Configuration.GetSection(nameof(RoofControllerHostOptionsV4)));
 
         // Add Razor Components for Blazor Server

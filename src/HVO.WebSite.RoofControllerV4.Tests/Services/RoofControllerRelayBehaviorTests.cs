@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 using FluentAssertions;
 using HVO.WebSite.RoofControllerV4.Logic;
 using HVO.WebSite.RoofControllerV4.Models;
@@ -23,27 +25,41 @@ public class RoofControllerRelayBehaviorTests
     private static readonly byte StopPlusCloseMask = (byte)((1 << (StopRelayIndex - 1)) | (1 << (CloseRelayIndex - 1)));
     private class FakeHat : FourRelayFourInputHat
     {
-        public FakeHat() : base(new FakeI2cDevice()) { }
+        private readonly FakeI2cDevice _device;
+
+        public FakeHat() : base(new FakeI2cDevice())
+        {
+            _device = (FakeI2cDevice)Device;
+        }
         public void SetInputs(bool in1, bool in2, bool in3, bool in4)
         {
-            ((FakeI2cDevice)Device).SetDigitalInputs(in1,in2,in3,in4);
+            _device.SetDigitalInputs(in1,in2,in3,in4);
         }
-        public byte RelayMask => ((FakeI2cDevice)Device).GetRelayMask();
+        public byte RelayMask => _device.GetRelayMask();
+        public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog => _device.RelayWriteLog;
+        public void ClearRelayWriteLog() => _device.ClearRelayWriteLog();
         private class FakeI2cDevice : System.Device.I2c.I2cDevice
         {
             private readonly byte[] _regs = new byte[256];
+            private readonly List<(byte Register, byte Value)> _relayWriteLog = new();
             public override System.Device.I2c.I2cConnectionSettings ConnectionSettings { get; } = new(1,0x0e);
             public void SetDigitalInputs(bool in1,bool in2,bool in3,bool in4)
             {
                 byte mask = 0; if (in1) mask|=0x01; if (in2) mask|=0x02; if (in3) mask|=0x04; if (in4) mask|=0x08; _regs[0x03]=mask; // digital inputs
             }
             public byte GetRelayMask() => _regs[0x00]; // relay register
+            public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog => _relayWriteLog;
+            public void ClearRelayWriteLog() => _relayWriteLog.Clear();
             public override void Read(Span<byte> buffer) => throw new NotSupportedException();
             public override void Write(ReadOnlySpan<byte> buffer)
             {
                 if (buffer.Length < 2) return; 
                 var reg = buffer[0];
                 byte val = buffer[1];
+                if (reg is 0x00 or 0x01 or 0x02)
+                {
+                    _relayWriteLog.Add((reg, val));
+                }
                 // Emulate relay command semantics of real HAT
                 switch (reg)
                 {
@@ -80,6 +96,8 @@ public class RoofControllerRelayBehaviorTests
 
     private class TestableRoofControllerService : RoofControllerServiceV4
     {
+        public int InternalStopCallCount { get; private set; }
+
         public TestableRoofControllerService(IOptions<RoofControllerOptionsV4> opts, FourRelayFourInputHat hat)
             : base(new NullLogger<RoofControllerServiceV4>(), opts, hat) { }
 
@@ -88,10 +106,17 @@ public class RoofControllerRelayBehaviorTests
         public void SimReverseLimitRaw(bool high) => OnReverseLimitSwitchChanged(high);
         public void SimFaultRaw(bool high) => OnFaultNotificationChanged(high);
         public void SimAtSpeedRaw(bool high) => OnAtSpeedChanged(high);
+
+        protected override void InternalStop(RoofControllerStopReason reason = RoofControllerStopReason.None)
+        {
+            InternalStopCallCount++;
+            base.InternalStop(reason);
+        }
     }
 
-    private static TestableRoofControllerService Create(FakeHat hat, TimeSpan? watchdog = null)
+    private static TestableRoofControllerService Create(FakeHat hat, TimeSpan? watchdog = null, TimeSpan? debounce = null)
     {
+        var defaultDebounce = TimeSpan.FromMilliseconds(25);
         var options = Options.Create(new RoofControllerOptionsV4
         {
             EnableDigitalInputPolling = false, // manual simulation via exposed handlers
@@ -102,7 +127,8 @@ public class RoofControllerRelayBehaviorTests
             OpenRelayId = OpenRelayIndex,
             CloseRelayId = CloseRelayIndex,
             ClearFaultRelayId = ClearFaultRelayIndex,
-            StopRelayId = StopRelayIndex
+            StopRelayId = StopRelayIndex,
+            LimitSwitchDebounce = debounce ?? defaultDebounce
         });
         return new TestableRoofControllerService(options, hat);
     }
@@ -136,6 +162,117 @@ public class RoofControllerRelayBehaviorTests
     }
 
     [TestMethod]
+    public async Task LimitSwitchDebounce_ShouldIgnoreRapidRepeatedLimitEvents()
+    {
+        var hat = new FakeHat();
+        hat.SetInputs(true,true,false,false); // mid-travel
+        var svc = Create(hat, debounce: TimeSpan.FromMilliseconds(30));
+        (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
+
+        svc.Open().IsSuccessful.Should().BeTrue();
+        var preStopCount = svc.InternalStopCallCount;
+
+        // First limit trip should count once
+        hat.SetInputs(false, true, false, false);
+        svc.SimForwardLimitRaw(false);
+        svc.InternalStopCallCount.Should().Be(preStopCount + 1);
+        svc.Status.Should().Be(RoofControllerStatus.Open);
+
+        // Simulate chatter: limit releases briefly within debounce window then asserts again
+        await Task.Delay(10);
+        svc.SimForwardLimitRaw(true);
+        svc.Status.Should().Be(RoofControllerStatus.Open, "debounce should ignore flip-flop within window");
+
+        svc.SimForwardLimitRaw(false);
+        svc.InternalStopCallCount.Should().Be(preStopCount + 1, "debounce should filter rapid duplicate limit events");
+    }
+
+    [TestMethod]
+    public async Task StopCommand_ShouldDropDirectionBeforeDisableStopRelay()
+    {
+        var hat = new FakeHat();
+        hat.SetInputs(true, true, false, false);
+        var svc = Create(hat);
+        (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
+
+        svc.Open().IsSuccessful.Should().BeTrue();
+        hat.RelayMask.Should().Be(StopPlusOpenMask);
+
+        hat.ClearRelayWriteLog();
+
+        svc.Stop(RoofControllerStopReason.NormalStop).IsSuccessful.Should().BeTrue();
+
+        var stopWrites = hat.RelayWriteLog;
+        stopWrites.Should().NotBeNull();
+        stopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        var stopSequence = stopWrites.Skip(Math.Max(0, stopWrites.Count - 3)).ToArray();
+        stopSequence.Should().Equal(new[]
+        {
+            ((byte)0x02, (byte)OpenRelayIndex),
+            ((byte)0x02, (byte)CloseRelayIndex),
+            ((byte)0x02, (byte)StopRelayIndex)
+        }, "Stop command should drop direction relays before disabling STOP");
+
+        hat.RelayMask.Should().Be(0x00);
+        svc.Status.Should().Be(RoofControllerStatus.PartiallyOpen);
+    }
+
+    [TestMethod]
+    public async Task BothLimitGlitch_ShouldTriggerErrorOnceAndDropAllRelays()
+    {
+        var hat = new FakeHat();
+        hat.SetInputs(true, true, false, false); // mid-travel baseline
+        var svc = Create(hat);
+        (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
+
+        var errorTransitions = 0;
+        using var errorSignal = new ManualResetEventSlim(false);
+        EventHandler<RoofStatusChangedEventArgs>? handler = null;
+        handler = (_, args) =>
+        {
+            if (args.Status.Status == RoofControllerStatus.Error)
+            {
+                Interlocked.Increment(ref errorTransitions);
+                errorSignal.Set();
+            }
+        };
+        svc.StatusChanged += handler;
+
+        svc.Close().IsSuccessful.Should().BeTrue();
+        hat.RelayMask.Should().Be(StopPlusCloseMask);
+
+        hat.ClearRelayWriteLog();
+
+        // Glitch: both limits report active momentarily (NC switches pull low)
+        hat.SetInputs(false, false, false, false);
+        svc.SimForwardLimitRaw(false);
+        svc.SimReverseLimitRaw(false);
+
+        errorSignal.Wait(TimeSpan.FromSeconds(1)).Should().BeTrue("Error transition should occur exactly once");
+
+        // Allow background event invocation to finish
+        await Task.Delay(20);
+
+        errorTransitions.Should().Be(1, "Error state should be published only once during both-limit glitch");
+        svc.Status.Should().Be(RoofControllerStatus.Error);
+        svc.IsMoving.Should().BeFalse();
+        hat.RelayMask.Should().Be(0x00, "All relays must be de-energized after glitch stop");
+
+        var stopWrites = hat.RelayWriteLog;
+        stopWrites.Should().NotBeNull();
+        stopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        var stopSequence = stopWrites.Skip(Math.Max(0, stopWrites.Count - 3)).ToArray();
+        stopSequence.Should().Equal(new[]
+        {
+            ((byte)0x02, (byte)OpenRelayIndex),
+            ((byte)0x02, (byte)CloseRelayIndex),
+            ((byte)0x02, (byte)StopRelayIndex)
+        }, "Both-limit glitch should drop direction relays before disabling STOP");
+
+        svc.StatusChanged -= handler;
+    }
+
+    [TestMethod]
     public async Task OpenSequence_ShouldEnergizeStopAndOpenRelays_ThenDropAtLimit()
     {
         var hat = new FakeHat();
@@ -143,18 +280,42 @@ public class RoofControllerRelayBehaviorTests
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
+        hat.ClearRelayWriteLog();
         var openResult = svc.Open();
         openResult.IsSuccessful.Should().BeTrue();
     hat.RelayMask.Should().Be(StopPlusOpenMask, "Stop + Open relays energized");
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
+        var openWrites = hat.RelayWriteLog;
+        openWrites.Should().NotBeNull();
+        openWrites.Count.Should().BeGreaterOrEqualTo(3);
+        var openSequence = openWrites.Skip(Math.Max(0, openWrites.Count - 3)).ToArray();
+        openSequence.Should().Equal(new[]
+        {
+            ((byte)0x02, (byte)CloseRelayIndex),
+            ((byte)0x01, (byte)OpenRelayIndex),
+            ((byte)0x01, (byte)StopRelayIndex)
+        }, "Open command should establish direction before energizing STOP");
+
         // Simulate limit reached: raw LOW on IN1 for NC
-    hat.SetInputs(false, true, false, false); // hardware now shows open limit engaged
+	    hat.ClearRelayWriteLog();
+	    hat.SetInputs(false, true, false, false); // hardware now shows open limit engaged
     svc.SimForwardLimitRaw(false);
     // Force a status refresh to ensure cached evaluation consistent in test context
     svc.ForceStatusRefresh(true);
     hat.RelayMask.Should().Be(0x00, "All relays de-energized after limit stop");
     svc.Status.Should().Be(RoofControllerStatus.Open);
+
+        var stopWrites = hat.RelayWriteLog;
+        stopWrites.Should().NotBeNull();
+        stopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        var stopSequence = stopWrites.Skip(Math.Max(0, stopWrites.Count - 3)).ToArray();
+        stopSequence.Should().Equal(new[]
+        {
+            ((byte)0x02, (byte)OpenRelayIndex),
+            ((byte)0x02, (byte)CloseRelayIndex),
+            ((byte)0x02, (byte)StopRelayIndex)
+        }, "Limit stop should drop direction relays before de-energizing STOP");
     }
 
     [TestMethod]
@@ -165,17 +326,41 @@ public class RoofControllerRelayBehaviorTests
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
+        hat.ClearRelayWriteLog();
         var closeResult = svc.Close();
         closeResult.IsSuccessful.Should().BeTrue();
     hat.RelayMask.Should().Be(StopPlusCloseMask, "Stop + Close relays energized");
         svc.Status.Should().Be(RoofControllerStatus.Closing);
 
+        var closeWrites = hat.RelayWriteLog;
+        closeWrites.Should().NotBeNull();
+        closeWrites.Count.Should().BeGreaterOrEqualTo(3);
+        var closeSequence = closeWrites.Skip(Math.Max(0, closeWrites.Count - 3)).ToArray();
+        closeSequence.Should().Equal(new[]
+        {
+            ((byte)0x02, (byte)OpenRelayIndex),
+            ((byte)0x01, (byte)CloseRelayIndex),
+            ((byte)0x01, (byte)StopRelayIndex)
+        }, "Close command should align direction before energizing STOP");
+
         // Simulate reverse/closed limit reached: raw LOW on IN2
-    hat.SetInputs(true, false, false, false); // hardware closed limit engaged
+	    hat.ClearRelayWriteLog();
+	    hat.SetInputs(true, false, false, false); // hardware closed limit engaged
     svc.SimReverseLimitRaw(false);
     svc.ForceStatusRefresh(true);
     hat.RelayMask.Should().Be(0x00);
     svc.Status.Should().Be(RoofControllerStatus.Closed);
+
+        var closeStopWrites = hat.RelayWriteLog;
+        closeStopWrites.Should().NotBeNull();
+        closeStopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        var closeStopSequence = closeStopWrites.Skip(Math.Max(0, closeStopWrites.Count - 3)).ToArray();
+        closeStopSequence.Should().Equal(new[]
+        {
+            ((byte)0x02, (byte)OpenRelayIndex),
+            ((byte)0x02, (byte)CloseRelayIndex),
+            ((byte)0x02, (byte)StopRelayIndex)
+        }, "Close limit stop should drop direction before disabling STOP");
     }
 
     [TestMethod]
