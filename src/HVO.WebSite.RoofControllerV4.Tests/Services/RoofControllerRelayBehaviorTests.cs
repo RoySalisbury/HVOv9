@@ -138,7 +138,7 @@ public class RoofControllerRelayBehaviorTests
 
         var openResult = svc.Open();
         openResult.IsSuccessful.Should().BeTrue();
-        hat.RelayMask.Should().Be(0x03, "Stop + Open relays energized (bits 0 and 1)");
+    hat.RelayMask.Should().Be(0x03, "Stop + Open relays energized (mask 0x03)");
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
         // Simulate limit reached: raw LOW on IN1 for NC
@@ -160,7 +160,7 @@ public class RoofControllerRelayBehaviorTests
 
         var closeResult = svc.Close();
         closeResult.IsSuccessful.Should().BeTrue();
-        hat.RelayMask.Should().Be(0x05, "Stop + Close relays energized (bits 0 and 2)");
+    hat.RelayMask.Should().Be(0x05, "Stop + Close relays energized (mask 0x05)");
         svc.Status.Should().Be(RoofControllerStatus.Closing);
 
         // Simulate reverse/closed limit reached: raw LOW on IN2

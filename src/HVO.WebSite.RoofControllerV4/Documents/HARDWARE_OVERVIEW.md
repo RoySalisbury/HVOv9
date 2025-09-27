@@ -65,7 +65,7 @@ RoofController automates a motorized roof using a Raspberry Pi 5. The Pi control
 | Limit Switch Wiring | ME‑8108 NC continuity until pressed (RAW HIGH = normal, LOW = pressed) | Logical boolean: TRUE = limit reached (polarity independent) |
 | Fault Indication | VFD fault relay / output changes electrical level | Logical IN3 TRUE => Status=Error + EmergencyStop semantics |
 | Motion Command | Energize RLY1/RLY2 applies run input to drive | Status transitions to Opening/Closing + watchdog start |
-| Inhibit / Stop | RLY4 opens enable/stop path when energized | All non-motion states keep RLY4 energized (fail-safe hold) |
+| Inhibit / Stop | RLY4 opens enable/stop path when energized | Motion energizes RLY4 to permit drive enable; non-motion states leave RLY4 de-energized (STOP asserted) |
 | Position Feedback | Only end-stop discrete contacts (no encoder) | Partial vs full inferred from last command + limits |
 | Speed Feedback | TB‑14 open-collector sink asserts at speed | IN4 AtSpeed/Run informational (not state driver) |
 | Safety Timeout | None inherent (apart from VFD internal) | Software watchdog enforces max motion time |
@@ -83,7 +83,7 @@ RAW references = direct voltage/level; LOGICAL = interpreted boolean after polar
 3. GET `/health` until `Ready:true` and `Status` not `NotInitialized`.
 4. Manually actuate each limit (press/release) and GET `/api/v1.0/roof/status` verifying IN1/IN2 logical toggles.
 5. Issue Open: `POST /api/v1.0/roof/open`; confirm Status=Opening, watchdog active.
-6. Trip open limit (or let travel) → Status=Open, RLY1 de‑energized, RLY4 energized.
+6. Trip open limit (or let travel) → Status=Open, RLY1 de‑energized, RLY4 de‑energized (STOP asserted).
 7. Issue Close and verify symmetrical behavior.
 8. Simulate fault (drive fault output) → Status=Error, LastStopReason=EmergencyStop.
 9. POST `/api/v1.0/roof/clear-fault` (pulse default 250 ms) after resolving root cause.
@@ -104,7 +104,7 @@ The controller exposes these operational states:
 | Stopped | Stopped with neither limit active and no remembered partial context (rare vs partial states). |
 | Error | Fault input asserted, contradictory limit condition, safety watchdog timeout, or emergency stop. |
 
-All non‑motion states (everything except Opening/Closing) energize the Stop relay (RLY4) to hold the drive in a safe inhibited condition by design.
+All non‑motion states (everything except Opening/Closing) keep the Stop relay (RLY4) de‑energized so the drive remains safely inhibited until motion is commanded.
 ### Input polarity (logical view, v1.3.1)
 | Input | Logical TRUE (service/API) | Logical FALSE |
 |-------|----------------------------|---------------|
@@ -137,7 +137,7 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 ### Commands
 - **Open:** Refuse if IN3 (fault) TRUE or IN1 (open limit) TRUE. Issue internal stop, energize RLY1, start watchdog, set status `Opening`. On IN1 TRUE → stop & status `Open`.
 - **Close:** Refuse if IN3 TRUE or IN2 TRUE. Issue internal stop, energize RLY2, start watchdog, status `Closing`. On IN2 TRUE → stop & status `Closed`.
-- **Stop:** Energize RLY4 (Stop relay) + de‑energize motion relays. Status resolves to `PartiallyOpen`, `PartiallyClose`, or `Stopped` based on last intent & limit states.
+- **Stop:** De-energize RLY4 (Stop relay) + de‑energize motion relays. Status resolves to `PartiallyOpen`, `PartiallyClose`, or `Stopped` based on last intent & limit states.
 - **Clear Fault:** Force EmergencyStop, pulse RLY3 (default 250 ms). If IN3 remains TRUE, fault persists.
 
 ### Interlocks & behaviors
@@ -167,7 +167,7 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 ---
 
 ## 6) I/O naming (signals)
-- **Relays:** RLY1=Open (FWD), RLY2=Close (REV), RLY3=ClearFault (momentary), RLY4=Stop (energize to interrupt TB‑1)
+- **Relays:** RLY1=Open (FWD), RLY2=Close (REV), RLY3=ClearFault (momentary), RLY4=Stop (de-energized asserts STOP; energize to permit motion)
 - **Inputs (logical in code):** IN1=OpenLimit (**TRUE when reached**), IN2=ClosedLimit (**TRUE when reached**), IN3=Fault (**TRUE fault**), IN4=**AtSpeed/Run** (**TRUE at commanded speed**)
 
 ### LED / Relay / Input Logical Mapping
@@ -176,7 +176,7 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 | RLY1 | RunFwd (TB-13A) | TRUE when energized (Opening) | Drops immediately on limit/stop |
 | RLY2 | RunRev (TB-13B) | TRUE when energized (Closing) | Symmetric to RLY1 |
 | RLY3 | ClearFault (TB-13C) | Pulsed TRUE during fault clear | Pulse width configurable (default 250 ms) |
-| RLY4 | Stop/Enable path | TRUE (energized) in non-motion | Fail-safe hold strategy |
+| RLY4 | Stop/Enable path | TRUE (energized) only during motion commands | Fail-safe: de-energized asserts STOP interlock |
 | LED1 | HAT LED bit0 | Mirrors logical Open limit | Set via LED mask update |
 | LED2 | HAT LED bit1 | Mirrors logical Closed limit |  |
 | LED3 | HAT LED bit2 | Mirrors logical Fault |  |
@@ -188,11 +188,11 @@ When false (Normally Open hardware): RAW HIGH → logical TRUE.
 ### Hardware vs Logical Position Examples
 | Scenario | RAW IN1 | RAW IN2 | Logical OpenLimit | Logical ClosedLimit | Software Status (idle) |
 |----------|---------|---------|-------------------|---------------------|------------------------|
-| Mid travel | HIGH | HIGH | FALSE | FALSE | Stopped / Partial* |
+| Mid travel | HIGH | HIGH | FALSE | FALSE | Stopped / PartiallyOpen / PartiallyClose* |
 | Fully open | LOW | HIGH | TRUE | FALSE | Open |
 | Fully closed | HIGH | LOW | FALSE | TRUE | Closed |
 | Dual limit anomaly | LOW | LOW | TRUE | TRUE | Error |
-*Partial vs Stopped depends on interruption history.
+*PartiallyOpen vs PartiallyClose depends on last motion direction; otherwise status remains Stopped.
 
 ---
 
@@ -201,19 +201,19 @@ Legend: ON = relay energized / input TRUE; OFF = de‑energized / input FALSE.
 
 | State | RLY1 | RLY2 | RLY3 | RLY4 | IN1 (OpenLimit) | IN2 (ClosedLimit) | IN3 (Fault) | IN4 (**AtSpeed/Run**) |
 |-------|------|------|------|------|------------------|-------------------|-------------|-------------------|
-| Opening | ON | OFF | OFF | OFF | FALSE | FALSE | FALSE | FALSE→TRUE* |
-| Open (limit) | OFF | OFF | OFF | ON | TRUE | FALSE | FALSE | FALSE |
-| Closing | OFF | ON | OFF | OFF | FALSE | FALSE | FALSE | FALSE→TRUE* |
-| Closed (limit) | OFF | OFF | OFF | ON | FALSE | TRUE | FALSE | FALSE |
-| PartiallyOpen | OFF | OFF | OFF | ON | FALSE | FALSE | FALSE | FALSE |
-| PartiallyClose | OFF | OFF | OFF | ON | FALSE | FALSE | FALSE | FALSE |
-| Stopped | OFF | OFF | OFF | ON | FALSE | FALSE | FALSE | FALSE |
-| Error | OFF | OFF | OFF | ON | (prev) | (prev) | TRUE | FALSE |
-| Fault clear pulse | OFF | OFF | ON | ON | (prev) | (prev) | TRUE→(FALSE) | FALSE |
+| Opening | ON | OFF | OFF | ON | FALSE | FALSE | FALSE | FALSE→TRUE* |
+| Open (limit) | OFF | OFF | OFF | OFF | TRUE | FALSE | FALSE | FALSE |
+| Closing | OFF | ON | OFF | ON | FALSE | FALSE | FALSE | FALSE→TRUE* |
+| Closed (limit) | OFF | OFF | OFF | OFF | FALSE | TRUE | FALSE | FALSE |
+| PartiallyOpen | OFF | OFF | OFF | OFF | FALSE | FALSE | FALSE | FALSE |
+| PartiallyClose | OFF | OFF | OFF | OFF | FALSE | FALSE | FALSE | FALSE |
+| Stopped | OFF | OFF | OFF | OFF | FALSE | FALSE | FALSE | FALSE |
+| Error | OFF | OFF | OFF | OFF | (prev) | (prev) | TRUE | FALSE |
+| Fault clear pulse | OFF | OFF | ON | OFF | (prev) | (prev) | TRUE→(FALSE) | FALSE |
 
 *IN4 goes TRUE once the drive reaches the reference speed (not during acceleration). IN4 does not currently influence state transitions.
 
-Inhibits: Refuse **Open** when IN1 TRUE; refuse **Close** when IN2 TRUE. All non‑motion states assert RLY4 (Stop) for fail‑safe hold.
+Inhibits: Refuse **Open** when IN1 TRUE; refuse **Close** when IN2 TRUE. All non‑motion states leave RLY4 de-energized, asserting STOP until motion is explicitly commanded.
 
 ---
 
@@ -227,7 +227,7 @@ Inhibits: Refuse **Open** when IN1 TRUE; refuse **Close** when IN2 TRUE. All non
 | Event | Hardware Effect | Software Effect | Operator Guidance |
 |-------|-----------------|-----------------|-------------------|
 | Pi power loss | All relays de-energize (motion stops) | Service offline | Verify roof stable before restart |
-| Pi reboot mid-travel | Motion relays drop, coast to stop | Re-initializes, recalculates from limits | If between limits, expect Partial/Stopped |
+| Pi reboot mid-travel | Motion relays drop, coast to stop | Re-initializes, recalculates from limits | If between limits, expect PartiallyOpen/PartiallyClose or Stopped |
 | VFD power loss | Run commands ignored, AtSpeed/Run FALSE | Potential Error if fault output asserts | Restore drive power, check faults |
 | Limit wiring open (NC) | Appears limit reached (raw LOW unreachable) | Logical limit may appear stuck TRUE | Investigate continuity before forcing motion |
 | Fault latch persists | Fault output stays asserted | Status Error remains | Diagnose drive or upstream interlocks |
@@ -246,7 +246,7 @@ All endpoints versioned under `/api/v1.0/roof` (example base path; adjust if dep
 Status Object (representative):
 ```
 {
-  "status": "Opening|Closing|Open|Closed|Partial|Error|Stopped|Unknown|NotInitialized",
+  "status": "Opening|Closing|Open|Closed|PartiallyOpen|PartiallyClose|Stopped|Error|Unknown|NotInitialized",
   "isReady": true,
   "limits": { "isOpen": false, "isClosed": true },
   "watchdog": { "lastKickUtc": "2025-01-01T00:00:00Z", "isHealthy": true },
@@ -274,7 +274,7 @@ Notes:
 
 Minimal Decision Flow:
 1. Is status Error? → Clear Fault (once) → persists? Inspect drive.
-2. Is status Partial when at physical limit? → Calibrate limit switch or check polarity config.
+2. Is status PartiallyOpen/PartiallyClose when physically at a limit? → Calibrate limit switch or check polarity config.
 3. Are both limits TRUE? → Electrical fault; halt motion until resolved.
 4. No motion on command? → Check watchdog health, then relay outputs, then VFD enable power.
 

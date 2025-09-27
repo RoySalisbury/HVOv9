@@ -81,7 +81,7 @@ No motion on Open/Close?
 ---
 ## 8. Safety Philosophy (Condensed)
 - Fail-safe: loss of control power removes motion relay drive.
-- Stop relay energized in all non-motion states to inhibit unintended restart.
+- Stop relay remains de-energized in all non-motion states; energize only to permit motion.
 - NC limits default ensure open circuit = safe stop.
 
 ---
