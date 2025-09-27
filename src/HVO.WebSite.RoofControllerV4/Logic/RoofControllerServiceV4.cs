@@ -617,9 +617,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
             }
             else if (!openTriggered && !closedTriggered)
             {
-                // Roof is between positions - determine based on current status and whether operation is active
-                var isOperationActive = _safetyWatchdogTimer?.Enabled ?? false;
-
+                // Roof is between positions - determine based on current status and whether watchdog is active
+                var isOperationActive = _watchdogActive;
                 if (this.Status == RoofControllerStatus.Opening || _lastCommandIntent == RoofControllerCommandIntent.Open)
                 {
                     if (isOperationActive)

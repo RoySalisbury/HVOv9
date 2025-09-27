@@ -14,6 +14,13 @@ namespace HVO.WebSite.RoofControllerV4.Tests.Services;
 [TestClass]
 public class RoofControllerRelayBehaviorTests
 {
+    private const int OpenRelayIndex = 1;
+    private const int CloseRelayIndex = 2;
+    private const int ClearFaultRelayIndex = 3;
+    private const int StopRelayIndex = 4;
+
+    private static readonly byte StopPlusOpenMask = (byte)((1 << (StopRelayIndex - 1)) | (1 << (OpenRelayIndex - 1)));
+    private static readonly byte StopPlusCloseMask = (byte)((1 << (StopRelayIndex - 1)) | (1 << (CloseRelayIndex - 1)));
     private class FakeHat : FourRelayFourInputHat
     {
         public FakeHat() : base(new FakeI2cDevice()) { }
@@ -92,10 +99,10 @@ public class RoofControllerRelayBehaviorTests
             DigitalInputPollInterval = TimeSpan.FromMilliseconds(5),
             SafetyWatchdogTimeout = watchdog ?? TimeSpan.FromSeconds(10),
             // Standard mapping: 1=Open 2=Close 3=ClearFault 4=Stop
-            OpenRelayId = 1,
-            CloseRelayId = 2,
-            ClearFaultRelayId = 3,
-            StopRelayId = 4
+            OpenRelayId = OpenRelayIndex,
+            CloseRelayId = CloseRelayIndex,
+            ClearFaultRelayId = ClearFaultRelayIndex,
+            StopRelayId = StopRelayIndex
         });
         return new TestableRoofControllerService(options, hat);
     }
@@ -138,7 +145,7 @@ public class RoofControllerRelayBehaviorTests
 
         var openResult = svc.Open();
         openResult.IsSuccessful.Should().BeTrue();
-    hat.RelayMask.Should().Be(0x03, "Stop + Open relays energized (mask 0x03)");
+    hat.RelayMask.Should().Be(StopPlusOpenMask, "Stop + Open relays energized");
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
         // Simulate limit reached: raw LOW on IN1 for NC
@@ -160,7 +167,7 @@ public class RoofControllerRelayBehaviorTests
 
         var closeResult = svc.Close();
         closeResult.IsSuccessful.Should().BeTrue();
-    hat.RelayMask.Should().Be(0x05, "Stop + Close relays energized (mask 0x05)");
+    hat.RelayMask.Should().Be(StopPlusCloseMask, "Stop + Close relays energized");
         svc.Status.Should().Be(RoofControllerStatus.Closing);
 
         // Simulate reverse/closed limit reached: raw LOW on IN2
@@ -180,14 +187,14 @@ public class RoofControllerRelayBehaviorTests
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
         svc.Open().IsSuccessful.Should().BeTrue();
-        hat.RelayMask.Should().Be(0x03);
+    hat.RelayMask.Should().Be(StopPlusOpenMask);
         svc.Stop(RoofControllerStopReason.NormalStop).IsSuccessful.Should().BeTrue();
         hat.RelayMask.Should().Be(0x00);
         svc.Status.Should().Be(RoofControllerStatus.PartiallyOpen);
 
         // Now issue Close then manual stop
         svc.Close().IsSuccessful.Should().BeTrue();
-        hat.RelayMask.Should().Be(0x05);
+    hat.RelayMask.Should().Be(StopPlusCloseMask);
         svc.Stop(RoofControllerStopReason.NormalStop).IsSuccessful.Should().BeTrue();
         hat.RelayMask.Should().Be(0x00);
         svc.Status.Should().Be(RoofControllerStatus.PartiallyClose);
@@ -201,7 +208,7 @@ public class RoofControllerRelayBehaviorTests
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
         svc.Open().IsSuccessful.Should().BeTrue();
-        hat.RelayMask.Should().Be(0x03);
+    hat.RelayMask.Should().Be(StopPlusOpenMask);
 
     // Simulate fault raw HIGH on IN3 (update hardware first)
     hat.SetInputs(true, true, true, false);
