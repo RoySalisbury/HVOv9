@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Device.I2c;
+using System.Linq;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
 
 namespace HVO.WebSite.RoofControllerV4.Tests.TestSupport;
@@ -54,81 +55,124 @@ internal sealed class FakeRoofHat : FourRelayFourInputHat
 
         private readonly byte[] _registers = new byte[256];
         private readonly List<(byte Register, byte Value)> _relayWriteLog = new();
+        private readonly object _syncRoot = new();
 
         public override I2cConnectionSettings ConnectionSettings { get; } = new(1, 0x0E);
 
-        public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog => _relayWriteLog;
+        public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog
+        {
+            get
+            {
+                lock (_syncRoot)
+                {
+                    return _relayWriteLog.ToArray();
+                }
+            }
+        }
 
-        public byte RelayMask => (byte)(_registers[RelayMaskRegister] & 0x0F);
+        public byte RelayMask
+        {
+            get
+            {
+                lock (_syncRoot)
+                {
+                    return (byte)(_registers[RelayMaskRegister] & 0x0F);
+                }
+            }
+        }
 
-        public byte LedMask => (byte)(_registers[LedMaskRegister] & 0x0F);
+        public byte LedMask
+        {
+            get
+            {
+                lock (_syncRoot)
+                {
+                    return (byte)(_registers[LedMaskRegister] & 0x0F);
+                }
+            }
+        }
 
-        public void ClearRelayWriteLog() => _relayWriteLog.Clear();
+        public void ClearRelayWriteLog()
+        {
+            lock (_syncRoot)
+            {
+                _relayWriteLog.Clear();
+            }
+        }
 
         public void SetDigitalInputs(bool in1, bool in2, bool in3, bool in4)
         {
-            byte mask = 0;
-            if (in1) mask |= 0x01;
-            if (in2) mask |= 0x02;
-            if (in3) mask |= 0x04;
-            if (in4) mask |= 0x08;
-            _registers[DigitalInputRegister] = mask;
+            lock (_syncRoot)
+            {
+                byte mask = 0;
+                if (in1) mask |= 0x01;
+                if (in2) mask |= 0x02;
+                if (in3) mask |= 0x04;
+                if (in4) mask |= 0x08;
+                _registers[DigitalInputRegister] = mask;
+            }
         }
 
         public override void Read(Span<byte> buffer) => throw new NotSupportedException();
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
-            if (buffer.Length < 2)
+            lock (_syncRoot)
             {
-                return;
-            }
+                if (buffer.Length < 2)
+                {
+                    return;
+                }
 
-            var register = buffer[0];
-            var value = buffer[1];
+                var register = buffer[0];
+                var value = buffer[1];
 
-            if (register is RelayMaskRegister or RelaySetRegister or RelayClearRegister)
-            {
-                _relayWriteLog.Add((register, value));
-            }
+                if (register is RelayMaskRegister or RelaySetRegister or RelayClearRegister)
+                {
+                    _relayWriteLog.Add((register, value));
+                }
 
-            switch (register)
-            {
-                case RelayMaskRegister:
-                    _registers[RelayMaskRegister] = (byte)(value & 0x0F);
-                    break;
-                case RelaySetRegister:
-                    if (value is >= 1 and <= 4)
-                    {
-                        _registers[RelayMaskRegister] = (byte)(_registers[RelayMaskRegister] | (1 << (value - 1)));
-                    }
-                    break;
-                case RelayClearRegister:
-                    if (value is >= 1 and <= 4)
-                    {
-                        _registers[RelayMaskRegister] = (byte)(_registers[RelayMaskRegister] & ~(1 << (value - 1)));
-                    }
-                    break;
-                case LedMaskRegister:
-                    _registers[LedMaskRegister] = (byte)(value & 0x0F);
-                    break;
-                default:
-                    _registers[register] = value;
-                    break;
-            }
+                switch (register)
+                {
+                    case RelayMaskRegister:
+                        _registers[RelayMaskRegister] = (byte)(value & 0x0F);
+                        break;
+                    case RelaySetRegister:
+                        if (value is >= 1 and <= 4)
+                        {
+                            _registers[RelayMaskRegister] = (byte)(_registers[RelayMaskRegister] | (1 << (value - 1)));
+                        }
+                        break;
+                    case RelayClearRegister:
+                        if (value is >= 1 and <= 4)
+                        {
+                            _registers[RelayMaskRegister] = (byte)(_registers[RelayMaskRegister] & ~(1 << (value - 1)));
+                        }
+                        break;
+                    case LedMaskRegister:
+                        _registers[LedMaskRegister] = (byte)(value & 0x0F);
+                        break;
+                    default:
+                        _registers[register] = value;
+                        break;
+                }
 
-            for (var i = 2; i < buffer.Length; i++)
-            {
-                _registers[register + i - 1] = buffer[i];
+                for (var i = 2; i < buffer.Length; i++)
+                {
+                    _registers[register + i - 1] = buffer[i];
+                }
             }
         }
 
         public override void WriteRead(ReadOnlySpan<byte> writeBuffer, Span<byte> readBuffer)
         {
-            var register = writeBuffer[0];
-            for (var i = 0; i < readBuffer.Length; i++)
+            lock (_syncRoot)
             {
-                readBuffer[i] = _registers[register + i];
+                var register = writeBuffer[0];
+                for (var i = 0; i < readBuffer.Length; i++)
+                {
+                    readBuffer[i] = _registers[register + i];
+                }
             }
         }
 

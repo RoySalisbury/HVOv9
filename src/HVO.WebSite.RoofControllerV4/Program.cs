@@ -20,31 +20,29 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-        {
-            try { Console.WriteLine("AppDomain.CurrentDomain.UnhandledException"); }
-            catch { /* swallow */ }
-        };
+        // AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        // {
+        //     try { Console.WriteLine("AppDomain.CurrentDomain.UnhandledException"); }
+        //     catch { /* swallow */ }
+        // };
 
-        AppDomain.CurrentDomain.ProcessExit += (s, e) =>
-        {
-            try { Console.WriteLine("AppDomain.CurrentDomain.ProcessExit"); }
-            catch { /* swallow */ }
-        };
+        // AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+        // {
+        //     try { Console.WriteLine("AppDomain.CurrentDomain.ProcessExit"); }
+        //     catch { /* swallow */ }
+        // };
 
-        TaskScheduler.UnobservedTaskException += (s, e) =>
-        {
-            try { Console.WriteLine("TaskScheduler.UnobservedTaskException"); }
-            catch { /* swallow */ }
-        };
+        // TaskScheduler.UnobservedTaskException += (s, e) =>
+        // {
+        //     try { Console.WriteLine("TaskScheduler.UnobservedTaskException"); }
+        //     catch { /* swallow */ }
+        // };
 
-        AssemblyLoadContext.Default.Unloading += _ =>
-        {
-            try { Console.WriteLine("AssemblyLoadContext.Default.Unloading"); }
-            catch { /* swallow */ }
-        };
-
-
+        // AssemblyLoadContext.Default.Unloading += _ =>
+        // {
+        //     try { Console.WriteLine("AssemblyLoadContext.Default.Unloading"); }
+        //     catch { /* swallow */ }
+        // };
 
         var builder = WebApplication.CreateBuilder(args);
         ConfigureServices(builder.Services, builder.Configuration, builder.Environment);
