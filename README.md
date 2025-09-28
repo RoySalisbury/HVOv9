@@ -105,6 +105,10 @@ Run tests:
 dotnet test
 ```
 
+## Docker deployment
+
+- [RoofController V4 Docker guide](docs/roofcontrollerv4-docker.md) – build and run the roof controller on a Raspberry Pi 5 with GPIO/I²C access inside a minimal container.
+
 ### CI/CD Workflow
 
 The GitHub Actions workflow is split into separate jobs for faster feedback:
