@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using HVO.WebSite.Playground.Models;
 using HVO.WebSite.Playground.Services;
+using System.Text.RegularExpressions;
 
 namespace HVO.WebSite.Playground.Controllers
 {
@@ -48,7 +49,7 @@ namespace HVO.WebSite.Playground.Controllers
         public async Task<ActionResult<LatestWeatherResponse>> GetLatestWeatherRecord()
         {
             var result = await _weatherService.GetLatestWeatherRecordAsync();
-            
+
             return result.Match(
                 success: data => Ok(data),
                 failure: error => error switch
@@ -93,7 +94,7 @@ namespace HVO.WebSite.Playground.Controllers
             [FromQuery] DateTimeOffset? endDate = null)
         {
             var result = await _weatherService.GetWeatherHighsLowsAsync(startDate, endDate);
-            
+
             return result.Match(
                 success: data => Ok(data),
                 failure: error => error switch
@@ -136,7 +137,7 @@ namespace HVO.WebSite.Playground.Controllers
         public async Task<ActionResult<CurrentWeatherResponse>> GetCurrentWeatherConditions()
         {
             var result = await _weatherService.GetCurrentWeatherConditionsAsync();
-            
+
             return result.Match(
                 success: data => Ok(data),
                 failure: error => error switch

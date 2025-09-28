@@ -8,7 +8,6 @@
 @using Microsoft.AspNetCore.Components
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
-
 <PageTitle>Roof Control V2 - HVOv9</PageTitle>
 
 <div class="rc2-shell">
@@ -81,9 +80,7 @@
                 </div>
                 <div class="rc2-card-body rc2-camera-body">
                     <div class="rc2-camera-placeholder">
-                        <i class="bi bi-camera-video-off"></i>
-                        <div>Camera preview disabled</div>
-                        <small class="text-muted">Live streaming has been removed for now. This placeholder remains for future use.</small>
+                        <CameraStream />
                     </div>
                 </div>
             </div>
