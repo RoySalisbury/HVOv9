@@ -32,18 +32,24 @@
 	<dict>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>192.168.2.3</key>
 			<dict>
 				<key>NSIncludesSubdomains</key>
 				<true/>
-				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
-				<key>NSTemporaryExceptionAllowsInsecureHTTPLoadsInWebContent</key>
+				<key>NSExceptionAllowsInsecureHTTPLoadsInWebContent</key>
 				<true/>
 			</dict>
 		</dict>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app connects to the observatory roof controller on the local network.</string>
+	<key>NSBonjourServices</key>
+	<array/>
 </dict>
 </plist>

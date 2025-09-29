@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.IO;
 using HVO.Maui.RoofControllerV4.iPad.Configuration;
 using HVO.Maui.RoofControllerV4.iPad.Services;
 using HVO.Maui.RoofControllerV4.iPad.ViewModels;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Maui.Storage;
 
 namespace HVO.Maui.RoofControllerV4.iPad;
 
@@ -26,6 +28,16 @@ public static class MauiProgram
 		ConfigureServices(builder.Services, builder.Configuration);
 
 #if DEBUG
+		builder.Logging.SetMinimumLevel(LogLevel.Trace);
+#else
+		builder.Logging.SetMinimumLevel(LogLevel.Information);
+#endif
+
+		builder.Logging.AddConsole();
+		builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+		builder.Logging.AddFilter("System.Net.Http", LogLevel.Information);
+
+#if DEBUG
 		builder.Logging.AddDebug();
 #endif
 
@@ -41,6 +53,12 @@ public static class MauiProgram
 		{
 			((IConfigurationBuilder)builder.Configuration).AddJsonStream(stream);
 		}
+
+		var userConfigurationPath = Path.Combine(FileSystem.AppDataDirectory, "roofcontroller.settings.json");
+		if (File.Exists(userConfigurationPath))
+		{
+			((IConfigurationBuilder)builder.Configuration).AddJsonFile(userConfigurationPath, optional: true, reloadOnChange: false);
+		}
 	}
 
 	private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
@@ -52,8 +70,14 @@ public static class MauiProgram
 			.ValidateOnStart();
 
 		services.AddHttpClient<IRoofControllerApiClient, RoofControllerApiClient>();
+		services.AddSingleton<IDialogService, DialogService>();
+		services.AddSingleton<IRoofControllerConfigurationService, RoofControllerConfigurationService>();
 
 		services.AddSingleton<RoofControllerViewModel>();
 		services.AddSingleton<MainPage>();
+		services.AddSingleton<CameraPage>();
+		services.AddSingleton<HistoryPage>();
+		services.AddSingleton<ConfigurationPage>();
+		services.AddSingleton<AppShell>();
 	}
 }

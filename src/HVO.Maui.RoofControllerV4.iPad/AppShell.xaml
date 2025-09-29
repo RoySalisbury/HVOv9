@@ -4,11 +4,39 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:HVO.Maui.RoofControllerV4.iPad"
-    Title="HVO.Maui.RoofControllerV4.iPad">
+    xmlns:shell="http://schemas.microsoft.com/dotnet/2021/maui"
+    Title="Roof Controller"
+    FlyoutBehavior="Disabled"
+    shell:Shell.NavBarIsVisible="False">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+    <TabBar>
+        <Tab Title="Dashboard" Icon="ic_tab_dashboard.svg">
+            <ShellContent
+                Icon="ic_tab_dashboard.svg"
+                ContentTemplate="{DataTemplate local:MainPage}"
+                Route="MainPage" />
+        </Tab>
+
+        <Tab Title="Camera" Icon="ic_tab_camera.svg">
+            <ShellContent
+                Icon="ic_tab_camera.svg"
+                ContentTemplate="{DataTemplate local:CameraPage}"
+                Route="CameraPage" />
+        </Tab>
+
+        <Tab Title="History" Icon="ic_tab_history.svg">
+            <ShellContent
+                Icon="ic_tab_history.svg"
+                ContentTemplate="{DataTemplate local:HistoryPage}"
+                Route="HistoryPage" />
+        </Tab>
+
+        <Tab Title="Configuration" Icon="ic_tab_configuration.svg">
+            <ShellContent
+                Icon="ic_tab_configuration.svg"
+                ContentTemplate="{DataTemplate local:ConfigurationPage}"
+                Route="ConfigurationPage" />
+        </Tab>
+    </TabBar>
 
 </Shell>

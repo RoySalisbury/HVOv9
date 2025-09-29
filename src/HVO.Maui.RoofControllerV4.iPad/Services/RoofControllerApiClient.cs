@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HVO.Maui.RoofControllerV4.iPad.Configuration;
 using HVO.WebSite.RoofControllerV4.Models;
 using HVO;
@@ -17,11 +18,7 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
     private readonly RoofControllerApiOptions _options;
     private readonly ILogger<RoofControllerApiClient> _logger;
 
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
+    private static readonly JsonSerializerOptions JsonSerializerOptions = CreateSerializerOptions();
 
     public RoofControllerApiClient(HttpClient httpClient, IOptions<RoofControllerApiOptions> options, ILogger<RoofControllerApiClient> logger)
     {
@@ -33,72 +30,95 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
     }
 
     public Task<Result<RoofStatusResponse>> GetStatusAsync(CancellationToken cancellationToken = default)
-        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "RoofControl/Status", cancellationToken: cancellationToken);
+        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "roofcontrol/status", cancellationToken: cancellationToken);
 
     public Task<Result<RoofStatusResponse>> OpenAsync(CancellationToken cancellationToken = default)
-        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "RoofControl/Open", cancellationToken: cancellationToken);
+        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "roofcontrol/open", cancellationToken: cancellationToken);
 
     public Task<Result<RoofStatusResponse>> CloseAsync(CancellationToken cancellationToken = default)
-        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "RoofControl/Close", cancellationToken: cancellationToken);
+        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "roofcontrol/close", cancellationToken: cancellationToken);
 
     public Task<Result<RoofStatusResponse>> StopAsync(CancellationToken cancellationToken = default)
-        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "RoofControl/Stop", cancellationToken: cancellationToken);
+        => SendRequestAsync<RoofStatusResponse>(HttpMethod.Get, "roofcontrol/stop", cancellationToken: cancellationToken);
 
     public Task<Result<bool>> ClearFaultAsync(int? pulseMs = null, CancellationToken cancellationToken = default)
     {
-        var query = pulseMs.HasValue ? $"ClearFault?pulseMs={pulseMs.Value}" : "ClearFault";
-        return SendRequestAsync<bool>(HttpMethod.Post, $"RoofControl/{query}", cancellationToken: cancellationToken);
+        var query = pulseMs.HasValue ? $"clearfault?pulseMs={pulseMs.Value}" : "clearfault";
+        return SendRequestAsync<bool>(HttpMethod.Post, $"roofcontrol/{query}", cancellationToken: cancellationToken);
     }
 
     private async Task<Result<T>> SendRequestAsync<T>(HttpMethod method, string relativeUrl, HttpContent? content = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativeUrl);
 
-        try
+        var attempt = 0;
+        var maxAttempts = Math.Max(1, _options.RequestRetryCount);
+
+        while (true)
         {
-            using var request = new HttpRequestMessage(method, relativeUrl)
+            attempt++;
+
+            try
             {
-                Content = content
-            };
-
-            _logger.LogDebug("Sending {Method} request to {Endpoint}", method, relativeUrl);
-
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorText = await TryReadProblemDetailsAsync(response, cancellationToken).ConfigureAwait(false);
-                var exception = new HttpRequestException($"API request to '{relativeUrl}' failed with {(int)response.StatusCode} {response.ReasonPhrase}: {errorText}");
-                _logger.LogError(exception, "Roof controller API call failed");
-                return Result<T>.Failure(exception);
-            }
-
-            if (response.Content.Headers.ContentLength == 0)
-            {
-                if (typeof(T) == typeof(bool))
+                using var request = new HttpRequestMessage(method, relativeUrl)
                 {
-                    return Result<T>.Success((T)(object)true);
+                    Content = content
+                };
+
+                _logger.LogDebug("Sending {Method} request to {Endpoint} (attempt {Attempt}/{MaxAttempts})", method, relativeUrl, attempt, maxAttempts);
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await TryReadProblemDetailsAsync(response, cancellationToken).ConfigureAwait(false);
+                    var exception = new HttpRequestException($"API request to '{relativeUrl}' failed with {(int)response.StatusCode} {response.ReasonPhrase}: {errorText}");
+                    _logger.LogError(exception, "Roof controller API call failed");
+                    return Result<T>.Failure(exception);
                 }
 
-                var noContent = new InvalidOperationException($"API response from '{relativeUrl}' was empty.");
-                _logger.LogError(noContent, "Unexpected empty response.");
-                return Result<T>.Failure(noContent);
-            }
+                if (response.Content.Headers.ContentLength == 0)
+                {
+                    if (typeof(T) == typeof(bool))
+                    {
+                        return Result<T>.Success((T)(object)true);
+                    }
 
-            var result = await response.Content.ReadFromJsonAsync<T>(JsonSerializerOptions, cancellationToken).ConfigureAwait(false);
-            if (result is null)
+                    var noContent = new InvalidOperationException($"API response from '{relativeUrl}' was empty.");
+                    _logger.LogError(noContent, "Unexpected empty response.");
+                    return Result<T>.Failure(noContent);
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<T>(JsonSerializerOptions, cancellationToken).ConfigureAwait(false);
+                if (result is null)
+                {
+                    var nullContent = new InvalidOperationException($"API response from '{relativeUrl}' could not be deserialized to {typeof(T).Name}.");
+                    _logger.LogError(nullContent, "Failed to deserialize API response");
+                    return Result<T>.Failure(nullContent);
+                }
+
+                return Result<T>.Success(result);
+            }
+            catch (Exception ex)
             {
-                var nullContent = new InvalidOperationException($"API response from '{relativeUrl}' could not be deserialized to {typeof(T).Name}.");
-                _logger.LogError(nullContent, "Failed to deserialize API response");
-                return Result<T>.Failure(nullContent);
-            }
+                if (attempt >= maxAttempts || cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogError(ex, "Unhandled error calling Roof Controller API {Method} {Endpoint} after {Attempts} attempts", method, relativeUrl, attempt);
+                    return Result<T>.Failure(ex);
+                }
 
-            return Result<T>.Success(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unhandled error calling Roof Controller API {Method} {Endpoint}", method, relativeUrl);
-            return Result<T>.Failure(ex);
+                var delay = TimeSpan.FromMilliseconds(Math.Min(500 * attempt, 2_000));
+                _logger.LogWarning(ex, "Error calling Roof Controller API {Method} {Endpoint} on attempt {Attempt}. Retrying in {Delay}ms", method, relativeUrl, attempt, delay.TotalMilliseconds);
+
+                try
+                {
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return Result<T>.Failure(ex);
+                }
+            }
         }
     }
 
@@ -151,4 +171,16 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
     }
 
     private sealed record ProblemDetailsPayload(string? Title, string? Detail);
+
+    private static JsonSerializerOptions CreateSerializerOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
+
+        return options;
+    }
 }

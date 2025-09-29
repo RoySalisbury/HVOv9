@@ -2,6 +2,7 @@
 <Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:local="clr-namespace:HVO.Maui.RoofControllerV4.iPad"
+             xmlns:shell="http://schemas.microsoft.com/dotnet/2021/maui"
              x:Class="HVO.Maui.RoofControllerV4.iPad.App">
     <Application.Resources>
         <ResourceDictionary>
@@ -9,6 +10,10 @@
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <Style TargetType="ContentPage">
+                <Setter Property="shell:Shell.NavBarIsVisible" Value="False" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

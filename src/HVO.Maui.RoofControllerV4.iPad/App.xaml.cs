@@ -1,17 +1,20 @@
-﻿namespace HVO.Maui.RoofControllerV4.iPad;
+﻿using Microsoft.Maui.ApplicationModel;
+
+namespace HVO.Maui.RoofControllerV4.iPad;
 
 public partial class App : Application
 {
-	private readonly MainPage _mainPage;
+	private readonly AppShell _appShell;
 
-	public App(MainPage mainPage)
+	public App(AppShell appShell)
 	{
 		InitializeComponent();
-		_mainPage = mainPage ?? throw new ArgumentNullException(nameof(mainPage));
+		UserAppTheme = AppTheme.Dark;
+		_appShell = appShell ?? throw new ArgumentNullException(nameof(appShell));
 	}
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(_mainPage);
+		return new Window(_appShell);
 	}
 }

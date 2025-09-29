@@ -84,6 +84,40 @@
       }
     },
     {
+      "label": "run:roofv4ipad:debug",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-sim.sh",
+      "args": [
+        "--configuration",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run:roofv4ipad:release",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-sim.sh",
+      "args": [
+        "--configuration",
+        "Release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "prepare:playground:debug",
       "dependsOn": [
         "kill:playground",

@@ -1,4 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.Linq;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HVO.Maui.RoofControllerV4.iPad.Configuration;
@@ -22,9 +27,12 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     private readonly IRoofControllerApiClient _apiClient;
     private readonly RoofControllerApiOptions _options;
     private readonly ILogger<RoofControllerViewModel> _logger;
+    private readonly IDialogService _dialogService;
+    private readonly IRoofControllerConfigurationService _configurationService;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
-    private readonly ObservableCollection<NotificationItem> _notifications = new();
-    private readonly ReadOnlyObservableCollection<NotificationItem> _readonlyNotifications;
+    private readonly SemaphoreSlim _promptSemaphore = new(1, 1);
+    private int _promptThreshold;
+    private readonly ObservableCollection<NotificationItem> _notificationHistory = new();
 
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
@@ -32,16 +40,26 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     private bool _serviceUnavailableNotified;
     private RoofControllerStatus _previousStatus = RoofControllerStatus.Unknown;
     private RoofControllerStopReason _previousStopReason = RoofControllerStopReason.None;
+    private int _consecutiveFailures;
+    private bool _configurationEditorInitialized;
+    private bool _isLoadingConfigurationEditor;
+    private bool _suppressConfigurationDirty;
 
     public RoofControllerViewModel(
         IRoofControllerApiClient apiClient,
         IOptions<RoofControllerApiOptions> options,
-        ILogger<RoofControllerViewModel> logger)
+        ILogger<RoofControllerViewModel> logger,
+        IDialogService dialogService,
+        IRoofControllerConfigurationService configurationService)
     {
         _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _readonlyNotifications = new ReadOnlyObservableCollection<NotificationItem>(_notifications);
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+        _promptThreshold = Math.Max(1, _options.ConnectionFailurePromptThreshold);
+        NotificationHistory = new ReadOnlyObservableCollection<NotificationItem>(_notificationHistory);
+        _notificationHistory.CollectionChanged += OnNotificationHistoryChanged;
     }
 
     #region Bindable State
@@ -99,9 +117,62 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     private string? lastErrorMessage;
 
+    [ObservableProperty]
+    private NotificationItem? latestNotification;
+
+    [ObservableProperty]
+    private string configurationBaseUrl = string.Empty;
+
+    [ObservableProperty]
+    private string configurationCameraStreamUrl = string.Empty;
+
+    [ObservableProperty]
+    private string configurationStatusPollIntervalSeconds = string.Empty;
+
+    [ObservableProperty]
+    private string configurationRequestRetryCount = string.Empty;
+
+    [ObservableProperty]
+    private string configurationFailurePromptThreshold = string.Empty;
+
+    [ObservableProperty]
+    private string configurationClearFaultPulseMs = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveConfigurationCommand))]
+    private bool isConfigurationSaving;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveConfigurationCommand))]
+    private bool isConfigurationDirty;
+
+    [ObservableProperty]
+    private string? configurationErrorMessage;
+
+    [ObservableProperty]
+    private string? configurationSuccessMessage;
+
     #endregion
 
-    public IReadOnlyList<NotificationItem> Notifications => _readonlyNotifications;
+    partial void OnConfigurationBaseUrlChanged(string value) => MarkConfigurationDirty();
+
+    partial void OnConfigurationCameraStreamUrlChanged(string value) => MarkConfigurationDirty();
+
+    partial void OnConfigurationStatusPollIntervalSecondsChanged(string value) => MarkConfigurationDirty();
+
+    partial void OnConfigurationRequestRetryCountChanged(string value) => MarkConfigurationDirty();
+
+    partial void OnConfigurationFailurePromptThresholdChanged(string value) => MarkConfigurationDirty();
+
+    partial void OnConfigurationClearFaultPulseMsChanged(string value) => MarkConfigurationDirty();
+
+    partial void OnConfigurationErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasConfigurationError));
+
+    partial void OnConfigurationSuccessMessageChanged(string? value) => OnPropertyChanged(nameof(HasConfigurationSuccess));
+
+    public bool HasConfigurationError => !string.IsNullOrWhiteSpace(ConfigurationErrorMessage);
+
+    public bool HasConfigurationSuccess => !string.IsNullOrWhiteSpace(ConfigurationSuccessMessage);
 
     public bool HasFault => CurrentStatus == RoofControllerStatus.Error;
 
@@ -188,7 +259,29 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
     public string? CameraStreamUrl => CameraStreamUri?.ToString();
 
-    public bool HasNotifications => _notifications.Count > 0;
+    public bool HasLatestNotification => LatestNotification is not null;
+
+    public ReadOnlyObservableCollection<NotificationItem> NotificationHistory { get; }
+
+    public bool HasNotificationHistory => NotificationHistory.Count > 0;
+
+    public string ApiBaseUrl => _options.BaseUrl;
+
+    public string CameraStreamDisplay => string.IsNullOrWhiteSpace(_options.CameraStreamUrl)
+        ? "Not configured"
+        : _options.CameraStreamUrl;
+
+    public int ConfiguredStatusPollIntervalSeconds => _options.StatusPollIntervalSeconds;
+
+    public int ConfiguredRequestRetryCount => _options.RequestRetryCount;
+
+    public int ConfiguredFailurePromptThreshold => _options.ConnectionFailurePromptThreshold;
+
+    public int ConfiguredClearFaultPulseMs => _options.ClearFaultPulseMs;
+
+    public string SafetyWatchdogTimeoutDisplay => _options.SafetyWatchdogTimeoutSeconds is double value
+        ? $"{value:F0} seconds"
+        : "Not configured";
 
     public string WatchdogStatusText => IsWatchdogActive ? "Active" : "Standby";
 
@@ -250,6 +343,220 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         }, "Command", "Fault cleared", "Failed to clear fault");
     }
 
+    public async Task LoadConfigurationEditorAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isLoadingConfigurationEditor)
+        {
+            return;
+        }
+
+        _isLoadingConfigurationEditor = true;
+
+        try
+        {
+            var loadResult = await _configurationService.LoadAsync(cancellationToken).ConfigureAwait(false);
+            if (!loadResult.IsSuccessful && loadResult.Error is not null)
+            {
+                _logger.LogError(loadResult.Error, "Failed to load roof controller configuration overrides");
+            }
+
+            var effectiveOptions = loadResult.IsSuccessful ? loadResult.Value : _options;
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                ConfigurationSuccessMessage = null;
+                if (!loadResult.IsSuccessful && loadResult.Error is not null)
+                {
+                    ConfigurationErrorMessage = $"Failed to load saved configuration. Using current runtime values. {loadResult.Error.Message}";
+                }
+                else
+                {
+                    ConfigurationErrorMessage = null;
+                }
+
+                PopulateConfigurationFields(effectiveOptions, markClean: true);
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _isLoadingConfigurationEditor = false;
+            _configurationEditorInitialized = true;
+        }
+    }
+
+    public bool CanSaveConfiguration() => !IsConfigurationSaving && IsConfigurationDirty;
+
+    [RelayCommand(CanExecute = nameof(CanSaveConfiguration))]
+    private async Task SaveConfigurationAsync()
+    {
+        ConfigurationErrorMessage = null;
+        ConfigurationSuccessMessage = null;
+
+        var baseUrl = ConfigurationBaseUrl?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            ConfigurationErrorMessage = "API base URL is required.";
+            return;
+        }
+
+        var cameraStream = string.IsNullOrWhiteSpace(ConfigurationCameraStreamUrl)
+            ? null
+            : ConfigurationCameraStreamUrl.Trim();
+
+        if (!TryParsePositiveInt(ConfigurationStatusPollIntervalSeconds, "Status poll interval", out var pollInterval, out var parseError))
+        {
+            ConfigurationErrorMessage = parseError;
+            return;
+        }
+
+        if (!TryParsePositiveInt(ConfigurationClearFaultPulseMs, "Clear fault pulse", out var clearFaultPulse, out parseError))
+        {
+            ConfigurationErrorMessage = parseError;
+            return;
+        }
+
+        if (!TryParsePositiveInt(ConfigurationRequestRetryCount, "Request retry count", out var retryCount, out parseError))
+        {
+            ConfigurationErrorMessage = parseError;
+            return;
+        }
+
+        if (!TryParsePositiveInt(ConfigurationFailurePromptThreshold, "Failure prompt threshold", out var promptThreshold, out parseError))
+        {
+            ConfigurationErrorMessage = parseError;
+            return;
+        }
+
+        var updatedOptions = new RoofControllerApiOptions
+        {
+            BaseUrl = baseUrl,
+            CameraStreamUrl = cameraStream,
+            StatusPollIntervalSeconds = pollInterval,
+            ClearFaultPulseMs = clearFaultPulse,
+            SafetyWatchdogTimeoutSeconds = _options.SafetyWatchdogTimeoutSeconds,
+            RequestRetryCount = retryCount,
+            ConnectionFailurePromptThreshold = promptThreshold
+        };
+
+        var validationResults = new List<ValidationResult>();
+        if (!Validator.TryValidateObject(updatedOptions, new ValidationContext(updatedOptions), validationResults, true))
+        {
+            ConfigurationErrorMessage = string.Join(Environment.NewLine, validationResults.Select(r => r.ErrorMessage).Where(static message => !string.IsNullOrWhiteSpace(message)).Distinct());
+            return;
+        }
+
+        try
+        {
+            IsConfigurationSaving = true;
+
+            var saveResult = await _configurationService.SaveAsync(updatedOptions).ConfigureAwait(false);
+            if (!saveResult.IsSuccessful)
+            {
+                _logger.LogError(saveResult.Error, "Failed to persist roof controller configuration");
+                ConfigurationErrorMessage = saveResult.Error?.Message ?? "Failed to save configuration.";
+                return;
+            }
+
+            ApplyConfigurationToOptions(saveResult.Value);
+            RaiseConfigurationPropertyChanges();
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                PopulateConfigurationFields(saveResult.Value, markClean: true);
+                ConfigurationSuccessMessage = "Configuration saved. Restart the app to apply updated connection settings.";
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            IsConfigurationSaving = false;
+        }
+    }
+
+    private void PopulateConfigurationFields(RoofControllerApiOptions options, bool markClean)
+    {
+        _suppressConfigurationDirty = true;
+
+        try
+        {
+            ConfigurationBaseUrl = options.BaseUrl;
+            ConfigurationCameraStreamUrl = options.CameraStreamUrl ?? string.Empty;
+            ConfigurationStatusPollIntervalSeconds = options.StatusPollIntervalSeconds.ToString(CultureInfo.InvariantCulture);
+            ConfigurationRequestRetryCount = options.RequestRetryCount.ToString(CultureInfo.InvariantCulture);
+            ConfigurationFailurePromptThreshold = options.ConnectionFailurePromptThreshold.ToString(CultureInfo.InvariantCulture);
+            ConfigurationClearFaultPulseMs = options.ClearFaultPulseMs.ToString(CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _suppressConfigurationDirty = false;
+        }
+
+        if (markClean)
+        {
+            IsConfigurationDirty = false;
+        }
+    }
+
+    private void ApplyConfigurationToOptions(RoofControllerApiOptions options)
+    {
+        _options.BaseUrl = options.BaseUrl;
+        _options.CameraStreamUrl = options.CameraStreamUrl;
+        _options.StatusPollIntervalSeconds = options.StatusPollIntervalSeconds;
+        _options.ClearFaultPulseMs = options.ClearFaultPulseMs;
+        _options.SafetyWatchdogTimeoutSeconds = options.SafetyWatchdogTimeoutSeconds;
+        _options.RequestRetryCount = options.RequestRetryCount;
+        _options.ConnectionFailurePromptThreshold = options.ConnectionFailurePromptThreshold;
+        _promptThreshold = Math.Max(1, _options.ConnectionFailurePromptThreshold);
+    }
+
+    private void RaiseConfigurationPropertyChanges()
+    {
+        OnPropertyChanged(nameof(ApiBaseUrl));
+        OnPropertyChanged(nameof(CameraStreamDisplay));
+        OnPropertyChanged(nameof(CameraStreamUri));
+        OnPropertyChanged(nameof(CameraStreamUrl));
+        OnPropertyChanged(nameof(ConfiguredStatusPollIntervalSeconds));
+        OnPropertyChanged(nameof(ConfiguredRequestRetryCount));
+        OnPropertyChanged(nameof(ConfiguredFailurePromptThreshold));
+        OnPropertyChanged(nameof(ConfiguredClearFaultPulseMs));
+        OnPropertyChanged(nameof(SafetyWatchdogTimeoutDisplay));
+        OnPropertyChanged(nameof(WatchdogSecondaryText));
+        OnPropertyChanged(nameof(WatchdogPercentage));
+    }
+
+    private void MarkConfigurationDirty()
+    {
+        if (_suppressConfigurationDirty || !_configurationEditorInitialized)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ConfigurationErrorMessage))
+        {
+            ConfigurationErrorMessage = null;
+        }
+
+        ConfigurationSuccessMessage = null;
+
+        if (!IsConfigurationDirty)
+        {
+            IsConfigurationDirty = true;
+        }
+    }
+
+    private static bool TryParsePositiveInt(string value, string fieldName, out int parsedValue, out string? errorMessage)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedValue) && parsedValue > 0)
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        errorMessage = $"{fieldName} must be a positive whole number.";
+        parsedValue = 0;
+        return false;
+    }
+
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_hasInitialized)
@@ -269,6 +576,8 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
             return;
         }
 
+        var shouldPrompt = false;
+
         try
         {
             if (initialLoad)
@@ -286,6 +595,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
             else
             {
                 await HandleServiceFailureAsync(result.Error!).ConfigureAwait(false);
+                shouldPrompt = true;
             }
         }
         finally
@@ -297,6 +607,11 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
             _refreshLock.Release();
         }
+
+        if (shouldPrompt)
+        {
+            await MaybePromptAsync().ConfigureAwait(false);
+        }
     }
 
     private async Task ExecuteCommandAsync(Func<Task<Result<RoofStatusResponse>>> command, string notificationTitle, string successMessage, string failureMessage)
@@ -305,6 +620,8 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         {
             return;
         }
+
+        var shouldPrompt = false;
 
         try
         {
@@ -319,6 +636,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
             {
                 await HandleServiceFailureAsync(result.Error!).ConfigureAwait(false);
                 AddNotification("Error", failureMessage, NotificationLevel.Error);
+                shouldPrompt = true;
             }
         }
         catch (Exception ex)
@@ -326,11 +644,17 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
             _logger.LogError(ex, "Error executing roof controller command");
             await HandleServiceFailureAsync(ex).ConfigureAwait(false);
             AddNotification("Error", failureMessage, NotificationLevel.Error);
+            shouldPrompt = true;
         }
         finally
         {
             await MainThread.InvokeOnMainThreadAsync(() => IsBusy = false);
             _refreshLock.Release();
+        }
+
+        if (shouldPrompt)
+        {
+            await MaybePromptAsync().ConfigureAwait(false);
         }
     }
 
@@ -338,6 +662,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     {
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
+            _consecutiveFailures = 0;
             IsServiceAvailable = true;
             LastErrorMessage = null;
             CurrentStatus = status.Status;
@@ -388,6 +713,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
     private async Task HandleServiceFailureAsync(Exception error)
     {
+        Interlocked.Increment(ref _consecutiveFailures);
         _logger.LogError(error, "Roof controller API error");
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
@@ -395,7 +721,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
             LastErrorMessage = error.Message;
             ShowServiceBanner = true;
             ServiceBannerTitle = "Service unavailable";
-            ServiceBannerMessage = "The roof controller API could not be reached. Check connectivity and try again.";
+            ServiceBannerMessage = BuildServiceBannerMessage(error);
             ServiceBannerIsError = true;
 
             if (!_serviceUnavailableNotified)
@@ -424,6 +750,50 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         });
     }
 
+    private async Task MaybePromptAsync()
+    {
+        if (_promptThreshold <= 0)
+        {
+            return;
+        }
+
+        if (_consecutiveFailures < _promptThreshold)
+        {
+            return;
+        }
+
+        if (!await _promptSemaphore.WaitAsync(0).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        try
+        {
+            var choice = await _dialogService.ShowConnectivityPromptAsync(
+                "Roof Controller Offline",
+                $"Unable to reach the roof controller after {_consecutiveFailures} attempts.",
+                LastErrorMessage).ConfigureAwait(false);
+
+            switch (choice)
+            {
+                case ConnectivityPromptResult.Retry:
+                    _consecutiveFailures = 0;
+                    await RefreshStatusAsync().ConfigureAwait(false);
+                    break;
+                case ConnectivityPromptResult.Cancel:
+                    _consecutiveFailures = 0;
+                    break;
+                case ConnectivityPromptResult.Exit:
+                    await _dialogService.ExitApplicationAsync().ConfigureAwait(false);
+                    break;
+            }
+        }
+        finally
+        {
+            _promptSemaphore.Release();
+        }
+    }
+
     private void UpdateServiceBanner(bool isError, string? title, string? message)
     {
         MainThread.BeginInvokeOnMainThread(() =>
@@ -444,24 +814,51 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         });
     }
 
+    private static string BuildServiceBannerMessage(Exception error)
+    {
+        const string baseMessage = "The roof controller API could not be reached. Check connectivity and try again.";
+
+        if (string.IsNullOrWhiteSpace(error.Message))
+        {
+            return baseMessage;
+        }
+
+        return $"{baseMessage} ({error.Message})";
+    }
+
     private void AddNotification(string title, string message, NotificationLevel level)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            _notifications.Insert(0, new NotificationItem
+            var item = new NotificationItem
             {
                 Title = title,
                 Message = message,
                 Level = level,
                 Timestamp = DateTime.Now
-            });
+            };
 
-            while (_notifications.Count > 5)
+            LatestNotification = item;
+            _notificationHistory.Insert(0, item);
+
+            const int maxItems = 100;
+            while (_notificationHistory.Count > maxItems)
             {
-                _notifications.RemoveAt(_notifications.Count - 1);
+                _notificationHistory.RemoveAt(_notificationHistory.Count - 1);
             }
+        });
+    }
 
-            OnPropertyChanged(nameof(HasNotifications));
+    partial void OnLatestNotificationChanged(NotificationItem? value)
+    {
+        OnPropertyChanged(nameof(HasLatestNotification));
+    }
+
+    private void OnNotificationHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            OnPropertyChanged(nameof(HasNotificationHistory));
         });
     }
 
@@ -530,7 +927,9 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     {
         StopPolling();
         _refreshLock.Dispose();
+        _promptSemaphore.Dispose();
         _pollingCts?.Dispose();
+        _notificationHistory.CollectionChanged -= OnNotificationHistoryChanged;
     }
 
     partial void OnServiceBannerIsErrorChanged(bool value)

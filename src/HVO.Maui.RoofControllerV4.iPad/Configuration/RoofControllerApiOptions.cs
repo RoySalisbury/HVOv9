@@ -33,6 +33,16 @@ public sealed class RoofControllerApiOptions : IValidatableObject
     public double? SafetyWatchdogTimeoutSeconds { get; set; }
 
     /// <summary>
+    /// Number of retry attempts for API requests before surfacing an error.
+    /// </summary>
+    public int RequestRetryCount { get; set; } = 3;
+
+    /// <summary>
+    /// Consecutive polling failures before prompting the operator with recovery options.
+    /// </summary>
+    public int ConnectionFailurePromptThreshold { get; set; } = 3;
+
+    /// <summary>
     /// Converts the configured BaseUrl into a <see cref="Uri"/> instance.
     /// </summary>
     public Uri GetBaseUri() => new(BaseUrl, UriKind.Absolute);
@@ -73,6 +83,16 @@ public sealed class RoofControllerApiOptions : IValidatableObject
         if (SafetyWatchdogTimeoutSeconds is { } timeout && timeout <= 0)
         {
             yield return new ValidationResult("SafetyWatchdogTimeoutSeconds must be greater than zero when provided.", new[] { nameof(SafetyWatchdogTimeoutSeconds) });
+        }
+
+        if (RequestRetryCount < 1)
+        {
+            yield return new ValidationResult("RequestRetryCount must be at least 1.", new[] { nameof(RequestRetryCount) });
+        }
+
+        if (ConnectionFailurePromptThreshold < 1)
+        {
+            yield return new ValidationResult("ConnectionFailurePromptThreshold must be at least 1.", new[] { nameof(ConnectionFailurePromptThreshold) });
         }
     }
 }
