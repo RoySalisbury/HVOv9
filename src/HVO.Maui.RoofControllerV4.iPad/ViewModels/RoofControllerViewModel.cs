@@ -308,7 +308,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
     public bool CanStop() => !IsBusy && IsServiceAvailable && IsMoving;
 
-    public bool CanClearFault() => !IsBusy && IsServiceAvailable && !IsMoving;
+    public bool CanClearFault() => !IsBusy && IsServiceAvailable && !IsMoving && HasFault;
 
     [RelayCommand(CanExecute = nameof(CanOpen))]
     private async Task OpenAsync()

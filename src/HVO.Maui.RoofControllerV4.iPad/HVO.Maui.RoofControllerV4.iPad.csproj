@@ -8,6 +8,7 @@
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
 		<ApplicationTitle>HVO Roof Controller</ApplicationTitle>
 		<ApplicationId>org.hvo.roofcontroller.v4.ipad</ApplicationId>
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>

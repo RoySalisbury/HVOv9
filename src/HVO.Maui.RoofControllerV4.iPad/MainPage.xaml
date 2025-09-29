@@ -24,8 +24,132 @@
                 <Setter Property="Padding" Value="24,16" />
                 <Setter Property="HeightRequest" Value="64" />
             </Style>
-
             <CornerRadius x:Key="CardCorner">24</CornerRadius>
+
+            <LinearGradientBrush x:Key="ControlButtonDisabledBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#444B54" Offset="0" />
+                <GradientStop Color="#2F343C" Offset="1" />
+            </LinearGradientBrush>
+
+            <LinearGradientBrush x:Key="OpenButtonIdleBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#1F9D63" Offset="0" />
+                <GradientStop Color="#157347" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="OpenButtonPressedBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#0F6C3F" Offset="0" />
+                <GradientStop Color="#0A4C2B" Offset="1" />
+            </LinearGradientBrush>
+
+            <LinearGradientBrush x:Key="StopButtonIdleBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FFD559" Offset="0" />
+                <GradientStop Color="#D39E00" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="StopButtonPressedBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#C89008" Offset="0" />
+                <GradientStop Color="#8F6400" Offset="1" />
+            </LinearGradientBrush>
+
+            <LinearGradientBrush x:Key="CloseButtonIdleBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#E24B59" Offset="0" />
+                <GradientStop Color="#B12A37" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="CloseButtonPressedBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#9D1D2A" Offset="0" />
+                <GradientStop Color="#6C1019" Offset="1" />
+            </LinearGradientBrush>
+
+            <LinearGradientBrush x:Key="FaultButtonIdleBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FF6B6B" Offset="0" />
+                <GradientStop Color="#C22739" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="FaultButtonPressedBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#C22739" Offset="0" />
+                <GradientStop Color="#831321" Offset="1" />
+            </LinearGradientBrush>
+
+            <Style x:Key="ControlButtonBaseStyle" TargetType="Button">
+                <Setter Property="WidthRequest" Value="150" />
+                <Setter Property="HeightRequest" Value="96" />
+                <Setter Property="FontSize" Value="20" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="CornerRadius" Value="24" />
+                <Setter Property="Padding" Value="12,10" />
+                <Setter Property="TextColor" Value="#F8F9FA" />
+                <Setter Property="BorderWidth" Value="2" />
+                <Setter Property="Shadow">
+                    <Setter.Value>
+                        <Shadow Brush="#66000000" Offset="0,6" Radius="14" />
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="HorizontalOptions" Value="Center" />
+                <Setter Property="VerticalOptions" Value="Center" />
+            </Style>
+
+            <Style x:Key="OpenControlButtonStyle" TargetType="Button" BasedOn="{StaticResource ControlButtonBaseStyle}">
+                <Setter Property="Background" Value="{StaticResource OpenButtonIdleBrush}" />
+                <Setter Property="BorderColor" Value="#52D197" />
+                <Style.Triggers>
+                    <Trigger TargetType="Button" Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{StaticResource OpenButtonPressedBrush}" />
+                        <Setter Property="BorderColor" Value="#0B3F27" />
+                    </Trigger>
+                    <Trigger TargetType="Button" Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
+                        <Setter Property="BorderColor" Value="#3C424D" />
+                        <Setter Property="TextColor" Value="#ADB5BD" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="StopControlButtonStyle" TargetType="Button" BasedOn="{StaticResource ControlButtonBaseStyle}">
+                <Setter Property="Background" Value="{StaticResource StopButtonIdleBrush}" />
+                <Setter Property="BorderColor" Value="#FFE184" />
+                <Setter Property="TextColor" Value="#1B1F24" />
+                <Style.Triggers>
+                    <Trigger TargetType="Button" Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{StaticResource StopButtonPressedBrush}" />
+                        <Setter Property="BorderColor" Value="#593B00" />
+                        <Setter Property="TextColor" Value="#F8F9FA" />
+                    </Trigger>
+                    <Trigger TargetType="Button" Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
+                        <Setter Property="BorderColor" Value="#3C424D" />
+                        <Setter Property="TextColor" Value="#ADB5BD" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="CloseControlButtonStyle" TargetType="Button" BasedOn="{StaticResource ControlButtonBaseStyle}">
+                <Setter Property="Background" Value="{StaticResource CloseButtonIdleBrush}" />
+                <Setter Property="BorderColor" Value="#FF92A0" />
+                <Style.Triggers>
+                    <Trigger TargetType="Button" Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{StaticResource CloseButtonPressedBrush}" />
+                        <Setter Property="BorderColor" Value="#3A070C" />
+                    </Trigger>
+                    <Trigger TargetType="Button" Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
+                        <Setter Property="BorderColor" Value="#3C424D" />
+                        <Setter Property="TextColor" Value="#ADB5BD" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="FaultControlButtonStyle" TargetType="Button" BasedOn="{StaticResource ControlButtonBaseStyle}">
+                <Setter Property="Background" Value="{StaticResource FaultButtonIdleBrush}" />
+                <Setter Property="BorderColor" Value="#FFC2C6" />
+                <Style.Triggers>
+                    <Trigger TargetType="Button" Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{StaticResource FaultButtonPressedBrush}" />
+                        <Setter Property="BorderColor" Value="#48090F" />
+                    </Trigger>
+                    <Trigger TargetType="Button" Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
+                        <Setter Property="BorderColor" Value="#3C424D" />
+                        <Setter Property="TextColor" Value="#ADB5BD" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -135,33 +259,34 @@
                        FontSize="22"
                        FontAttributes="Bold"
                        TextColor="#F8F9FA" />
-                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
+                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="16">
                     <Button Grid.Column="0"
-                         Text="Open"
-                         Command="{Binding OpenCommand}"
-                         Style="{StaticResource CommandButtonStyle}"
-                         BackgroundColor="#198754"
-                         TextColor="White" />
+                            Text="Open"
+                            Command="{Binding OpenCommand}"
+                            Style="{StaticResource OpenControlButtonStyle}"
+                            SemanticProperties.Description="Open the observatory roof"
+                            SemanticProperties.Hint="Initiates the roof opening sequence" />
+
                     <Button Grid.Column="1"
-                         Text="Stop"
-                         Command="{Binding StopCommand}"
-                         Style="{StaticResource CommandButtonStyle}"
-                         BackgroundColor="#FFC107"
-                         TextColor="#1B1F24" />
+                            Text="Stop"
+                            Command="{Binding StopCommand}"
+                            Style="{StaticResource StopControlButtonStyle}"
+                            SemanticProperties.Description="Stop the roof movement"
+                            SemanticProperties.Hint="Halts any active roof movement" />
+
                     <Button Grid.Column="2"
-                         Text="Close"
-                         Command="{Binding CloseCommand}"
-                         Style="{StaticResource CommandButtonStyle}"
-                         BackgroundColor="#DC3545"
-                         TextColor="White" />
+                            Text="Close"
+                            Command="{Binding CloseCommand}"
+                            Style="{StaticResource CloseControlButtonStyle}"
+                            SemanticProperties.Description="Close the observatory roof"
+                            SemanticProperties.Hint="Starts closing the roof" />
+
                     <Button Grid.Column="3"
-                         Text="Clear Fault"
-                         Command="{Binding ClearFaultCommand}"
-                         Style="{StaticResource CommandButtonStyle}"
-                         BackgroundColor="Transparent"
-                         TextColor="#DC3545"
-                         BorderColor="#DC3545"
-                         BorderWidth="2" />
+                            Text="Clear Fault"
+                            Command="{Binding ClearFaultCommand}"
+                            Style="{StaticResource FaultControlButtonStyle}"
+                            SemanticProperties.Description="Clear roof fault"
+                            SemanticProperties.Hint="Attempts to clear an active fault when safe" />
                 </Grid>
             </VerticalStackLayout>
         </Border>
