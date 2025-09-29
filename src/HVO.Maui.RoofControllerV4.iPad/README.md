@@ -29,7 +29,7 @@ The default Visual Studio Code launch configuration invokes the same script, so 
 
 ## Troubleshooting and Log Collection
 
-During development, its often helpful to tail the simulator logs filtered to the Roof Controller app:
+During development, it’s often helpful to tail the simulator logs filtered to the Roof Controller app:
 
 ```bash
 xcrun simctl spawn F878E277-60EC-43CF-90EC-B1C9050549E6 \
@@ -60,3 +60,5 @@ Common issues to watch for:
 - `scripts/run-roofcontroller-ipad-sim.sh`: build/deploy automation logic.
 - `Services/RoofControllerApiClient.cs`: HTTP client implementation and serializer configuration.
 - `Configuration/appsettings.json`: Local configuration defaults (API base address, logging levels, etc.).
+- `Resources/Splash/splash.svg`: Vector splash artwork shown during cold start (derived from the observatory branding).
+- `Resources/Fonts/MaterialSymbolsOutlined.ttf`: Material Symbols Outlined icon font (Apache 2.0) used for tab glyphs.

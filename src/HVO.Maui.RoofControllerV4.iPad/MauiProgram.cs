@@ -22,6 +22,13 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+				fonts.AddFont("material-symbols-outlined-latin-100-normal.ttf", "MaterialSymbolsOutlined100");
+				fonts.AddFont("material-symbols-outlined-latin-200-normal.ttf", "MaterialSymbolsOutlined200");
+				fonts.AddFont("material-symbols-outlined-latin-300-normal.ttf", "MaterialSymbolsOutlined300");
+				fonts.AddFont("material-symbols-outlined-latin-400-normal.ttf", "MaterialSymbolsOutlined400");
+				fonts.AddFont("material-symbols-outlined-latin-500-normal.ttf", "MaterialSymbolsOutlined500");
+				fonts.AddFont("material-symbols-outlined-latin-600-normal.ttf", "MaterialSymbolsOutlined600");
+				fonts.AddFont("material-symbols-outlined-latin-700-normal.ttf", "MaterialSymbolsOutlined700");
 			});
 
 		AddConfiguration(builder);

@@ -19,6 +19,20 @@
             "stopAtEntry": false
         },
         {
+            "name": "Run: HVO Roof Controller iPad Device",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "run:roofv4:ipad:device:debug",
+            "program": "/usr/local/share/dotnet/dotnet",
+            "args": [
+                "--info"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "internalConsoleOptions": "neverOpen",
+            "stopAtEntry": false
+        },
+        {
             "name": ".NET Debug: HVO.WebSite.v9",
             "type": "coreclr",
             "request": "launch",

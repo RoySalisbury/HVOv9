@@ -105,6 +105,38 @@ Run tests:
 dotnet test
 ```
 
+## iPad/iPhone deployment helpers
+
+Two Apple devices are currently paired with the development machine. You can confirm they are visible to Xcode tooling with either command below:
+
+```
+xcrun devicectl list devices
+xcrun xctrace list devices
+```
+
+| Friendly name               | Core Device identifier                       | Model                         | iOS version | UDID                     |
+|----------------------------|----------------------------------------------|-------------------------------|-------------|--------------------------|
+| Roy’s iPad                 | `6D6F1F70-66B7-5574-BE56-169737777049`       | iPad Pro (11-inch) (iPad8,3)  | 18.6.2      | `00008027-000209091122002E` |
+| roys@express-is.net (iPhone12) | `63B634A9-A714-51B6-8DC3-1E1F111900AC`   | iPhone 12 Pro (iPhone13,3)    | 18.6.2      | `00008101-000B04193420001E` |
+
+Use the `scripts/run-roofcontroller-ipad-device.sh` helper to build, install, and launch the MAUI app on a physical device. Examples:
+
+```zsh
+# Run once per terminal session to target Roy’s iPad by default
+export HVO_ROOF_IPAD_DEVICE_UDID=00008027-000209091122002E
+
+# Deploy a Debug build (UDID picked up from environment)
+./scripts/run-roofcontroller-ipad-device.sh --configuration Debug --console
+
+# Deploy a Release build to the paired iPhone 12 explicitly
+./scripts/run-roofcontroller-ipad-device.sh \
+   --udid 00008101-000B04193420001E \
+      --configuration Release \
+      --no-console
+```
+
+The script keeps the terminal attached to the device console. Press `Ctrl+C` when you’re ready to detach.
+
 ## Docker deployment
 
 - [RoofController V4 Docker guide](docs/roofcontrollerv4-docker.md) – build and run the roof controller on a Raspberry Pi 5 with GPIO/I²C access inside a minimal container.

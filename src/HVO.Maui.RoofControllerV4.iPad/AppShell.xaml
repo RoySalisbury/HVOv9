@@ -10,30 +10,38 @@
     shell:Shell.NavBarIsVisible="False">
 
     <TabBar>
-        <Tab Title="Dashboard" Icon="ic_tab_dashboard.svg">
+        <Tab Title="Dashboard">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialSymbolsOutlined200" Glyph="&#xE88A;" Color="#F8F9FA" />
+            </Tab.Icon>
             <ShellContent
-                Icon="ic_tab_dashboard.svg"
                 ContentTemplate="{DataTemplate local:MainPage}"
                 Route="MainPage" />
         </Tab>
 
-        <Tab Title="Camera" Icon="ic_tab_camera.svg">
+        <Tab Title="Camera">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialSymbolsOutlined200" Glyph="&#xE412;" Color="#F8F9FA" />
+            </Tab.Icon>
             <ShellContent
-                Icon="ic_tab_camera.svg"
                 ContentTemplate="{DataTemplate local:CameraPage}"
                 Route="CameraPage" />
         </Tab>
 
-        <Tab Title="History" Icon="ic_tab_history.svg">
+        <Tab Title="History">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialSymbolsOutlined200" Glyph="&#xE889;" Color="#F8F9FA" />
+            </Tab.Icon>
             <ShellContent
-                Icon="ic_tab_history.svg"
                 ContentTemplate="{DataTemplate local:HistoryPage}"
                 Route="HistoryPage" />
         </Tab>
 
-        <Tab Title="Configuration" Icon="ic_tab_configuration.svg">
+        <Tab Title="Configuration">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialSymbolsOutlined200" Glyph="&#xE8B8;" Color="#F8F9FA" />
+            </Tab.Icon>
             <ShellContent
-                Icon="ic_tab_configuration.svg"
                 ContentTemplate="{DataTemplate local:ConfigurationPage}"
                 Route="ConfigurationPage" />
         </Tab>

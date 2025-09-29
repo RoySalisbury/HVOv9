@@ -15,10 +15,15 @@
 		<SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
 	</PropertyGroup>
 
+	<PropertyGroup Condition="'$(Configuration)'=='Debug' And '$(TargetFramework)'=='net9.0-ios'">
+        <MtouchUseLlvm>false</MtouchUseLlvm>
+    </PropertyGroup>
+
 	<ItemGroup>
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2B3035" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#10131A" BaseSize="256,256" />
 		<MauiImage Include="Resources\Images\**" />
+		<MauiImage Update="Resources\Images\ic_tab_*.svg" BaseSize="32,32" />
 		<MauiFont Include="Resources\Fonts\**" />
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>

@@ -89,7 +89,8 @@
       "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-sim.sh",
       "args": [
         "--configuration",
-        "Debug"
+        "Debug",
+        "--no-console"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -106,10 +107,51 @@
       "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-sim.sh",
       "args": [
         "--configuration",
-        "Release"
+        "Release",
+        "--no-console"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run:roofv4:ipad:device:debug",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-device.sh",
+      "args": [
+        "--configuration",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "HVO_ROOF_IPAD_DEVICE_UDID": "${env:HVO_ROOF_IPAD_DEVICE_UDID}"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run:roofv4:ipad:device:release",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-device.sh",
+      "args": [
+        "--configuration",
+        "Release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "HVO_ROOF_IPAD_DEVICE_UDID": "${env:HVO_ROOF_IPAD_DEVICE_UDID}"
+        }
       },
       "problemMatcher": [],
       "presentation": {
