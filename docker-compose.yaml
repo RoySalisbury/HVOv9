@@ -3,7 +3,7 @@ services:
     image: hvov9/roof-controller:v4
     build:
       context: .
-      dockerfile: src/HVO.WebSite.RoofControllerV4/Dockerfile
+      dockerfile: "src/HVO.RoofControllerV4.RPi/Dockerfile"
       platforms:
         - linux/arm64
     restart: unless-stopped

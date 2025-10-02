@@ -5,9 +5,9 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Include>[HVO.WebSite.RoofControllerV4]*</Include>
+          <Include>[HVO.RoofControllerV4.RPi]*</Include>
           <Include>[HVO.Iot.Devices]*</Include>
-          <Exclude>[HVO.WebSite.RoofControllerV4.Tests]*</Exclude>
+          <Exclude>[HVO.RoofControllerV4.RPi.Tests]*</Exclude>
           <Exclude>[*.Tests]*</Exclude>
           <SkipAutoProps>true</SkipAutoProps>
           <UseSourceLink>true</UseSourceLink>

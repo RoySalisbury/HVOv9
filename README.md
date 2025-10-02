@@ -29,7 +29,7 @@ src/
 ├── HVO.Iot.Devices/           # IoT abstractions & implementations
 ├── HVO.Iot.Devices.Tests/     # IoT tests
 ├── HVO.WebSite.Playground/    # Web app (Blazor Server + APIs)
-└── HVO.WebSite.RoofControllerV4/  # Roof controller app
+└── HVO.RoofControllerV4.RPi/      # Roof controller app
 ```
 
 ## Hardware driver abstraction pattern (I²C devices)
@@ -193,6 +193,7 @@ gh pr edit --add-label "integration-tests"
 
 - OpenAPI JSON:  /openapi/v1.json
 - Scalar UI:     /scalar/v1 (Development only)
+- REST Client collection: `src/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.http` (status, configuration, motion, fault-clear endpoints)
 
 Example requests (Development defaults):
 ```bash

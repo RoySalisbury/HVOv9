@@ -1,6 +1,6 @@
 # Docker Build & Deployment Guide
 
-This guide captures the end-to-end workflow for building and running the `HVO.WebSite.RoofControllerV4` application in Docker while keeping access to Raspberry Pi hardware peripherals (GPIO, I²C, and temperature telemetry).
+This guide captures the end-to-end workflow for building and running the `HVO.RoofControllerV4.RPi` application in Docker while keeping access to Raspberry Pi hardware peripherals (GPIO, I²C, and temperature telemetry).
 
 > **TL;DR** – the container must either run with `--privileged` **or** receive explicit device mounts for `/dev/i2c-1` and `/dev/gpiomem0` (plus any other sensors you need). Without that access the roof controller will fall back to simulation and the hardware relays will not actuate.
 
@@ -32,7 +32,7 @@ This guide captures the end-to-end workflow for building and running the `HVO.We
 cd HVOv9
 
 docker build \
-  -f src/HVO.WebSite.RoofControllerV4/Dockerfile \
+  -f src/HVO.RoofControllerV4.RPi/Dockerfile \
   -t hvov9/roof-controller:v4 \
   .
 ```
@@ -41,7 +41,7 @@ docker build \
 ```bash
 docker buildx build \
   --platform linux/arm64 \
-  -f src/HVO.WebSite.RoofControllerV4/Dockerfile \
+  -f src/HVO.RoofControllerV4.RPi/Dockerfile \
   -t hvov9/roof-controller:v4 \
   .
 ```
@@ -207,7 +207,7 @@ Compose will recreate the container only when the image or configuration changes
 docker rm -f roof-controller
 
 # Rebuild the image
-docker build -f src/HVO.WebSite.RoofControllerV4/Dockerfile -t hvov9/roof-controller:v4 .
+docker build -f src/HVO.RoofControllerV4.RPi/Dockerfile -t hvov9/roof-controller:v4 .
 
 # Re-run (choose privileged or minimal device approach)
 docker run -d --name roof-controller --device /dev/gpiomem0:/dev/gpiomem --device /dev/i2c-1 -p 8080:8080 hvov9/roof-controller:v4
@@ -231,6 +231,6 @@ For CI/CD scenarios push the tagged image to your registry of choice and pull on
 ## 9. Related Documentation
 
 - `docs/roofcontrollerv4-docker.md` – deep dive walkthrough (original notes; kept for historical context).
-- `src/HVO.WebSite.RoofControllerV4/Documents/HARDWARE_OVERVIEW.md` – hardware wiring and device overview.
+- `src/HVO.RoofControllerV4.RPi/Documents/HARDWARE_OVERVIEW.md` – hardware wiring and device overview.
 
 Keep this guide up to date whenever Docker build arguments or runtime flags change so deployments stay repeatable.

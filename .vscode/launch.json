@@ -97,13 +97,13 @@
         },
         
         {
-            "name": ".NET Debug (HTTP only): HVO.WebSite.RoofControllerV4",
+            "name": ".NET Debug (HTTP only): HVO.RoofControllerV4.RPi",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "prepare:roofv4:debug",
-            "program": "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/bin/Debug/net9.0/HVO.WebSite.RoofControllerV4.dll",
+            "program": "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/bin/Debug/net9.0/HVO.RoofControllerV4.RPi.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/bin/Debug/net9.0",
+            "cwd": "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/bin/Debug/net9.0",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
                 "DOTNET_ENVIRONMENT": "Development",
@@ -118,13 +118,13 @@
             }
         },
         {
-            "name": ".NET Debug: HVO.WebSite.RoofControllerV4",
+            "name": ".NET Debug: HVO.RoofControllerV4.RPi",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "prepare:roofv4:debug",
-            "program": "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/bin/Debug/net9.0/HVO.WebSite.RoofControllerV4.dll",
+            "program": "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/bin/Debug/net9.0/HVO.RoofControllerV4.RPi.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/bin/Debug/net9.0",
+            "cwd": "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/bin/Debug/net9.0",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
                 "DOTNET_ENVIRONMENT": "Development",
@@ -139,13 +139,13 @@
             }
         },
         {
-            "name": ".NET Release: HVO.WebSite.RoofControllerV4",
+            "name": ".NET Release: HVO.RoofControllerV4.RPi",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "prepare:roofv4:release",
-            "program": "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/bin/Release/net9.0/HVO.WebSite.RoofControllerV4.dll",
+            "program": "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/bin/Release/net9.0/HVO.RoofControllerV4.RPi.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/bin/Release/net9.0",
+            "cwd": "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/bin/Release/net9.0",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Production",
                 "DOTNET_ENVIRONMENT": "Production",

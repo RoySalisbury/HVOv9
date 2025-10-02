@@ -13,7 +13,7 @@ All test projects have been standardized to use **MSTest** instead of xUnit for 
 - **HVO.WebSite.Playground.Tests** - Successfully converted to MSTest
 
 ### 🔄 Conversion in Progress
-- **HVO.WebSite.RoofControllerV4.Tests** - Partially converted, requires manual syntax fixes
+- **HVO.RoofControllerV4.RPi.Tests** - Partially converted, requires manual syntax fixes
 
 ## Project Configuration
 

@@ -1,8 +1,9 @@
 <Solution>
   <Folder Name="/RoofController/">
-    <Project Path="HVO.WebSite.RoofControllerV4.Tests/HVO.WebSite.RoofControllerV4.Tests.csproj" />
-    <Project Path="HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj" />
-    <Project Path="HVO.Maui.RoofControllerV4.iPad/HVO.Maui.RoofControllerV4.iPad.csproj" />
+  <Project Path="HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj" />
+  <Project Path="HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj" />
+  <Project Path="HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj" />
+  <Project Path="HVO.RoofControllerV4.Common/HVO.RoofControllerV4.Common.csproj" />
   </Folder>
   <Folder Name="/SkyMonitor/">
     <Project Path="HVO.CLI.SkyMonitor/HVO.CLI.SkyMonitor.csproj" />

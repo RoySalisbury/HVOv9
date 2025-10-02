@@ -1,6 +1,6 @@
 # Running HVO RoofController V4 in Docker on Raspberry Pi 5
 
-This guide documents how to build and run the `HVO.WebSite.RoofControllerV4` web application inside a Docker container on a Raspberry Pi 5. The application interacts with GPIO pins, I²C peripherals, and reads the CPU temperature sensor, so the container must be granted access to those hardware resources.
+This guide documents how to build and run the `HVO.RoofControllerV4.RPi` web application inside a Docker container on a Raspberry Pi 5. The application interacts with GPIO pins, I²C peripherals, and reads the CPU temperature sensor, so the container must be granted access to those hardware resources.
 
 ## Prerequisites
 
@@ -25,14 +25,14 @@ This guide documents how to build and run the `HVO.WebSite.RoofControllerV4` web
 ```bash
 # On the Raspberry Pi 5 (native build)
 docker build \
-  -f src/HVO.WebSite.RoofControllerV4/Dockerfile \
+  -f src/HVO.RoofControllerV4.RPi/Dockerfile \
   -t hvov9/roof-controller:v4 \
   .
 
 # From another machine with Buildx enabled (cross-build)
 docker buildx build \
   --platform linux/arm64 \
-  -f src/HVO.WebSite.RoofControllerV4/Dockerfile \
+  -f src/HVO.RoofControllerV4.RPi/Dockerfile \
   -t hvov9/roof-controller:v4 \
   .
 ```
@@ -43,9 +43,6 @@ The Dockerfile publishes the app for the `linux-arm64` runtime and produces a mi
 
 The application needs access to:
 
-- `/dev/gpiomem` for GPIO operations.
-- `/dev/i2c-1` (or the appropriate bus) for I²C peripherals.
-- `/sys/class/thermal/thermal_zone0/temp` for CPU temperature readings.
 
 Launch the container with the relevant devices mounted read-only:
 
@@ -62,11 +59,6 @@ docker run -d \
 
 ### Additional runtime tips
 
-- If your I²C bus uses a different device (e.g., `/dev/i2c-0`), adjust the `--device` flag accordingly.
-- Raspberry Pi 5 exposes multiple memory-mapped GPIO devices (`/dev/gpiomem0`, `/dev/gpiomem1`, ...). Map the one you need into the container—for example `--device /dev/gpiomem0:/dev/gpiomem`—or run `ls /dev/gpiomem*` to confirm the available node names.
-- Run the container as root (default) so the process has permission to access the device nodes. If you prefer a non-root user, ensure the container user has the same group IDs as the host `gpio` and `i2c` groups.
-- The container exposes port `8080`. Update the `-p` mapping if you need a different host port.
-- Health checks hit `http://localhost:8080/health/live`. Confirm this endpoint stays enabled in your deployment configuration.
 
 ## Environment configuration
 
@@ -95,7 +87,7 @@ When the application changes, rebuild and redeploy:
 docker rm -f roof-controller
 
 # Rebuild
-docker build -f src/HVO.WebSite.RoofControllerV4/Dockerfile -t hvov9/roof-controller:v4 .
+docker build -f src/HVO.RoofControllerV4.RPi/Dockerfile -t hvov9/roof-controller:v4 .
 
 # Run again with the same device mounts
 docker run -d --name roof-controller ... hvov9/roof-controller:v4
@@ -103,8 +95,5 @@ docker run -d --name roof-controller ... hvov9/roof-controller:v4
 
 ## Troubleshooting
 
-- **Permission denied for GPIO or I²C**: Confirm the host devices exist (`ls /dev/gpiomem`, `ls /dev/i2c-*`) and that the container is started with the appropriate `--device` flags. Running as root inside the container avoids group mismatches.
-- **Missing CPU temperature file**: Some Pi OS builds expose the sensor under a different thermal zone. Run `ls /sys/class/thermal` on the host to find the correct path and adjust the bind mount.
-- **Build fails on ARM64 cross-compilation**: Ensure Docker Buildx is enabled (`docker buildx ls`) and the `docker-container` builder supports `linux/arm64`. Alternatively, build directly on the Raspberry Pi.
 
 With these steps the RoofController V4 web site runs inside a lightweight container while retaining access to the Raspberry Pi's GPIO, I²C, and thermal telemetry.

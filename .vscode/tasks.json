@@ -15,7 +15,7 @@
       }
     },
 
-    // ================= RoofControllerV4 Tasks =================
+  // ================= RoofControllerV4 (RPi) Tasks =================
     {
       "label": "kill:roofv4",
       "type": "shell",
@@ -51,7 +51,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj",
+  "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
         "-c",
         "Debug"
       ],
@@ -70,7 +70,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.WebSite.RoofControllerV4/HVO.WebSite.RoofControllerV4.csproj",
+  "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
         "-c",
         "Release"
       ],

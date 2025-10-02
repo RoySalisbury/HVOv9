@@ -92,7 +92,7 @@ jobs:
         test-project:
           - HVO.Iot.Devices.Tests
           - HVO.WebSite.Playground.Tests
-          - HVO.WebSite.RoofControllerV4.Tests
+          - HVO.RoofControllerV4.RPi.Tests
           - HVO.WebSite.v9.Tests
 
     env:
@@ -158,7 +158,7 @@ jobs:
         test-project:
           - HVO.Iot.Devices.Tests
           - HVO.WebSite.Playground.Tests
-          - HVO.WebSite.RoofControllerV4.Tests
+          - HVO.RoofControllerV4.RPi.Tests
           - HVO.WebSite.v9.Tests
 
     env:
