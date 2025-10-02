@@ -362,6 +362,11 @@
                         <Label Text="{Binding WatchdogSecondaryText}"
                                Style="{StaticResource ValueLabelStyle}"
                                FontSize="14" />
+               <Label Text="{Binding RemoteRestartOnFailureWaitTimeDisplay}"
+                   Style="{StaticResource ValueLabelStyle}"
+                   FontSize="14"
+                   TextColor="#ADB5BD"
+                   IsVisible="{Binding HasRemoteRestartOnFailureWaitTime}" />
                     </VerticalStackLayout>
 
                     <Label Grid.Row="2" Grid.Column="2"

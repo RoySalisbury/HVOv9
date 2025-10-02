@@ -44,6 +44,8 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     private bool _configurationEditorInitialized;
     private bool _isLoadingConfigurationEditor;
     private bool _suppressConfigurationDirty;
+    private bool _suppressRemoteConfigurationDirty;
+    private RoofConfigurationResponse? _remoteConfigurationSnapshot;
 
     public RoofControllerViewModel(
         IRoofControllerApiClient apiClient,
@@ -152,6 +154,62 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     private string? configurationSuccessMessage;
 
+    [ObservableProperty]
+    private string remoteSafetyWatchdogTimeoutSeconds = string.Empty;
+
+    [ObservableProperty]
+    private string remoteOpenRelayId = string.Empty;
+
+    [ObservableProperty]
+    private string remoteCloseRelayId = string.Empty;
+
+    [ObservableProperty]
+    private string remoteClearFaultRelayId = string.Empty;
+
+    [ObservableProperty]
+    private string remoteStopRelayId = string.Empty;
+
+    [ObservableProperty]
+    private string remoteDigitalInputPollIntervalMilliseconds = string.Empty;
+
+    [ObservableProperty]
+    private string remotePeriodicVerificationIntervalSeconds = string.Empty;
+
+    [ObservableProperty]
+    private string remoteLimitSwitchDebounceMilliseconds = string.Empty;
+
+    [ObservableProperty]
+    private bool remoteEnableDigitalInputPolling;
+
+    [ObservableProperty]
+    private bool remoteEnablePeriodicVerificationWhileMoving;
+
+    [ObservableProperty]
+    private bool remoteUseNormallyClosedLimitSwitches;
+
+    [ObservableProperty]
+    private bool remoteIgnorePhysicalLimitSwitches;
+
+    [ObservableProperty]
+    private string remoteRestartOnFailureWaitTimeSeconds = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveRemoteConfigurationCommand))]
+    private bool isRemoteConfigurationSaving;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveRemoteConfigurationCommand))]
+    private bool isRemoteConfigurationDirty;
+
+    [ObservableProperty]
+    private string? remoteConfigurationErrorMessage;
+
+    [ObservableProperty]
+    private string? remoteConfigurationSuccessMessage;
+
+    [ObservableProperty]
+    private bool isRemoteConfigurationRefreshing;
+
     #endregion
 
     partial void OnConfigurationBaseUrlChanged(string value) => MarkConfigurationDirty();
@@ -170,9 +228,53 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
     partial void OnConfigurationSuccessMessageChanged(string? value) => OnPropertyChanged(nameof(HasConfigurationSuccess));
 
+    partial void OnRemoteSafetyWatchdogTimeoutSecondsChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteOpenRelayIdChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteCloseRelayIdChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteClearFaultRelayIdChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteStopRelayIdChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteDigitalInputPollIntervalMillisecondsChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemotePeriodicVerificationIntervalSecondsChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteLimitSwitchDebounceMillisecondsChanged(string value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteEnableDigitalInputPollingChanged(bool value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteEnablePeriodicVerificationWhileMovingChanged(bool value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteUseNormallyClosedLimitSwitchesChanged(bool value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteIgnorePhysicalLimitSwitchesChanged(bool value) => MarkRemoteConfigurationDirty();
+
+    partial void OnRemoteRestartOnFailureWaitTimeSecondsChanged(string value)
+    {
+        OnPropertyChanged(nameof(RemoteRestartOnFailureWaitTimeDisplay));
+        OnPropertyChanged(nameof(HasRemoteRestartOnFailureWaitTime));
+    }
+
+    partial void OnRemoteConfigurationErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasRemoteConfigurationError));
+
+    partial void OnRemoteConfigurationSuccessMessageChanged(string? value) => OnPropertyChanged(nameof(HasRemoteConfigurationSuccess));
+
+    partial void OnIsRemoteConfigurationSavingChanged(bool value) => OnPropertyChanged(nameof(IsRemoteConfigurationBusy));
+
+    partial void OnIsRemoteConfigurationRefreshingChanged(bool value) => OnPropertyChanged(nameof(IsRemoteConfigurationBusy));
+
     public bool HasConfigurationError => !string.IsNullOrWhiteSpace(ConfigurationErrorMessage);
 
     public bool HasConfigurationSuccess => !string.IsNullOrWhiteSpace(ConfigurationSuccessMessage);
+
+    public bool HasRemoteConfigurationError => !string.IsNullOrWhiteSpace(RemoteConfigurationErrorMessage);
+
+    public bool HasRemoteConfigurationSuccess => !string.IsNullOrWhiteSpace(RemoteConfigurationSuccessMessage);
+
+    public bool IsRemoteConfigurationBusy => IsRemoteConfigurationSaving || IsRemoteConfigurationRefreshing;
 
     public bool HasFault => CurrentStatus == RoofControllerStatus.Error;
 
@@ -223,7 +325,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
                 return 0d;
             }
 
-            var timeout = _options.SafetyWatchdogTimeoutSeconds;
+            var timeout = GetConfiguredWatchdogTimeoutSeconds();
             if (timeout is null or <= 0)
             {
                 return 0d;
@@ -279,9 +381,16 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
     public int ConfiguredClearFaultPulseMs => _options.ClearFaultPulseMs;
 
-    public string SafetyWatchdogTimeoutDisplay => _options.SafetyWatchdogTimeoutSeconds is double value
-        ? $"{value:F0} seconds"
-        : "Not configured";
+    public string SafetyWatchdogTimeoutDisplay
+    {
+        get
+        {
+            var value = GetConfiguredWatchdogTimeoutSeconds();
+            return value is { } seconds and > 0
+                ? $"{seconds:F0} seconds"
+                : "Not configured";
+        }
+    }
 
     public string WatchdogStatusText => IsWatchdogActive ? "Active" : "Standby";
 
@@ -294,11 +403,19 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
                 return $"{Math.Max(WatchdogSecondsRemaining, 0):F0}s remaining";
             }
 
-            return _options.SafetyWatchdogTimeoutSeconds is double timeout
-                ? $"Timeout {timeout:F0}s"
+            var timeout = GetConfiguredWatchdogTimeoutSeconds();
+
+            return timeout is { } configuredTimeout and > 0
+                ? $"Timeout {configuredTimeout:F0}s"
                 : "Timeout not configured";
         }
     }
+
+    public string RemoteRestartOnFailureWaitTimeDisplay => string.IsNullOrWhiteSpace(RemoteRestartOnFailureWaitTimeSeconds)
+        ? "Restart wait not reported"
+        : $"Restart wait {RemoteRestartOnFailureWaitTimeSeconds}s";
+
+    public bool HasRemoteRestartOnFailureWaitTime => !string.IsNullOrWhiteSpace(RemoteRestartOnFailureWaitTimeSeconds);
 
     public Color ServiceBannerColor => ServiceBannerIsError ? Color.FromArgb("#dc3545") : Color.FromArgb("#f0ad4e");
 
@@ -376,6 +493,8 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
                 PopulateConfigurationFields(effectiveOptions, markClean: true);
             }).ConfigureAwait(false);
+
+            await FetchRemoteConfigurationAsync(showSuccessMessage: false, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -523,6 +642,191 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(WatchdogPercentage));
     }
 
+    public bool CanSaveRemoteConfiguration() => !IsRemoteConfigurationSaving && IsRemoteConfigurationDirty;
+
+    [RelayCommand(CanExecute = nameof(CanSaveRemoteConfiguration))]
+    private async Task SaveRemoteConfigurationAsync()
+    {
+        RemoteConfigurationErrorMessage = null;
+        RemoteConfigurationSuccessMessage = null;
+
+        if (!TryBuildRemoteConfigurationRequest(out var request, out var validationError))
+        {
+            RemoteConfigurationErrorMessage = validationError;
+            return;
+        }
+
+        try
+        {
+            IsRemoteConfigurationSaving = true;
+            var result = await _apiClient.UpdateConfigurationAsync(request).ConfigureAwait(false);
+            if (!result.IsSuccessful)
+            {
+                _logger.LogError(result.Error, "Failed to update roof controller configuration");
+                RemoteConfigurationErrorMessage = result.Error?.Message ?? "Failed to update controller configuration.";
+                return;
+            }
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                PopulateRemoteConfigurationFields(result.Value, markClean: true);
+                RemoteConfigurationSuccessMessage = "Controller configuration updated.";
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            IsRemoteConfigurationSaving = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RefreshRemoteConfigurationAsync()
+    {
+        await FetchRemoteConfigurationAsync(showSuccessMessage: true).ConfigureAwait(false);
+    }
+
+    private async Task FetchRemoteConfigurationAsync(bool showSuccessMessage, CancellationToken cancellationToken = default)
+    {
+        if (IsRemoteConfigurationRefreshing)
+        {
+            return;
+        }
+
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            IsRemoteConfigurationRefreshing = true;
+            if (!showSuccessMessage)
+            {
+                RemoteConfigurationSuccessMessage = null;
+            }
+        });
+
+        try
+        {
+            var result = await _apiClient.GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
+            if (!result.IsSuccessful)
+            {
+                _logger.LogError(result.Error, "Failed to retrieve roof controller configuration snapshot");
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    RemoteConfigurationErrorMessage = result.Error?.Message ?? "Failed to load controller configuration.";
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                RemoteConfigurationErrorMessage = null;
+                PopulateRemoteConfigurationFields(result.Value, markClean: true);
+                if (showSuccessMessage)
+                {
+                    RemoteConfigurationSuccessMessage = "Loaded configuration snapshot from controller.";
+                }
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            await MainThread.InvokeOnMainThreadAsync(() => IsRemoteConfigurationRefreshing = false).ConfigureAwait(false);
+        }
+    }
+
+    private bool TryBuildRemoteConfigurationRequest(out RoofConfigurationRequest request, out string? errorMessage)
+    {
+        request = default!;
+        errorMessage = null;
+
+        if (!TryParseNonNegativeDouble(RemoteSafetyWatchdogTimeoutSeconds, "Safety watchdog timeout (seconds)", out var watchdogSeconds, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParsePositiveInt(RemoteOpenRelayId, "Open relay ID", out var openRelayId, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParsePositiveInt(RemoteCloseRelayId, "Close relay ID", out var closeRelayId, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParsePositiveInt(RemoteClearFaultRelayId, "Clear fault relay ID", out var clearFaultRelayId, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParsePositiveInt(RemoteStopRelayId, "Stop relay ID", out var stopRelayId, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParseNonNegativeDouble(RemoteDigitalInputPollIntervalMilliseconds, "Digital input poll interval (ms)", out var pollIntervalMs, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParseNonNegativeDouble(RemotePeriodicVerificationIntervalSeconds, "Verification interval (seconds)", out var verificationSeconds, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryParseNonNegativeDouble(RemoteLimitSwitchDebounceMilliseconds, "Limit switch debounce (ms)", out var debounceMs, out errorMessage))
+        {
+            return false;
+        }
+
+        request = new RoofConfigurationRequest
+        {
+            SafetyWatchdogTimeoutSeconds = watchdogSeconds,
+            OpenRelayId = openRelayId,
+            CloseRelayId = closeRelayId,
+            ClearFaultRelayId = clearFaultRelayId,
+            StopRelayId = stopRelayId,
+            EnableDigitalInputPolling = RemoteEnableDigitalInputPolling,
+            DigitalInputPollIntervalMilliseconds = pollIntervalMs,
+            EnablePeriodicVerificationWhileMoving = RemoteEnablePeriodicVerificationWhileMoving,
+            PeriodicVerificationIntervalSeconds = verificationSeconds,
+            UseNormallyClosedLimitSwitches = RemoteUseNormallyClosedLimitSwitches,
+            LimitSwitchDebounceMilliseconds = debounceMs,
+            IgnorePhysicalLimitSwitches = RemoteIgnorePhysicalLimitSwitches
+        };
+
+        return true;
+    }
+
+    private void PopulateRemoteConfigurationFields(RoofConfigurationResponse configuration, bool markClean)
+    {
+        _suppressRemoteConfigurationDirty = true;
+
+        try
+        {
+            RemoteSafetyWatchdogTimeoutSeconds = configuration.SafetyWatchdogTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+            RemoteOpenRelayId = configuration.OpenRelayId.ToString(CultureInfo.InvariantCulture);
+            RemoteCloseRelayId = configuration.CloseRelayId.ToString(CultureInfo.InvariantCulture);
+            RemoteClearFaultRelayId = configuration.ClearFaultRelayId.ToString(CultureInfo.InvariantCulture);
+            RemoteStopRelayId = configuration.StopRelayId.ToString(CultureInfo.InvariantCulture);
+            RemoteDigitalInputPollIntervalMilliseconds = configuration.DigitalInputPollIntervalMilliseconds.ToString(CultureInfo.InvariantCulture);
+            RemotePeriodicVerificationIntervalSeconds = configuration.PeriodicVerificationIntervalSeconds.ToString(CultureInfo.InvariantCulture);
+            RemoteLimitSwitchDebounceMilliseconds = configuration.LimitSwitchDebounceMilliseconds.ToString(CultureInfo.InvariantCulture);
+            RemoteEnableDigitalInputPolling = configuration.EnableDigitalInputPolling;
+            RemoteEnablePeriodicVerificationWhileMoving = configuration.EnablePeriodicVerificationWhileMoving;
+            RemoteUseNormallyClosedLimitSwitches = configuration.UseNormallyClosedLimitSwitches;
+            RemoteIgnorePhysicalLimitSwitches = configuration.IgnorePhysicalLimitSwitches;
+            RemoteRestartOnFailureWaitTimeSeconds = configuration.RestartOnFailureWaitTimeSeconds.ToString(CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _suppressRemoteConfigurationDirty = false;
+        }
+
+        ApplyRemoteConfigurationSnapshot(configuration);
+
+        if (markClean)
+        {
+            IsRemoteConfigurationDirty = false;
+        }
+    }
+
     private void MarkConfigurationDirty()
     {
         if (_suppressConfigurationDirty || !_configurationEditorInitialized)
@@ -543,6 +847,36 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         }
     }
 
+    private void MarkRemoteConfigurationDirty()
+    {
+        if (_suppressRemoteConfigurationDirty)
+        {
+            return;
+        }
+
+        RemoteConfigurationErrorMessage = null;
+        RemoteConfigurationSuccessMessage = null;
+
+        if (!IsRemoteConfigurationDirty)
+        {
+            IsRemoteConfigurationDirty = true;
+        }
+    }
+
+    private double? GetConfiguredWatchdogTimeoutSeconds()
+        => _remoteConfigurationSnapshot?.SafetyWatchdogTimeoutSeconds
+            ?? _options.SafetyWatchdogTimeoutSeconds;
+
+    private void ApplyRemoteConfigurationSnapshot(RoofConfigurationResponse configuration)
+    {
+        _remoteConfigurationSnapshot = configuration;
+        _options.SafetyWatchdogTimeoutSeconds = configuration.SafetyWatchdogTimeoutSeconds;
+
+        OnPropertyChanged(nameof(SafetyWatchdogTimeoutDisplay));
+        OnPropertyChanged(nameof(WatchdogSecondaryText));
+        OnPropertyChanged(nameof(WatchdogPercentage));
+    }
+
     private static bool TryParsePositiveInt(string value, string fieldName, out int parsedValue, out string? errorMessage)
     {
         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedValue) && parsedValue > 0)
@@ -556,6 +890,19 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         return false;
     }
 
+    private static bool TryParseNonNegativeDouble(string value, string fieldName, out double parsedValue, out string? errorMessage)
+    {
+        if (double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out parsedValue) && parsedValue >= 0)
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        errorMessage = $"{fieldName} must be a valid number greater than or equal to zero.";
+        parsedValue = 0d;
+        return false;
+    }
+
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -566,6 +913,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
         _hasInitialized = true;
         await RefreshStatusAsync(true, cancellationToken).ConfigureAwait(false);
+        await FetchRemoteConfigurationAsync(showSuccessMessage: false, cancellationToken).ConfigureAwait(false);
         StartPolling();
     }
 

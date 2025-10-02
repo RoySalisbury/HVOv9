@@ -47,6 +47,16 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
         return SendRequestAsync<bool>(HttpMethod.Post, $"roofcontrol/{query}", cancellationToken: cancellationToken);
     }
 
+    public Task<Result<RoofConfigurationResponse>> GetConfigurationAsync(CancellationToken cancellationToken = default)
+        => SendRequestAsync<RoofConfigurationResponse>(HttpMethod.Get, "roofcontrol/configuration", cancellationToken: cancellationToken);
+
+    public Task<Result<RoofConfigurationResponse>> UpdateConfigurationAsync(RoofConfigurationRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var content = JsonContent.Create(request, options: JsonSerializerOptions);
+        return SendRequestAsync<RoofConfigurationResponse>(HttpMethod.Post, "roofcontrol/configuration", content, cancellationToken);
+    }
+
     private async Task<Result<T>> SendRequestAsync<T>(HttpMethod method, string relativeUrl, HttpContent? content = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativeUrl);

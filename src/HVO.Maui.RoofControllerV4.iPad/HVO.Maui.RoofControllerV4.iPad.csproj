@@ -47,6 +47,12 @@
 		<Compile Include="..\HVO.WebSite.RoofControllerV4\Models\RoofStatusResponse.cs">
 			<Link>Models\RoofStatusResponse.cs</Link>
 		</Compile>
+		<Compile Include="..\HVO.WebSite.RoofControllerV4\Models\RoofConfigurationResponse.cs">
+			<Link>Models\RoofConfigurationResponse.cs</Link>
+		</Compile>
+		<Compile Include="..\HVO.WebSite.RoofControllerV4\Models\RoofConfigurationRequest.cs">
+			<Link>Models\RoofConfigurationRequest.cs</Link>
+		</Compile>
 	</ItemGroup>
 
 	<ItemGroup>

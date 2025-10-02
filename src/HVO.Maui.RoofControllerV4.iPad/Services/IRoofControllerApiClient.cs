@@ -17,4 +17,8 @@ public interface IRoofControllerApiClient
     Task<Result<RoofStatusResponse>> StopAsync(CancellationToken cancellationToken = default);
 
     Task<Result<bool>> ClearFaultAsync(int? pulseMs = null, CancellationToken cancellationToken = default);
+
+    Task<Result<RoofConfigurationResponse>> GetConfigurationAsync(CancellationToken cancellationToken = default);
+
+    Task<Result<RoofConfigurationResponse>> UpdateConfigurationAsync(RoofConfigurationRequest request, CancellationToken cancellationToken = default);
 }
