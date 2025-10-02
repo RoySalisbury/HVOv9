@@ -1,8 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Asp.Versioning;
-using System.Device.Gpio;
-using System.Device.Gpio.Drivers;
+using Microsoft.Extensions.Options;
 using HVO.WebSite.RoofControllerV4.Logic;
 using HVO.WebSite.RoofControllerV4.Models;
 
@@ -19,11 +21,19 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
     {
         private readonly ILogger<RoofController> _logger;
         private readonly IRoofControllerServiceV4 _roofController;
+        private readonly IOptionsMonitor<RoofControllerHostOptionsV4> _hostOptions;
+        private readonly IEnumerable<IValidateOptions<RoofControllerOptionsV4>> _configurationValidators;
 
-        public RoofController(ILogger<RoofController> logger, IRoofControllerServiceV4 roofController)
+        public RoofController(
+            ILogger<RoofController> logger,
+            IRoofControllerServiceV4 roofController,
+            IOptionsMonitor<RoofControllerHostOptionsV4> hostOptions,
+            IEnumerable<IValidateOptions<RoofControllerOptionsV4>> configurationValidators)
         {
-            this._logger = logger;
-            this._roofController = roofController;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _roofController = roofController ?? throw new ArgumentNullException(nameof(roofController));
+            _hostOptions = hostOptions ?? throw new ArgumentNullException(nameof(hostOptions));
+            _configurationValidators = configurationValidators ?? throw new ArgumentNullException(nameof(configurationValidators));
         }
 
         /// <summary>
@@ -39,6 +49,96 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         {
             _roofController.RefreshStatus(forceHardwareRead: true);
             return Ok(CreateStatus());
+        }
+
+        /// <summary>
+        /// Retrieves the current configuration applied to the roof controller service.
+        /// </summary>
+        /// <returns>Current controller configuration values.</returns>
+        /// <response code="200">Returns the configuration snapshot.</response>
+        [HttpGet, Route("Configuration", Name = nameof(GetRoofConfiguration))]
+        [ProducesResponseType(typeof(RoofConfigurationResponse), StatusCodes.Status200OK)]
+        public ActionResult<RoofConfigurationResponse> GetRoofConfiguration()
+        {
+            var snapshot = _roofController.GetConfigurationSnapshot();
+            return Ok(CreateConfigurationResponse(snapshot));
+        }
+
+        /// <summary>
+        /// Applies a configuration update to the roof controller service.
+        /// </summary>
+        /// <param name="request">The desired configuration values.</param>
+        /// <returns>The effective configuration after applying the update.</returns>
+        /// <response code="200">Configuration updated successfully.</response>
+        /// <response code="400">Validation failed for one or more configuration values.</response>
+        /// <response code="500">Internal server error or service state issue occurred.</response>
+        [HttpPost, Route("Configuration", Name = nameof(UpdateRoofConfiguration))]
+        [ProducesResponseType(typeof(RoofConfigurationResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+        public ActionResult<RoofConfigurationResponse> UpdateRoofConfiguration([FromBody] RoofConfigurationRequest? request)
+        {
+            if (request is null)
+            {
+                ModelState.AddModelError(string.Empty, "Request body is required.");
+                return ValidationProblem(ModelState);
+            }
+
+            ValidateConfigurationRequest(request);
+
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            var updatedOptions = new RoofControllerOptionsV4
+            {
+                SafetyWatchdogTimeout = TimeSpan.FromSeconds(request.SafetyWatchdogTimeoutSeconds),
+                OpenRelayId = request.OpenRelayId,
+                CloseRelayId = request.CloseRelayId,
+                ClearFaultRelayId = request.ClearFaultRelayId,
+                StopRelayId = request.StopRelayId,
+                EnableDigitalInputPolling = request.EnableDigitalInputPolling,
+                DigitalInputPollInterval = TimeSpan.FromMilliseconds(request.DigitalInputPollIntervalMilliseconds),
+                EnablePeriodicVerificationWhileMoving = request.EnablePeriodicVerificationWhileMoving,
+                PeriodicVerificationInterval = TimeSpan.FromSeconds(request.PeriodicVerificationIntervalSeconds),
+                UseNormallyClosedLimitSwitches = request.UseNormallyClosedLimitSwitches,
+                LimitSwitchDebounce = TimeSpan.FromMilliseconds(request.LimitSwitchDebounceMilliseconds),
+                IgnorePhysicalLimitSwitches = request.IgnorePhysicalLimitSwitches
+            };
+
+            var validationFailures = _configurationValidators
+                .Select(validator => validator.Validate(Options.DefaultName, updatedOptions))
+                .Where(result => result is { Failed: true })
+                .SelectMany(result => result.Failures ?? Array.Empty<string>())
+                .Distinct()
+                .ToArray();
+
+            if (validationFailures.Length > 0)
+            {
+                foreach (var failure in validationFailures)
+                {
+                    ModelState.AddModelError(nameof(RoofConfigurationRequest), failure);
+                }
+
+                return ValidationProblem(ModelState);
+            }
+
+            var result = _roofController.UpdateConfiguration(updatedOptions);
+
+            return result.Match(
+                success: options => Ok(CreateConfigurationResponse(options)),
+                failure: error => error switch
+                {
+                    InvalidOperationException => Problem(
+                        title: "Service Error",
+                        detail: error.Message,
+                        statusCode: StatusCodes.Status500InternalServerError),
+                    _ => Problem(
+                        title: "Internal Server Error",
+                        detail: "An error occurred while updating configuration",
+                        statusCode: StatusCodes.Status500InternalServerError)
+                });
         }
 
         /// <summary>
@@ -178,7 +278,85 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
                 this._roofController.LastTransitionUtc,
                 this._roofController.IsWatchdogActive,
                 this._roofController.WatchdogSecondsRemaining,
-                this._roofController.IsAtSpeed);
+                this._roofController.IsAtSpeed,
+                this._roofController.IsUsingPhysicalHardware,
+                this._roofController.IsIgnoringPhysicalLimitSwitches);
+        }
+
+        private RoofConfigurationResponse CreateConfigurationResponse(RoofControllerOptionsV4 options)
+        {
+            var host = _hostOptions.CurrentValue;
+
+            return new RoofConfigurationResponse
+            {
+                SafetyWatchdogTimeoutSeconds = options.SafetyWatchdogTimeout.TotalSeconds,
+                OpenRelayId = options.OpenRelayId,
+                CloseRelayId = options.CloseRelayId,
+                ClearFaultRelayId = options.ClearFaultRelayId,
+                StopRelayId = options.StopRelayId,
+                EnableDigitalInputPolling = options.EnableDigitalInputPolling,
+                DigitalInputPollIntervalMilliseconds = options.DigitalInputPollInterval.TotalMilliseconds,
+                EnablePeriodicVerificationWhileMoving = options.EnablePeriodicVerificationWhileMoving,
+                PeriodicVerificationIntervalSeconds = options.PeriodicVerificationInterval.TotalSeconds,
+                UseNormallyClosedLimitSwitches = options.UseNormallyClosedLimitSwitches,
+                LimitSwitchDebounceMilliseconds = options.LimitSwitchDebounce.TotalMilliseconds,
+                IgnorePhysicalLimitSwitches = options.IgnorePhysicalLimitSwitches,
+                RestartOnFailureWaitTimeSeconds = host.RestartOnFailureWaitTime
+            };
+        }
+
+        private void ValidateConfigurationRequest(RoofConfigurationRequest request)
+        {
+            if (request.SafetyWatchdogTimeoutSeconds <= 0)
+            {
+                ModelState.AddModelError(nameof(request.SafetyWatchdogTimeoutSeconds), "Safety watchdog timeout must be greater than zero.");
+            }
+
+            if (request.DigitalInputPollIntervalMilliseconds <= 0)
+            {
+                ModelState.AddModelError(nameof(request.DigitalInputPollIntervalMilliseconds), "Digital input poll interval must be greater than zero.");
+            }
+
+            if (request.PeriodicVerificationIntervalSeconds <= 0)
+            {
+                ModelState.AddModelError(nameof(request.PeriodicVerificationIntervalSeconds), "Periodic verification interval must be greater than zero.");
+            }
+
+            if (!request.EnableDigitalInputPolling && request.EnablePeriodicVerificationWhileMoving)
+            {
+                ModelState.AddModelError(nameof(request.EnablePeriodicVerificationWhileMoving), "Periodic verification requires digital input polling to be enabled.");
+            }
+
+            ValidateRelayId(nameof(request.OpenRelayId), request.OpenRelayId);
+            ValidateRelayId(nameof(request.CloseRelayId), request.CloseRelayId);
+            ValidateRelayId(nameof(request.ClearFaultRelayId), request.ClearFaultRelayId);
+            ValidateRelayId(nameof(request.StopRelayId), request.StopRelayId);
+
+            if (request.PeriodicVerificationIntervalSeconds < request.SafetyWatchdogTimeoutSeconds)
+            {
+                // Additional validation performed by options validator; leave for consistency.
+            }
+
+            var relayIds = new[]
+            {
+                request.OpenRelayId,
+                request.CloseRelayId,
+                request.ClearFaultRelayId,
+                request.StopRelayId
+            };
+
+            if (relayIds.Distinct().Count() != relayIds.Length)
+            {
+                ModelState.AddModelError(nameof(RoofConfigurationRequest), "Relay identifiers (Open, Close, ClearFault, Stop) must be unique.");
+            }
+        }
+
+        private void ValidateRelayId(string fieldName, int relayId)
+        {
+            if (relayId is < 1 or > 4)
+            {
+                ModelState.AddModelError(fieldName, "Relay identifiers must be between 1 and 4.");
+            }
         }
     }
 }

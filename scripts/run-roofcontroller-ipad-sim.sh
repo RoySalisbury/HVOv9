@@ -74,6 +74,9 @@ fi
 xcrun simctl boot "$UDID" >/dev/null 2>&1 || true
 xcrun simctl bootstatus "$UDID" -b
 
+echo "Opening Simulator.app for device ${UDID}..."
+open -a Simulator --args -CurrentDeviceUDID "$UDID" >/dev/null 2>&1 || true
+
 echo "Uninstalling existing app (if present)..."
 xcrun simctl uninstall "$UDID" "$APP_ID" >/dev/null 2>&1 || true
 

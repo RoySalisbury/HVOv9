@@ -32,6 +32,8 @@ A .NET 9 Blazor Server + ASP.NET Core application that automates the Hualapai Va
 ## Configuration Notes
 - Operational settings live in `appsettings*.json` under `RoofControllerOptionsV4` and `RoofControllerHostOptionsV4`.
 - `IgnorePhysicalLimitSwitches` is enabled in `appsettings.Development.json` to bypass missing limit wiring during local bench testing. Disable it for real hardware.
+- `HardwareDetection` section in `appsettings*.json` can provide default values for `ForceRaspberryPi`, `ContainerRpiHint`, or `UseRealGpio`; these populate the matching environment variables when not already set.
+- When running inside Docker on the Raspberry Pi, hardware detection now respects the environment variable overrides `HVO_FORCE_RASPBERRY_PI=true` (force hardware) and `HVO_CONTAINER_RPI_HINT="raspberrypi-5"` (optional hint when GPIO devices are not mounted by default).
 - Health check tags: `roof` and `hardware`; see `/health`, `/health/ready`, and `/health/live` for monitoring.
 
 ## Testing

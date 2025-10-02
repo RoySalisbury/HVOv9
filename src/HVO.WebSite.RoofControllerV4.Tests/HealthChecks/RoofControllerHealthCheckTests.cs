@@ -120,6 +120,8 @@ public sealed class RoofControllerHealthCheckTests
     {
         public event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
 
+        private RoofControllerOptionsV4 _configuration = new();
+
         public bool IsInitialized { get; set; }
         public bool IsServiceDisposed { get; set; }
         public RoofControllerStatus Status { get; set; }
@@ -129,8 +131,10 @@ public sealed class RoofControllerHealthCheckTests
         public bool IsWatchdogActive { get; set; }
         public double? WatchdogSecondsRemaining { get; set; }
         public bool IsAtSpeed { get; set; }
+        public bool IsUsingPhysicalHardware { get; set; }
+        public bool IsIgnoringPhysicalLimitSwitches { get; set; }
 
-        public RoofStatusResponse GetCurrentStatusSnapshot() => new(Status, IsMoving, LastStopReason, LastTransitionUtc, IsWatchdogActive, WatchdogSecondsRemaining, IsAtSpeed);
+        public RoofStatusResponse GetCurrentStatusSnapshot() => new(Status, IsMoving, LastStopReason, LastTransitionUtc, IsWatchdogActive, WatchdogSecondsRemaining, IsAtSpeed, IsUsingPhysicalHardware, IsIgnoringPhysicalLimitSwitches);
 
         public Task<Result<bool>> Initialize(CancellationToken cancellationToken) => Task.FromResult(Result<bool>.Success(true));
         public Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop) => RoofControllerStatus.Stopped;
@@ -142,11 +146,21 @@ public sealed class RoofControllerHealthCheckTests
         }
 
         public Task<Result<bool>> ClearFault(int pulseMs = 250, CancellationToken cancellationToken = default) => Task.FromResult(Result<bool>.Success(true));
+
+        public RoofControllerOptionsV4 GetConfigurationSnapshot() => _configuration;
+
+        public Result<RoofControllerOptionsV4> UpdateConfiguration(RoofControllerOptionsV4 configuration)
+        {
+            _configuration = configuration;
+            return Result<RoofControllerOptionsV4>.Success(configuration);
+        }
     }
 
     private sealed class ThrowingRoofControllerService : IRoofControllerServiceV4
     {
         public event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
+
+        private RoofControllerOptionsV4 _configuration = new();
 
         public bool IsInitialized => throw new InvalidOperationException("status failure");
         public bool IsServiceDisposed => false;
@@ -157,7 +171,9 @@ public sealed class RoofControllerHealthCheckTests
         public bool IsWatchdogActive => false;
         public double? WatchdogSecondsRemaining => 0;
         public bool IsAtSpeed => true;
-    public RoofStatusResponse GetCurrentStatusSnapshot() => new(RoofControllerStatus.Open, false, RoofControllerStopReason.None, null, false, 0, true);
+        public bool IsUsingPhysicalHardware => true;
+        public bool IsIgnoringPhysicalLimitSwitches => false;
+        public RoofStatusResponse GetCurrentStatusSnapshot() => new(RoofControllerStatus.Open, false, RoofControllerStopReason.None, null, false, 0, true, IsUsingPhysicalHardware, IsIgnoringPhysicalLimitSwitches);
         public Task<Result<bool>> Initialize(CancellationToken cancellationToken) => Task.FromResult(Result<bool>.Success(true));
         public Result<RoofControllerStatus> Stop(RoofControllerStopReason reason = RoofControllerStopReason.NormalStop) => RoofControllerStatus.Stopped;
         public Result<RoofControllerStatus> Open() => RoofControllerStatus.Open;
@@ -168,5 +184,9 @@ public sealed class RoofControllerHealthCheckTests
         }
 
         public Task<Result<bool>> ClearFault(int pulseMs = 250, CancellationToken cancellationToken = default) => Task.FromResult(Result<bool>.Success(true));
+
+        public RoofControllerOptionsV4 GetConfigurationSnapshot() => _configuration;
+
+        public Result<RoofControllerOptionsV4> UpdateConfiguration(RoofControllerOptionsV4 configuration) => throw new InvalidOperationException("configuration failure");
     }
 }

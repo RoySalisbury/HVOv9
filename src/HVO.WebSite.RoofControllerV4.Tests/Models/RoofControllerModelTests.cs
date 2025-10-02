@@ -31,7 +31,9 @@ public sealed class RoofControllerModelTests
             LastTransitionUtc: timestamp,
             IsWatchdogActive: false,
             WatchdogSecondsRemaining: 12.5,
-            IsAtSpeed: true);
+            IsAtSpeed: true,
+            IsUsingPhysicalHardware: true,
+            IsIgnoringPhysicalLimitSwitches: true);
 
         response.Status.Should().Be(RoofControllerStatus.Open);
         response.IsMoving.Should().BeTrue();
@@ -40,6 +42,8 @@ public sealed class RoofControllerModelTests
         response.IsWatchdogActive.Should().BeFalse();
         response.WatchdogSecondsRemaining.Should().Be(12.5);
         response.IsAtSpeed.Should().BeTrue();
+        response.IsUsingPhysicalHardware.Should().BeTrue();
+    response.IsIgnoringPhysicalLimitSwitches.Should().BeTrue();
 
         var updated = response with { IsMoving = false };
         updated.IsMoving.Should().BeFalse();

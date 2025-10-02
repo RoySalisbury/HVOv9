@@ -93,6 +93,7 @@ public sealed class RoofControllerServiceV4HostTests
     {
         private readonly ConcurrentQueue<(Result<bool> Result, bool MarkInitialized)> _initializationResults = new();
         private int _initializationCallCount;
+        private RoofControllerOptionsV4 _options = new();
 
         public event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
 
@@ -109,10 +110,20 @@ public sealed class RoofControllerServiceV4HostTests
     public double? WatchdogSecondsRemaining { get; set; }
     public bool IsAtSpeed { get; set; }
     public bool IsServiceDisposed { get; set; }
+    public bool IsUsingPhysicalHardware { get; set; } = true;
+    public bool IsIgnoringPhysicalLimitSwitches { get; set; }
 
         public void EnqueueInitialization(Result<bool> result, bool markInitialized) => _initializationResults.Enqueue((result, markInitialized));
 
-    public RoofStatusResponse GetCurrentStatusSnapshot() => new(Status, IsMoving, LastStopReason, LastTransitionUtc, IsWatchdogActive, WatchdogSecondsRemaining, IsAtSpeed);
+    public RoofStatusResponse GetCurrentStatusSnapshot() => new(Status, IsMoving, LastStopReason, LastTransitionUtc, IsWatchdogActive, WatchdogSecondsRemaining, IsAtSpeed, IsUsingPhysicalHardware, IsIgnoringPhysicalLimitSwitches);
+
+        public RoofControllerOptionsV4 GetConfigurationSnapshot() => _options;
+
+        public Result<RoofControllerOptionsV4> UpdateConfiguration(RoofControllerOptionsV4 updatedOptions)
+        {
+            _options = updatedOptions;
+            return Result<RoofControllerOptionsV4>.Success(_options);
+        }
 
         public Task<Result<bool>> Initialize(CancellationToken cancellationToken)
         {

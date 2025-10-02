@@ -16,6 +16,16 @@ public interface IRoofControllerServiceV4
         bool IsInitialized { get; }
 
         /// <summary>
+        /// Gets a value indicating whether the controller is currently bound to physical I²C hardware instead of simulation.
+        /// </summary>
+        bool IsUsingPhysicalHardware { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether physical limit switch inputs are currently being ignored by the controller.
+        /// </summary>
+        bool IsIgnoringPhysicalLimitSwitches { get; }
+
+        /// <summary>
         /// Gets the current operational status of the roof controller.
         /// </summary>
         RoofControllerStatus Status { get; }
@@ -55,6 +65,18 @@ public interface IRoofControllerServiceV4
         /// Returns a current snapshot of status for UI/API consumption.
         /// </summary>
         RoofStatusResponse GetCurrentStatusSnapshot();
+
+        /// <summary>
+        /// Returns a snapshot of the current configuration options applied to the controller.
+        /// </summary>
+        RoofControllerOptionsV4 GetConfigurationSnapshot();
+
+        /// <summary>
+        /// Applies a configuration update to the controller service.
+        /// </summary>
+        /// <param name="updatedOptions">The validated configuration values to apply.</param>
+        /// <returns>A result containing the effective configuration when successful.</returns>
+        Result<RoofControllerOptionsV4> UpdateConfiguration(RoofControllerOptionsV4 updatedOptions);
 
         /// <summary>
         /// True if the underlying service has been disposed (not available for use).

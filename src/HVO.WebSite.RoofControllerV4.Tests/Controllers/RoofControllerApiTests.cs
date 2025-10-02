@@ -1,8 +1,11 @@
+using System;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -31,11 +34,14 @@ public class RoofControllerApiTests
         _roofServiceMock.SetupGet(s => s.IsWatchdogActive).Returns(false);
         _roofServiceMock.SetupGet(s => s.WatchdogSecondsRemaining).Returns((double?)null);
     _roofServiceMock.SetupGet(s => s.IsAtSpeed).Returns(false);
+    _roofServiceMock.SetupGet(s => s.IsUsingPhysicalHardware).Returns(true);
+    _roofServiceMock.SetupGet(s => s.IsIgnoringPhysicalLimitSwitches).Returns(true);
     _roofServiceMock.SetupGet(s => s.LastTransitionUtc).Returns(DateTimeOffset.UtcNow);
     _roofServiceMock.SetupGet(s => s.LastTransitionUtc).Returns(DateTimeOffset.UtcNow);
         _roofServiceMock.Setup(s => s.RefreshStatus(It.IsAny<bool>()));
         _roofServiceMock.Setup(s => s.Initialize(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<bool>.Success(true));
+        _roofServiceMock.Setup(s => s.GetConfigurationSnapshot()).Returns(new RoofControllerOptionsV4());
 
         // Default success setups (overridden per test where needed)
         _roofServiceMock.Setup(s => s.Open()).Returns(Result<RoofControllerStatus>.Success(RoofControllerStatus.Opening));
@@ -63,6 +69,7 @@ public class RoofControllerApiTests
                         services.Remove(existing);
 
                     services.AddSingleton(_roofServiceMock.Object);
+                    services.PostConfigure<RoofControllerHostOptionsV4>(options => options.RestartOnFailureWaitTime = 42);
                 });
             });
 
@@ -117,6 +124,8 @@ public class RoofControllerApiTests
     Assert.IsFalse(payload.IsMoving);
     Assert.IsTrue(payload.IsWatchdogActive);
     Assert.AreEqual(42.5, payload.WatchdogSecondsRemaining);
+    Assert.IsTrue(payload.IsUsingPhysicalHardware);
+    Assert.IsTrue(payload.IsIgnoringPhysicalLimitSwitches);
         _roofServiceMock.VerifyGet(s => s.Status, Times.AtLeastOnce);
     }
 
@@ -142,6 +151,8 @@ public class RoofControllerApiTests
     Assert.IsTrue(payload.IsMoving);
     Assert.IsTrue(payload.IsWatchdogActive);
     Assert.AreEqual(59.9, payload.WatchdogSecondsRemaining);
+    Assert.IsTrue(payload.IsUsingPhysicalHardware);
+    Assert.IsTrue(payload.IsIgnoringPhysicalLimitSwitches);
         _roofServiceMock.Verify(s => s.Open(), Times.Once);
     }
 
@@ -185,6 +196,8 @@ public class RoofControllerApiTests
     Assert.IsTrue(payload.IsMoving);
     Assert.IsTrue(payload.IsWatchdogActive);
     Assert.AreEqual(30.0, payload.WatchdogSecondsRemaining);
+    Assert.IsTrue(payload.IsUsingPhysicalHardware);
+    Assert.IsTrue(payload.IsIgnoringPhysicalLimitSwitches);
         _roofServiceMock.Verify(s => s.Close(), Times.Once);
     }
 
@@ -233,6 +246,8 @@ public class RoofControllerApiTests
     Assert.IsFalse(payload.IsMoving);
     Assert.IsFalse(payload.IsWatchdogActive);
     Assert.IsNull(payload.WatchdogSecondsRemaining);
+    Assert.IsTrue(payload.IsUsingPhysicalHardware);
+    Assert.IsTrue(payload.IsIgnoringPhysicalLimitSwitches);
         _roofServiceMock.Verify(s => s.Stop(It.IsAny<RoofControllerStopReason>()), Times.Once);
     }
 
@@ -291,6 +306,135 @@ public class RoofControllerApiTests
         Assert.IsNotNull(problem);
         StringAssert.Contains(problem.Title, "Service Error");
     _roofServiceMock.Verify(s => s.ClearFault(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task GetConfiguration_ReturnsSnapshot()
+    {
+        // Arrange
+        var options = new RoofControllerOptionsV4
+        {
+            SafetyWatchdogTimeout = TimeSpan.FromSeconds(90),
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4,
+            EnableDigitalInputPolling = true,
+            DigitalInputPollInterval = TimeSpan.FromMilliseconds(50),
+            EnablePeriodicVerificationWhileMoving = true,
+            PeriodicVerificationInterval = TimeSpan.FromSeconds(2),
+            UseNormallyClosedLimitSwitches = true,
+            LimitSwitchDebounce = TimeSpan.FromMilliseconds(25),
+            IgnorePhysicalLimitSwitches = false
+        };
+        _roofServiceMock.Setup(s => s.GetConfigurationSnapshot()).Returns(options);
+
+        // Act
+        var (response, payload) = await GetJsonAsync<RoofConfigurationResponse>(_client, "/api/v4.0/RoofControl/Configuration");
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsNotNull(payload);
+        Assert.AreEqual(90, payload!.SafetyWatchdogTimeoutSeconds);
+        Assert.AreEqual(1, payload.OpenRelayId);
+        Assert.AreEqual(2, payload.CloseRelayId);
+        Assert.AreEqual(3, payload.ClearFaultRelayId);
+        Assert.AreEqual(4, payload.StopRelayId);
+        Assert.AreEqual(50, payload.DigitalInputPollIntervalMilliseconds);
+        Assert.AreEqual(2, payload.PeriodicVerificationIntervalSeconds);
+        Assert.AreEqual(25, payload.LimitSwitchDebounceMilliseconds);
+        Assert.AreEqual(42, payload.RestartOnFailureWaitTimeSeconds);
+        _roofServiceMock.Verify(s => s.GetConfigurationSnapshot(), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task UpdateConfiguration_ValidRequest_ReturnsUpdatedSnapshot()
+    {
+        // Arrange
+        var request = new RoofConfigurationRequest
+        {
+            SafetyWatchdogTimeoutSeconds = 120,
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4,
+            EnableDigitalInputPolling = true,
+            DigitalInputPollIntervalMilliseconds = 75,
+            EnablePeriodicVerificationWhileMoving = true,
+            PeriodicVerificationIntervalSeconds = 5,
+            UseNormallyClosedLimitSwitches = false,
+            LimitSwitchDebounceMilliseconds = 15,
+            IgnorePhysicalLimitSwitches = true
+        };
+
+        RoofControllerOptionsV4? capturedOptions = null;
+        var updatedOptions = new RoofControllerOptionsV4
+        {
+            SafetyWatchdogTimeout = TimeSpan.FromSeconds(150),
+            OpenRelayId = 1,
+            CloseRelayId = 2,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4,
+            EnableDigitalInputPolling = true,
+            DigitalInputPollInterval = TimeSpan.FromMilliseconds(75),
+            EnablePeriodicVerificationWhileMoving = false,
+            PeriodicVerificationInterval = TimeSpan.FromSeconds(6),
+            UseNormallyClosedLimitSwitches = true,
+            LimitSwitchDebounce = TimeSpan.FromMilliseconds(20),
+            IgnorePhysicalLimitSwitches = false
+        };
+
+        _roofServiceMock.Setup(s => s.UpdateConfiguration(It.IsAny<RoofControllerOptionsV4>()))
+            .Callback<RoofControllerOptionsV4>(options => capturedOptions = options)
+            .Returns(Result<RoofControllerOptionsV4>.Success(updatedOptions));
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v4.0/RoofControl/Configuration", request);
+        var payload = await response.Content.ReadFromJsonAsync<RoofConfigurationResponse>();
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsNotNull(payload);
+        Assert.AreEqual(150, payload!.SafetyWatchdogTimeoutSeconds);
+        Assert.IsNotNull(capturedOptions);
+        Assert.AreEqual(TimeSpan.FromSeconds(120), capturedOptions!.SafetyWatchdogTimeout);
+        Assert.AreEqual(TimeSpan.FromMilliseconds(75), capturedOptions.DigitalInputPollInterval);
+        Assert.AreEqual(TimeSpan.FromSeconds(5), capturedOptions.PeriodicVerificationInterval);
+        _roofServiceMock.Verify(s => s.UpdateConfiguration(It.IsAny<RoofControllerOptionsV4>()), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task UpdateConfiguration_InvalidRequest_ReturnsValidationProblem()
+    {
+        // Arrange
+        var request = new RoofConfigurationRequest
+        {
+            SafetyWatchdogTimeoutSeconds = 0,
+            OpenRelayId = 1,
+            CloseRelayId = 1,
+            ClearFaultRelayId = 3,
+            StopRelayId = 4,
+            EnableDigitalInputPolling = false,
+            DigitalInputPollIntervalMilliseconds = -10,
+            EnablePeriodicVerificationWhileMoving = true,
+            PeriodicVerificationIntervalSeconds = 0,
+            UseNormallyClosedLimitSwitches = true,
+            LimitSwitchDebounceMilliseconds = -1,
+            IgnorePhysicalLimitSwitches = false
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v4.0/RoofControl/Configuration", request);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+
+        // Assert
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.IsNotNull(problem);
+        Assert.IsTrue(problem!.Errors.ContainsKey(nameof(RoofConfigurationRequest.SafetyWatchdogTimeoutSeconds)));
+        Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest.DigitalInputPollIntervalMilliseconds)));
+        Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest.EnablePeriodicVerificationWhileMoving)));
+        Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest)));
+        _roofServiceMock.Verify(s => s.UpdateConfiguration(It.IsAny<RoofControllerOptionsV4>()), Times.Never);
     }
 
     [TestMethod]

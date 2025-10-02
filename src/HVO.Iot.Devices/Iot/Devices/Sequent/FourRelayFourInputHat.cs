@@ -70,6 +70,16 @@ public class FourRelayFourInputHat : RegisterBasedI2cDevice, IFourRelayFourInput
     private readonly Lazy<(byte Major, byte Minor)> _hardwareRevision;
     private readonly Lazy<(byte Major, byte Minor)> _softwareRevision;
 
+    /// <summary>
+    /// Indicates whether the HAT is backed by a physical I²C device instead of an in-memory simulation.
+    /// </summary>
+    public bool IsHardwareBacked { get; }
+
+    /// <summary>
+    /// Human-readable description of the connection mode used by this instance.
+    /// </summary>
+    public string ConnectionMode => IsHardwareBacked ? "Physical I²C" : "Simulation";
+
     // Digital input change notification infrastructure
     private readonly object _eventSync = new();
     private CancellationTokenSource? _inputPollCts;
@@ -114,7 +124,8 @@ public class FourRelayFourInputHat : RegisterBasedI2cDevice, IFourRelayFourInput
     private FourRelayFourInputHat(II2cRegisterClient registerClient, bool ownsClient, ILogger<FourRelayFourInputHat>? logger, string? initializationSource)
         : base(registerClient, ownsClient)
     {
-        _logger = logger ?? NullLogger<FourRelayFourInputHat>.Instance;
+    _logger = logger ?? NullLogger<FourRelayFourInputHat>.Instance;
+    IsHardwareBacked = registerClient is not MemoryI2cRegisterClient;
         _i2cBusNo = ConnectionSettings.BusId;
         _hwAddress = ConnectionSettings.DeviceAddress;
 
@@ -122,7 +133,7 @@ public class FourRelayFourInputHat : RegisterBasedI2cDevice, IFourRelayFourInput
         _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
 
         string suffix = string.IsNullOrWhiteSpace(initializationSource) ? string.Empty : $" ({initializationSource})";
-        _logger.LogInformation("FourRelayFourInputHat initialized{InitializationSuffix} - Bus: {Bus}, Address: 0x{Addr:X2}", suffix, _i2cBusNo, _hwAddress);
+    _logger.LogInformation("FourRelayFourInputHat initialized{InitializationSuffix} - Bus: {Bus}, Address: 0x{Addr:X2}, Mode: {Mode}", suffix, _i2cBusNo, _hwAddress, ConnectionMode);
     }
 
     private static II2cRegisterClient CreateHardwareClient(int stack, int i2cBus, int postTransactionDelayMs)

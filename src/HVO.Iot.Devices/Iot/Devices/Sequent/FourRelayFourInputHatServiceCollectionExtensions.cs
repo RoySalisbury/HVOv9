@@ -27,17 +27,27 @@ public static class FourRelayFourInputHatServiceCollectionExtensions
         services.AddSingleton<IFourRelayFourInputHat>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<FourRelayFourInputHat>>();
-            II2cRegisterClient client;
-            bool ownsClient;
-            if (options.UseSimulation)
+            var address = options.BaseAddress + options.Stack;
+
+            II2cRegisterClient CreateSimulationClient(out bool ownsSimulation)
             {
-                if (options.SimulationClientFactory is null)
+                if (options.SimulationClientFactory is not null)
                 {
-                    throw new InvalidOperationException("Simulation mode requires a SimulationClientFactory.");
+                    var simulation = options.SimulationClientFactory(sp) ?? throw new InvalidOperationException("SimulationClientFactory returned null.");
+                    ownsSimulation = options.OwnsClientFromSimulationFactory;
+                    return simulation;
                 }
 
-                client = options.SimulationClientFactory(sp) ?? throw new InvalidOperationException("SimulationClientFactory returned null.");
-                ownsClient = options.OwnsClientFromSimulationFactory;
+                ownsSimulation = true;
+                return new FourRelayFourInputHatMemoryClient(options.I2cBusId, address);
+            }
+
+            II2cRegisterClient client;
+            bool ownsClient;
+
+            if (options.UseSimulation)
+            {
+                client = CreateSimulationClient(out ownsClient);
             }
             else if (options.ClientFactory is not null)
             {
@@ -46,9 +56,25 @@ public static class FourRelayFourInputHatServiceCollectionExtensions
             }
             else
             {
-                var address = options.BaseAddress + options.Stack;
-                client = new I2cRegisterClient(options.I2cBusId, address, options.PostTransactionDelayMs);
-                ownsClient = true;
+                var simulationUsed = false;
+                var simulationOwns = true;
+
+                II2cRegisterClient SimulationFactory()
+                {
+                    simulationUsed = true;
+                    var simulation = CreateSimulationClient(out var ownsSimulation);
+                    simulationOwns = ownsSimulation;
+                    return simulation;
+                }
+
+                client = I2cRegisterClientFactory.CreateAutoSelecting(
+                    options.I2cBusId,
+                    address,
+                    options.PostTransactionDelayMs,
+                    useRealHardware: null,
+                    simulationFactory: SimulationFactory);
+
+                ownsClient = simulationUsed ? simulationOwns : true;
             }
 
             return new FourRelayFourInputHat(client, ownsClient, logger)
@@ -82,5 +108,26 @@ public sealed class FourRelayFourInputHatOptions
 
     public Func<IServiceProvider, II2cRegisterClient>? ClientFactory { get; set; }
     public bool OwnsClientFromFactory { get; set; }
+
+    /// <summary>
+    /// Provides a convenient way to see and customise the default configuration used by RoofController V4.
+    /// Callers can optionally mutate the returned instance before passing it to
+    /// <see cref="FourRelayFourInputHatServiceCollectionExtensions.AddFourRelayFourInputHat"/>.
+    /// </summary>
+    public static FourRelayFourInputHatOptions CreateDefault(Action<FourRelayFourInputHatOptions>? configure = null)
+    {
+        var options = new FourRelayFourInputHatOptions
+        {
+            Stack = 0,
+            BaseAddress = 0x0E,
+            I2cBusId = 1,
+            PostTransactionDelayMs = 15,
+            DigitalInputPollInterval = TimeSpan.FromMilliseconds(25),
+            UseSimulation = !HardwareEnvironment.IsRaspberryPi()
+        };
+
+        configure?.Invoke(options);
+        return options;
+    }
 }
 #pragma warning restore CS1591

@@ -22,7 +22,14 @@
 
             <div class="rc2-status-pill">
                 <span class="badge rc2-badge @(IsInitialized ? "bg-success" : "bg-secondary") me-2">@(IsInitialized ? "Initialized" : "Initializing…")</span>
-                <span class="badge rc2-badge @GetHealthCheckBadgeClass() me-2"><i class="bi bi-heart me-1"></i>Health</span>
+                <span class="badge rc2-badge @(GetHardwareBadgeClass()) me-2"><i class="bi bi-cpu me-1"></i>@GetHardwareModeLabel()</span>
+                @if (IsIgnoringLimitSwitches)
+                {
+                    <span class="badge rc2-badge @(GetLimitSwitchBadgeClass()) me-2"><i class="bi bi-exclamation-triangle me-1"></i>@GetLimitSwitchLabel()</span>
+                }
+                <button type="button" class="rc2-badge rc2-badge-button @GetHealthCheckBadgeClass() me-2" @onclick="OpenHealthDialogAsync">
+                    <i class="bi bi-heart me-1"></i>Health
+                </button>
                 @if (!string.IsNullOrEmpty(GetLastStopTypeLabel()))
                 {
                     <span class="badge rc2-badge @(WasEmergencyStop ? "bg-danger" : "bg-secondary")"><i class="bi bi-stop-circle me-1"></i>@GetLastStopTypeLabel() Stop</span>
@@ -132,3 +139,101 @@
         Only one operation at a time. Use Stop for normal interruption; emergency stops are automatic on fault/watchdog.
     </div>
 </div>
+
+@if (IsHealthDialogOpen)
+{
+    <div class="rc2-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="healthDialogTitle" @onclick="CloseHealthDialog">
+        <div class="rc2-modal-card" @onclick:stopPropagation="true">
+            <div class="rc2-modal-header">
+                <h3 class="rc2-modal-title" id="healthDialogTitle">
+                    <span class="badge @GetHealthStatusBadgeClass(HealthReport?.Status)"><i class="bi bi-heart-pulse-fill me-2"></i>@(HealthReport?.Status ?? "Unknown")</span>
+                </h3>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close" @onclick="CloseHealthDialog"></button>
+            </div>
+            <div class="rc2-modal-body">
+                @if (IsHealthDialogLoading)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-info" role="status" aria-hidden="true"></div>
+                        <div class="mt-3 text-muted">Loading health information…</div>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(HealthDialogError))
+                {
+                    <div class="alert alert-warning" role="alert">
+                        <i class="bi bi-exclamation-triangle me-2"></i>@HealthDialogError
+                    </div>
+                }
+                else if (HealthReport is not null)
+                {
+                    var checks = GetOrderedHealthChecks().ToList();
+                    <div class="rc2-health-summary">
+                        <div class="rc2-health-meta">Overall Status: <strong>@(HealthReport.Status)</strong></div>
+                        @if (!string.IsNullOrWhiteSpace(HealthReport.TotalDuration))
+                        {
+                            <div class="rc2-health-meta">Total Duration: <span>@HealthReport.TotalDuration</span></div>
+                        }
+                    </div>
+
+                    @if (!checks.Any())
+                    {
+                        <div class="text-muted">No individual health checks reported.</div>
+                    }
+                    else
+                    {
+                        <div class="rc2-health-list">
+                            @foreach (var check in checks)
+                            {
+                                <div class="rc2-health-check">
+                                    <div class="rc2-health-check-head">
+                                        <span class="badge @GetHealthStatusBadgeClass(check.Status)">@check.Status</span>
+                                        <div class="rc2-health-check-name">@check.Name</div>
+                                        @if (!string.IsNullOrWhiteSpace(check.Duration))
+                                        {
+                                            <div class="rc2-health-check-duration">@check.Duration</div>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(check.Description))
+                                    {
+                                        <p class="rc2-health-check-description">@check.Description</p>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(check.Exception))
+                                    {
+                                        <div class="rc2-health-check-exception">
+                                            <i class="bi bi-bug-fill me-2"></i>@check.Exception
+                                        </div>
+                                    }
+                                    @if (HasHealthData(check.Data))
+                                    {
+                                        var formatted = FormatHealthData(check.Data);
+                                        @if (!string.IsNullOrEmpty(formatted))
+                                        {
+                                            <pre class="rc2-health-check-data">@formatted</pre>
+                                        }
+                                    }
+                                    @if (check.Tags is { Count: > 0 })
+                                    {
+                                        <div class="rc2-health-check-tags">
+                                            <i class="bi bi-tags-fill me-2"></i>
+                                            <span>@string.Join(", ", check.Tags)</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-muted">No health data available.</div>
+                }
+            </div>
+            <div class="rc2-modal-footer">
+                <button type="button" class="btn btn-outline-light" @onclick="CloseHealthDialog">Close</button>
+                <button type="button" class="btn btn-primary" @onclick="RefreshHealthDialogAsync" disabled="@IsHealthDialogLoading">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+}

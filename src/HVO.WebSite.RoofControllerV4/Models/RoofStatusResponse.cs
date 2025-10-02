@@ -8,5 +8,7 @@ namespace HVO.WebSite.RoofControllerV4.Models
         DateTimeOffset? LastTransitionUtc,
         bool IsWatchdogActive,
         double? WatchdogSecondsRemaining,
-    bool IsAtSpeed);
+        bool IsAtSpeed,
+        bool IsUsingPhysicalHardware,
+        bool IsIgnoringPhysicalLimitSwitches);
 }

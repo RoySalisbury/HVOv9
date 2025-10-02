@@ -33,6 +33,8 @@ RUN dotnet publish "HVO.WebSite.RoofControllerV4.csproj" \
 # Runtime image
 # -------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+ARG HVO_FORCE_RASPBERRY_PI=false
+ARG HVO_CONTAINER_RPI_HINT=""
 WORKDIR /app
 
 # Install the minimal native dependencies needed for GPIO/I2C access and health checks
@@ -52,7 +54,9 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
     Logging__LogLevel__Default=Information \
     Logging__LogLevel__Microsoft.AspNetCore=Warning \
-    TZ=UTC
+    TZ=UTC \
+    HVO_FORCE_RASPBERRY_PI=${HVO_FORCE_RASPBERRY_PI} \
+    HVO_CONTAINER_RPI_HINT=${HVO_CONTAINER_RPI_HINT}
 
 # Expose the HTTP port used by the site
 EXPOSE 8080

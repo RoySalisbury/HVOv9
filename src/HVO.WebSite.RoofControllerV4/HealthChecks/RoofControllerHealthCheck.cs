@@ -37,7 +37,8 @@ namespace HVO.WebSite.RoofControllerV4.HealthChecks
                     ["WatchdogSecondsRemaining"] = _roofController.WatchdogSecondsRemaining ?? 0d,
                     ["Ready"] = _roofController.IsInitialized && !_roofController.IsServiceDisposed,
                     ["CheckTime"] = DateTime.UtcNow,
-                    ["IgnorePhysicalLimitSwitches"] = _options.IgnorePhysicalLimitSwitches
+                    ["IgnorePhysicalLimitSwitches"] = _options.IgnorePhysicalLimitSwitches,
+                    ["HardwareMode"] = _roofController.IsUsingPhysicalHardware ? "Physical" : "Simulation"
                 };
 
                 // Service disposed is a hard failure for readiness

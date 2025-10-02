@@ -28,7 +28,7 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     private readonly ILogger<RoofControllerServiceV4> _logger;
     private readonly RoofControllerOptionsV4 _roofControllerOptions;
     private readonly FourRelayFourInputHat _fourRelayFourInputHat;
-    private readonly long _limitDebounceTicks;
+    private long _limitDebounceTicks;
     // Cached LED mask to avoid redundant I2C writes (bits 0..2 -> OpenLimit, ClosedLimit, Fault)
     private byte? _lastIndicatorLedMask;
     private RoofStatusResponse? _lastPublishedStatus;
@@ -50,6 +50,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     private RoofControllerCommandIntent _lastLimitEventIntent = RoofControllerCommandIntent.None;
 
     // Legacy DigitalInput1..4 events removed; use named alias events below
+
+    private static long CalculateLimitDebounceTicks(TimeSpan debounce) => debounce > TimeSpan.Zero ? (long)(debounce.TotalSeconds * Stopwatch.Frequency) : 0;
 
     // Event hooks are handled internally and exposed via protected virtual methods instead of public events
     protected virtual void OnForwardLimitSwitchChanged(bool isHigh)
@@ -187,6 +189,61 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         _lastLimitEventIntent = intent;
     }
 
+    private void UpdateDigitalInputSubscriptions_NoLock()
+    {
+        try
+        {
+            if (_hatIn1Handler is not null)
+            {
+                _fourRelayFourInputHat.DigitalInput1Changed -= _hatIn1Handler;
+                _hatIn1Handler = null;
+            }
+
+            if (_hatIn2Handler is not null)
+            {
+                _fourRelayFourInputHat.DigitalInput2Changed -= _hatIn2Handler;
+                _hatIn2Handler = null;
+            }
+
+            if (_hatIn3Handler is not null)
+            {
+                _fourRelayFourInputHat.DigitalInput3Changed -= _hatIn3Handler;
+                _hatIn3Handler = null;
+            }
+
+            if (_hatIn4Handler is not null)
+            {
+                _fourRelayFourInputHat.DigitalInput4Changed -= _hatIn4Handler;
+                _hatIn4Handler = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update digital input subscriptions during configuration change");
+        }
+
+        if (!_roofControllerOptions.EnableDigitalInputPolling)
+        {
+            _logger.LogDebug("Digital input polling disabled via configuration update");
+            return;
+        }
+
+        if (!_roofControllerOptions.IgnorePhysicalLimitSwitches)
+        {
+            _hatIn1Handler = (_, state) => OnForwardLimitSwitchChanged(state);
+            _hatIn2Handler = (_, state) => OnReverseLimitSwitchChanged(state);
+            _fourRelayFourInputHat.DigitalInput1Changed += _hatIn1Handler;
+            _fourRelayFourInputHat.DigitalInput2Changed += _hatIn2Handler;
+        }
+
+        _hatIn3Handler = (_, state) => OnFaultNotificationChanged(state);
+        _hatIn4Handler = (_, state) => OnAtSpeedChanged(state);
+        _fourRelayFourInputHat.DigitalInput3Changed += _hatIn3Handler;
+        _fourRelayFourInputHat.DigitalInput4Changed += _hatIn4Handler;
+
+        _logger.LogDebug("Digital input polling subscriptions refreshed. IgnoreLimits={IgnoreLimits}", _roofControllerOptions.IgnorePhysicalLimitSwitches);
+    }
+
 
     public event EventHandler<RoofStatusChangedEventArgs>? StatusChanged;
 
@@ -196,8 +253,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         this._logger = logger;
         this._roofControllerOptions = roofControllerOptions.Value;
     this._fourRelayFourInputHat = fourRelayFourInputHat;
-    var debounce = _roofControllerOptions.LimitSwitchDebounce;
-    _limitDebounceTicks = debounce > TimeSpan.Zero ? (long)(debounce.TotalSeconds * Stopwatch.Frequency) : 0;
+    _limitDebounceTicks = CalculateLimitDebounceTicks(_roofControllerOptions.LimitSwitchDebounce);
+        _logger.LogInformation("RoofControllerServiceV4 using {HardwareMode} mode for relay HAT", _fourRelayFourInputHat.ConnectionMode);
     }
 
 
@@ -231,6 +288,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
     public virtual RoofControllerStatus Status { get; protected set; } = RoofControllerStatus.NotInitialized;
     public virtual DateTimeOffset? LastTransitionUtc { get; protected set; }
     public bool IsServiceDisposed => _disposed;
+    public bool IsUsingPhysicalHardware => _fourRelayFourInputHat.IsHardwareBacked;
+    public bool IsIgnoringPhysicalLimitSwitches => _roofControllerOptions.IgnorePhysicalLimitSwitches;
 
     public bool IsAtSpeed
     {
@@ -259,8 +318,101 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 LastTransitionUtc,
                 IsWatchdogActive,
                 WatchdogSecondsRemaining,
-                _lastIn4 ?? false
+                _lastIn4 ?? false,
+                IsUsingPhysicalHardware,
+                IsIgnoringPhysicalLimitSwitches
             );
+        }
+    }
+
+    public RoofControllerOptionsV4 GetConfigurationSnapshot()
+    {
+        lock (_syncLock)
+        {
+            return new RoofControllerOptionsV4
+            {
+                SafetyWatchdogTimeout = _roofControllerOptions.SafetyWatchdogTimeout,
+                OpenRelayId = _roofControllerOptions.OpenRelayId,
+                CloseRelayId = _roofControllerOptions.CloseRelayId,
+                ClearFaultRelayId = _roofControllerOptions.ClearFaultRelayId,
+                StopRelayId = _roofControllerOptions.StopRelayId,
+                EnableDigitalInputPolling = _roofControllerOptions.EnableDigitalInputPolling,
+                DigitalInputPollInterval = _roofControllerOptions.DigitalInputPollInterval,
+                EnablePeriodicVerificationWhileMoving = _roofControllerOptions.EnablePeriodicVerificationWhileMoving,
+                PeriodicVerificationInterval = _roofControllerOptions.PeriodicVerificationInterval,
+                UseNormallyClosedLimitSwitches = _roofControllerOptions.UseNormallyClosedLimitSwitches,
+                LimitSwitchDebounce = _roofControllerOptions.LimitSwitchDebounce,
+                IgnorePhysicalLimitSwitches = _roofControllerOptions.IgnorePhysicalLimitSwitches
+            };
+        }
+    }
+
+    public Result<RoofControllerOptionsV4> UpdateConfiguration(RoofControllerOptionsV4 updatedOptions)
+    {
+        ArgumentNullException.ThrowIfNull(updatedOptions);
+
+        lock (_syncLock)
+        {
+            try
+            {
+                ThrowIfDisposed();
+
+                if (IsMoving || _watchdogActive)
+                {
+                    var reason = new InvalidOperationException("Cannot update configuration while the roof is moving or the safety watchdog is active.");
+                    _logger.LogWarning(reason, "Configuration update blocked while in motion or watchdog active. Status={Status}, WatchdogActive={WatchdogActive}", Status, _watchdogActive);
+                    return Result<RoofControllerOptionsV4>.Failure(reason);
+                }
+
+                var previousEnablePolling = _roofControllerOptions.EnableDigitalInputPolling;
+                var previousIgnoreLimits = _roofControllerOptions.IgnorePhysicalLimitSwitches;
+
+                _roofControllerOptions.SafetyWatchdogTimeout = updatedOptions.SafetyWatchdogTimeout;
+                _roofControllerOptions.OpenRelayId = updatedOptions.OpenRelayId;
+                _roofControllerOptions.CloseRelayId = updatedOptions.CloseRelayId;
+                _roofControllerOptions.ClearFaultRelayId = updatedOptions.ClearFaultRelayId;
+                _roofControllerOptions.StopRelayId = updatedOptions.StopRelayId;
+                _roofControllerOptions.EnableDigitalInputPolling = updatedOptions.EnableDigitalInputPolling;
+                _roofControllerOptions.DigitalInputPollInterval = updatedOptions.DigitalInputPollInterval;
+                _roofControllerOptions.EnablePeriodicVerificationWhileMoving = updatedOptions.EnablePeriodicVerificationWhileMoving;
+                _roofControllerOptions.PeriodicVerificationInterval = updatedOptions.PeriodicVerificationInterval;
+                _roofControllerOptions.UseNormallyClosedLimitSwitches = updatedOptions.UseNormallyClosedLimitSwitches;
+                _roofControllerOptions.LimitSwitchDebounce = updatedOptions.LimitSwitchDebounce;
+                _roofControllerOptions.IgnorePhysicalLimitSwitches = updatedOptions.IgnorePhysicalLimitSwitches;
+
+                _limitDebounceTicks = CalculateLimitDebounceTicks(updatedOptions.LimitSwitchDebounce);
+
+                UpdateSafetyWatchdogAfterConfigurationChange_NoLock();
+                InitializeOrUpdatePeriodicVerificationTimer();
+
+                try
+                {
+                    _fourRelayFourInputHat.DigitalInputPollInterval = _roofControllerOptions.DigitalInputPollInterval;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to apply digital input poll interval {Interval}ms", _roofControllerOptions.DigitalInputPollInterval.TotalMilliseconds);
+                }
+
+                if (previousEnablePolling != _roofControllerOptions.EnableDigitalInputPolling ||
+                    previousIgnoreLimits != _roofControllerOptions.IgnorePhysicalLimitSwitches)
+                {
+                    UpdateDigitalInputSubscriptions_NoLock();
+                }
+
+                if (_watchdogActive)
+                {
+                    TryStartPeriodicVerification_NoLock();
+                }
+
+                UpdateRoofStatus(forceRead: true);
+                return Result<RoofControllerOptionsV4>.Success(GetConfigurationSnapshot());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update roof controller configuration");
+                return Result<RoofControllerOptionsV4>.Failure(ex);
+            }
         }
     }
 
@@ -372,6 +524,25 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         };
         _safetyWatchdogTimer.Elapsed += SafetyWatchdog_Elapsed;
         _watchdogActive = false; // reset active state on recreation
+    }
+
+    private void UpdateSafetyWatchdogAfterConfigurationChange_NoLock()
+    {
+        if (_safetyWatchdogTimer is null)
+        {
+            return;
+        }
+
+        var wasActive = _watchdogActive;
+        RecreateSafetyWatchdog_NoLock();
+
+        if (wasActive && _safetyWatchdogTimer is not null)
+        {
+            _operationStartTime = DateTimeOffset.UtcNow;
+            _safetyWatchdogTimer.Start();
+            _watchdogActive = true;
+            _logger.LogDebug("Safety watchdog timer restarted with new timeout {TimeoutSeconds}", _roofControllerOptions.SafetyWatchdogTimeout.TotalSeconds);
+        }
     }
 
     private void InitializeOrUpdatePeriodicVerificationTimer()
@@ -1086,6 +1257,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
                 this._lastCommandIntent = RoofControllerCommandIntent.Open;
+                _lastLimitEventTicks = 0;
+                _lastLimitEventIntent = RoofControllerCommandIntent.None;
 
                 // Always stop the current action before starting a new one.
                 var stopResult = this.Stop();
@@ -1193,6 +1366,8 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
 
                 // Set the command BEFORE calling Stop() so UpdateRoofStatus has the correct context
                 this._lastCommandIntent = RoofControllerCommandIntent.Close;
+                _lastLimitEventTicks = 0;
+                _lastLimitEventIntent = RoofControllerCommandIntent.None;
 
                 // Always stop the current action before starting a new one.
                 var stopResult = this.Stop();
@@ -1282,73 +1457,113 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
         if (this._fourRelayFourInputHat == null || _roofControllerOptions == null)
             return;
 
-        // Guard: never energize both Open and Close simultaneously; enforce safe STOP state
-        if (openRelay && closeRelay)
+        lock (_fourRelayFourInputHat)
         {
-            _logger.LogError("Invalid relay request: both Open and Close requested true. Forcing STOP state.");
-            stopRelay = true;
-            openRelay = false;
-            closeRelay = false;
-        }
-
-    // NOTE: FourRelayFourInputHat exposes SetRelaysMask for a single I2C transaction, but we intentionally
-    // drive each relay individually via TrySetRelayWithRetry. This keeps the built-in verification/retry
-    // semantics, preserves detailed logging per relay, and still guarantees a safe sequence even if one
-    // operation fails (mask writes would be all-or-nothing without granular feedback).
-        var stopRelayId = _roofControllerOptions.StopRelayId;
-        var openRelayId = _roofControllerOptions.OpenRelayId;
-        var closeRelayId = _roofControllerOptions.CloseRelayId;
-
-        void ApplyRelay(int relayId, bool desiredState, string relayName)
-        {
-            try
+            // Guard: never energize both Open and Close simultaneously; enforce safe STOP state
+            if (openRelay && closeRelay)
             {
-                var result = _fourRelayFourInputHat.TrySetRelayWithRetry(relayId, desiredState);
-                if (result.IsFailure || result.Value == false)
+                _logger.LogError("Invalid relay request: both Open and Close requested true. Forcing STOP state.");
+                stopRelay = true;
+                openRelay = false;
+                closeRelay = false;
+            }
+
+            var stopRelayId = _roofControllerOptions.StopRelayId;
+            var openRelayId = _roofControllerOptions.OpenRelayId;
+            var closeRelayId = _roofControllerOptions.CloseRelayId;
+
+            byte DesiredMask()
+            {
+                byte mask = 0;
+                if (stopRelay) mask |= (byte)(1 << (stopRelayId - 1));
+                if (openRelay) mask |= (byte)(1 << (openRelayId - 1));
+                if (closeRelay) mask |= (byte)(1 << (closeRelayId - 1));
+                return mask;
+            }
+
+            bool ExecuteSequence(bool trackFailures)
+            {
+                bool hadFailure = false;
+
+                void ApplyRelay(int relayId, bool desiredState, string relayName)
                 {
-                    if (result.IsFailure && result.Error is not null)
+                    try
                     {
-                        _logger.LogError(result.Error, "Failed to set {RelayName} relay pin {Pin} to {Value} ", relayName, relayId, desiredState);
+                        var result = _fourRelayFourInputHat.TrySetRelayWithRetry(relayId, desiredState);
+                        if (result.IsFailure || result.Value == false)
+                        {
+                            hadFailure = trackFailures || hadFailure;
+
+                            if (result.IsFailure && result.Error is not null)
+                            {
+                                _logger.LogError(result.Error, "Failed to set {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
+                            }
+                            else
+                            {
+                                _logger.LogError("Failed to verify {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        hadFailure = trackFailures || hadFailure;
+                        _logger.LogError(ex, "Failed to set {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
+                    }
+                }
+
+                if (stopRelay)
+                {
+                    // Starting motion: allow the enable path first, then assert the selected direction
+                    ApplyRelay(stopRelayId, true, "Stop");
+
+                    if (closeRelay)
+                    {
+                        ApplyRelay(openRelayId, false, "Open");
+                        ApplyRelay(closeRelayId, true, "Close");
+                    }
+                    else if (openRelay)
+                    {
+                        ApplyRelay(closeRelayId, false, "Close");
+                        ApplyRelay(openRelayId, true, "Open");
                     }
                     else
                     {
-                        _logger.LogError("Failed to verify {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
+                        ApplyRelay(openRelayId, false, "Open");
+                        ApplyRelay(closeRelayId, false, "Close");
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to set {RelayName} relay pin {Pin} to {Value}", relayName, relayId, desiredState);
-            }
-        }
+                else
+                {
+                    // Stopping motion: drop any direction first, then de-energize STOP for fail-safe state
+                    ApplyRelay(openRelayId, false, "Open");
+                    ApplyRelay(closeRelayId, false, "Close");
+                    ApplyRelay(stopRelayId, false, "Stop");
+                }
 
-        if (stopRelay)
-        {
-            // Starting motion: allow the enable path first, then assert the selected direction
-            ApplyRelay(stopRelayId, true, "Stop");
+                return hadFailure;
+            }
 
-            if (closeRelay)
+            var hadFailure = ExecuteSequence(trackFailures: true);
+            if (hadFailure)
             {
-                ApplyRelay(openRelayId, false, "Open");
-                ApplyRelay(closeRelayId, true, "Close");
+                var desiredMask = DesiredMask();
+                var maskResult = _fourRelayFourInputHat.SetRelaysMask(desiredMask);
+                if (!maskResult.IsSuccessful)
+                {
+                    if (maskResult.Error is not null)
+                    {
+                        _logger.LogError(maskResult.Error, "Failed to enforce relay mask 0x{Mask:X2} after retry failure", desiredMask);
+                    }
+                    else
+                    {
+                        _logger.LogError("Failed to enforce relay mask 0x{Mask:X2} after retry failure", desiredMask);
+                    }
+                    return;
+                }
+
+                // Re-run sequence without tracking to restore expected ordering/logging semantics
+                ExecuteSequence(trackFailures: false);
             }
-            else if (openRelay)
-            {
-                ApplyRelay(closeRelayId, false, "Close");
-                ApplyRelay(openRelayId, true, "Open");
-            }
-            else
-            {
-                ApplyRelay(openRelayId, false, "Open");
-                ApplyRelay(closeRelayId, false, "Close");
-            }
-        }
-        else
-        {
-            // Stopping motion: drop any direction first, then de-energize STOP for fail-safe state
-            ApplyRelay(openRelayId, false, "Open");
-            ApplyRelay(closeRelayId, false, "Close");
-            ApplyRelay(stopRelayId, false, "Stop");
         }
     }
 
@@ -1487,7 +1702,9 @@ public class RoofControllerServiceV4 : IRoofControllerServiceV4, IAsyncDisposabl
                 LastTransitionUtc,
                 IsWatchdogActive,
                 WatchdogSecondsRemaining,
-                _lastIn4 ?? false
+                _lastIn4 ?? false,
+                IsUsingPhysicalHardware,
+                IsIgnoringPhysicalLimitSwitches
             );
 
             if (_lastPublishedStatus is null || !_lastPublishedStatus.Equals(snapshot))

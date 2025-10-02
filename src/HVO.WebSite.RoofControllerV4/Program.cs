@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Microsoft.Extensions.Options;
@@ -22,6 +23,7 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        ApplyHardwareDetectionOverrides(builder.Configuration);
         ConfigureServices(builder.Services, builder.Configuration, builder.Environment);
 
         var app = builder.Build();
@@ -46,10 +48,11 @@ public class Program
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
-        services.AddSingleton<FourRelayFourInputHat>(sp =>
+        services.AddSingleton<IGpioControllerClient>(_ => GpioControllerClientFactory.CreateAutoSelecting());
+
+        services.AddFourRelayFourInputHat(options =>
         {
-            var logger = sp.GetRequiredService<ILogger<FourRelayFourInputHat>>();
-            return new FourRelayFourInputHat(logger: logger);
+            options.DigitalInputPollInterval = TimeSpan.FromMilliseconds(25);
         });
 
 
@@ -127,6 +130,34 @@ public class Program
 
         // Add HttpContextAccessor for Blazor components
         services.AddHttpContextAccessor();
+    }
+
+    private static void ApplyHardwareDetectionOverrides(ConfigurationManager configuration)
+    {
+        var section = configuration.GetSection("HardwareDetection");
+        if (!section.Exists())
+        {
+            return;
+        }
+
+        SetIfUnset("HVO_FORCE_RASPBERRY_PI", section["ForceRaspberryPi"]);
+        SetIfUnset("HVO_CONTAINER_RPI_HINT", section["ContainerRpiHint"]);
+        SetIfUnset(IGpioControllerClient.UseRealHardwareEnvironmentVariable, section["UseRealGpio"]);
+
+        static void SetIfUnset(string key, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
+            {
+                return;
+            }
+
+            Environment.SetEnvironmentVariable(key, value);
+        }
     }
 
     private static void Configure(WebApplication app)

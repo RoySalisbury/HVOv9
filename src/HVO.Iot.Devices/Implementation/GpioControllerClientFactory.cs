@@ -1,7 +1,5 @@
 using System;
 using System.Device.Gpio;
-using System.IO;
-using System.Runtime.InteropServices;
 using HVO.Iot.Devices.Abstractions;
 
 namespace HVO.Iot.Devices.Implementation;
@@ -37,7 +35,7 @@ public static class GpioControllerClientFactory
             return envController;
         }
 
-        if (IsRaspberryPi() && TryCreateHardware(out var piController))
+        if (HardwareEnvironment.IsRaspberryPi() && TryCreateHardware(out var piController))
         {
             return piController;
         }
@@ -65,42 +63,6 @@ public static class GpioControllerClientFactory
             controller = default!;
             return false;
         }
-    }
-
-    private static bool IsRaspberryPi()
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            return false;
-        }
-
-        try
-        {
-            if (File.Exists("/proc/device-tree/model"))
-            {
-                var model = File.ReadAllText("/proc/device-tree/model");
-                if (model.Contains("Raspberry", StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            if (File.Exists("/proc/cpuinfo"))
-            {
-                var cpuInfo = File.ReadAllText("/proc/cpuinfo");
-                if (cpuInfo.Contains("Raspberry Pi", StringComparison.OrdinalIgnoreCase) ||
-                    cpuInfo.Contains("BCM", StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-        }
-        catch
-        {
-            // ignore detection errors and fall back to simulation
-        }
-
-        return false;
     }
 }
 #pragma warning restore CS1591

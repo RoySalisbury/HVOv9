@@ -7,6 +7,9 @@ using HVO.WebSite.RoofControllerV4.Services;
 using HVO;
 using System.Timers;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace HVO.WebSite.RoofControllerV4.Components.Pages;
 
@@ -23,6 +26,8 @@ public class RoofControlBase : ComponentBase, IDisposable
     [Inject] protected IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] protected IOptions<RoofControllerOptionsV4> RoofControllerOptions { get; set; } = default!;
     [Inject] protected FooterStatusService? FooterStatusService { get; set; }
+    [Inject] protected IHttpClientFactory HttpClientFactory { get; set; } = default!;
+    [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
 
     #endregion
 
@@ -33,6 +38,7 @@ public class RoofControlBase : ComponentBase, IDisposable
     protected bool _isDisposed = false;
     protected RoofControllerStopReason _lastNotifiedStopReason = RoofControllerStopReason.None;
     private bool _footerStatusReady;
+    private HttpClient? _healthHttpClient;
     
     #endregion
 
@@ -41,9 +47,16 @@ public class RoofControlBase : ComponentBase, IDisposable
     public RoofControllerStatus CurrentStatus => RoofController.Status;
     public bool IsInitialized => RoofController.IsInitialized;
     public bool IsMoving => RoofController.IsMoving;
+    public bool HasFault => RoofController.Status == RoofControllerStatus.Error;
     public bool IsRoofOpen => RoofController.Status == RoofControllerStatus.Open;
     public bool IsServiceDisposed => RoofController.IsServiceDisposed;
     public bool IsServiceAvailable => RoofController.IsInitialized && !RoofController.IsServiceDisposed;
+    public bool IsUsingPhysicalHardware => RoofController.IsUsingPhysicalHardware;
+    public bool IsIgnoringLimitSwitches => RoofController.IsIgnoringPhysicalLimitSwitches;
+    protected bool IsHealthDialogOpen { get; private set; }
+    protected bool IsHealthDialogLoading { get; private set; }
+    protected string? HealthDialogError { get; private set; }
+    protected HealthReportPayload? HealthReport { get; private set; }
 
     public bool IsOpenDisabled 
     { 
@@ -70,7 +83,7 @@ public class RoofControlBase : ComponentBase, IDisposable
     }
 
     public bool IsStopDisabled => !IsServiceAvailable || !RoofController.IsMoving;
-    public bool IsClearFaultDisabled => !IsServiceAvailable || RoofController.IsMoving;
+    public bool IsClearFaultDisabled => !IsServiceAvailable || RoofController.IsMoving || !HasFault;
     public IReadOnlyList<NotificationMessage> Notifications => _notifications.AsReadOnly();
     public bool IsSafetyWatchdogRunning => RoofController.IsWatchdogActive;
     public double SafetyWatchdogTimeRemaining => RoofController.WatchdogSecondsRemaining ?? 0;
@@ -213,7 +226,23 @@ public class RoofControlBase : ComponentBase, IDisposable
         _ => "bg-dark"
     };
 
+    public string GetHardwareBadgeClass() => IsUsingPhysicalHardware ? "bg-primary" : "bg-warning text-dark";
+
+    public string GetHardwareModeLabel() => IsUsingPhysicalHardware ? "Physical I²C" : "Simulation";
+
+    public string GetLimitSwitchBadgeClass() => "bg-warning text-dark";
+
+    public string GetLimitSwitchLabel() => "Limits Ignored";
+
     public string GetHealthCheckBadgeClass() => CurrentStatus == RoofControllerStatus.Error ? "bg-danger" : "bg-success";
+    public string GetHealthStatusBadgeClass(string? status) => status?.ToLowerInvariant() switch
+    {
+        "healthy" => "bg-success",
+        "degraded" => "bg-warning text-dark",
+        "unhealthy" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
     public string GetHealthCheckStatus()
     {
         if (IsServiceDisposed || CurrentStatus == RoofControllerStatus.Error)
@@ -222,6 +251,19 @@ public class RoofControlBase : ComponentBase, IDisposable
             return "Healthy";
         return "Checking...";
     }
+
+    protected IEnumerable<HealthCheckEntry> GetOrderedHealthChecks()
+    {
+        if (HealthReport?.Checks is null)
+        {
+            return Enumerable.Empty<HealthCheckEntry>();
+        }
+
+        return HealthReport.Checks
+            .OrderByDescending(c => NormalizeStatusRank(c.Status))
+            .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase);
+    }
+
     public string GetWatchdogBadgeClass() => IsSafetyWatchdogRunning ? "bg-warning text-dark" : "bg-success";
 
     public string GetOpenButtonClass() => $"btn btn-success btn-lg control-btn{(IsOpenDisabled ? " disabled" : string.Empty)}";
@@ -344,6 +386,131 @@ public class RoofControlBase : ComponentBase, IDisposable
 
     #endregion
 
+    #region Health Dialog
+
+    protected async Task OpenHealthDialogAsync()
+    {
+        IsHealthDialogOpen = true;
+        await FetchHealthReportAsync().ConfigureAwait(false);
+    }
+
+    protected async Task RefreshHealthDialogAsync()
+    {
+        if (!IsHealthDialogOpen)
+        {
+            IsHealthDialogOpen = true;
+        }
+
+        await FetchHealthReportAsync().ConfigureAwait(false);
+    }
+
+    protected void CloseHealthDialog()
+    {
+        IsHealthDialogOpen = false;
+        HealthDialogError = null;
+    }
+
+    protected bool HasHealthData(JsonElement? data)
+    {
+        if (data is null)
+        {
+            return false;
+        }
+
+        return data.Value.ValueKind switch
+        {
+            JsonValueKind.Object => data.Value.EnumerateObject().Any(),
+            JsonValueKind.Array => data.Value.GetArrayLength() > 0,
+            JsonValueKind.String => !string.IsNullOrWhiteSpace(data.Value.GetString()),
+            JsonValueKind.Number => true,
+            JsonValueKind.True or JsonValueKind.False => true,
+            _ => false
+        };
+    }
+
+    protected string? FormatHealthData(JsonElement? data)
+    {
+        if (!HasHealthData(data))
+        {
+            return null;
+        }
+
+        var serializerOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true
+        };
+
+        return JsonSerializer.Serialize(data!.Value, serializerOptions);
+    }
+
+    private async Task FetchHealthReportAsync()
+    {
+        HealthDialogError = null;
+        IsHealthDialogLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var client = GetHealthHttpClient();
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var payload = await client.GetFromJsonAsync<HealthReportPayload>("health", cancellation.Token).ConfigureAwait(false);
+            HealthReport = payload;
+        }
+        catch (OperationCanceledException ex)
+        {
+            Logger.LogWarning(ex, "Timed out retrieving health report");
+            HealthDialogError = "Timed out retrieving health details. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to retrieve health report");
+            HealthDialogError = "Unable to retrieve health details. Check server logs for more information.";
+        }
+        finally
+        {
+            IsHealthDialogLoading = false;
+            if (!_isDisposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private HttpClient GetHealthHttpClient()
+    {
+        if (_healthHttpClient is not null)
+        {
+            return _healthHttpClient;
+        }
+
+        var client = HttpClientFactory.CreateClient("roof-health");
+
+        if (client.BaseAddress is null)
+        {
+            client.BaseAddress = new Uri(NavigationManager.BaseUri);
+        }
+
+        if (!client.DefaultRequestHeaders.Accept.Any())
+        {
+            client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+        }
+
+        client.Timeout = TimeSpan.FromSeconds(15);
+
+        _healthHttpClient = client;
+        return _healthHttpClient;
+    }
+
+    private static int NormalizeStatusRank(string? status) => status?.ToLowerInvariant() switch
+    {
+        "unhealthy" => 0,
+        "degraded" => 1,
+        "healthy" => 2,
+        _ => -1
+    };
+
+    #endregion
+
     #region Supporting Types
 
     public class NotificationMessage
@@ -363,6 +530,24 @@ public class RoofControlBase : ComponentBase, IDisposable
         Error
     }
 
+    public class HealthReportPayload
+    {
+        public string Status { get; set; } = string.Empty;
+        public List<HealthCheckEntry> Checks { get; set; } = new();
+        public string? TotalDuration { get; set; }
+    }
+
+    public class HealthCheckEntry
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public JsonElement? Data { get; set; }
+        public string? Duration { get; set; }
+        public string? Exception { get; set; }
+        public IReadOnlyList<string>? Tags { get; set; }
+    }
+
     #endregion
 
     #region Footer Synchronization
@@ -380,7 +565,13 @@ public class RoofControlBase : ComponentBase, IDisposable
 
         FooterStatusService.SetLeftNotifications(footerNotifications);
 
-        FooterStatusService.SetCenterMessage(new FooterStatusMessage($"Status: {CurrentStatus}", MapStatusLevel(CurrentStatus)));
+        var centerMessage = $"Status: {CurrentStatus} • Mode: {GetHardwareModeLabel()}";
+        if (IsIgnoringLimitSwitches)
+        {
+            centerMessage += " • Limits Ignored";
+        }
+
+        FooterStatusService.SetCenterMessage(new FooterStatusMessage(centerMessage, MapStatusLevel(CurrentStatus)));
 
         var watchdogMessage = IsSafetyWatchdogRunning
             ? $"Watchdog: {Math.Ceiling(SafetyWatchdogTimeRemaining)}s remaining"

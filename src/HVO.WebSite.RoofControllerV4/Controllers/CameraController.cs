@@ -1,10 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
-using System.Device.Gpio;
-using System.Device.Gpio.Drivers;
-using HVO.WebSite.RoofControllerV4.Logic;
-using HVO.WebSite.RoofControllerV4.Models;
+using System.IO;
 using System.Net.Http.Headers;
 
 namespace HVO.WebSite.RoofControllerV4.Controllers
@@ -40,31 +37,52 @@ namespace HVO.WebSite.RoofControllerV4.Controllers
         [HttpGet("{cameraId:int:range(1, 99)}/mjpeg")]
         public async Task<IActionResult> CameraMotionJpeg(int cameraId)
         {
-            using var http = CreateBlueIrisClient();
-            var upstream = await http.GetAsync($"{BlueIrisBase}/mjpg/cam{cameraId:D2}/video.mjpg", HttpCompletionOption.ResponseHeadersRead, HttpContext.RequestAborted);
+            var cancellationToken = HttpContext.RequestAborted;
 
-            if (!upstream.IsSuccessStatusCode)
+            try
             {
-                return StatusCode((int)upstream.StatusCode);
-            }
+                using var http = CreateBlueIrisClient();
+                using var upstream = await http.GetAsync($"{BlueIrisBase}/mjpg/cam{cameraId:D2}/video.mjpg", HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            // Forward Content-Type EXACTLY as-is (don’t “fix” boundary)
-            if (upstream.Content.Headers.TryGetValues("Content-Type", out var ct))
+                if (!upstream.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Camera stream upstream returned non-success status {StatusCode} for camera {CameraId}", (int)upstream.StatusCode, cameraId);
+                    return StatusCode((int)upstream.StatusCode);
+                }
+
+                // Forward Content-Type EXACTLY as-is (don’t “fix” boundary)
+                if (upstream.Content.Headers.TryGetValues("Content-Type", out var ct))
+                {
+                    Response.Headers["Content-Type"] = ct.ToArray();
+                }
+
+                // Helpful streaming headers
+                Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+                Response.Headers["Pragma"] = "no-cache";
+                Response.Headers["Expires"] = "0";
+                Response.Headers["X-Accel-Buffering"] = "no";
+
+                // Copy the upstream bytes to the client; don't dispose early
+                await using var s = await upstream.Content.ReadAsStreamAsync(cancellationToken);
+                await s.CopyToAsync(Response.Body, cancellationToken);
+
+                return new EmptyResult();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                Response.Headers["Content-Type"] = ct.ToArray();
+                _logger.LogDebug("Camera stream cancelled by client for camera {CameraId}", cameraId);
+                return new EmptyResult();
             }
-
-            // Helpful streaming headers
-            Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-            Response.Headers["Pragma"] = "no-cache";
-            Response.Headers["Expires"] = "0";
-            Response.Headers["X-Accel-Buffering"] = "no";
-
-            // Copy the upstream bytes to the client; don't dispose early
-            await using var s = await upstream.Content.ReadAsStreamAsync(HttpContext.RequestAborted);
-
-            await s.CopyToAsync(Response.Body, HttpContext.RequestAborted);
-            return new EmptyResult();
+            catch (IOException ex) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogTrace(ex, "Camera stream ended due to client disconnect for camera {CameraId}", cameraId);
+                return new EmptyResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error proxying camera stream for camera {CameraId}", cameraId);
+                return Problem(title: "Camera Stream Error", detail: "The camera stream could not be proxied.", statusCode: StatusCodes.Status502BadGateway);
+            }
         }
     }
 }
