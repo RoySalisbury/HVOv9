@@ -98,16 +98,16 @@ public class MyTests
 ### GPIO Controller Example (Best Practice)
 ```csharp
 [TestClass]
-public class MockGpioControllerTests : IDisposable
+public class MemoryGpioControllerClientTests : IDisposable
 {
     private ServiceProvider _serviceProvider = null!;
-    private IGpioController _gpioController = null!;
+    private IGpioControllerClient _gpioController = null!;
     
     [TestInitialize]
     public void TestInitialize()
     {
-        _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-        _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
+        _serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
+        _gpioController = _serviceProvider.GetRequiredService<IGpioControllerClient>();
     }
     
     [TestCleanup]

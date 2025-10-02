@@ -9,37 +9,27 @@ using HVO.Iot.Devices.Tests.TestHelpers;
 namespace HVO.Iot.Devices.Tests;
 
 /// <summary>
-/// Unit tests for MockGpioController to verify Raspberry Pi 5 GPIO behavior simulation.
-/// Uses dependency injection to test the IGpioController interface implementation.
-/// This demonstrates how to easily switch between mock and real hardware implementations.
+/// Unit tests for <see cref="MemoryGpioControllerClient"/> to verify Raspberry Pi 5 GPIO behavior simulation.
+/// Uses dependency injection to test the <see cref="IGpioControllerClient"/> interface implementation.
+/// This demonstrates how to easily switch between in-memory and real hardware implementations.
 /// </summary>
 [TestClass]
-public class MockGpioControllerTests : IDisposable
+public class MemoryGpioControllerClientTests : IDisposable
 {
     private ServiceProvider _serviceProvider = null!;
-    private IGpioController _gpioController = null!;
-    private MockGpioController _mockController = null!; // Keep reference for MockGpioController-specific methods
+    private IGpioControllerClient _gpioController = null!;
+    private MemoryGpioControllerClient _memoryController = null!;
     private const int ValidPin = 18; // GPIO18 is a standard pin on Pi 5
     private const int InvalidPin = 100; // Invalid pin number
     
     [TestInitialize]
     public void TestInitialize()
     {
-        // Use the test helper to configure dependency injection for mock GPIO
-        _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-        _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
-        
-        // Keep a reference to the concrete type for mock-specific methods
-        // Since we're now using GpioControllerWrapper, we need to access the underlying controller
-        if (_gpioController is GpioControllerWrapper wrapper)
-        {
-            _mockController = wrapper.UnderlyingController as MockGpioController
-                ?? throw new InvalidOperationException("Expected MockGpioController but got a different implementation");
-        }
-        else
-        {
-            throw new InvalidOperationException("Expected GpioControllerWrapper but got a different implementation");
-        }
+        // Use the test helper to configure dependency injection for the memory GPIO client
+        _serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
+        _gpioController = _serviceProvider.GetRequiredService<IGpioControllerClient>();
+        _memoryController = _gpioController as MemoryGpioControllerClient
+            ?? throw new InvalidOperationException("Expected MemoryGpioControllerClient but got a different implementation");
     }
 
     [TestCleanup]
@@ -109,7 +99,7 @@ public class MockGpioControllerTests : IDisposable
 
         // Assert
         Assert.IsTrue(_gpioController.IsPinOpen(ValidPin));
-        Assert.AreEqual(PinMode.Output, _mockController.GetPinMode(ValidPin));
+        Assert.AreEqual(PinMode.Output, _memoryController.GetPinMode(ValidPin));
     }
 
     [TestMethod]
@@ -291,7 +281,7 @@ public class MockGpioControllerTests : IDisposable
         _gpioController.OpenPin(ValidPin, PinMode.Input);
 
         // Act
-        _mockController.SimulatePinValueChange(ValidPin, PinValue.High);
+        _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
 
         // Assert
         Assert.AreEqual(PinValue.High, _gpioController.Read(ValidPin));
@@ -305,7 +295,7 @@ public class MockGpioControllerTests : IDisposable
 
         // Act & Assert
         var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _mockController.SimulatePinValueChange(ValidPin, PinValue.High));
+            _memoryController.SimulatePinValueChange(ValidPin, PinValue.High));
         
         Assert.IsTrue(exception.Message.Contains("output pin"));
     }
@@ -315,7 +305,7 @@ public class MockGpioControllerTests : IDisposable
     {
         // Act & Assert
         var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _mockController.SimulatePinValueChange(ValidPin, PinValue.High));
+            _memoryController.SimulatePinValueChange(ValidPin, PinValue.High));
         
         Assert.IsTrue(exception.Message.Contains("not open"));
     }
@@ -325,7 +315,7 @@ public class MockGpioControllerTests : IDisposable
     {
         // Act & Assert
         var exception = Assert.ThrowsException<ArgumentException>(() => 
-            _mockController.SimulatePinValueChange(InvalidPin, PinValue.High));
+            _memoryController.SimulatePinValueChange(InvalidPin, PinValue.High));
         
         Assert.IsTrue(exception.Message.Contains("not a valid GPIO pin"));
     }
@@ -344,7 +334,7 @@ public class MockGpioControllerTests : IDisposable
 
         // Act
         _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Rising, callback);
-        _mockController.SimulatePinValueChange(ValidPin, PinValue.High);
+        _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
 
         // Assert
         Assert.IsTrue(callbackInvoked);
@@ -393,7 +383,7 @@ public class MockGpioControllerTests : IDisposable
         _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Rising, callback);
 
         // Act
-        _mockController.SimulatePinValueChange(ValidPin, PinValue.High);
+        _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
 
         // Assert
         Assert.IsTrue(eventTriggered);
@@ -418,7 +408,7 @@ public class MockGpioControllerTests : IDisposable
         _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Falling, callback);
 
         // Act
-        _mockController.SimulatePinValueChange(ValidPin, PinValue.Low);
+        _memoryController.SimulatePinValueChange(ValidPin, PinValue.Low);
 
         // Assert
         Assert.IsTrue(eventTriggered);
@@ -436,7 +426,7 @@ public class MockGpioControllerTests : IDisposable
         _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Falling, callback);
 
         // Act - Trigger rising edge, but callback is registered for falling
-        _mockController.SimulatePinValueChange(ValidPin, PinValue.High);
+        _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
 
         // Assert
         Assert.IsFalse(eventTriggered);
@@ -454,7 +444,7 @@ public class MockGpioControllerTests : IDisposable
 
         // Act
         _gpioController.UnregisterCallbackForPinValueChangedEvent(ValidPin, callback);
-        _mockController.SimulatePinValueChange(ValidPin, PinValue.High);
+        _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
 
         // Assert
         Assert.IsFalse(eventTriggered);
@@ -528,7 +518,7 @@ public class MockGpioControllerTests : IDisposable
         Assert.IsTrue(_gpioController.IsPinOpen(19));
 
         // Act
-        _mockController.Dispose();
+        _memoryController.Dispose();
 
         // Assert - After disposal, operations should throw ObjectDisposedException
         // This verifies that dispose properly cleaned up
@@ -540,7 +530,7 @@ public class MockGpioControllerTests : IDisposable
     public void AfterDispose_AllOperations_ShouldThrowObjectDisposedException()
     {
         // Arrange
-        _mockController.Dispose();
+        _memoryController.Dispose();
 
         // Act & Assert
         Assert.ThrowsException<ObjectDisposedException>(() => 
@@ -562,7 +552,7 @@ public class MockGpioControllerTests : IDisposable
             _gpioController.Write(ValidPin, PinValue.High));
 
         Assert.ThrowsException<ObjectDisposedException>(() => 
-            _mockController.SimulatePinValueChange(ValidPin, PinValue.High));
+            _memoryController.SimulatePinValueChange(ValidPin, PinValue.High));
     }
 
     #endregion

@@ -12,7 +12,7 @@ namespace HVO.Iot.Devices;
 /// </summary>
 public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
 {
-    private readonly IGpioController _gpioController;
+    private readonly IGpioControllerClient _gpioController;
     private readonly PinMode _gpioPinMode;
     private readonly PinMode _eventPinMode;
     private readonly int _buttonPin;
@@ -78,7 +78,7 @@ public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
     /// <param name="logger">Optional logger for recording events and diagnostics.</param>
     public GpioButtonWithLed(int buttonPin, int? ledPin, bool isPullUp = true, bool hasExternalResistor = false,
         TimeSpan debounceTime = default, ILogger<GpioButtonWithLed>? logger = null)
-        : this(buttonPin, ledPin, TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), isPullUp, hasExternalResistor, Implementation.GpioControllerWrapper.CreateAutoSelecting(), debounceTime, logger)
+    : this(buttonPin, ledPin, TimeSpan.FromTicks(DefaultDoublePressTicks), TimeSpan.FromMilliseconds(DefaultHoldingMilliseconds), isPullUp, hasExternalResistor, Implementation.GpioControllerClientFactory.CreateAutoSelecting(), debounceTime, logger)
     {
     }
 
@@ -101,7 +101,7 @@ public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
         TimeSpan holding,
         bool isPullUp = true,
         bool hasExternalResistor = false,
-        IGpioController? gpioController = null,
+    IGpioControllerClient? gpioController = null,
         TimeSpan debounceTime = default,
         ILogger<GpioButtonWithLed>? logger = null)
         : base(doublePress, holding, debounceTime)
@@ -111,7 +111,7 @@ public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
             throw new ArgumentException("Button pin and LED pin cannot be the same", nameof(ledPin));
         }
 
-        _gpioController = gpioController ?? new GpioControllerWrapper();
+    _gpioController = gpioController ?? GpioControllerClientFactory.CreateAutoSelecting();
         _shouldDispose = gpioController == null;
         _buttonPin = buttonPin;
         _ledPin = ledPin;
@@ -861,7 +861,7 @@ public class GpioButtonWithLed : GpioButtonBase, IAsyncDisposable
             {
                 _logger?.LogDebug("Cleanup - Turning off LED on pin {LedPin}", _ledPin.Value);
 
-                _gpioController.Write(_ledPin.Value, PinValue.Low);
+                _gpioController.WriteLow(_ledPin.Value);
             }
             catch (Exception ex)
             {

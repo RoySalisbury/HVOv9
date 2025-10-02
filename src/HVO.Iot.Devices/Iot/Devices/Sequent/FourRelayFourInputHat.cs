@@ -4,7 +4,9 @@ using System;
 using System.Device.I2c;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Iot.Devices.Common;
+using HVO.Iot.Devices.Implementation;
 using HVO;
 
 namespace HVO.Iot.Devices.Iot.Devices.Sequent;
@@ -12,7 +14,7 @@ namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 /// <summary>
 /// Sequent Microsystems 4-Relay/4-Input HAT device driver with thread-safe I2C register access.
 /// </summary>
-public class FourRelayFourInputHat : I2cRegisterDevice
+public class FourRelayFourInputHat : RegisterBasedI2cDevice, IFourRelayFourInputHat
 {
     /// <summary>
     /// LED operating mode.
@@ -83,37 +85,52 @@ public class FourRelayFourInputHat : I2cRegisterDevice
     /// <summary>
     /// Initializes a new instance using a bus number and stack index (0..7).
     /// </summary>
-    public FourRelayFourInputHat(int stack = 0, int i2cBus = 1, ILogger<FourRelayFourInputHat>? logger = null)
-        : base(i2cBus, _CARD_BASE_ADDRESS + stack)
+    public FourRelayFourInputHat(int stack = 0, int i2cBus = 1, ILogger<FourRelayFourInputHat>? logger = null, int postTransactionDelayMs = 15)
+        : this(CreateHardwareClient(stack, i2cBus, postTransactionDelayMs), ownsClient: true, logger: logger, initializationSource: null)
     {
-        if (stack < 0 || stack > _STACK_LEVEL_MAX)
-            throw new ArgumentOutOfRangeException(nameof(stack), "Invalid stack level!");
-
-        _hwAddress = _CARD_BASE_ADDRESS + stack;
-        _i2cBusNo = i2cBus;
-        _logger = logger ?? NullLogger<FourRelayFourInputHat>.Instance;
-
-        _hardwareRevision = new Lazy<(byte Major, byte Minor)>(GetHardwareRevision);
-        _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
-
-        _logger.LogInformation("FourRelayFourInputHat initialized - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
     }
 
     /// <summary>
     /// Initializes a new instance from an existing <see cref="I2cDevice"/>.
     /// </summary>
-    public FourRelayFourInputHat(I2cDevice device, ILogger<FourRelayFourInputHat>? logger = null)
-        : base(device)
+    public FourRelayFourInputHat(I2cDevice device, ILogger<FourRelayFourInputHat>? logger = null, int postTransactionDelayMs = 15)
+        : this(new I2cRegisterClient(device, ownsDevice: false, postTransactionDelayMs), ownsClient: false, logger: logger, initializationSource: "external device")
     {
-        _ = device ?? throw new ArgumentNullException(nameof(device));
+    }
+
+    /// <summary>
+    /// Initializes a new instance using a pre-configured <see cref="II2cRegisterClient"/>.
+    /// </summary>
+    public FourRelayFourInputHat(II2cRegisterClient registerClient, ILogger<FourRelayFourInputHat>? logger = null)
+        : this(registerClient, ownsClient: false, logger: logger, initializationSource: "injected register client")
+    {
+    }
+
+    public FourRelayFourInputHat(II2cRegisterClient registerClient, bool ownsClient, ILogger<FourRelayFourInputHat>? logger = null)
+        : this(registerClient, ownsClient, logger, initializationSource: ownsClient ? null : "custom register client")
+    {
+    }
+
+    private FourRelayFourInputHat(II2cRegisterClient registerClient, bool ownsClient, ILogger<FourRelayFourInputHat>? logger, string? initializationSource)
+        : base(registerClient, ownsClient)
+    {
         _logger = logger ?? NullLogger<FourRelayFourInputHat>.Instance;
-        _i2cBusNo = device.ConnectionSettings.BusId;
-        _hwAddress = device.ConnectionSettings.DeviceAddress;
+        _i2cBusNo = ConnectionSettings.BusId;
+        _hwAddress = ConnectionSettings.DeviceAddress;
 
         _hardwareRevision = new Lazy<(byte Major, byte Minor)>(GetHardwareRevision);
         _softwareRevision = new Lazy<(byte Major, byte Minor)>(GetSoftwareRevision);
 
-        _logger.LogInformation("FourRelayFourInputHat initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusNo, _hwAddress);
+        string suffix = string.IsNullOrWhiteSpace(initializationSource) ? string.Empty : $" ({initializationSource})";
+        _logger.LogInformation("FourRelayFourInputHat initialized{InitializationSuffix} - Bus: {Bus}, Address: 0x{Addr:X2}", suffix, _i2cBusNo, _hwAddress);
+    }
+
+    private static II2cRegisterClient CreateHardwareClient(int stack, int i2cBus, int postTransactionDelayMs)
+    {
+        if (stack < 0 || stack > _STACK_LEVEL_MAX)
+            throw new ArgumentOutOfRangeException(nameof(stack), "Invalid stack level!");
+
+        return new I2cRegisterClient(i2cBus, _CARD_BASE_ADDRESS + stack, postTransactionDelayMs);
     }
 
     /// <summary>

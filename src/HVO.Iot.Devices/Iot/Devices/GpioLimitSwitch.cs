@@ -121,7 +121,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
         bool hasExternalResistor = false,
         TimeSpan debounceTime = default,
         ILogger<GpioLimitSwitch>? logger = null)
-        : this(Implementation.GpioControllerWrapper.CreateAutoSelecting(), gpioPinNumber, isPullup, hasExternalResistor, debounceTime, logger)
+    : this(Implementation.GpioControllerClientFactory.CreateAutoSelecting(), gpioPinNumber, isPullup, hasExternalResistor, debounceTime, logger)
     {
     }
 
@@ -147,7 +147,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     /// <exception cref="ArgumentOutOfRangeException">Thrown when gpioPinNumber is less than or equal to 0.</exception>
     /// <exception cref="ArgumentException">Thrown when the specified pin doesn't support the required mode.</exception>
     public GpioLimitSwitch(
-        IGpioController gpioController,
+    IGpioControllerClient gpioController,
         int gpioPinNumber,
         bool isPullup = true,
         bool hasExternalResistor = false,
@@ -202,7 +202,7 @@ public class GpioLimitSwitch : IAsyncDisposable, IDisposable
     /// <summary>
     /// Gets the GPIO controller instance used for pin operations.
     /// </summary>
-    public IGpioController GpioController { get; private init; }
+    public IGpioControllerClient GpioController { get; private init; }
 
     /// <summary>
     /// Gets the GPIO pin number being monitored.

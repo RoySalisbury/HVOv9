@@ -1,31 +1,31 @@
 # GPIO Controller Dependency Injection Setup
 
-This document explains how the GPIO controller tests have been updated to use dependency injection, making it easy to switch between mock and real hardware implementations.
+This document explains how the GPIO controller tests use dependency injection, making it easy to switch between the in-memory simulator and real hardware implementations.
 
 ## Architecture Overview
 
 The GPIO controller architecture now uses dependency injection (DI) to provide flexible testing and deployment scenarios:
 
-- **IGpioController Interface**: Common interface for all GPIO operations
-- **MockGpioController**: Mock implementation for testing without hardware
-- **GpioControllerWrapper**: Real hardware implementation for Raspberry Pi
+- **IGpioControllerClient Interface**: Common interface for all GPIO operations
+- **MemoryGpioControllerClient**: In-memory Raspberry Pi 5 simulator for tests
+- **GpioControllerClient**: Real hardware implementation for Raspberry Pi
 - **Dependency Injection**: Configuration management for different scenarios
 
 ## Test Configuration
 
-### MockGpioControllerTests
-Updated to use dependency injection for `IGpioController`:
+### MemoryGpioControllerClientTests
+Updated to use dependency injection for `IGpioControllerClient`:
 
 ```csharp
 [TestInitialize]
 public void TestInitialize()
 {
-    // Use the test helper to configure dependency injection for mock GPIO
-    _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-    _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
-    
-    // Keep a reference to the concrete type for mock-specific methods
-    _mockController = (MockGpioController)_gpioController;
+    // Use the test helper to configure dependency injection for the in-memory client
+    _serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
+    _gpioController = _serviceProvider.GetRequiredService<IGpioControllerClient>();
+
+    // Keep a reference to the concrete type for simulation helpers
+    _memoryController = (MemoryGpioControllerClient)_gpioController;
 }
 ```
 
@@ -45,9 +45,9 @@ public void TestInitialize()
     }
     else
     {
-        _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-    }
-    
+        _serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
+
+    _gpioController = _serviceProvider.GetRequiredService<IGpioControllerClient>();
     _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
 }
 ```
@@ -56,11 +56,11 @@ public void TestInitialize()
 
 The `GpioTestConfiguration` class provides convenience methods for DI setup:
 
-### For Mock Testing (Unit Tests)
+### For Memory (Unit Tests)
 ```csharp
-services.AddMockGpioController();
+services.AddMemoryGpioControllerClient();
 // or
-var serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
+var serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
 ```
 
 ### For Real Hardware Testing (Integration Tests)
@@ -81,10 +81,9 @@ var serviceProvider = GpioTestConfiguration.CreateRealGpioServiceProvider();
 
 ### Running Unit Tests (Mock Hardware)
 ```bash
-dotnet test HVO.Iot.Devices.Tests --filter "MockGpioControllerTests"
+dotnet test HVO.Iot.Devices.Tests --filter "MemoryGpioControllerClientTests"
 ```
-- Tests: 49/49 passing
-- Uses mock GPIO controller with Raspberry Pi 5 hardware simulation
+- Exercises the in-memory GPIO controller client simulator
 
 ### Running Integration Tests (Mock Mode)
 ```bash
@@ -95,10 +94,9 @@ dotnet test HVO.Iot.Devices.Tests --filter "GpioHardwareIntegrationTests"
 
 ### Running All GPIO Tests
 ```bash
-dotnet test HVO.Iot.Devices.Tests --filter "MockGpioControllerTests|GpioHardwareIntegrationTests"
+dotnet test HVO.Iot.Devices.Tests --filter "MemoryGpioControllerClientTests|GpioHardwareIntegrationTests"
 ```
-- Tests: 53/53 passing
-- Comprehensive coverage of both mock and integration scenarios
+- Comprehensive coverage of both simulated and integration scenarios
 
 ## Migration Path
 

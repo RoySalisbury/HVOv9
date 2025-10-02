@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Device.I2c;
 using System.Linq;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
+using HVO.Iot.Devices.Implementation;
 
 namespace HVO.WebSite.RoofControllerV4.Tests.TestSupport;
 
@@ -12,40 +12,40 @@ namespace HVO.WebSite.RoofControllerV4.Tests.TestSupport;
 /// </summary>
 internal sealed class FakeRoofHat : FourRelayFourInputHat
 {
-    private readonly FakeRoofI2cDevice _device;
+    private readonly FakeRoofRegisterClient _client;
 
-    public FakeRoofHat() : base(new FakeRoofI2cDevice())
+    public FakeRoofHat() : base(new FakeRoofRegisterClient(), ownsClient: true)
     {
-        _device = (FakeRoofI2cDevice)Device;
+        _client = (FakeRoofRegisterClient)Client;
     }
 
     /// <summary>
     /// Updates the raw input register to simulate electrical states for the four digital inputs.
     /// </summary>
     public void SetInputs(bool forwardLimitHigh, bool reverseLimitHigh, bool faultHigh, bool atSpeedHigh)
-        => _device.SetDigitalInputs(forwardLimitHigh, reverseLimitHigh, faultHigh, atSpeedHigh);
+        => _client.SetDigitalInputs(forwardLimitHigh, reverseLimitHigh, faultHigh, atSpeedHigh);
 
     /// <summary>
     /// Clears the relay write log captured during test execution.
     /// </summary>
-    public void ClearRelayWriteLog() => _device.ClearRelayWriteLog();
+    public void ClearRelayWriteLog() => _client.ClearRelayWriteLog();
 
     /// <summary>
     /// Gets the accumulated relay write log (register/value pairs) for sequencing assertions.
     /// </summary>
-    public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog => _device.RelayWriteLog;
+    public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog => _client.RelayWriteLog;
 
     /// <summary>
     /// Gets the current relay mask register (bits 0-3 represent relays 1-4).
     /// </summary>
-    public byte RelayMask => _device.RelayMask;
+    public byte RelayMask => _client.RelayMask;
 
     /// <summary>
     /// Gets the current LED mask register value (bits 0-3 map to indicator LEDs 1-4).
     /// </summary>
-    public byte LedMask => _device.LedMask;
+    public byte LedMask => _client.LedMask;
 
-    private sealed class FakeRoofI2cDevice : I2cDevice
+    private sealed class FakeRoofRegisterClient : MemoryI2cRegisterClient
     {
         private const byte RelayMaskRegister = 0x00;
         private const byte RelaySetRegister = 0x01;
@@ -53,17 +53,17 @@ internal sealed class FakeRoofHat : FourRelayFourInputHat
         private const byte DigitalInputRegister = 0x03;
         private const byte LedMaskRegister = 0x05;
 
-        private readonly byte[] _registers = new byte[256];
         private readonly List<(byte Register, byte Value)> _relayWriteLog = new();
-        private readonly object _syncRoot = new();
-
-        public override I2cConnectionSettings ConnectionSettings { get; } = new(1, 0x0E);
+        public FakeRoofRegisterClient()
+            : base(busId: 1, address: 0x0E)
+        {
+        }
 
         public IReadOnlyList<(byte Register, byte Value)> RelayWriteLog
         {
             get
             {
-                lock (_syncRoot)
+                lock (SyncRoot)
                 {
                     return _relayWriteLog.ToArray();
                 }
@@ -74,9 +74,9 @@ internal sealed class FakeRoofHat : FourRelayFourInputHat
         {
             get
             {
-                lock (_syncRoot)
+                lock (SyncRoot)
                 {
-                    return (byte)(_registers[RelayMaskRegister] & 0x0F);
+                    return (byte)(RegisterSpan[RelayMaskRegister] & 0x0F);
                 }
             }
         }
@@ -85,16 +85,16 @@ internal sealed class FakeRoofHat : FourRelayFourInputHat
         {
             get
             {
-                lock (_syncRoot)
+                lock (SyncRoot)
                 {
-                    return (byte)(_registers[LedMaskRegister] & 0x0F);
+                    return (byte)(RegisterSpan[LedMaskRegister] & 0x0F);
                 }
             }
         }
 
         public void ClearRelayWriteLog()
         {
-            lock (_syncRoot)
+            lock (SyncRoot)
             {
                 _relayWriteLog.Clear();
             }
@@ -102,83 +102,59 @@ internal sealed class FakeRoofHat : FourRelayFourInputHat
 
         public void SetDigitalInputs(bool in1, bool in2, bool in3, bool in4)
         {
-            lock (_syncRoot)
+            lock (SyncRoot)
             {
                 byte mask = 0;
                 if (in1) mask |= 0x01;
                 if (in2) mask |= 0x02;
                 if (in3) mask |= 0x04;
                 if (in4) mask |= 0x08;
-                _registers[DigitalInputRegister] = mask;
+                RegisterSpan[DigitalInputRegister] = mask;
             }
         }
 
-        public override void Read(Span<byte> buffer) => throw new NotSupportedException();
-
-        public override void Write(ReadOnlySpan<byte> buffer)
+        protected override void OnWrite(byte register, ReadOnlySpan<byte> data)
         {
-            lock (_syncRoot)
+            lock (SyncRoot)
             {
-                if (buffer.Length < 2)
+                if (data.Length >= 1 && register is RelayMaskRegister or RelaySetRegister or RelayClearRegister)
                 {
-                    return;
-                }
-
-                var register = buffer[0];
-                var value = buffer[1];
-
-                if (register is RelayMaskRegister or RelaySetRegister or RelayClearRegister)
-                {
-                    _relayWriteLog.Add((register, value));
+                    _relayWriteLog.Add((register, data[0]));
                 }
 
                 switch (register)
                 {
                     case RelayMaskRegister:
-                        _registers[RelayMaskRegister] = (byte)(value & 0x0F);
+                        RegisterSpan[RelayMaskRegister] = (byte)(data[0] & 0x0F);
                         break;
                     case RelaySetRegister:
-                        if (value is >= 1 and <= 4)
+                        if (data[0] is >= 1 and <= 4)
                         {
-                            _registers[RelayMaskRegister] = (byte)(_registers[RelayMaskRegister] | (1 << (value - 1)));
+                            RegisterSpan[RelayMaskRegister] = (byte)(RegisterSpan[RelayMaskRegister] | (1 << (data[0] - 1)));
                         }
                         break;
                     case RelayClearRegister:
-                        if (value is >= 1 and <= 4)
+                        if (data[0] is >= 1 and <= 4)
                         {
-                            _registers[RelayMaskRegister] = (byte)(_registers[RelayMaskRegister] & ~(1 << (value - 1)));
+                            RegisterSpan[RelayMaskRegister] = (byte)(RegisterSpan[RelayMaskRegister] & ~(1 << (data[0] - 1)));
                         }
                         break;
                     case LedMaskRegister:
-                        _registers[LedMaskRegister] = (byte)(value & 0x0F);
+                        RegisterSpan[LedMaskRegister] = (byte)(data[0] & 0x0F);
                         break;
                     default:
-                        _registers[register] = value;
-                        break;
+                        base.OnWrite(register, data);
+                        return;
                 }
 
-                for (var i = 2; i < buffer.Length; i++)
+                if (data.Length > 1)
                 {
-                    _registers[register + i - 1] = buffer[i];
+                    for (var i = 1; i < data.Length; i++)
+                    {
+                        RegisterSpan[register + i] = data[i];
+                    }
                 }
             }
-        }
-
-        public override void WriteRead(ReadOnlySpan<byte> writeBuffer, Span<byte> readBuffer)
-        {
-            lock (_syncRoot)
-            {
-                var register = writeBuffer[0];
-                for (var i = 0; i < readBuffer.Length; i++)
-                {
-                    readBuffer[i] = _registers[register + i];
-                }
-            }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            // No unmanaged resources; nothing to dispose.
         }
     }
 }

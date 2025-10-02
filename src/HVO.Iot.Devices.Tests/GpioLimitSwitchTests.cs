@@ -16,9 +16,9 @@ namespace HVO.Iot.Devices.Tests
     [TestClass]
     public class GpioLimitSwitchTests : IDisposable
     {
-        private ServiceProvider? _serviceProvider;
-        private IGpioController? _gpioController;
-        private MockGpioController? _mockGpioController;
+    private ServiceProvider? _serviceProvider;
+    private IGpioControllerClient? _gpioController;
+    private MemoryGpioControllerClient? _memoryGpioController;
         private ILogger<GpioLimitSwitch>? _logger;
         private GpioLimitSwitch? _limitSwitch;
         private const int TestPin = 18;
@@ -27,14 +27,10 @@ namespace HVO.Iot.Devices.Tests
         [TestInitialize]
         public void Setup()
         {
-            _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-            _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
+            _serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
+            _gpioController = _serviceProvider.GetRequiredService<IGpioControllerClient>();
             _logger = _serviceProvider.GetRequiredService<ILogger<GpioLimitSwitch>>();
-            // Get reference to the mock controller for direct testing
-            if (_gpioController is GpioControllerWrapper wrapper)
-            {
-                _mockGpioController = wrapper.UnderlyingController as MockGpioController;
-            }
+            _memoryGpioController = _gpioController as MemoryGpioControllerClient;
         }
 
         [TestCleanup]
@@ -51,7 +47,7 @@ namespace HVO.Iot.Devices.Tests
             _limitSwitch = null;
             _serviceProvider?.Dispose();
             _gpioController = null;
-            _mockGpioController = null;
+            _memoryGpioController = null;
             _logger = null;
         }
 
@@ -83,10 +79,10 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void SimulatePinStateChange(PinEventTypes eventType)
         {
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
                 var newValue = eventType == PinEventTypes.Rising ? PinValue.High : PinValue.Low;
-                _mockGpioController.SimulatePinValueChange(TestPin, newValue);
+                _memoryGpioController.SimulatePinValueChange(TestPin, newValue);
             }
         }
 
@@ -152,7 +148,7 @@ namespace HVO.Iot.Devices.Tests
         {
             // Act & Assert
             Assert.ThrowsException<ArgumentNullException>(() =>
-                new GpioLimitSwitch((IGpioController)null!, TestPin));
+                new GpioLimitSwitch((IGpioControllerClient)null!, TestPin));
         }
 
         [TestMethod]
@@ -166,7 +162,7 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithUnsupportedPinMode_ShouldThrowArgumentException()
         {
-            // With MockGpioController, we need to test differently since we can't configure
+            // With the memory GPIO controller, we need to test differently since we can't configure
             // it to reject pin modes. This test verifies that valid pin modes work.
             // Arrange & Act
             _limitSwitch = CreateLimitSwitch();
@@ -178,7 +174,7 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithPinAlreadyOpen_ShouldCloseAndReopenPin()
         {
-            // This test simulates the behavior - MockGpioController handles pin reopening automatically
+            // This test simulates the behavior - MemoryGpioControllerClient handles pin reopening automatically
             // Arrange & Act
             _limitSwitch = CreateLimitSwitch();
 
@@ -190,7 +186,7 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithPinOpenFailure_ShouldThrowInvalidOperationException()
         {
-            // MockGpioController doesn't simulate open failures by default
+            // MemoryGpioControllerClient doesn't simulate open failures by default
             // This test verifies normal operation instead
             // Act
             _limitSwitch = CreateLimitSwitch();
@@ -202,7 +198,7 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithReadFailure_ShouldThrowInvalidOperationException()
         {
-            // MockGpioController doesn't simulate read failures by default
+            // MemoryGpioControllerClient doesn't simulate read failures by default
             // This test verifies normal operation instead
             // Act
             _limitSwitch = CreateLimitSwitch();
@@ -214,7 +210,7 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithCallbackRegistrationFailure_ShouldThrowInvalidOperationException()
         {
-            // MockGpioController doesn't simulate callback registration failures by default
+            // MemoryGpioControllerClient doesn't simulate callback registration failures by default
             // This test verifies normal operation instead
             // Act
             _limitSwitch = CreateLimitSwitch();
@@ -441,9 +437,9 @@ namespace HVO.Iot.Devices.Tests
             // Verify initial state
             Assert.AreEqual(PinValue.High, _limitSwitch.CurrentPinValue);
             // Act - Try to simulate Rising event when already High (no change)
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
-                _mockGpioController.SimulatePinValueChange(TestPin, PinValue.High);
+                _memoryGpioController.SimulatePinValueChange(TestPin, PinValue.High);
             }
             Thread.Sleep(50);
             // Assert - No event should fire since there was no state change

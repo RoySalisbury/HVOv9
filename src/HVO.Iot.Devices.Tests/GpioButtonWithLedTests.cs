@@ -16,8 +16,8 @@ namespace HVO.Iot.Devices.Tests
     public class GpioButtonWithLedTests : IDisposable
     {
         private ServiceProvider? _serviceProvider;
-        private IGpioController? _gpioController;
-        private MockGpioController? _mockGpioController;
+    private IGpioControllerClient? _gpioController;
+    private MemoryGpioControllerClient? _memoryGpioController;
         private ILogger<GpioButtonWithLed>? _logger;
         private GpioButtonWithLed? _buttonWithLed;
         private const int ButtonPin = 18;
@@ -29,14 +29,10 @@ namespace HVO.Iot.Devices.Tests
         [TestInitialize]
         public void Setup()
         {
-            _serviceProvider = GpioTestConfiguration.CreateMockGpioServiceProvider();
-            _gpioController = _serviceProvider.GetRequiredService<IGpioController>();
+            _serviceProvider = GpioTestConfiguration.CreateMemoryGpioServiceProvider();
+            _gpioController = _serviceProvider.GetRequiredService<IGpioControllerClient>();
             _logger = _serviceProvider.GetRequiredService<ILogger<GpioButtonWithLed>>();
-            // Get reference to the mock controller for direct testing
-            if (_gpioController is GpioControllerWrapper wrapper)
-            {
-                _mockGpioController = wrapper.UnderlyingController as MockGpioController;
-            }
+            _memoryGpioController = _gpioController as MemoryGpioControllerClient;
         }
 
         [TestCleanup]
@@ -53,7 +49,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed = null;
             _serviceProvider?.Dispose();
             _gpioController = null;
-            _mockGpioController = null;
+            _memoryGpioController = null;
             _logger = null;
         }
 
@@ -79,7 +75,7 @@ namespace HVO.Iot.Devices.Tests
                 holding: holding ?? TimeSpan.FromSeconds(2),
                 isPullUp: isPullUp,
                 hasExternalResistor: hasExternalResistor,
-                gpioController: _gpioController!,
+        gpioController: _gpioController!,
                 debounceTime: debounceTime ?? TimeSpan.FromMilliseconds(50));
         }
 
@@ -88,9 +84,9 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void SimulateButtonPress()
         {
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
-                _mockGpioController.SimulatePinValueChange(TestPin, PinValue.Low);
+                _memoryGpioController.SimulatePinValueChange(TestPin, PinValue.Low);
             }
         }
 
@@ -99,9 +95,9 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void SimulateButtonRelease()
         {
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
-                _mockGpioController.SimulatePinValueChange(TestPin, PinValue.High);
+                _memoryGpioController.SimulatePinValueChange(TestPin, PinValue.High);
             }
         }
 
@@ -121,9 +117,9 @@ namespace HVO.Iot.Devices.Tests
         /// </summary>
         private void VerifyPinMode(int pinNumber, PinMode expectedMode)
         {
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
-                var actualMode = _mockGpioController.GetPinMode(pinNumber);
+                var actualMode = _memoryGpioController.GetPinMode(pinNumber);
                 Assert.AreEqual(expectedMode, actualMode, $"Pin {pinNumber} should be configured as {expectedMode} but was {actualMode}");
             }
         }
@@ -265,9 +261,9 @@ namespace HVO.Iot.Devices.Tests
             Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
             
             // Verify LED pin state for mock controller
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
-                var ledValue = _mockGpioController.Read(TestLedPin);
+                var ledValue = _memoryGpioController.Read(TestLedPin);
                 Assert.AreEqual(PinValue.High, ledValue, "LED pin should be HIGH when LedState is On");
             }
         }
@@ -286,9 +282,9 @@ namespace HVO.Iot.Devices.Tests
             Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
             
             // Verify LED pin state for mock controller
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
-                var ledValue = _mockGpioController.Read(TestLedPin);
+                var ledValue = _memoryGpioController.Read(TestLedPin);
                 Assert.AreEqual(PinValue.Low, ledValue, "LED pin should be LOW when LedState is Off");
             }
         }
@@ -383,7 +379,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert - Should not throw
             // After disposal, events should not fire
-            if (_mockGpioController != null)
+            if (_memoryGpioController != null)
             {
                 // After disposal, pins are closed; simulate may throw. Ignore such exceptions and only assert no event fired.
                 try

@@ -1,88 +1,70 @@
 #pragma warning disable CS1591
 using System;
 using System.Device.I2c;
+using HVO.Iot.Devices.Abstractions;
 
 namespace HVO.Iot.Devices.Iot.Devices.Common;
 
-public abstract class I2cRegisterDevice : IDisposable
+/// <summary>
+/// Base class for register-oriented I2C peripherals that delegate raw bus operations to an <see cref="II2cRegisterClient"/>.
+/// This design enables swapping between hardware-backed and simulated implementations while keeping device logic unchanged.
+/// </summary>
+public abstract class RegisterBasedI2cDevice : IDisposable
 {
-    private readonly int _postTransactionDelayMs;
+    private bool _disposed;
 
-    protected I2cRegisterDevice(int busId, int address, int postTransactionDelayMs = 15)
+    protected RegisterBasedI2cDevice(II2cRegisterClient registerClient)
+        : this(registerClient, ownsClient: false)
     {
-        Device = I2cDevice.Create(new I2cConnectionSettings(busId, address));
-        OwnsDevice = true;
-        _postTransactionDelayMs = postTransactionDelayMs < 0 ? 0 : postTransactionDelayMs;
     }
 
-    protected I2cRegisterDevice(I2cDevice device, int postTransactionDelayMs = 15)
+    protected RegisterBasedI2cDevice(II2cRegisterClient registerClient, bool ownsClient)
     {
-        Device = device ?? throw new ArgumentNullException(nameof(device));
-        OwnsDevice = false;
-        _postTransactionDelayMs = postTransactionDelayMs < 0 ? 0 : postTransactionDelayMs;
+        Client = registerClient ?? throw new ArgumentNullException(nameof(registerClient));
+        OwnsClient = ownsClient;
     }
 
-    protected I2cDevice Device { get; }
-    protected bool OwnsDevice { get; }
-    protected object Sync { get; } = new();
+    protected II2cRegisterClient Client { get; }
+
+    protected bool OwnsClient { get; }
+
+    /// <summary>
+    /// Provides access to a shared synchronization object suitable for <see langword="lock"/> statements.
+    /// </summary>
+    protected object Sync => Client.SyncRoot;
+
+    /// <summary>
+    /// Exposes the underlying connection settings for logging and diagnostics.
+    /// </summary>
+    protected I2cConnectionSettings ConnectionSettings => Client.ConnectionSettings;
+
+    protected byte ReadByte(byte register) => Client.ReadByte(register);
+
+    protected ushort ReadUInt16(byte register) => Client.ReadUInt16(register);
+
+    protected uint ReadUInt32(byte register) => Client.ReadUInt32(register);
+
+    protected void ReadBlock(byte register, Span<byte> destination) => Client.ReadBlock(register, destination);
+
+    protected void WriteByte(byte register, byte value) => Client.WriteByte(register, value);
+
+    protected void WriteUInt16(byte register, ushort value) => Client.WriteUInt16(register, value);
+
+    protected void WriteBlock(byte register, ReadOnlySpan<byte> data) => Client.WriteBlock(register, data);
 
     public void Dispose()
     {
-        if (OwnsDevice)
+        if (_disposed)
         {
-            Device.Dispose();
+            return;
         }
-    }
 
-    protected byte ReadByte(byte reg)
-    {
-        Span<byte> rb = stackalloc byte[1];
-        Device.WriteRead(stackalloc byte[] { reg }, rb);
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
-        return rb[0];
-    }
+        if (OwnsClient)
+        {
+            Client.Dispose();
+        }
 
-    protected ushort ReadUInt16(byte reg)
-    {
-        Span<byte> rb = stackalloc byte[2];
-        Device.WriteRead(stackalloc byte[] { reg }, rb);
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
-        return (ushort)(rb[0] | (rb[1] << 8));
-    }
-
-    protected uint ReadUInt32(byte reg)
-    {
-        Span<byte> rb = stackalloc byte[4];
-        Device.WriteRead(stackalloc byte[] { reg }, rb);
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
-        return (uint)(rb[0] | (rb[1] << 8) | (rb[2] << 16) | (rb[3] << 24));
-    }
-
-    protected void ReadBlock(byte reg, Span<byte> destination)
-    {
-        Device.WriteRead(stackalloc byte[] { reg }, destination);
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
-    }
-
-    protected void WriteByte(byte reg, byte value)
-    {
-        Device.Write(stackalloc byte[] { reg, value });
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
-    }
-
-    protected void WriteUInt16(byte reg, ushort value)
-    {
-        Device.Write(stackalloc byte[] { reg, (byte)(value & 0xFF), (byte)((value >> 8) & 0xFF) });
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
-    }
-
-    protected void WriteBlock(byte reg, ReadOnlySpan<byte> data)
-    {
-        byte[] buffer = new byte[1 + data.Length];
-        buffer[0] = reg;
-        data.CopyTo(buffer.AsSpan(1));
-        Device.Write(buffer);
-        if (_postTransactionDelayMs > 0) System.Threading.Thread.Sleep(_postTransactionDelayMs);
+        _disposed = true;
     }
 }
 

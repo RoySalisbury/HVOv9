@@ -10,20 +10,20 @@ namespace HVO.Iot.Devices.Tests
     [TestClass]
     public class BlinkingFunctionalityTests
     {
-        private GpioButtonWithLed? _buttonWithLed;
-        private MockGpioController? _mockGpioController;
+    private GpioButtonWithLed? _buttonWithLed;
+    private MemoryGpioControllerClient? _memoryGpioController;
 
         [TestInitialize]
         public void Setup()
         {
-            _mockGpioController = new MockGpioController();
+            _memoryGpioController = new MemoryGpioControllerClient();
         }
 
         [TestCleanup]
         public void Cleanup()
         {
             _buttonWithLed?.Dispose();
-            _mockGpioController?.Dispose();
+            _memoryGpioController?.Dispose();
         }
 
         [TestMethod]
@@ -99,7 +99,7 @@ namespace HVO.Iot.Devices.Tests
                 holding: TimeSpan.FromSeconds(2),
                 isPullUp: true,
                 hasExternalResistor: false,
-                gpioController: _mockGpioController!,
+                gpioController: _memoryGpioController!,
                 debounceTime: TimeSpan.FromMilliseconds(200));
         }
     }

@@ -32,6 +32,25 @@ src/
 └── HVO.WebSite.RoofControllerV4/  # Roof controller app
 ```
 
+## Hardware driver abstraction pattern (I²C devices)
+
+HVOv9 standardizes I²C hardware access around a layered pattern that keeps device logic agnostic of the underlying transport.
+
+- **Register clients**
+   - `II2cRegisterClient` defines byte/word/block read-write helpers plus a `SyncRoot` for thread-safe operations.
+   - `I2cRegisterClient` wraps the real `I2cDevice` from `System.Device.I2c`, including optional post-transaction delays required by Sequent Microsystems boards.
+   - `MemoryI2cRegisterClient` is a reusable simulation base that stores register state in memory and exposes overridable hooks for device-specific behavior.
+- **Device base class**
+   - `RegisterBasedI2cDevice` owns an `II2cRegisterClient`, exposing protected helpers (ReadByte, WriteUInt16, etc.) so concrete drivers focus on domain logic instead of transport concerns.
+- **Concrete drivers and interfaces**
+   - `FourRelayFourInputHat` implements `IFourRelayFourInputHat` and `WatchdogBatteryHat` implements `IWatchdogBatteryHat`, giving every device a DI-friendly contract for services and tests.
+- **Dependency injection helpers**
+   - `AddFourRelayFourInputHat` and `AddWatchdogBatteryHat` register real hardware by default and optionally accept custom or simulated `II2cRegisterClient` factories for automated tests and playground scenarios.
+- **Testing support**
+   - Unit tests (e.g., `FourRelayFourInputHatTests`, `WatchdogBatteryHatTests`) use `MemoryI2cRegisterClient` derivatives to simulate register behavior and log writes, providing fast regression coverage without hardware.
+
+To swap between hardware and simulation, configure the DI options to supply your own `II2cRegisterClient` (for example, a `MemoryI2cRegisterClient` derivative) while the device drivers remain unchanged.
+
 ## Dev environment (VS Code + Dev Container)
 
 This repo is configured for VS Code Dev Containers / GitHub Codespaces:

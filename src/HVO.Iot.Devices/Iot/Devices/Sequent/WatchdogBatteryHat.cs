@@ -4,12 +4,14 @@ using System;
 using System.Device.I2c;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Iot.Devices.Common;
+using HVO.Iot.Devices.Implementation;
 using HVO;
 
 namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 
-public class WatchdogBatteryHat : I2cRegisterDevice
+public class WatchdogBatteryHat : RegisterBasedI2cDevice, IWatchdogBatteryHat
 {
     private const byte HW_ADD = 0x30;
 
@@ -58,25 +60,35 @@ public class WatchdogBatteryHat : I2cRegisterDevice
     private readonly int _i2cBusId;
     private readonly int _i2cAddress;
 
-    public WatchdogBatteryHat(int i2cBusId = 1, byte address = HW_ADD, ILogger<WatchdogBatteryHat>? logger = null)
-        : base(i2cBusId, address)
+    public WatchdogBatteryHat(int i2cBusId = 1, byte address = HW_ADD, ILogger<WatchdogBatteryHat>? logger = null, int postTransactionDelayMs = 15)
+        : this(new I2cRegisterClient(i2cBusId, address, postTransactionDelayMs), ownsClient: true, logger: logger, initializationSource: null)
     {
-        _i2cBusId = i2cBusId;
-        _i2cAddress = address;
-        _logger = logger ?? NullLogger<WatchdogBatteryHat>.Instance;
-
-        _logger.LogInformation("WatchdogBatteryHat initialized - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusId, _i2cAddress);
     }
 
-    public WatchdogBatteryHat(I2cDevice device, ILogger<WatchdogBatteryHat>? logger = null)
-        : base(device)
+    public WatchdogBatteryHat(I2cDevice device, ILogger<WatchdogBatteryHat>? logger = null, int postTransactionDelayMs = 15)
+        : this(new I2cRegisterClient(device, ownsDevice: false, postTransactionDelayMs), ownsClient: false, logger: logger, initializationSource: "external device")
     {
-        _ = device ?? throw new ArgumentNullException(nameof(device));
-        _logger = logger ?? NullLogger<WatchdogBatteryHat>.Instance;
-        _i2cBusId = device.ConnectionSettings.BusId;
-        _i2cAddress = device.ConnectionSettings.DeviceAddress;
+    }
 
-        _logger.LogInformation("WatchdogBatteryHat initialized (external device) - Bus: {Bus}, Address: 0x{Addr:X2}", _i2cBusId, _i2cAddress);
+    public WatchdogBatteryHat(II2cRegisterClient registerClient, ILogger<WatchdogBatteryHat>? logger = null)
+        : this(registerClient, ownsClient: false, logger: logger, initializationSource: "injected register client")
+    {
+    }
+
+    public WatchdogBatteryHat(II2cRegisterClient registerClient, bool ownsClient, ILogger<WatchdogBatteryHat>? logger = null)
+        : this(registerClient, ownsClient, logger, initializationSource: ownsClient ? null : "custom register client")
+    {
+    }
+
+    private WatchdogBatteryHat(II2cRegisterClient registerClient, bool ownsClient, ILogger<WatchdogBatteryHat>? logger, string? initializationSource)
+        : base(registerClient, ownsClient)
+    {
+        _logger = logger ?? NullLogger<WatchdogBatteryHat>.Instance;
+        _i2cBusId = ConnectionSettings.BusId;
+        _i2cAddress = ConnectionSettings.DeviceAddress;
+
+        string suffix = string.IsNullOrWhiteSpace(initializationSource) ? string.Empty : $" ({initializationSource})";
+        _logger.LogInformation("WatchdogBatteryHat initialized{InitializationSuffix} - Bus: {Bus}, Address: 0x{Addr:X2}", suffix, _i2cBusId, _i2cAddress);
     }
 
     public Result<int> GetWatchdogPeriodSeconds()

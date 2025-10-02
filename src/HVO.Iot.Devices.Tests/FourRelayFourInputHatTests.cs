@@ -2,7 +2,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
 using HVO.Iot.Devices.Tests.TestHelpers;
 using FluentAssertions;
-using System.Device.I2c;
 
 namespace HVO.Iot.Devices.Tests;
 
