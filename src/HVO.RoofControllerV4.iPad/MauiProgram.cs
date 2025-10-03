@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.IO;
+using CommunityToolkit.Maui;
 using HVO.RoofControllerV4.iPad.Configuration;
 using HVO.RoofControllerV4.iPad.Services;
 using HVO.RoofControllerV4.iPad.ViewModels;
@@ -18,6 +19,7 @@ public static class MauiProgram
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
+			.UseMauiCommunityToolkit()
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");

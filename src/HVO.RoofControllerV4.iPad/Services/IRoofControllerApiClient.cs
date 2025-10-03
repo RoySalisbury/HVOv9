@@ -21,4 +21,6 @@ public interface IRoofControllerApiClient
     Task<Result<RoofConfigurationResponse>> GetConfigurationAsync(CancellationToken cancellationToken = default);
 
     Task<Result<RoofConfigurationResponse>> UpdateConfigurationAsync(RoofConfigurationRequest request, CancellationToken cancellationToken = default);
+
+    Task<Result<HealthReportPayload>> GetHealthReportAsync(CancellationToken cancellationToken = default);
 }

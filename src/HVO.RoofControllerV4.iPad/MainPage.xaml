@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewModels="clr-namespace:HVO.RoofControllerV4.iPad.ViewModels"
              xmlns:converters="clr-namespace:HVO.RoofControllerV4.iPad.Converters"
+             xmlns:models="clr-namespace:HVO.RoofControllerV4.iPad.Models"
              x:Class="HVO.RoofControllerV4.iPad.MainPage"
              x:DataType="viewModels:RoofControllerViewModel"
              BackgroundColor="#10131A">
@@ -10,6 +11,7 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:BoolInvertConverter x:Key="BoolInvertConverter" />
+            <converters:StringHasValueConverter x:Key="StringHasValueConverter" />
 
             <Style x:Key="BadgeLabelStyle" TargetType="Label">
                 <Setter Property="FontAttributes" Value="Bold" />
@@ -23,6 +25,15 @@
                 <Setter Property="CornerRadius" Value="14" />
                 <Setter Property="Padding" Value="24,16" />
                 <Setter Property="HeightRequest" Value="64" />
+            </Style>
+            <Style x:Key="HealthDialogActionButtonStyle" TargetType="Button">
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="Padding" Value="16,10" />
+                <Setter Property="BackgroundColor" Value="#2F343C" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="BorderWidth" Value="0" />
             </Style>
             <CornerRadius x:Key="CardCorner">24</CornerRadius>
 
@@ -153,9 +164,10 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
+      <Grid>
         <Grid Padding="32"
-              RowSpacing="24"
-              RowDefinitions="Auto,Auto,Auto,Auto">
+            RowSpacing="24"
+            RowDefinitions="Auto,Auto,Auto,Auto">
 
             <!-- Row 1: Header & status pills -->
             <VerticalStackLayout Grid.Row="0" Spacing="16">
@@ -189,6 +201,9 @@
                             Padding="14,8"
                             StrokeThickness="0"
                             Margin="0,0,12,12">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenHealthDialogCommand}" />
+                        </Border.GestureRecognizers>
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="20" />
                         </Border.StrokeShape>
@@ -259,34 +274,34 @@
                        FontSize="22"
                        FontAttributes="Bold"
                        TextColor="#F8F9FA" />
-                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="16">
-                    <Button Grid.Column="0"
-                            Text="Open"
-                            Command="{Binding OpenCommand}"
-                            Style="{StaticResource OpenControlButtonStyle}"
-                            SemanticProperties.Description="Open the observatory roof"
-                            SemanticProperties.Hint="Initiates the roof opening sequence" />
+        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="16">
+            <Button Grid.Column="0"
+                Text="Open"
+                Command="{Binding OpenCommand}"
+                Style="{StaticResource OpenControlButtonStyle}"
+                SemanticProperties.Description="Open the observatory roof"
+                SemanticProperties.Hint="Initiates the roof opening sequence" />
 
-                    <Button Grid.Column="1"
-                            Text="Stop"
-                            Command="{Binding StopCommand}"
-                            Style="{StaticResource StopControlButtonStyle}"
-                            SemanticProperties.Description="Stop the roof movement"
-                            SemanticProperties.Hint="Halts any active roof movement" />
+            <Button Grid.Column="1"
+                Text="Stop"
+                Command="{Binding StopCommand}"
+                Style="{StaticResource StopControlButtonStyle}"
+                SemanticProperties.Description="Stop the roof movement"
+                SemanticProperties.Hint="Halts any active roof movement" />
 
-                    <Button Grid.Column="2"
-                            Text="Close"
-                            Command="{Binding CloseCommand}"
-                            Style="{StaticResource CloseControlButtonStyle}"
-                            SemanticProperties.Description="Close the observatory roof"
-                            SemanticProperties.Hint="Starts closing the roof" />
+            <Button Grid.Column="2"
+                Text="Close"
+                Command="{Binding CloseCommand}"
+                Style="{StaticResource CloseControlButtonStyle}"
+                SemanticProperties.Description="Close the observatory roof"
+                SemanticProperties.Hint="Starts closing the roof" />
 
-                    <Button Grid.Column="3"
-                            Text="Clear Fault"
-                            Command="{Binding ClearFaultCommand}"
-                            Style="{StaticResource FaultControlButtonStyle}"
-                            SemanticProperties.Description="Clear roof fault"
-                            SemanticProperties.Hint="Attempts to clear an active fault when safe" />
+            <Button Grid.Column="3"
+                Text="Clear Fault"
+                Command="{Binding ClearFaultCommand}"
+                Style="{StaticResource FaultControlButtonStyle}"
+                SemanticProperties.Description="Clear roof fault"
+                SemanticProperties.Hint="Attempts to clear an active fault when safe" />
                 </Grid>
             </VerticalStackLayout>
         </Border>
@@ -458,7 +473,7 @@
                 </VisualStateGroup>
             </VisualStateManager.VisualStateGroups>
         </Border>
-
+        </Grid>
     </Grid>
 
 </ContentPage>

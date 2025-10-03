@@ -57,9 +57,16 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
         return SendRequestAsync<RoofConfigurationResponse>(HttpMethod.Post, "roofcontrol/configuration", content, cancellationToken);
     }
 
-    private async Task<Result<T>> SendRequestAsync<T>(HttpMethod method, string relativeUrl, HttpContent? content = null, CancellationToken cancellationToken = default)
+    public Task<Result<HealthReportPayload>> GetHealthReportAsync(CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(relativeUrl);
+        var root = GetRootBaseUri();
+        var healthUri = new Uri(root, "health");
+        return SendRequestAsync<HealthReportPayload>(HttpMethod.Get, healthUri.ToString(), cancellationToken: cancellationToken);
+    }
+
+    private async Task<Result<T>> SendRequestAsync<T>(HttpMethod method, string requestUri, HttpContent? content = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestUri);
 
         var attempt = 0;
         var maxAttempts = Math.Max(1, _options.RequestRetryCount);
@@ -67,22 +74,25 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
         while (true)
         {
             attempt++;
+            Uri? requestUriObject = null;
 
             try
             {
-                using var request = new HttpRequestMessage(method, relativeUrl)
+                requestUriObject = CreateRequestUri(requestUri);
+
+                using var request = new HttpRequestMessage(method, requestUriObject)
                 {
                     Content = content
                 };
 
-                _logger.LogDebug("Sending {Method} request to {Endpoint} (attempt {Attempt}/{MaxAttempts})", method, relativeUrl, attempt, maxAttempts);
+                _logger.LogDebug("Sending {Method} request to {Endpoint} (attempt {Attempt}/{MaxAttempts})", method, requestUriObject, attempt, maxAttempts);
 
                 using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorText = await TryReadProblemDetailsAsync(response, cancellationToken).ConfigureAwait(false);
-                    var exception = new HttpRequestException($"API request to '{relativeUrl}' failed with {(int)response.StatusCode} {response.ReasonPhrase}: {errorText}");
+                    var exception = new HttpRequestException($"API request to '{requestUriObject}' failed with {(int)response.StatusCode} {response.ReasonPhrase}: {errorText}");
                     _logger.LogError(exception, "Roof controller API call failed");
                     return Result<T>.Failure(exception);
                 }
@@ -94,7 +104,7 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
                         return Result<T>.Success((T)(object)true);
                     }
 
-                    var noContent = new InvalidOperationException($"API response from '{relativeUrl}' was empty.");
+                    var noContent = new InvalidOperationException($"API response from '{requestUriObject}' was empty.");
                     _logger.LogError(noContent, "Unexpected empty response.");
                     return Result<T>.Failure(noContent);
                 }
@@ -102,7 +112,7 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
                 var result = await response.Content.ReadFromJsonAsync<T>(JsonSerializerOptions, cancellationToken).ConfigureAwait(false);
                 if (result is null)
                 {
-                    var nullContent = new InvalidOperationException($"API response from '{relativeUrl}' could not be deserialized to {typeof(T).Name}.");
+                    var nullContent = new InvalidOperationException($"API response from '{requestUriObject}' could not be deserialized to {typeof(T).Name}.");
                     _logger.LogError(nullContent, "Failed to deserialize API response");
                     return Result<T>.Failure(nullContent);
                 }
@@ -113,12 +123,14 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
             {
                 if (attempt >= maxAttempts || cancellationToken.IsCancellationRequested)
                 {
-                    _logger.LogError(ex, "Unhandled error calling Roof Controller API {Method} {Endpoint} after {Attempts} attempts", method, relativeUrl, attempt);
+                    var endpoint = requestUriObject?.ToString() ?? requestUri;
+                    _logger.LogError(ex, "Unhandled error calling Roof Controller API {Method} {Endpoint} after {Attempts} attempts", method, endpoint, attempt);
                     return Result<T>.Failure(ex);
                 }
 
                 var delay = TimeSpan.FromMilliseconds(Math.Min(500 * attempt, 2_000));
-                _logger.LogWarning(ex, "Error calling Roof Controller API {Method} {Endpoint} on attempt {Attempt}. Retrying in {Delay}ms", method, relativeUrl, attempt, delay.TotalMilliseconds);
+                var retryEndpoint = requestUriObject?.ToString() ?? requestUri;
+                _logger.LogWarning(ex, "Error calling Roof Controller API {Method} {Endpoint} on attempt {Attempt}. Retrying in {Delay}ms", method, retryEndpoint, attempt, delay.TotalMilliseconds);
 
                 try
                 {
@@ -178,6 +190,33 @@ public sealed class RoofControllerApiClient : IRoofControllerApiClient
         }
 
         _httpClient.BaseAddress = baseUri;
+    }
+
+    private Uri CreateRequestUri(string requestUri)
+    {
+        if (Uri.TryCreate(requestUri, UriKind.Absolute, out var absolute))
+        {
+            return absolute;
+        }
+
+        if (_httpClient.BaseAddress is null)
+        {
+            EnsureBaseAddress();
+        }
+
+        return new Uri(_httpClient.BaseAddress!, requestUri);
+    }
+
+    private Uri GetRootBaseUri()
+    {
+        var baseUri = _httpClient.BaseAddress ?? _options.GetBaseUri();
+        var builder = new UriBuilder(baseUri)
+        {
+            Path = "/",
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+        return builder.Uri;
     }
 
     private sealed record ProblemDetailsPayload(string? Title, string? Detail);

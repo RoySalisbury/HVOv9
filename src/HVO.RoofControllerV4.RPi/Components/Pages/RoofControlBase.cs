@@ -5,6 +5,7 @@ using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;
 using HVO.RoofControllerV4.RPi.Services;
 using HVO;
+using System.Collections.Generic;
 using System.Timers;
 using System.Linq;
 using System.Net.Http;
@@ -528,24 +529,6 @@ public class RoofControlBase : ComponentBase, IDisposable
         Success,
         Warning,
         Error
-    }
-
-    public class HealthReportPayload
-    {
-        public string Status { get; set; } = string.Empty;
-        public List<HealthCheckEntry> Checks { get; set; } = new();
-        public string? TotalDuration { get; set; }
-    }
-
-    public class HealthCheckEntry
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        public JsonElement? Data { get; set; }
-        public string? Duration { get; set; }
-        public string? Exception { get; set; }
-        public IReadOnlyList<string>? Tags { get; set; }
     }
 
     #endregion

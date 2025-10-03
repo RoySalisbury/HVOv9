@@ -1,9 +1,12 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HVO.RoofControllerV4.iPad.Configuration;
@@ -46,6 +49,7 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     private bool _suppressConfigurationDirty;
     private bool _suppressRemoteConfigurationDirty;
     private RoofConfigurationResponse? _remoteConfigurationSnapshot;
+    private static readonly TimeSpan HealthRequestTimeout = TimeSpan.FromSeconds(10);
 
     public RoofControllerViewModel(
         IRoofControllerApiClient apiClient,
@@ -210,6 +214,21 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     private bool isRemoteConfigurationRefreshing;
 
+    [ObservableProperty]
+    private bool isHealthDialogOpen;
+
+    [ObservableProperty]
+    private bool isHealthDialogLoading;
+
+    [ObservableProperty]
+    private string? healthDialogError;
+
+    [ObservableProperty]
+    private HealthReportPayload? healthReport;
+
+    [ObservableProperty]
+    private IReadOnlyList<HealthCheckDisplay> healthChecks = Array.Empty<HealthCheckDisplay>();
+
     #endregion
 
     partial void OnConfigurationBaseUrlChanged(string value) => MarkConfigurationDirty();
@@ -266,6 +285,53 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
 
     partial void OnIsRemoteConfigurationRefreshingChanged(bool value) => OnPropertyChanged(nameof(IsRemoteConfigurationBusy));
 
+    partial void OnHealthDialogErrorChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasHealthDialogError));
+        OnPropertyChanged(nameof(ShowNoHealthChecksMessage));
+    }
+
+    partial void OnIsHealthDialogLoadingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowNoHealthChecksMessage));
+    }
+
+    partial void OnHealthReportChanged(HealthReportPayload? value)
+    {
+        var ordered = value?.Checks is { Count: > 0 } checks
+            ? checks
+                .OrderByDescending(c => NormalizeStatusRank(c.Status))
+                .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(c => new HealthCheckDisplay(c))
+                .ToArray()
+            : Array.Empty<HealthCheckDisplay>();
+
+        HealthChecks = ordered;
+        OnPropertyChanged(nameof(HasHealthReport));
+        OnPropertyChanged(nameof(HealthStatus));
+        OnPropertyChanged(nameof(HealthDialogStatusText));
+        OnPropertyChanged(nameof(HealthDialogStatusColor));
+        OnPropertyChanged(nameof(HealthDialogStatusTextColor));
+        OnPropertyChanged(nameof(HealthDialogDuration));
+        OnPropertyChanged(nameof(ShowNoHealthChecksMessage));
+    }
+
+    partial void OnHealthChecksChanged(IReadOnlyList<HealthCheckDisplay> value)
+    {
+        OnPropertyChanged(nameof(HasHealthChecks));
+        OnPropertyChanged(nameof(ShowNoHealthChecksMessage));
+    }
+
+    partial void OnIsHealthDialogOpenChanged(bool value)
+    {
+        if (!value)
+        {
+            IsHealthDialogLoading = false;
+        }
+
+        OnPropertyChanged(nameof(ShowNoHealthChecksMessage));
+    }
+
     public bool HasConfigurationError => !string.IsNullOrWhiteSpace(ConfigurationErrorMessage);
 
     public bool HasConfigurationSuccess => !string.IsNullOrWhiteSpace(ConfigurationSuccessMessage);
@@ -306,7 +372,23 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         _ => CurrentStatus.ToString()
     };
 
-    public string HealthStatus => HasFault ? "Error Detected" : IsServiceAvailable ? "Healthy" : "Offline";
+    public string HealthStatus
+    {
+        get
+        {
+            if (HasFault)
+            {
+                return "Error Detected";
+            }
+
+            if (HealthReport is { Status.Length: > 0 } report)
+            {
+                return report.Status;
+            }
+
+            return IsServiceAvailable ? "Healthy" : "Checking…";
+        }
+    }
 
     public string MovementStatus => IsMoving ? "In Progress" : "Idle";
 
@@ -411,6 +493,22 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         }
     }
 
+    public bool HasHealthDialogError => !string.IsNullOrWhiteSpace(HealthDialogError);
+
+    public bool HasHealthReport => HealthReport is not null;
+
+    public bool HasHealthChecks => HealthChecks.Count > 0;
+
+    public bool ShowNoHealthChecksMessage => !IsHealthDialogLoading && string.IsNullOrWhiteSpace(HealthDialogError) && HealthReport is not null && HealthChecks.Count == 0;
+
+    public string HealthDialogStatusText => HealthReport?.Status ?? (IsServiceAvailable ? "Healthy" : "Unknown");
+
+    public Color HealthDialogStatusColor => GetHealthStatusBackground(HealthReport?.Status);
+
+    public Color HealthDialogStatusTextColor => GetHealthStatusText(HealthReport?.Status);
+
+    public string? HealthDialogDuration => HealthReport?.TotalDuration;
+
     public string RemoteRestartOnFailureWaitTimeDisplay => string.IsNullOrWhiteSpace(RemoteRestartOnFailureWaitTimeSeconds)
         ? "Restart wait not reported"
         : $"Restart wait {RemoteRestartOnFailureWaitTimeSeconds}s";
@@ -459,6 +557,120 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
             return Result<RoofStatusResponse>.Failure(result.Error ?? new InvalidOperationException("Clear fault failed"));
         }, "Command", "Fault cleared", "Failed to clear fault");
     }
+
+    #region Health Dialog
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task OpenHealthDialogAsync()
+    {
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            if (!IsHealthDialogOpen)
+            {
+                IsHealthDialogOpen = true;
+            }
+
+            HealthDialogError = null;
+        }).ConfigureAwait(false);
+
+        await RefreshHealthDialogInternalAsync().ConfigureAwait(false);
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task RefreshHealthDialogAsync()
+    {
+        if (!IsHealthDialogOpen)
+        {
+            await MainThread.InvokeOnMainThreadAsync(() => IsHealthDialogOpen = true).ConfigureAwait(false);
+        }
+
+        await RefreshHealthDialogInternalAsync().ConfigureAwait(false);
+    }
+
+    [RelayCommand]
+    private void CloseHealthDialog()
+    {
+        if (!IsHealthDialogOpen)
+        {
+            return;
+        }
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            IsHealthDialogOpen = false;
+            HealthDialogError = null;
+        });
+    }
+
+    private async Task RefreshHealthDialogInternalAsync()
+    {
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            IsHealthDialogLoading = true;
+            HealthDialogError = null;
+        }).ConfigureAwait(false);
+
+        try
+        {
+            using var cancellation = new CancellationTokenSource(HealthRequestTimeout);
+            var result = await _apiClient.GetHealthReportAsync(cancellation.Token).ConfigureAwait(false);
+
+            if (result.IsSuccessful)
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    HealthReport = result.Value;
+                    HealthDialogError = null;
+                }).ConfigureAwait(false);
+            }
+            else if (result.Error is OperationCanceledException)
+            {
+                await HandleHealthDialogErrorAsync(result.Error, timedOut: true).ConfigureAwait(false);
+            }
+            else if (result.Error is not null)
+            {
+                await HandleHealthDialogErrorAsync(result.Error, timedOut: false).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException ex)
+        {
+            await HandleHealthDialogErrorAsync(ex, timedOut: true).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await HandleHealthDialogErrorAsync(ex, timedOut: false).ConfigureAwait(false);
+        }
+        finally
+        {
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                IsHealthDialogLoading = false;
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private async Task HandleHealthDialogErrorAsync(Exception error, bool timedOut)
+    {
+        if (timedOut)
+        {
+            _logger.LogWarning(error, "Timed out retrieving health report");
+        }
+        else
+        {
+            _logger.LogError(error, "Failed to retrieve health report");
+        }
+
+        var message = timedOut
+            ? "Timed out retrieving health details. Please try again."
+            : "Unable to retrieve health details. Check server logs for more information.";
+
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            HealthDialogError = message;
+        }).ConfigureAwait(false);
+    }
+
+    #endregion
 
     public async Task LoadConfigurationEditorAsync(CancellationToken cancellationToken = default)
     {
@@ -902,6 +1114,28 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         parsedValue = 0d;
         return false;
     }
+
+    private static int NormalizeStatusRank(string? status) => status?.ToLowerInvariant() switch
+    {
+        "unhealthy" => 0,
+        "degraded" => 1,
+        "healthy" => 2,
+        _ => -1
+    };
+
+    private static Color GetHealthStatusBackground(string? status) => status?.ToLowerInvariant() switch
+    {
+        "healthy" => Color.FromArgb("#198754"),
+        "degraded" => Color.FromArgb("#ffc107"),
+        "unhealthy" => Color.FromArgb("#dc3545"),
+        _ => Color.FromArgb("#6c757d")
+    };
+
+    private static Color GetHealthStatusText(string? status) => status?.ToLowerInvariant() switch
+    {
+        "degraded" => Color.FromArgb("#212529"),
+        _ => Colors.White
+    };
 
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
