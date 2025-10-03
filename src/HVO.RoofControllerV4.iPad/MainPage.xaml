@@ -4,6 +4,7 @@
              xmlns:viewModels="clr-namespace:HVO.RoofControllerV4.iPad.ViewModels"
              xmlns:converters="clr-namespace:HVO.RoofControllerV4.iPad.Converters"
              xmlns:models="clr-namespace:HVO.RoofControllerV4.iPad.Models"
+             xmlns:behaviors="clr-namespace:CommunityToolkit.Maui.Behaviors;assembly=CommunityToolkit.Maui"
              x:Class="HVO.RoofControllerV4.iPad.MainPage"
              x:DataType="viewModels:RoofControllerViewModel"
              BackgroundColor="#10131A">
@@ -101,8 +102,8 @@
                 <Setter Property="BorderColor" Value="#52D197" />
                 <Style.Triggers>
                     <Trigger TargetType="Button" Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="{StaticResource OpenButtonPressedBrush}" />
-                        <Setter Property="BorderColor" Value="#0B3F27" />
+                        <Setter Property="Background" Value="{StaticResource OpenButtonIdleBrush}" />
+                        <Setter Property="BorderColor" Value="#52D197" />
                     </Trigger>
                     <Trigger TargetType="Button" Property="IsEnabled" Value="False">
                         <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
@@ -118,9 +119,9 @@
                 <Setter Property="TextColor" Value="#1B1F24" />
                 <Style.Triggers>
                     <Trigger TargetType="Button" Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="{StaticResource StopButtonPressedBrush}" />
-                        <Setter Property="BorderColor" Value="#593B00" />
-                        <Setter Property="TextColor" Value="#F8F9FA" />
+                        <Setter Property="Background" Value="{StaticResource StopButtonIdleBrush}" />
+                        <Setter Property="BorderColor" Value="#FFE184" />
+                        <Setter Property="TextColor" Value="#1B1F24" />
                     </Trigger>
                     <Trigger TargetType="Button" Property="IsEnabled" Value="False">
                         <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
@@ -135,8 +136,8 @@
                 <Setter Property="BorderColor" Value="#FF92A0" />
                 <Style.Triggers>
                     <Trigger TargetType="Button" Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="{StaticResource CloseButtonPressedBrush}" />
-                        <Setter Property="BorderColor" Value="#3A070C" />
+                        <Setter Property="Background" Value="{StaticResource CloseButtonIdleBrush}" />
+                        <Setter Property="BorderColor" Value="#FF92A0" />
                     </Trigger>
                     <Trigger TargetType="Button" Property="IsEnabled" Value="False">
                         <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
@@ -151,8 +152,8 @@
                 <Setter Property="BorderColor" Value="#FFC2C6" />
                 <Style.Triggers>
                     <Trigger TargetType="Button" Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="{StaticResource FaultButtonPressedBrush}" />
-                        <Setter Property="BorderColor" Value="#48090F" />
+                        <Setter Property="Background" Value="{StaticResource FaultButtonIdleBrush}" />
+                        <Setter Property="BorderColor" Value="#FFC2C6" />
                     </Trigger>
                     <Trigger TargetType="Button" Property="IsEnabled" Value="False">
                         <Setter Property="Background" Value="{StaticResource ControlButtonDisabledBrush}" />
@@ -275,33 +276,57 @@
                        FontAttributes="Bold"
                        TextColor="#F8F9FA" />
         <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="16">
-            <Button Grid.Column="0"
-                Text="Open"
-                Command="{Binding OpenCommand}"
-                Style="{StaticResource OpenControlButtonStyle}"
-                SemanticProperties.Description="Open the observatory roof"
-                SemanticProperties.Hint="Initiates the roof opening sequence" />
+                    <Button Grid.Column="0"
+                            Text="Open"
+                            Command="{Binding OpenCommand}"
+                            Style="{StaticResource OpenControlButtonStyle}"
+                            SemanticProperties.Description="Open the observatory roof"
+                            SemanticProperties.Hint="Initiates the roof opening sequence">
+                        <Button.Behaviors>
+                            <behaviors:TouchBehavior PressedScale="0.96"
+                                                     PressedOpacity="1"
+                                                     DefaultScale="1" />
+                        </Button.Behaviors>
+                    </Button>
 
-            <Button Grid.Column="1"
-                Text="Stop"
-                Command="{Binding StopCommand}"
-                Style="{StaticResource StopControlButtonStyle}"
-                SemanticProperties.Description="Stop the roof movement"
-                SemanticProperties.Hint="Halts any active roof movement" />
+                    <Button Grid.Column="1"
+                            Text="Stop"
+                            Command="{Binding StopCommand}"
+                            Style="{StaticResource StopControlButtonStyle}"
+                            SemanticProperties.Description="Stop the roof movement"
+                            SemanticProperties.Hint="Halts any active roof movement">
+                        <Button.Behaviors>
+                            <behaviors:TouchBehavior PressedScale="0.96"
+                                                     PressedOpacity="1"
+                                                     DefaultScale="1" />
+                        </Button.Behaviors>
+                    </Button>
 
-            <Button Grid.Column="2"
-                Text="Close"
-                Command="{Binding CloseCommand}"
-                Style="{StaticResource CloseControlButtonStyle}"
-                SemanticProperties.Description="Close the observatory roof"
-                SemanticProperties.Hint="Starts closing the roof" />
+                    <Button Grid.Column="2"
+                            Text="Close"
+                            Command="{Binding CloseCommand}"
+                            Style="{StaticResource CloseControlButtonStyle}"
+                            SemanticProperties.Description="Close the observatory roof"
+                            SemanticProperties.Hint="Starts closing the roof">
+                        <Button.Behaviors>
+                            <behaviors:TouchBehavior PressedScale="0.96"
+                                                     PressedOpacity="1"
+                                                     DefaultScale="1" />
+                        </Button.Behaviors>
+                    </Button>
 
-            <Button Grid.Column="3"
-                Text="Clear Fault"
-                Command="{Binding ClearFaultCommand}"
-                Style="{StaticResource FaultControlButtonStyle}"
-                SemanticProperties.Description="Clear roof fault"
-                SemanticProperties.Hint="Attempts to clear an active fault when safe" />
+                    <Button Grid.Column="3"
+                            Text="Clear Fault"
+                            Command="{Binding ClearFaultCommand}"
+                            Style="{StaticResource FaultControlButtonStyle}"
+                            SemanticProperties.Description="Clear roof fault"
+                            SemanticProperties.Hint="Attempts to clear an active fault when safe">
+                        <Button.Behaviors>
+                            <behaviors:TouchBehavior PressedScale="0.96"
+                                                     PressedOpacity="1"
+                                                     DefaultScale="1" />
+                        </Button.Behaviors>
+                    </Button>
                 </Grid>
             </VerticalStackLayout>
         </Border>

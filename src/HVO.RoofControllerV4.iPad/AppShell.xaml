@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:HVO.RoofControllerV4.iPad"
     xmlns:shell="http://schemas.microsoft.com/dotnet/2021/maui"
-    Title="Roof Controller"
+    Title="HVO Roof Controller"
     FlyoutBehavior="Disabled"
     shell:Shell.NavBarIsVisible="False">
 

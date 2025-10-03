@@ -7,10 +7,14 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Maui;
+using CommunityToolkit.Maui.Core;
+using CommunityToolkit.Maui.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HVO.RoofControllerV4.iPad.Configuration;
 using HVO.RoofControllerV4.iPad.Models;
+using HVO.RoofControllerV4.iPad.Popups;
 using HVO.RoofControllerV4.iPad.Services;
 using HVO.RoofControllerV4.Common.Models;
 using HVO;
@@ -32,10 +36,12 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     private readonly ILogger<RoofControllerViewModel> _logger;
     private readonly IDialogService _dialogService;
     private readonly IRoofControllerConfigurationService _configurationService;
+    private readonly IPopupService _popupService;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly SemaphoreSlim _promptSemaphore = new(1, 1);
     private int _promptThreshold;
     private readonly ObservableCollection<NotificationItem> _notificationHistory = new();
+    private HealthStatusPopup? _activeHealthPopup;
 
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
@@ -56,13 +62,15 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         IOptions<RoofControllerApiOptions> options,
         ILogger<RoofControllerViewModel> logger,
         IDialogService dialogService,
-        IRoofControllerConfigurationService configurationService)
+        IRoofControllerConfigurationService configurationService,
+        IPopupService popupService)
     {
         _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+        _popupService = popupService ?? throw new ArgumentNullException(nameof(popupService));
         _promptThreshold = Math.Max(1, _options.ConnectionFailurePromptThreshold);
         NotificationHistory = new ReadOnlyObservableCollection<NotificationItem>(_notificationHistory);
         _notificationHistory.CollectionChanged += OnNotificationHistoryChanged;
@@ -563,41 +571,96 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task OpenHealthDialogAsync()
     {
-        await MainThread.InvokeOnMainThreadAsync(() =>
-        {
-            if (!IsHealthDialogOpen)
-            {
-                IsHealthDialogOpen = true;
-            }
-
-            HealthDialogError = null;
-        }).ConfigureAwait(false);
-
+        await EnsureHealthDialogPopupAsync().ConfigureAwait(false);
         await RefreshHealthDialogInternalAsync().ConfigureAwait(false);
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task RefreshHealthDialogAsync()
     {
-        if (!IsHealthDialogOpen)
-        {
-            await MainThread.InvokeOnMainThreadAsync(() => IsHealthDialogOpen = true).ConfigureAwait(false);
-        }
-
+        await EnsureHealthDialogPopupAsync().ConfigureAwait(false);
         await RefreshHealthDialogInternalAsync().ConfigureAwait(false);
     }
 
     [RelayCommand]
     private void CloseHealthDialog()
     {
-        if (!IsHealthDialogOpen)
+        MainThread.BeginInvokeOnMainThread(() =>
         {
-            return;
+            if (!IsHealthDialogOpen)
+            {
+                return;
+            }
+
+            IsHealthDialogOpen = false;
+            HealthDialogError = null;
+            _activeHealthPopup?.Close();
+        });
+    }
+
+    private async Task EnsureHealthDialogPopupAsync()
+    {
+        var shouldShowPopup = false;
+
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            if (!IsHealthDialogOpen)
+            {
+                IsHealthDialogOpen = true;
+                shouldShowPopup = true;
+            }
+
+            HealthDialogError = null;
+        }).ConfigureAwait(false);
+
+        if (shouldShowPopup)
+        {
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                HealthStatusPopup? createdPopup = null;
+
+                _popupService.ShowPopup<HealthStatusPopupViewModel>(viewModel =>
+                {
+                    if (viewModel is null)
+                    {
+                        throw new InvalidOperationException("Popup view model was not provided.");
+                    }
+
+                    viewModel.Dashboard = this;
+
+                    createdPopup = viewModel.Popup;
+                });
+
+                if (createdPopup is null)
+                {
+                    throw new InvalidOperationException("Health status popup instance was not created.");
+                }
+
+                _activeHealthPopup = createdPopup;
+                _activeHealthPopup.Closed += OnHealthPopupClosed;
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private void OnHealthPopupClosed(object? sender, PopupClosedEventArgs e)
+    {
+        if (sender is HealthStatusPopup popup)
+        {
+            popup.Closed -= OnHealthPopupClosed;
+
+            if (ReferenceEquals(_activeHealthPopup, popup))
+            {
+                _activeHealthPopup = null;
+            }
         }
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            IsHealthDialogOpen = false;
+            if (IsHealthDialogOpen)
+            {
+                IsHealthDialogOpen = false;
+            }
+
             HealthDialogError = null;
         });
     }
@@ -1512,6 +1575,11 @@ public sealed partial class RoofControllerViewModel : ObservableObject, IDisposa
         _promptSemaphore.Dispose();
         _pollingCts?.Dispose();
         _notificationHistory.CollectionChanged -= OnNotificationHistoryChanged;
+        if (_activeHealthPopup is not null)
+        {
+            _activeHealthPopup.Closed -= OnHealthPopupClosed;
+            _activeHealthPopup = null;
+        }
     }
 
     partial void OnServiceBannerIsErrorChanged(bool value)

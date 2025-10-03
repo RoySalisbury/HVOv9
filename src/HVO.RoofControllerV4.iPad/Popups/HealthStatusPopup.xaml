@@ -3,11 +3,12 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+    xmlns:behaviors="clr-namespace:CommunityToolkit.Maui.Behaviors;assembly=CommunityToolkit.Maui"
     xmlns:viewModels="clr-namespace:HVO.RoofControllerV4.iPad.ViewModels"
     xmlns:models="clr-namespace:HVO.RoofControllerV4.iPad.Models"
     xmlns:converters="clr-namespace:HVO.RoofControllerV4.iPad.Converters"
     x:Class="HVO.RoofControllerV4.iPad.Popups.HealthStatusPopup"
-    x:DataType="viewModels:RoofControllerViewModel"
+    x:DataType="viewModels:HealthStatusPopupViewModel"
     Color="Transparent"
     CanBeDismissedByTappingOutsideOfPopup="False">
 
@@ -31,7 +32,7 @@
     <Grid>
         <BoxView BackgroundColor="#150E141F">
             <BoxView.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding CloseHealthDialogCommand}" />
+                <TapGestureRecognizer Command="{Binding Dashboard.CloseHealthDialogCommand}" />
             </BoxView.GestureRecognizers>
         </BoxView>
 
@@ -52,7 +53,7 @@
             <VerticalStackLayout Spacing="18">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
                     <Border
-                        BackgroundColor="{Binding HealthDialogStatusColor}"
+                        BackgroundColor="{Binding Dashboard.HealthDialogStatusColor}"
                         Padding="12,6"
                         StrokeThickness="0"
                         VerticalOptions="Center">
@@ -60,19 +61,19 @@
                             <RoundRectangle CornerRadius="16" />
                         </Border.StrokeShape>
                         <Label
-                            Text="{Binding HealthDialogStatusText}"
-                            TextColor="{Binding HealthDialogStatusTextColor}"
+                            Text="{Binding Dashboard.HealthDialogStatusText}"
+                            TextColor="{Binding Dashboard.HealthDialogStatusTextColor}"
                             FontAttributes="Bold"
                             FontSize="16" />
                     </Border>
 
                     <Label
                         Grid.Column="1"
-                        Text="{Binding HealthDialogDuration, StringFormat='Total Duration: {0}'}"
+                        Text="{Binding Dashboard.HealthDialogDuration, StringFormat='Total Duration: {0}'}"
                         TextColor="#ADB5BD"
                         FontSize="13"
                         VerticalTextAlignment="Center"
-                        IsVisible="{Binding HealthDialogDuration, Converter={StaticResource StringHasValueConverter}}" />
+                        IsVisible="{Binding Dashboard.HealthDialogDuration, Converter={StaticResource StringHasValueConverter}}" />
 
                     <HorizontalStackLayout
                         Grid.Column="2"
@@ -80,21 +81,33 @@
                         VerticalOptions="Center">
                         <Button
                             Text="Refresh"
-                            Command="{Binding RefreshHealthDialogCommand}"
+                            Command="{Binding Dashboard.RefreshHealthDialogCommand}"
                             Style="{StaticResource HealthDialogActionButtonStyle}"
-                            IsEnabled="{Binding IsHealthDialogLoading, Converter={StaticResource BoolInvertConverter}}" />
+                            IsEnabled="{Binding Dashboard.IsHealthDialogLoading, Converter={StaticResource BoolInvertConverter}}">
+                            <Button.Behaviors>
+                                <behaviors:TouchBehavior PressedOpacity="0.9"
+                                                         PressedScale="0.96"
+                                                         DefaultScale="1" />
+                            </Button.Behaviors>
+                        </Button>
                         <Button
                             Text="Close"
-                            Command="{Binding CloseHealthDialogCommand}"
+                            Command="{Binding Dashboard.CloseHealthDialogCommand}"
                             Style="{StaticResource HealthDialogActionButtonStyle}"
-                            BackgroundColor="#3A3F47" />
+                            BackgroundColor="#3A3F47">
+                            <Button.Behaviors>
+                                <behaviors:TouchBehavior PressedOpacity="0.9"
+                                                         PressedScale="0.96"
+                                                         DefaultScale="1" />
+                            </Button.Behaviors>
+                        </Button>
                     </HorizontalStackLayout>
                 </Grid>
 
                 <StackLayout
                     Spacing="8"
                     HorizontalOptions="Center"
-                    IsVisible="{Binding IsHealthDialogLoading}">
+                    IsVisible="{Binding Dashboard.IsHealthDialogLoading}">
                     <ActivityIndicator IsRunning="True" Color="#0dcaf0" />
                     <Label
                         Text="Loading health information…"
@@ -107,12 +120,12 @@
                     BackgroundColor="#51311A"
                     Padding="12"
                     StrokeThickness="0"
-                    IsVisible="{Binding HasHealthDialogError}">
+                    IsVisible="{Binding Dashboard.HasHealthDialogError}">
                     <Border.StrokeShape>
                         <RoundRectangle CornerRadius="16" />
                     </Border.StrokeShape>
                     <Label
-                        Text="{Binding HealthDialogError}"
+                        Text="{Binding Dashboard.HealthDialogError}"
                         TextColor="#FFD8A8"
                         FontSize="14" />
                 </Border>
@@ -121,11 +134,11 @@
                     Text="No individual health checks reported."
                     TextColor="#ADB5BD"
                     FontSize="14"
-                    IsVisible="{Binding ShowNoHealthChecksMessage}" />
+                    IsVisible="{Binding Dashboard.ShowNoHealthChecksMessage}" />
 
                 <CollectionView
-                    ItemsSource="{Binding HealthChecks}"
-                    IsVisible="{Binding HasHealthChecks}"
+                    ItemsSource="{Binding Dashboard.HealthChecks}"
+                    IsVisible="{Binding Dashboard.HasHealthChecks}"
                     HeightRequest="360"
                     BackgroundColor="Transparent"
                     SelectionMode="None">

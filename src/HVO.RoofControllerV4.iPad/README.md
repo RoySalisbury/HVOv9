@@ -27,6 +27,19 @@ This command performs the following:
 
 The default Visual Studio Code launch configuration invokes the same script, so you can press <kbd>F5</kbd> to rebuild and deploy without opening a terminal manually.
 
+### Manual dotnet CLI run
+
+If you need to bypass the helper script (for example when debugging MSBuild targets), you can drive deployment directly:
+
+```bash
+dotnet build src/HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj \
+  -t:Run \
+  -f net9.0-ios \
+  -p:_DeviceName=:v2:udid=F878E277-60EC-43CF-90EC-B1C9050549E6
+```
+
+The `_DeviceName` property must include the simulator UDID; using the human-readable device name causes a `KeyNotFoundException` during deployment.
+
 ## Troubleshooting and Log Collection
 
 During development, it’s often helpful to tail the simulator logs filtered to the Roof Controller app:
@@ -54,6 +67,7 @@ Common issues to watch for:
 - **HTTP 503 or 404 responses** from the Roof Controller API (usually network/environment configuration).
 - **`System.Text.Json.JsonException`** entries indicating payload/enum mismatches. Confirm the API response and client serializer settings in `Services/RoofControllerApiClient.cs`.
 - **Simulator permissions prompts** (camera/microphone). Dismiss or accept as needed; the app logs the TCC requests at `info` level.
+- **`Health status popup instance was not created.`** Ensure `HealthStatusPopup` assigns itself to `HealthStatusPopupViewModel.Popup` in the constructor so the dashboard can track the active popup instance.
 
 ## Additional Resources
 
