@@ -28,7 +28,6 @@ on:
       - '.devcontainer/**'
       - '.github/ISSUE_TEMPLATE/**'
   schedule:
-    # Run integration tests nightly at 2 AM UTC
     - cron: '0 2 * * *'
 
 concurrency:
@@ -64,13 +63,12 @@ jobs:
             NuGet.config
 
       - name: Restore dependencies
-        run: cd src && dotnet restore HVOv9.slnx --nologo -v minimal
+        # Use the solution filter to restore only the required projects
+        run: cd src && dotnet restore HVOv9.slnf --nologo -v minimal
 
       - name: Build all non-MAUI projects
-        # This command explicitly excludes the MAUI project during the build on the Linux runner.
-        run: |
-          cd src && dotnet build HVOv9.slnx -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true \
-          /p:ExcludeProjectReferences="HVO.RoofControllerV4.iPad.csproj"
+        # Use the solution filter to build only the required projects
+        run: cd src && dotnet build HVOv9.slnf --no-restore -c Release -v minimal --nologo -maxcpucount /p:ContinuousIntegrationBuild=true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -105,12 +103,13 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Install MAUI workload
-        run: dotnet workload install maui
+        run: dotnet workload install maui --ignore-failed-sources
+
+      - name: Restore dependencies
+        run: cd src && dotnet restore HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj
 
       - name: Build MAUI iOS project
-        run: |
-          cd src && dotnet build HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj \
-          -f:net9.0-ios -c Release --no-restore /p:ContinuousIntegrationBuild=true
+        run: cd src && dotnet build HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj -f:net9.0-ios -c Release --no-restore /p:ContinuousIntegrationBuild=true
 
       - name: Upload iOS build artifacts
         uses: actions/upload-artifact@v4
@@ -118,7 +117,7 @@ jobs:
           name: build-artifacts-maui-ios
           path: src/HVO.RoofControllerV4.iPad/bin/Release/net9.0-ios/
           retention-days: 1
-
+          
   test-unit:
     needs: build-non-maui
     runs-on: ubuntu-latest

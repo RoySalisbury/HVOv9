@@ -1,0 +1,24 @@
+{
+  "solution": "HVOv9.slnx",
+  "projects": [
+    "HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj",
+    "HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
+    "HVO.RoofControllerV4.Common/HVO.RoofControllerV4.Common.csproj",
+    "HVO.CLI.SkyMonitor/HVO.CLI.SkyMonitor.csproj",
+    "HVO.Infrastucture.SkyMonitor/HVO.Infrastucture.SkyMonitor.csproj",
+    "HVO.Services.SkyMonitor/HVO.Services.SkyMonitor.csproj",
+    "HVO.WebSite.SkyMonitorV4/HVO.WebSite.SkyMonitorV4.csproj",
+    "HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj",
+    "HVO.Iot.Devices/HVO.Iot.Devices.csproj",
+    "HVO.GpioTestApp/HVO.GpioTestApp.csproj",
+    "HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj",
+    "HVO.DataModels/HVO.DataModels.csproj",
+    "HVO.NinaClient/HVO.NinaClient.csproj",
+    "HVO.SourceGenerators/HVO.SourceGenerators.csproj",
+    "HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj",
+    "HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
+    "HVO/HVO.csproj",
+    "HVO.WebSite.v9/HVO.WebSite.v9.csproj",
+    "HVO.WebSite.v9.Tests/HVO.WebSite.v9.Tests.csproj"
+  ]
+}
