@@ -227,6 +227,7 @@ See `.github/copilot-instructions.md` for workspace-wide standards:
 - Result<T> pattern for operations that can fail
 - Structured logging with ILogger<T>
 - API versioning via URL segments (`/api/v1.0/...`)
+- Keep validation inside request DTOs using data annotations or `IValidatableObject` so controllers rely on automatic model validation
 
 ## Contributing
 

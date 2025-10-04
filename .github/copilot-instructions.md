@@ -64,6 +64,7 @@ namespace HVO.ProjectName
 - **Hardware Device Logging**: All GPIO and IoT device classes must support ILogger<T> with fallback creation when not provided
 - Implement proper exception handling with specific exception types
 - **Use `Result<T>` pattern for operations that can fail** - Located in `HVO/Result.cs`
+- **Ensure API request DTOs encapsulate validation** using data annotations or `IValidatableObject` so controllers rely on automatic model validation
 - **Use `InvalidOperationException` for true "not found" scenarios only** - Controllers should handle these explicitly
 - **Service state issues should use `InvalidOperationException` but return 500 via controller handling**
 - Implement global exception handling middleware (`HvoServiceExceptionHandler`)

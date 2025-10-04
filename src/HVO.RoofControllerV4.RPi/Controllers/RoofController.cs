@@ -84,8 +84,6 @@ namespace HVO.RoofControllerV4.RPi.Controllers
                 return ValidationProblem(ModelState);
             }
 
-            ValidateConfigurationRequest(request);
-
             if (!ModelState.IsValid)
             {
                 return ValidationProblem(ModelState);
@@ -305,58 +303,6 @@ namespace HVO.RoofControllerV4.RPi.Controllers
             };
         }
 
-        private void ValidateConfigurationRequest(RoofConfigurationRequest request)
-        {
-            if (request.SafetyWatchdogTimeoutSeconds <= 0)
-            {
-                ModelState.AddModelError(nameof(request.SafetyWatchdogTimeoutSeconds), "Safety watchdog timeout must be greater than zero.");
-            }
-
-            if (request.DigitalInputPollIntervalMilliseconds <= 0)
-            {
-                ModelState.AddModelError(nameof(request.DigitalInputPollIntervalMilliseconds), "Digital input poll interval must be greater than zero.");
-            }
-
-            if (request.PeriodicVerificationIntervalSeconds <= 0)
-            {
-                ModelState.AddModelError(nameof(request.PeriodicVerificationIntervalSeconds), "Periodic verification interval must be greater than zero.");
-            }
-
-            if (!request.EnableDigitalInputPolling && request.EnablePeriodicVerificationWhileMoving)
-            {
-                ModelState.AddModelError(nameof(request.EnablePeriodicVerificationWhileMoving), "Periodic verification requires digital input polling to be enabled.");
-            }
-
-            ValidateRelayId(nameof(request.OpenRelayId), request.OpenRelayId);
-            ValidateRelayId(nameof(request.CloseRelayId), request.CloseRelayId);
-            ValidateRelayId(nameof(request.ClearFaultRelayId), request.ClearFaultRelayId);
-            ValidateRelayId(nameof(request.StopRelayId), request.StopRelayId);
-
-            if (request.PeriodicVerificationIntervalSeconds < request.SafetyWatchdogTimeoutSeconds)
-            {
-                // Additional validation performed by options validator; leave for consistency.
-            }
-
-            var relayIds = new[]
-            {
-                request.OpenRelayId,
-                request.CloseRelayId,
-                request.ClearFaultRelayId,
-                request.StopRelayId
-            };
-
-            if (relayIds.Distinct().Count() != relayIds.Length)
-            {
-                ModelState.AddModelError(nameof(RoofConfigurationRequest), "Relay identifiers (Open, Close, ClearFault, Stop) must be unique.");
-            }
-        }
-
-        private void ValidateRelayId(string fieldName, int relayId)
-        {
-            if (relayId is < 1 or > 4)
-            {
-                ModelState.AddModelError(fieldName, "Relay identifiers must be between 1 and 4.");
-            }
-        }
+        
     }
 }
