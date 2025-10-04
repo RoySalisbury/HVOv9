@@ -36,7 +36,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  # Job to build all projects that do not target iOS, using the Linux runner.
+  build-non-maui:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -62,19 +63,19 @@ jobs:
             global.json
             NuGet.config
 
-      - name: Restore
-        run: |
-          cd src && dotnet restore HVOv9.slnx --nologo -v minimal || dotnet restore --nologo -v minimal
+      - name: Restore dependencies
+        run: cd src && dotnet restore HVOv9.slnx --nologo -v minimal
 
-      - name: Build
+      - name: Build all non-MAUI projects
+        # This command explicitly excludes the MAUI project during the build on the Linux runner.
         run: |
-          cd src && dotnet build HVOv9.slnx -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true || \
-          dotnet build -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true
+          cd src && dotnet build HVOv9.slnx -c Release --no-restore --nologo -v minimal -maxcpucount /p:ContinuousIntegrationBuild=true \
+          /p:ExcludeProjectReferences="HVO.RoofControllerV4.iPad.csproj"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
+          name: build-artifacts-non-maui
           path: |
             src/**/bin/Release/**
             !src/**/bin/Release/**/ref/**
@@ -82,8 +83,44 @@ jobs:
             src/**/obj/Release/net9.0/scopedcss/**
           retention-days: 1
 
+  # New job to build only the MAUI iOS project on a macOS runner.
+  build-maui-ios:
+    needs: build-non-maui
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui
+
+      - name: Build MAUI iOS project
+        run: |
+          cd src && dotnet build HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj \
+          -f:net9.0-ios -c Release --no-restore /p:ContinuousIntegrationBuild=true
+
+      - name: Upload iOS build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-maui-ios
+          path: src/HVO.RoofControllerV4.iPad/bin/Release/net9.0-ios/
+          retention-days: 1
+
   test-unit:
-    needs: build
+    needs: build-non-maui
     runs-on: ubuntu-latest
     timeout-minutes: 10
     
@@ -120,7 +157,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts
+          name: build-artifacts-non-maui
           path: src
 
       - name: Run unit tests
@@ -143,11 +180,10 @@ jobs:
           retention-days: 7
 
   test-integration:
-    needs: build
+    needs: build-non-maui
     runs-on: ubuntu-latest
     timeout-minutes: 15
     
-    # Gate integration tests: run on main branch, scheduled runs, or when PR has integration-tests label
     if: |
       github.ref == 'refs/heads/main' || 
       github.event_name == 'schedule' || 
@@ -186,7 +222,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts
+          name: build-artifacts-non-maui
           path: src
 
       - name: Run integration tests
