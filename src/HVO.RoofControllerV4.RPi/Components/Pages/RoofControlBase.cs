@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;
@@ -40,7 +41,7 @@ public class RoofControlBase : ComponentBase, IDisposable
     protected RoofControllerStopReason _lastNotifiedStopReason = RoofControllerStopReason.None;
     private bool _footerStatusReady;
     private HttpClient? _healthHttpClient;
-    
+
     #endregion
 
     #region Public Properties
@@ -93,7 +94,6 @@ public class RoofControlBase : ComponentBase, IDisposable
     public RoofControllerStopReason LastStopReason => RoofController.LastStopReason;
     public bool WasEmergencyStop => LastStopReason is RoofControllerStopReason.EmergencyStop or RoofControllerStopReason.SafetyWatchdogTimeout;
     public bool IsInStopState => CurrentStatus is RoofControllerStatus.Stopped or RoofControllerStatus.PartiallyOpen or RoofControllerStatus.PartiallyClose;
-
     public string GetLastStopTypeLabel()
     {
         if (!IsInStopState)
@@ -172,7 +172,7 @@ public class RoofControlBase : ComponentBase, IDisposable
         if (_isDisposed) return;
         _isDisposed = true;
         RoofController.StatusChanged -= OnServiceStatusChanged;
-    FooterStatusService?.Reset();
+        FooterStatusService?.Reset();
         GC.SuppressFinalize(this);
     }
 

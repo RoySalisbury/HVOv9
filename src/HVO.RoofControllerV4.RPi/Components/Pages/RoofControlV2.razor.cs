@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using System.Threading.Tasks;
 
 namespace HVO.RoofControllerV4.RPi.Components.Pages;
 
@@ -8,5 +9,38 @@ namespace HVO.RoofControllerV4.RPi.Components.Pages;
 /// </summary>
 public partial class RoofControlV2
 {
-    // Streaming removed; placeholder remains in the UI.
+    private int _consoleLogEntryCount;
+
+    protected bool IsConsoleLogExpanded { get; private set; }
+
+    protected bool AutoScrollLogs { get; private set; } = true;
+
+    protected void ToggleConsoleLog()
+    {
+        IsConsoleLogExpanded = !IsConsoleLogExpanded;
+    }
+
+    protected void OnAutoScrollChanged(bool value)
+    {
+        if (AutoScrollLogs == value)
+        {
+            return;
+        }
+
+        AutoScrollLogs = value;
+        StateHasChanged();
+    }
+
+    private Task OnLogEntryCountChanged(int count)
+    {
+        if (_consoleLogEntryCount == count)
+        {
+            return Task.CompletedTask;
+        }
+
+        _consoleLogEntryCount = count;
+        return InvokeAsync(StateHasChanged);
+    }
 }
+
+

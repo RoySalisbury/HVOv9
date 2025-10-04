@@ -4,6 +4,7 @@
 @inherits RoofControlBase
 @using HVO.RoofControllerV4.RPi.Logic
 @using HVO.RoofControllerV4.Common.Models
+@using HVO.RoofControllerV4.RPi.Components.ConsoleLog
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.Components
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -129,6 +130,25 @@
                     <div class="rc2-kpi"><div class="rc2-kpi-label">Health</div><div class="rc2-kpi-value">@GetHealthCheckStatus()</div></div>
                     <div class="rc2-kpi"><div class="rc2-kpi-label">Movement</div><div class="rc2-kpi-value">@(IsMoving ? "In Progress" : "Idle")</div></div>
                     <div class="rc2-kpi" title="@GetLastTransitionTooltip()"><div class="rc2-kpi-label">Last Transition</div><div class="rc2-kpi-value">@GetLastTransitionFriendly()</div></div>
+                </div>
+
+                <div class="rc2-console-section">
+                    <button class="rc2-console-toggle" type="button" @onclick="ToggleConsoleLog">
+                        <span class="rc2-console-toggle-main">
+                            <i class="bi @(IsConsoleLogExpanded ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                            <span class="rc2-console-toggle-label">Real-time Console Output</span>
+                        </span>
+                        <span class="rc2-console-count" aria-hidden="true">(@_consoleLogEntryCount)</span>
+                    </button>
+
+                    @if (IsConsoleLogExpanded)
+                    {
+                        <ConsoleLogViewer AutoScroll="@AutoScrollLogs"
+                                          AutoScrollChanged="OnAutoScrollChanged"
+                                          EntryCountChanged="OnLogEntryCountChanged"
+                                          EmptyMessage="No console output has been captured yet."
+                                          AriaLabel="Roof controller console output" />
+                    }
                 </div>
             </div>
         </div>

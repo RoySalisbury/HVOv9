@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
@@ -14,6 +15,7 @@ using HVO.Iot.Devices.Implementation;
 
 using System.Runtime.Loader;
 using HVO.Iot.Devices.Iot.Devices.Sequent;
+using HVO.RoofControllerV4.RPi.Logging;
 using HVO.RoofControllerV4.RPi.Services;
 
 namespace HVO.RoofControllerV4.RPi;
@@ -56,11 +58,15 @@ public class Program
         });
 
 
-        services.AddHostedService<RoofControllerServiceV4Host>();
+    services.AddHostedService<RoofControllerServiceV4Host>();
 
-        // Register RoofController based on configuration
-        services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
-        services.AddScoped<FooterStatusService>();
+    // Register RoofController based on configuration
+    services.AddSingleton<IRoofControllerServiceV4, RoofControllerServiceV4>();
+    services.AddScoped<FooterStatusService>();
+
+    services.Configure<ConsoleLogBufferOptions>(Configuration.GetSection("ConsoleLogBuffer"));
+    services.AddSingleton<ConsoleLogBuffer>();
+    services.AddSingleton<ILoggerProvider, ConsoleLogLoggerProvider>();
 
         // Add exception handling middleware
         // NOTE: Use built-in exception handling instead of custom error controllers

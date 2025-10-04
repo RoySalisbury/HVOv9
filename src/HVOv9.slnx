@@ -21,6 +21,7 @@
     <File Path="../.github/copilot-instructions.md" />
     <File Path="../.gitignore" />
     <File Path="../README.md" />
+    <File Path="HVOv9.slnf" />
   </Folder>
   <Project Path="HVO.DataModels/HVO.DataModels.csproj" />
   <Project Path="HVO.NinaClient/HVO.NinaClient.csproj" Id="939204bd-3174-4a74-852f-82c2880b49d6" />
