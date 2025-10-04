@@ -1,6 +1,6 @@
 {
   "solution": {
-    "path": "HVOv9.slnx"
+    "file": "HVOv9.slnx"
   },
   "projects": [
     "HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj",
