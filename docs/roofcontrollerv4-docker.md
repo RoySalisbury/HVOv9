@@ -18,7 +18,29 @@ This guide documents how to build and run the `HVO.RoofControllerV4.RPi` web app
    cd HVOv9
    ```
 
-## Build the image (linux/arm64)
+## Quick deployment script
+
+If you have SSH access to the Raspberry Pi, the repo provides `scripts/deploy-roofcontroller-rpi.sh` which builds the image, copies it to the Pi, and restarts the container for you. Set the destination host (and optional overrides) and run the script from the repository root:
+
+```bash
+PI_HOST=roofpi.local PI_USER=roy \
+  ./scripts/deploy-roofcontroller-rpi.sh
+```
+
+Environment variables accepted by the script:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PI_HOST` | ✅ | Hostname or IP address of the Raspberry Pi |
+| `PI_USER` | ❌ | SSH username (default `pi`) |
+| `IMAGE_TAG` | ❌ | Docker image tag to build (default `hvov9/roof-controller:v4`) |
+| `CONTAINER_NAME` | ❌ | Container name on the Pi (default `roof-controller`) |
+| `HOST_PORT` | ❌ | Host port mapped to container port 8080 (default `8080`) |
+| `EXTRA_DOCKER_ARGS` | ❌ | Additional arguments appended to `docker run` (e.g. `-e ASPNETCORE_ENVIRONMENT=Production`) |
+
+The script uses `docker buildx` with `--platform linux/arm64`, copies the image to the Pi via `scp`, removes any existing container with the same name, and launches the updated container with the required GPIO/I²C/thermal device bindings.
+
+## Build the image manually (linux/arm64)
 
 > If you are already on the Raspberry Pi 5, a standard `docker build` is enough. From an x64 workstation you can cross-build using Docker Buildx.
 
