@@ -1,4 +1,8 @@
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Asp.Versioning;
+using Asp.Versioning.Builder;
 using HVO.SkyMonitorV4.RPi.Components;
 using HVO.SkyMonitorV4.RPi.HostedServices;
 using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyCamera;
@@ -7,8 +11,10 @@ using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyImageSave;
 using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyTimelapse;
 using HVO.SkyMonitorV4.RPi.Middleware;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Scalar.AspNetCore;
 
 namespace HVO.SkyMonitorV4.RPi;
 
@@ -34,10 +40,13 @@ public static class Program
 
     private static void ConfigureServices(IServiceCollection services)
     {
-        services.AddControllers();
+        services.AddOptions();
 
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
+
+        services.AddEndpointsApiExplorer();
+        services.AddOpenApi("v1");
 
         services.AddExceptionHandler<HvoServiceExceptionHandler>();
 
@@ -53,6 +62,18 @@ public static class Program
             }
         });
 
+        services.AddHealthChecks();
+
+        services.AddControllersWithViews()
+            .AddJsonOptions(options =>
+            {
+                if (!options.JsonSerializerOptions.Converters.Any(converter => converter is JsonStringEnumConverter))
+                {
+                    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+                }
+            });
+
+        services.AddHttpClient();
         services.AddHttpContextAccessor();
 
         services.AddOptions<AllSkyCameraServiceOptions>()
@@ -83,7 +104,12 @@ public static class Program
             options.AssumeDefaultVersionWhenUnspecified = true;
             options.DefaultApiVersion = new ApiVersion(1, 0);
             options.ReportApiVersions = true;
-        }).AddMvc();
+            options.ApiVersionReader = new UrlSegmentApiVersionReader();
+        }).AddApiExplorer(options =>
+        {
+            options.GroupNameFormat = "'v'VVV";
+            options.SubstituteApiVersionInUrl = true;
+        });
 
         services.AddHostedService<AllSkyCameraServiceHost>();
         services.AddHostedService<AllSkyImageSaveService>();
@@ -96,6 +122,14 @@ public static class Program
         app.UseExceptionHandler();
         app.UseStatusCodePages();
 
+        app.MapOpenApi();
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapScalarApiReference();
+            app.UseDeveloperExceptionPage();
+        }
+
         if (!app.Environment.IsDevelopment())
         {
             app.UseHsts();
@@ -107,9 +141,45 @@ public static class Program
             app.UseHttpsRedirection();
         }
 
+        app.UseStaticFiles();
         app.UseRouting();
+        app.UseAuthorization();
         app.UseAntiforgery();
         app.MapStaticAssets();
+
+        app.MapHealthChecks("/health", new HealthCheckOptions
+        {
+            ResponseWriter = async (context, report) =>
+            {
+                context.Response.ContentType = "application/json";
+                var response = new
+                {
+                    status = report.Status.ToString(),
+                    checks = report.Entries.Select(entry => new
+                    {
+                        name = entry.Key,
+                        status = entry.Value.Status.ToString(),
+                        description = entry.Value.Description,
+                        data = entry.Value.Data,
+                        duration = entry.Value.Duration.ToString(),
+                        exception = entry.Value.Exception?.Message,
+                        tags = entry.Value.Tags
+                    }),
+                    totalDuration = report.TotalDuration.ToString()
+                };
+                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            }
+        });
+
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("hardware")
+        });
+
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = _ => false
+        });
 
         app.MapControllers();
 
