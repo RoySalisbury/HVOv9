@@ -17,5 +17,9 @@
     <ProjectReference Include="../HVO.Services.SkyMonitor/HVO.Services.SkyMonitor.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="HostedServices/" />
+  </ItemGroup>
+
 
 </Project>

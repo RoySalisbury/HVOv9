@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using HVO.WebSite.SkyMonitorV4.Components;
+using HVO.WebSite.SkyMonitorV4.HostedServices;
 
 namespace HVO.WebSite.SkyMonitorV4;
 

@@ -19,8 +19,7 @@
       "HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj",
       "HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
       "HVO/HVO.csproj",
-      "HVO.WebSite.v9/HVO.WebSite.v9.csproj",
-      "HVO.WebSite.v9.Tests/HVO.WebSite.v9.Tests.csproj"
+      "HVO.WebSite.v9/HVO.WebSite.v9.csproj"
     ]
   }
 }

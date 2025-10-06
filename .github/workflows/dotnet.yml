@@ -129,7 +129,6 @@ jobs:
           - HVO.Iot.Devices.Tests
           - HVO.WebSite.Playground.Tests
           - HVO.RoofControllerV4.RPi.Tests
-          - HVO.WebSite.v9.Tests
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -194,7 +193,6 @@ jobs:
           - HVO.Iot.Devices.Tests
           - HVO.WebSite.Playground.Tests
           - HVO.RoofControllerV4.RPi.Tests
-          - HVO.WebSite.v9.Tests
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1

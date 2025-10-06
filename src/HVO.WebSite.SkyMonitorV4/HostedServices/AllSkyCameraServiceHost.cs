@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Extensions.Hosting;
 
-namespace HVO.Infrastructure.SkyMonitor.HostedServices;
+namespace HVO.WebSite.SkyMonitorV4.HostedServices;
 
 public class AllSkyCameraServiceHost : BackgroundService
 {
