@@ -1,0 +1,21 @@
+.navbar-dark .navbar-nav .nav-link { color: rgba(255,255,255,.85); }
+.navbar-dark .navbar-nav .nav-link:hover { color: #fff; }
+.navbar-dark .navbar-brand { color: #fff; font-weight: 600; }
+
+.app-frame {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at top left, rgba(13, 110, 253, 0.08), transparent 55%), #0f1115;
+}
+
+.app-navbar {
+    background: rgba(0, 0, 0, 0.65) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(6px);
+}
+
+.app-main {
+    flex: 1 0 auto;
+    padding-bottom: 2.5rem;
+}
