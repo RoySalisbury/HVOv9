@@ -1,5 +1,10 @@
+using Asp.Versioning;
 using HVO.SkyMonitorV4.RPi.Components;
 using HVO.SkyMonitorV4.RPi.HostedServices;
+using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyCamera;
+using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyImageCleanup;
+using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyImageSave;
+using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyTimelapse;
 using HVO.SkyMonitorV4.RPi.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +34,8 @@ public static class Program
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        services.AddControllers();
+
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
@@ -48,7 +55,40 @@ public static class Program
 
         services.AddHttpContextAccessor();
 
+        services.AddOptions<AllSkyCameraServiceOptions>()
+            .BindConfiguration("AllSkyCamera")
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<AllSkyImageSaveOptions>()
+            .BindConfiguration("AllSkyImageSave")
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<AllSkyImageCleanupOptions>()
+            .BindConfiguration("AllSkyImageCleanup")
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<AllSkyTimelapseOptions>()
+            .BindConfiguration("AllSkyTimelapse")
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<IAllSkyCameraService, AllSkyCameraService>();
+        services.AddSingleton<IAllSkyTimelapseService, AllSkyTimelapseService>();
+
+        services.AddApiVersioning(options =>
+        {
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.ReportApiVersions = true;
+        }).AddMvc();
+
         services.AddHostedService<AllSkyCameraServiceHost>();
+        services.AddHostedService<AllSkyImageSaveService>();
+        services.AddHostedService<AllSkyImageCleanupService>();
+        services.AddHostedService<AllSkyTimelapseServiceHost>();
     }
 
     private static void Configure(WebApplication app)
@@ -70,6 +110,8 @@ public static class Program
         app.UseRouting();
         app.UseAntiforgery();
         app.MapStaticAssets();
+
+        app.MapControllers();
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
