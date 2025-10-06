@@ -4,6 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HVO.SkyMonitorV4.WebSite</RootNamespace>
+    <AssemblyName>HVO.SkyMonitorV4.WebSite</AssemblyName>
   </PropertyGroup>
 
 </Project>

@@ -3,9 +3,9 @@ using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using HVO.WebSite.SkyMonitorV4.HostedServices;
+using HVO.SkyMonitorV4.WebSite.HostedServices;
 
-namespace HVO.WebSite.SkyMonitorV4;
+namespace HVO.SkyMonitorV4.WebSite;
 
 public class Program
 {
@@ -43,7 +43,7 @@ public class Program
         app.UseAntiforgery();
 
         app.MapStaticAssets();
-        app.MapRazorComponents<HVO.WebSite.SkyMonitorV4.Components.App>()
+        app.MapRazorComponents<HVO.SkyMonitorV4.WebSite.Components.App>()
             .AddInteractiveServerRenderMode();
 
         app.Run();
