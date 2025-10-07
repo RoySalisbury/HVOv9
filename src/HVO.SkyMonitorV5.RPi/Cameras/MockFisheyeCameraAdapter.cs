@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -31,6 +32,7 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MockFisheyeCameraAdapter> _logger;
+    private readonly ICelestialProjector _celestialProjector;
     private readonly Random _random = new();
 
     private bool _initialized;
@@ -40,12 +42,14 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
         IOptionsMonitor<StarCatalogOptions> catalogOptions,
         IOptionsMonitor<CardinalDirectionsOptions> cardinalOptions,
         IServiceScopeFactory scopeFactory,
+        ICelestialProjector celestialProjector,
         ILogger<MockFisheyeCameraAdapter>? logger = null)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogOptions = catalogOptions ?? throw new ArgumentNullException(nameof(catalogOptions));
         _cardinalMonitor = cardinalOptions ?? throw new ArgumentNullException(nameof(cardinalOptions));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _celestialProjector = celestialProjector ?? throw new ArgumentNullException(nameof(celestialProjector));
         _logger = logger ?? NullLogger<MockFisheyeCameraAdapter>.Instance;
     }
 
@@ -201,7 +205,8 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
             horizonPaddingPct: DefaultHorizonPadding,
             flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
             fovDeg: 184.0, applyRefraction: true,
-            sizeCurve: selectCurve);
+            sizeCurve: selectCurve,
+            projector: _celestialProjector);
 
         // ring quotas (inner→outer), bias toward horizon
         var ringFractions = new[] { 0.06, 0.10, 0.18, 0.28, 0.38 };
@@ -308,7 +313,8 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
             horizonPaddingPct: DefaultHorizonPadding,
             flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
             fovDeg: 184.0, applyRefraction: true,
-            sizeCurve: renderCurve);
+            sizeCurve: renderCurve,
+            projector: _celestialProjector);
 
         using var starfield = engine.Render(
             stars: catalogStars,

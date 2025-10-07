@@ -7,6 +7,7 @@ using HVO.SkyMonitorV5.RPi.Middleware;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -54,6 +55,7 @@ public static class Program
         });
 
         services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
+        services.AddSingleton<ICelestialProjector, CelestialProjector>();
 
         services.AddScoped<HygStarRepository>();
         services.AddScoped<PlanetRepository>();

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,14 +17,17 @@ public sealed class HygStarRepository : IStarRepository
     private readonly HygContext _db;
     private readonly IConstellationCatalog _constellationCatalog;
     private readonly ILogger<HygStarRepository> _logger;
+    private readonly ICelestialProjector _celestialProjector;
 
     public HygStarRepository(
         HygContext db,
         IConstellationCatalog constellationCatalog,
+        ICelestialProjector celestialProjector,
         ILogger<HygStarRepository>? logger = null)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _constellationCatalog = constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog));
+        _celestialProjector = celestialProjector ?? throw new ArgumentNullException(nameof(celestialProjector));
         _logger = logger ?? NullLogger<HygStarRepository>.Instance;
     }
 
@@ -76,7 +80,8 @@ public sealed class HygStarRepository : IStarRepository
                 height: Math.Max(1, screenHeight),
                 latitudeDeg: latitudeDeg,
                 longitudeDeg: longitudeDeg,
-                utcUtc: utc);
+                utcUtc: utc,
+                projector: _celestialProjector);
 
             var visible = new List<Star>(pool.Count);
             foreach (var row in pool)
@@ -323,7 +328,8 @@ public sealed class HygStarRepository : IStarRepository
                 height: Math.Max(1, screenHeight),
                 latitudeDeg: latitudeDeg,
                 longitudeDeg: longitudeDeg,
-                utcUtc: utc);
+                utcUtc: utc,
+                projector: _celestialProjector);
 
             var visible = new List<(string Constellation, Star Star)>(pool.Count);
             foreach (var row in pool)

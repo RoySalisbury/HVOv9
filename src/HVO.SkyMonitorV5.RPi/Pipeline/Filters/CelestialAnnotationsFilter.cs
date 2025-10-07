@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -41,6 +42,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<CelestialAnnotationsFilter> _logger;
+    private readonly ICelestialProjector _celestialProjector;
     private readonly object _planetWarningLock = new();
 
     private readonly HashSet<PlanetBody> _suppressedPlanetWarnings = new();
@@ -54,6 +56,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         IOptionsMonitor<CardinalDirectionsOptions> cardinalMonitor,
         IConstellationCatalog constellationCatalog,
         IServiceScopeFactory scopeFactory,
+        ICelestialProjector celestialProjector,
         ILogger<CelestialAnnotationsFilter> logger)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
@@ -61,6 +64,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         _annotationMonitor = annotationMonitor ?? throw new ArgumentNullException(nameof(annotationMonitor));
         _cardinalMonitor = cardinalMonitor ?? throw new ArgumentNullException(nameof(cardinalMonitor));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _celestialProjector = celestialProjector ?? throw new ArgumentNullException(nameof(celestialProjector));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _catalogStarIndex = BuildCatalogStarIndex(constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog)));
 
@@ -138,12 +142,13 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             bitmap.Height,
             location.LatitudeDegrees,
             location.LongitudeDegrees,
-            stackResult.Frame.Timestamp.UtcDateTime,   // render at the frame time
+            frameTimestampUtc,
             MockFisheyeCameraAdapter.DefaultProjection,
             MockFisheyeCameraAdapter.DefaultHorizonPadding,
-            flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
+            flipHorizontal: flipHorizontal,
             fovDeg: MockFisheyeCameraAdapter.DefaultFovDeg,
-            applyRefraction: true);
+            applyRefraction: true,
+            projector: _celestialProjector);
 
 
         AnnotateTargets(cache.StarTargets, engine, canvas, haloPaint, textFont, labelPaint, bitmap.Width, bitmap.Height, cancellationToken);

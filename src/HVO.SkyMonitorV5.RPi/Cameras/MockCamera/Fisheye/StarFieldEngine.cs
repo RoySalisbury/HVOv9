@@ -1,5 +1,6 @@
 #nullable enable
 using HVO.Astronomy;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
@@ -13,11 +14,11 @@ public enum FisheyeModel
 }
 
 public sealed record StarSizeCurve(
-    double RMinPx = 0.8,      // was 0.9/1.1
-    double RMaxPx = 2.9,      // was 3.4/5.0
-    double MMid = 5.6,      // was 5.2/3.6  (moves “halfway” toward fainter)
-    double Slope = 1.40,     // was 1.30/0.85 (softer transition)
-    double BrightBoostPerMag = 0.18 // was 0.25/0.6
+    double RMinPx = 0.8,
+    double RMaxPx = 2.9,
+    double MMid = 5.6,
+    double Slope = 1.40,
+    double BrightBoostPerMag = 0.18
 );
 
 public sealed record Star(double RightAscensionHours, double DeclinationDegrees, double Magnitude, SKColor? Color = null);
@@ -27,18 +28,13 @@ public readonly record struct PlanetProjection(string Name, float X, float Y, do
 
 public sealed class StarFieldEngine
 {
-    private readonly double _latitudeDeg;
-    private readonly double _longitudeDeg;
-    private readonly DateTime _utc;
-    private readonly bool _flipHorizontal;
     private readonly double _fovDeg;
-    private readonly bool _applyRefraction;
     private readonly StarSizeCurve _sizeCurve;
+    private readonly CelestialProjectionContext _projection;
 
-private const double MicroDotMagThreshold1x1 = 5.2;  // ≥ this → consider microdot
-private const double MicroDotMagThreshold2x2 = 6.0;  // ≥ this → 2×2 pixel
-private const float  MicroDotRadiusCutoff    = 1.05f;
-
+    private const double MicroDotMagThreshold1x1 = 5.2;
+    private const double MicroDotMagThreshold2x2 = 6.0;
+    private const float MicroDotRadiusCutoff = 1.05f;
 
     public StarFieldEngine(
         int width,
@@ -51,7 +47,8 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
         bool flipHorizontal = false,
         double fovDeg = 180.0,
         bool applyRefraction = false,
-        StarSizeCurve? sizeCurve = null)
+        StarSizeCurve? sizeCurve = null,
+        ICelestialProjector? projector = null)
     {
         if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
         if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
@@ -61,13 +58,22 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
         Projection = projection;
         HorizonPaddingPct = horizonPaddingPct;
 
-        _latitudeDeg = latitudeDeg;
-        _longitudeDeg = longitudeDeg;
-        _utc = utcUtc.ToUniversalTime();
-        _flipHorizontal = flipHorizontal;
         _fovDeg = Math.Clamp(fovDeg, 120.0, 200.0);
-        _applyRefraction = applyRefraction;
         _sizeCurve = sizeCurve ?? new StarSizeCurve();
+
+        var settings = new CelestialProjectionSettings(
+            width,
+            height,
+            latitudeDeg,
+            longitudeDeg,
+            projection,
+            horizonPaddingPct,
+            _fovDeg,
+            applyRefraction,
+            flipHorizontal);
+
+        var effectiveProjector = projector ?? new CelestialProjector();
+        _projection = effectiveProjector.Create(settings, utcUtc);
     }
 
     public int Width { get; }
@@ -75,8 +81,6 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
     public FisheyeModel Projection { get; }
     public double HorizonPaddingPct { get; }
 
-
-    // Convenience overload (unchanged signature)
     public SKBitmap Render(
         IReadOnlyList<Star> stars,
         int randomFillerCount,
@@ -95,7 +99,6 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
             out _);
     }
 
-    // Full renderer (micro-dot stars, calmer sizing)
     public SKBitmap Render(
         IReadOnlyList<Star> stars,
         IReadOnlyList<PlanetMark> planets,
@@ -113,31 +116,24 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
 
-        var cx = Width * 0.5f;
-        var cy = Height * 0.5f;
-        var maxRadius = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
+        var cx = _projection.CenterX;
+        var cy = _projection.CenterY;
+        var maxRadius = _projection.MaxRadius;
 
         using var paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
-    var lstHours = AstronomyMath.LocalSiderealTime(_utc, _longitudeDeg);
-    var latitudeDeg = _latitudeDeg;
-
-        // --- Stars ---
-        var scaleRatio = maxRadius / 480f; // baseline ~480px fisheye radius
+        var scaleRatio = maxRadius / 480f;
         for (var i = 0; i < stars.Count; i++)
         {
             var s = stars[i];
-            if (!TryProject(s.RightAscensionHours, s.DeclinationDegrees, lstHours, latitudeDeg,
-                            cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
-                            out var px, out var py))
+            if (!_projection.TryProjectStar(s, out var px, out var py))
+            {
                 continue;
+            }
 
             var magnitude = s.Magnitude;
-
-            // size scaled by actual fisheye radius (baseline 480 px)
             var radius = RadiusFromMagnitude(magnitude, _sizeCurve, scaleRatio);
 
-            // color: keep spectral color; fade faint by alpha
             var color = s.Color ?? SKColors.White;
             if (dimFaintStars)
             {
@@ -145,12 +141,8 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
                 color = new SKColor(color.Red, color.Green, color.Blue, a);
             }
 
-            // microdot policy:
-            // - mag >= 6.0  → draw 2×2 pixel (survives down-scaling)
-            // - 5.2 ≤ mag < 6.0 OR tiny radius → draw 1×1 pixel
-            // - otherwise draw small AA circle
-bool micro2x2 = magnitude >= MicroDotMagThreshold2x2;
-bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadiusCutoff);
+            var micro2x2 = magnitude >= MicroDotMagThreshold2x2;
+            var micro1x1 = magnitude >= MicroDotMagThreshold1x1 || radius < MicroDotRadiusCutoff;
 
             if (micro2x2)
             {
@@ -159,7 +151,6 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
                 var oldAA = paint.IsAntialias;
                 paint.IsAntialias = false;
                 paint.Color = color;
-                // 2×2 crisp block
                 canvas.DrawRect(SKRect.Create(pxI, pyI, 2, 2), paint);
                 paint.IsAntialias = oldAA;
             }
@@ -170,7 +161,6 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
                 var oldAA = paint.IsAntialias;
                 paint.IsAntialias = false;
                 paint.Color = color;
-                // 1×1 crisp pixel
                 canvas.DrawRect(SKRect.Create(pxI, pyI, 1, 1), paint);
                 paint.IsAntialias = oldAA;
             }
@@ -181,12 +171,8 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
             }
 
             projectedStars.Add(new StarProjection(i, px, py, magnitude));
-
-
-
         }
 
-        // --- Optional random filler ---
         if (randomFillerCount > 0)
         {
             var rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
@@ -197,10 +183,10 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
                 var decDegrees = AstronomyMath.RadiansToDegrees(Math.Asin(Math.Clamp(sinDec, -1.0, 1.0)));
                 var mag = rng.NextDouble() < 0.67 ? 5.0 + rng.NextDouble() * 2.0 : 3.0 + rng.NextDouble() * 2.0;
 
-                if (!TryProject(raHours, decDegrees, lstHours, latitudeDeg,
-                                cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
-                                out var px, out var py))
+                if (!_projection.TryProjectEquatorial(raHours, decDegrees, out var px, out var py))
+                {
                     continue;
+                }
 
                 var radius = RadiusFromMagnitude(mag, _sizeCurve, scaleRatio);
                 var a = dimFaintStars ? AlphaFromMagnitude(mag) : (byte)210;
@@ -228,22 +214,20 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
             }
         }
 
-        // --- Planets ---
         if (planets.Count > 0)
         {
             foreach (var p in planets)
             {
-                if (!TryProject(p.Star.RightAscensionHours, p.Star.DeclinationDegrees,
-                                lstHours, latitudeDeg, cx, cy, maxRadius,
-                                Projection, _flipHorizontal, _applyRefraction, _fovDeg,
-                                out var px, out var py))
+                if (!_projection.TryProjectStar(p.Star, out var px, out var py))
+                {
                     continue;
+                }
 
                 var radius = p.Body == PlanetBody.Moon
                     ? planetOptions.MoonRadiusPx
                     : CalculatePlanetRadius(p.Star.Magnitude, planetOptions);
 
-                radius = Math.Max(radius, 2.0f); // ensure visible
+                radius = Math.Max(radius, 2.0f);
 
                 DrawPlanetGlyph(canvas, px, py, radius, p, planetOptions.Shape, paint);
                 projectedPlanets.Add(new PlanetProjection(p.Name, px, py, p.Star.Magnitude, p.Color));
@@ -253,19 +237,8 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
         return bitmap;
     }
 
-
     public bool ProjectStar(Star star, out float x, out float y)
-    {
-        var lstHours = AstronomyMath.LocalSiderealTime(_utc, _longitudeDeg);
-        var latitudeDeg = _latitudeDeg;
-        var cx = Width * 0.5f;
-        var cy = Height * 0.5f;
-        var maxRadius = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
-
-        return TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeDeg,
-                          cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
-                          out x, out y);
-    }
+        => _projection.TryProjectStar(star, out x, out y);
 
     private static float CalculatePlanetRadius(double magnitude, PlanetRenderOptions options)
     {
@@ -299,106 +272,33 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
         }
     }
 
-    private static bool TryProject(
-        double raHours,
-        double decDeg,
-        double lstHours,
-        double latitudeDeg,
-        float cx,
-        float cy,
-        float maxRadius,
-        FisheyeModel projection,
-        bool flipHorizontal,
-        bool applyRefraction,
-        double fovDeg,
-        out float x,
-        out float y)
-    {
-        x = 0f;
-        y = 0f;
-
-        // RA/Dec -> Alt/Az (always succeed; cull later)
-        var (altitudeDeg, azimuthDeg) = AstronomyMath.EquatorialToHorizontal(raHours, decDeg, lstHours, latitudeDeg);
-
-        // Apply refraction before horizon cull (apparent sky)
-        if (applyRefraction)
-        {
-            altitudeDeg += AstronomyMath.BennettRefractionDegrees(altitudeDeg);
-        }
-
-        // Now cull if still below the apparent horizon
-        if (altitudeDeg < 0.0) return false;
-
-        // Alt/Az -> fisheye
-        if (!AltAzToFisheye(altitudeDeg, azimuthDeg, cx, cy, maxRadius, projection, flipHorizontal, fovDeg, out x, out y))
-            return false;
-
-        var dx = x - cx;
-        var dy = y - cy;
-        return dx * dx + dy * dy <= maxRadius * maxRadius + 1.0f;
-    }
-
-    private static bool AltAzToFisheye(double altitudeDeg, double azimuthDeg, float cx, float cy, float maxRadius, FisheyeModel projection, bool flipHorizontal, double fovDeg, out float x, out float y)
-    {
-        x = 0f; y = 0f;
-
-    var theta = AstronomyMath.DegreesToRadians(90.0 - altitudeDeg); // zenith angle
-        if (theta < 0) return false;
-
-        var thetaMax = Math.PI * (fovDeg / 360.0); // FOV/2 in radians
-        theta = Math.Min(theta, thetaMax);
-
-        double rPrime = projection switch
-        {
-            FisheyeModel.Equidistant => theta / thetaMax,
-            FisheyeModel.EquisolidAngle => Math.Sin(theta / 2.0) / Math.Sin(thetaMax / 2.0),
-            FisheyeModel.Orthographic => Math.Sin(theta) / Math.Sin(thetaMax),
-            FisheyeModel.Stereographic => Math.Tan(theta / 2.0) / Math.Tan(thetaMax / 2.0),
-            _ => theta / thetaMax
-        };
-
-        rPrime = Math.Min(rPrime, 1.0);
-        var radius = (float)(rPrime * maxRadius);
-    var azimuthRad = AstronomyMath.DegreesToRadians(azimuthDeg);
-
-        var horizontalOffset = (float)(radius * Math.Sin(azimuthRad));
-        x = flipHorizontal ? cx - horizontalOffset : cx + horizontalOffset;
-        y = cy - (float)(radius * Math.Cos(azimuthRad));
-        return true;
-    }
-
     private static float RadiusFromMagnitude(double mag, StarSizeCurve c, double scaleRatio)
     {
-        // logistic core
         double r = c.RMinPx + (c.RMaxPx - c.RMinPx) / (1.0 + Math.Exp((mag - c.MMid) / c.Slope));
 
-        // give very bright stars a little extra punch
         if (mag < -1.0)
+        {
             r += (-1.0 - mag) * c.BrightBoostPerMag;
+        }
 
-        // scale for different image sizes (baseline: radius≈480 px)
-        r *= Math.Sqrt(Math.Max(0.25, scaleRatio)); // gentle scaling
+        r *= Math.Sqrt(Math.Max(0.25, scaleRatio));
         return (float)r;
     }
 
     private static byte AlphaFromMagnitude(double mag)
     {
-        // bright solid, mid modest, faint subtle but still visible
         double a = mag switch
         {
             <= 1.0 => 255,
-            <= 3.0 => 245 - 17.5 * (mag - 1.0),   // 245 → 210
-            <= 5.0 => 210 - 17.5 * (mag - 3.0),   // 210 → 175
-            _ => 175 - 10.0 * (mag - 5.0)    // 175 → ~165 at 6.5
+            <= 3.0 => 245 - 17.5 * (mag - 1.0),
+            <= 5.0 => 210 - 17.5 * (mag - 3.0),
+            _ => 175 - 10.0 * (mag - 5.0)
         };
-        return (byte)Math.Clamp(a, 165, 255);     // raise floor a touch
+        return (byte)Math.Clamp(a, 165, 255);
     }
 
-    // Treat very faint/small stars as microdots for a crisp look.
     private static bool ShouldMicroDot(double mag, float radius) =>
-        (mag >= 5.2) || (radius < 1.05f);
-
-
+        mag >= 5.2 || radius < 1.05f;
 }
 
 public static class StarColors
