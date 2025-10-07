@@ -87,7 +87,8 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
         var cfg      = _catalogOptions.CurrentValue;
 
         using var scope = _scopeFactory.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
+    var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
+    var planetRepository = scope.ServiceProvider.GetRequiredService<IPlanetRepository>();
 
         // ----- target counts -----
         var targetTotal = Math.Max(300, cfg.TopStarCount);
@@ -270,23 +271,29 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
 
         // ----- planets -----
         IReadOnlyList<PlanetMark> planetMarks = Array.Empty<PlanetMark>();
-        if (ShouldComputePlanets(cfg))
+        var planetCriteria = PlanetVisibilityCriteria.FromOptions(cfg);
+
+        if (planetCriteria.ShouldCompute)
         {
-            var computed = PlanetMarks.Compute(
+            var planetResult = await planetRepository.GetVisiblePlanetsAsync(
                 latitudeDeg: location.LatitudeDegrees,
                 longitudeDeg: location.LongitudeDegrees,
                 utc: nowUtc,
-                includeUranusNeptune: cfg.IncludeOuterPlanets,
-                includeSun: cfg.IncludeSun);
+                criteria: planetCriteria,
+                cancellationToken).ConfigureAwait(false);
 
-            var filtered = new List<PlanetMark>(computed.Count);
-            foreach (var m in computed)
+            if (planetResult.IsFailure)
             {
-                if (!ShouldIncludePlanet(m, cfg)) continue;
-                filtered.Add(m);
-                catalogStars.Add(m.Star); // also as points
+                var error = planetResult.Error ?? new InvalidOperationException("Failed to retrieve visible planets.");
+                _logger.LogError(error, "Planet repository failed to provide visible planets.");
+                return Result<CameraFrame>.Failure(error);
             }
-            if (filtered.Count > 0) planetMarks = filtered;
+
+            planetMarks = planetResult.Value;
+            foreach (var mark in planetMarks)
+            {
+                catalogStars.Add(mark.Star);
+            }
         }
 
         // ----- render -----
@@ -378,15 +385,4 @@ private void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
         span[i + 3] = a;
     }
 }
-
-    private static bool ShouldComputePlanets(StarCatalogOptions o)
-        => o.IncludePlanets || o.IncludeMoon || o.IncludeOuterPlanets || o.IncludeSun;
-
-    private static bool ShouldIncludePlanet(PlanetMark p, StarCatalogOptions o) => p.Body switch
-    {
-        PlanetBody.Moon => o.IncludeMoon,
-        PlanetBody.Sun => o.IncludeSun,
-        PlanetBody.Uranus or PlanetBody.Neptune => o.IncludeOuterPlanets,
-        _ => o.IncludePlanets
-    };
 }

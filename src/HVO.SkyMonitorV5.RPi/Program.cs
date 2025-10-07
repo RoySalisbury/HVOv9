@@ -56,6 +56,7 @@ public static class Program
         services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
 
         services.AddScoped<HygStarRepository>();
+        services.AddScoped<PlanetRepository>();
 
         services.AddScoped<IStarRepository>(sp =>
         {
@@ -67,6 +68,19 @@ public static class Program
                 cache,
                 absoluteTtl: TimeSpan.FromMinutes(30),
                 slidingTtl: TimeSpan.FromMinutes(10),
+                logger: logger);
+        });
+
+        services.AddScoped<IPlanetRepository>(sp =>
+        {
+            var inner = sp.GetRequiredService<PlanetRepository>();
+            var cache = sp.GetRequiredService<IMemoryCache>();
+            var logger = sp.GetRequiredService<ILogger<CachedPlanetRepository>>();
+            return new CachedPlanetRepository(
+                inner,
+                cache,
+                absoluteTtl: TimeSpan.FromMinutes(15),
+                slidingTtl: TimeSpan.FromMinutes(5),
                 logger: logger);
         });
 

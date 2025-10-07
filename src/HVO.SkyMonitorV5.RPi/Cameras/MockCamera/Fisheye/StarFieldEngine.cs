@@ -1,4 +1,5 @@
 #nullable enable
+using HVO.Astronomy;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
@@ -118,15 +119,15 @@ private const float  MicroDotRadiusCutoff    = 1.05f;
 
         using var paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
-        var lstHours = LocalSiderealTime(_utc, _longitudeDeg);
-        var latitudeRad = DegreesToRadians(_latitudeDeg);
+    var lstHours = AstronomyMath.LocalSiderealTime(_utc, _longitudeDeg);
+    var latitudeDeg = _latitudeDeg;
 
         // --- Stars ---
         var scaleRatio = maxRadius / 480f; // baseline ~480px fisheye radius
         for (var i = 0; i < stars.Count; i++)
         {
             var s = stars[i];
-            if (!TryProject(s.RightAscensionHours, s.DeclinationDegrees, lstHours, latitudeRad,
+            if (!TryProject(s.RightAscensionHours, s.DeclinationDegrees, lstHours, latitudeDeg,
                             cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
                             out var px, out var py))
                 continue;
@@ -193,10 +194,10 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
             {
                 var raHours = rng.NextDouble() * 24.0;
                 var sinDec = rng.NextDouble() * 2.0 - 1.0;
-                var decDegrees = RadiansToDegrees(Math.Asin(Math.Clamp(sinDec, -1.0, 1.0)));
+                var decDegrees = AstronomyMath.RadiansToDegrees(Math.Asin(Math.Clamp(sinDec, -1.0, 1.0)));
                 var mag = rng.NextDouble() < 0.67 ? 5.0 + rng.NextDouble() * 2.0 : 3.0 + rng.NextDouble() * 2.0;
 
-                if (!TryProject(raHours, decDegrees, lstHours, latitudeRad,
+                if (!TryProject(raHours, decDegrees, lstHours, latitudeDeg,
                                 cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
                                 out var px, out var py))
                     continue;
@@ -233,7 +234,7 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
             foreach (var p in planets)
             {
                 if (!TryProject(p.Star.RightAscensionHours, p.Star.DeclinationDegrees,
-                                lstHours, latitudeRad, cx, cy, maxRadius,
+                                lstHours, latitudeDeg, cx, cy, maxRadius,
                                 Projection, _flipHorizontal, _applyRefraction, _fovDeg,
                                 out var px, out var py))
                     continue;
@@ -255,13 +256,13 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
 
     public bool ProjectStar(Star star, out float x, out float y)
     {
-        var lstHours = LocalSiderealTime(_utc, _longitudeDeg);
-        var latitudeRad = DegreesToRadians(_latitudeDeg);
+        var lstHours = AstronomyMath.LocalSiderealTime(_utc, _longitudeDeg);
+        var latitudeDeg = _latitudeDeg;
         var cx = Width * 0.5f;
         var cy = Height * 0.5f;
         var maxRadius = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
 
-        return TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeRad,
+        return TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeDeg,
                           cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
                           out x, out y);
     }
@@ -302,7 +303,7 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
         double raHours,
         double decDeg,
         double lstHours,
-        double latitudeRad,
+        double latitudeDeg,
         float cx,
         float cy,
         float maxRadius,
@@ -317,12 +318,12 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
         y = 0f;
 
         // RA/Dec -> Alt/Az (always succeed; cull later)
-        RaDecToAltAz(raHours, decDeg, lstHours, latitudeRad, out var altitudeDeg, out var azimuthDeg);
+        var (altitudeDeg, azimuthDeg) = AstronomyMath.EquatorialToHorizontal(raHours, decDeg, lstHours, latitudeDeg);
 
         // Apply refraction before horizon cull (apparent sky)
         if (applyRefraction)
         {
-            altitudeDeg += BennettRefractionDeg(altitudeDeg);
+            altitudeDeg += AstronomyMath.BennettRefractionDegrees(altitudeDeg);
         }
 
         // Now cull if still below the apparent horizon
@@ -337,28 +338,11 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
         return dx * dx + dy * dy <= maxRadius * maxRadius + 1.0f;
     }
 
-    private static void RaDecToAltAz(double raHours, double decDeg, double lstHours, double latitudeRad, out double altitudeDeg, out double azimuthDeg)
-    {
-        var hourAngle = DegreesToRadians((lstHours - raHours) * 15.0);
-        var declinationRad = DegreesToRadians(decDeg);
-        var sinAlt = Math.Sin(declinationRad) * Math.Sin(latitudeRad) + Math.Cos(declinationRad) * Math.Cos(latitudeRad) * Math.Cos(hourAngle);
-        var altitude = Math.Asin(Math.Clamp(sinAlt, -1.0, 1.0));
-
-        var cosAz = (Math.Sin(declinationRad) - Math.Sin(altitude) * Math.Sin(latitudeRad)) / (Math.Cos(altitude) * Math.Cos(latitudeRad));
-        cosAz = Math.Clamp(cosAz, -1.0, 1.0);
-
-        var azimuth = Math.Acos(cosAz);
-        if (Math.Sin(hourAngle) > 0) azimuth = Math.PI * 2.0 - azimuth;
-
-        altitudeDeg = RadiansToDegrees(altitude);
-        azimuthDeg = RadiansToDegrees(azimuth);
-    }
-
     private static bool AltAzToFisheye(double altitudeDeg, double azimuthDeg, float cx, float cy, float maxRadius, FisheyeModel projection, bool flipHorizontal, double fovDeg, out float x, out float y)
     {
         x = 0f; y = 0f;
 
-        var theta = DegreesToRadians(90.0 - altitudeDeg); // zenith angle
+    var theta = AstronomyMath.DegreesToRadians(90.0 - altitudeDeg); // zenith angle
         if (theta < 0) return false;
 
         var thetaMax = Math.PI * (fovDeg / 360.0); // FOV/2 in radians
@@ -375,37 +359,13 @@ bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadi
 
         rPrime = Math.Min(rPrime, 1.0);
         var radius = (float)(rPrime * maxRadius);
-        var azimuthRad = DegreesToRadians(azimuthDeg);
+    var azimuthRad = AstronomyMath.DegreesToRadians(azimuthDeg);
 
         var horizontalOffset = (float)(radius * Math.Sin(azimuthRad));
         x = flipHorizontal ? cx - horizontalOffset : cx + horizontalOffset;
         y = cy - (float)(radius * Math.Cos(azimuthRad));
         return true;
     }
-
-    // Bennett 1982 refraction (deg). Good near horizon.
-    private static double BennettRefractionDeg(double altDeg)
-    {
-        var a = Math.Max(altDeg, -0.9);
-        var rArcMin = 1.02 / Math.Tan((a + 10.3 / (a + 5.11)) * Math.PI / 180.0);
-        return rArcMin / 60.0;
-    }
-
-    public static double LocalSiderealTime(DateTime utc, double longitudeDeg)
-    {
-        var jd = OADateToJulian(utc);
-        var t = (jd - 2451545.0) / 36525.0;
-        var gmst = 6.697374558 + 2400.051336 * t + 0.000025862 * t * t;
-        var fractionalDay = (jd + 0.5) % 1.0;
-        gmst = (gmst + fractionalDay * 24.0 * 1.00273790935) % 24.0;
-        var lst = (gmst + longitudeDeg / 15.0) % 24.0;
-        if (lst < 0) lst += 24.0;
-        return lst;
-    }
-
-    private static double OADateToJulian(DateTime utc) => utc.ToOADate() + 2415018.5;
-    private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
-    private static double RadiansToDegrees(double radians) => radians * 180.0 / Math.PI;
 
     private static float RadiusFromMagnitude(double mag, StarSizeCurve c, double scaleRatio)
     {

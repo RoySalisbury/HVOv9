@@ -10,6 +10,7 @@ using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Simulation;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
@@ -38,6 +39,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private readonly IOptionsMonitor<StarCatalogOptions> _catalogMonitor;
     private readonly IOptionsMonitor<CelestialAnnotationsOptions> _annotationMonitor;
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<CelestialAnnotationsFilter> _logger;
     private readonly object _planetWarningLock = new();
 
@@ -51,12 +53,14 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         IOptionsMonitor<CelestialAnnotationsOptions> annotationMonitor,
         IOptionsMonitor<CardinalDirectionsOptions> cardinalMonitor,
         IConstellationCatalog constellationCatalog,
+        IServiceScopeFactory scopeFactory,
         ILogger<CelestialAnnotationsFilter> logger)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogMonitor = catalogMonitor ?? throw new ArgumentNullException(nameof(catalogMonitor));
         _annotationMonitor = annotationMonitor ?? throw new ArgumentNullException(nameof(annotationMonitor));
         _cardinalMonitor = cardinalMonitor ?? throw new ArgumentNullException(nameof(cardinalMonitor));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _catalogStarIndex = BuildCatalogStarIndex(constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog)));
 
@@ -95,7 +99,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             || ShouldAnnotatePlanets(catalogOptions, cache);
     }
 
-    public ValueTask ApplyAsync(
+    public async ValueTask ApplyAsync(
         SKBitmap bitmap,
         FrameStackResult stackResult,
         CameraConfiguration configuration,
@@ -109,7 +113,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         if (cache.StarTargets.Count == 0 && cache.DeepSkyTargets.Count == 0 && !annotatePlanets)
         {
-            return ValueTask.CompletedTask;
+            return;
         }
 
         var location = _locationMonitor.CurrentValue;
@@ -147,7 +151,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         if (annotatePlanets)
         {
-            var planetMarks = ComputePlanetMarks(location, catalogOptions, frameTimestampUtc, cache.PlanetBodyLookup);
+            var planetMarks = await ComputePlanetMarks(location, catalogOptions, frameTimestampUtc, cache.PlanetBodyLookup, cancellationToken)
+                .ConfigureAwait(false);
             if (planetMarks.Count > 0)
             {
                 foreach (var planet in planetMarks)
@@ -176,8 +181,6 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                 }
             }
         }
-
-        return ValueTask.CompletedTask;
     }
 
     private AnnotationCache BuildCache(CelestialAnnotationsOptions options)
@@ -330,52 +333,69 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         }
     }
 
-    private IReadOnlyList<PlanetMark> ComputePlanetMarks(
+    private async Task<IReadOnlyList<PlanetMark>> ComputePlanetMarks(
         ObservatoryLocationOptions location,
         StarCatalogOptions options,
         DateTime timestampUtc,
-        HashSet<PlanetBody> requestedBodies)
+        HashSet<PlanetBody> requestedBodies,
+        CancellationToken cancellationToken)
     {
         if (requestedBodies.Count == 0)
         {
             return Array.Empty<PlanetMark>();
         }
 
-        var marks = PlanetMarks.Compute(
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var criteria = PlanetVisibilityCriteria.FromOptions(options, requestedBodies);
+
+        foreach (var body in requestedBodies)
+        {
+            if (!criteria.IsBodyEnabled(body))
+            {
+                LogPlanetSuppressed(body);
+            }
+        }
+
+        if (!criteria.ShouldCompute)
+        {
+            return Array.Empty<PlanetMark>();
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPlanetRepository>();
+
+        var result = await repository.GetVisiblePlanetsAsync(
             latitudeDeg: location.LatitudeDegrees,
             longitudeDeg: location.LongitudeDegrees,
             utc: timestampUtc,
-            includeUranusNeptune: options.IncludeOuterPlanets,
-            includeSun: options.IncludeSun);
+            criteria: criteria,
+            cancellationToken).ConfigureAwait(false);
 
+        if (result.IsFailure)
+        {
+            if (result.Error is OperationCanceledException oce)
+            {
+                throw oce;
+            }
+
+            var error = result.Error ?? new InvalidOperationException("Failed to retrieve planet annotations.");
+            _logger.LogError(error, "Celestial annotations: planet repository failed to provide marks.");
+            return Array.Empty<PlanetMark>();
+        }
+
+        var marks = result.Value;
         if (marks.Count == 0)
         {
             return Array.Empty<PlanetMark>();
         }
 
         var filtered = new List<PlanetMark>(marks.Count);
-
         foreach (var mark in marks)
         {
-            if (!requestedBodies.Contains(mark.Body))
+            if (requestedBodies.Contains(mark.Body))
             {
-                continue;
-            }
-
-            if (!ShouldIncludePlanet(mark.Body, options))
-            {
-                LogPlanetSuppressed(mark.Body);
-                continue;
-            }
-
-            filtered.Add(mark);
-        }
-
-        foreach (var body in requestedBodies)
-        {
-            if (!ShouldIncludePlanet(body, options))
-            {
-                LogPlanetSuppressed(body);
+                filtered.Add(mark);
             }
         }
 
@@ -400,14 +420,6 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
     private static bool ShouldComputePlanets(StarCatalogOptions options)
         => options.IncludePlanets || options.IncludeMoon || options.IncludeOuterPlanets || options.IncludeSun;
-
-    private static bool ShouldIncludePlanet(PlanetBody body, StarCatalogOptions options) => body switch
-    {
-        PlanetBody.Moon => options.IncludeMoon,
-        PlanetBody.Sun => options.IncludeSun,
-        PlanetBody.Uranus or PlanetBody.Neptune => options.IncludeOuterPlanets,
-        _ => options.IncludePlanets
-    };
 
     private static void DrawMarkerWithLabel(
         SKCanvas canvas,
