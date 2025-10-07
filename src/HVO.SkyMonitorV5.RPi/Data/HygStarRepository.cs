@@ -18,17 +18,24 @@ public sealed class HygStarRepository : IStarRepository
     private readonly IConstellationCatalog _constellationCatalog;
     private readonly ILogger<HygStarRepository> _logger;
     private readonly ICelestialProjector _celestialProjector;
+    private readonly ILogger<StarFieldEngine> _starFieldLogger;
 
     public HygStarRepository(
         HygContext db,
         IConstellationCatalog constellationCatalog,
+        ILoggerFactory loggerFactory,
         ICelestialProjector celestialProjector,
         ILogger<HygStarRepository>? logger = null)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _constellationCatalog = constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog));
+        if (loggerFactory is null)
+        {
+            throw new ArgumentNullException(nameof(loggerFactory));
+        }
         _celestialProjector = celestialProjector ?? throw new ArgumentNullException(nameof(celestialProjector));
         _logger = logger ?? NullLogger<HygStarRepository>.Instance;
+        _starFieldLogger = loggerFactory.CreateLogger<StarFieldEngine>();
     }
 
     // --- Helpers ---
@@ -81,7 +88,8 @@ public sealed class HygStarRepository : IStarRepository
                 latitudeDeg: latitudeDeg,
                 longitudeDeg: longitudeDeg,
                 utcUtc: utc,
-                projector: _celestialProjector);
+                projector: _celestialProjector,
+                logger: _starFieldLogger);
 
             var visible = new List<Star>(pool.Count);
             foreach (var row in pool)
@@ -329,7 +337,8 @@ public sealed class HygStarRepository : IStarRepository
                 latitudeDeg: latitudeDeg,
                 longitudeDeg: longitudeDeg,
                 utcUtc: utc,
-                projector: _celestialProjector);
+                projector: _celestialProjector,
+                logger: _starFieldLogger);
 
             var visible = new List<(string Constellation, Star Star)>(pool.Count);
             foreach (var row in pool)

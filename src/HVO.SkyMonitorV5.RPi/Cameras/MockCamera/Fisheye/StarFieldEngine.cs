@@ -1,6 +1,8 @@
 #nullable enable
 using HVO.Astronomy;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
@@ -31,6 +33,7 @@ public sealed class StarFieldEngine
     private readonly double _fovDeg;
     private readonly StarSizeCurve _sizeCurve;
     private readonly CelestialProjectionContext _projection;
+    private readonly ILogger<StarFieldEngine> _logger;
 
     private const double MicroDotMagThreshold1x1 = 5.2;
     private const double MicroDotMagThreshold2x2 = 6.0;
@@ -48,7 +51,8 @@ public sealed class StarFieldEngine
         double fovDeg = 180.0,
         bool applyRefraction = false,
         StarSizeCurve? sizeCurve = null,
-        ICelestialProjector? projector = null)
+        ICelestialProjector? projector = null,
+        ILogger<StarFieldEngine>? logger = null)
     {
         if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
         if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
@@ -60,6 +64,7 @@ public sealed class StarFieldEngine
 
         _fovDeg = Math.Clamp(fovDeg, 120.0, 200.0);
         _sizeCurve = sizeCurve ?? new StarSizeCurve();
+        _logger = logger ?? NullLogger<StarFieldEngine>.Instance;
 
         var settings = new CelestialProjectionSettings(
             width,
@@ -74,6 +79,16 @@ public sealed class StarFieldEngine
 
         var effectiveProjector = projector ?? new CelestialProjector();
         _projection = effectiveProjector.Create(settings, utcUtc);
+
+        _logger.LogDebug(
+            "StarFieldEngine configured: Width={Width}, Height={Height}, Projection={Projection}, FovDeg={Fov}, HorizonPadding={HorizonPadding}, ApplyRefraction={ApplyRefraction}, FlipHorizontal={FlipHorizontal}.",
+            Width,
+            Height,
+            Projection,
+            _fovDeg,
+            HorizonPaddingPct,
+            applyRefraction,
+            flipHorizontal);
     }
 
     public int Width { get; }
@@ -234,11 +249,30 @@ public sealed class StarFieldEngine
             }
         }
 
+        _logger.LogDebug(
+            "Rendered star field with {InputStars} input stars, {ProjectedStars} projected stars, {PlanetCount} planets, RandomFiller={RandomFillerCount}.",
+            stars.Count,
+            projectedStars.Count,
+            planets.Count,
+            randomFillerCount);
+
         return bitmap;
     }
 
     public bool ProjectStar(Star star, out float x, out float y)
-        => _projection.TryProjectStar(star, out x, out y);
+    {
+        if (_projection.TryProjectStar(star, out x, out y))
+        {
+            return true;
+        }
+
+        _logger.LogTrace(
+            "Star projection failed (beneath horizon): RA={RightAscensionHours}, Dec={DeclinationDegrees}",
+            star.RightAscensionHours,
+            star.DeclinationDegrees);
+
+        return false;
+    }
 
     private static float CalculatePlanetRadius(double magnitude, PlanetRenderOptions options)
     {

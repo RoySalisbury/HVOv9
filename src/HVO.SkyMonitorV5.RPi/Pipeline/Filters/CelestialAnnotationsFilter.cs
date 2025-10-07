@@ -42,6 +42,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<CelestialAnnotationsFilter> _logger;
+    private readonly ILogger<StarFieldEngine> _starFieldLogger;
     private readonly ICelestialProjector _celestialProjector;
     private readonly object _planetWarningLock = new();
 
@@ -56,6 +57,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         IOptionsMonitor<CardinalDirectionsOptions> cardinalMonitor,
         IConstellationCatalog constellationCatalog,
         IServiceScopeFactory scopeFactory,
+        ILoggerFactory loggerFactory,
         ICelestialProjector celestialProjector,
         ILogger<CelestialAnnotationsFilter> logger)
     {
@@ -64,8 +66,13 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         _annotationMonitor = annotationMonitor ?? throw new ArgumentNullException(nameof(annotationMonitor));
         _cardinalMonitor = cardinalMonitor ?? throw new ArgumentNullException(nameof(cardinalMonitor));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        if (loggerFactory is null)
+        {
+            throw new ArgumentNullException(nameof(loggerFactory));
+        }
         _celestialProjector = celestialProjector ?? throw new ArgumentNullException(nameof(celestialProjector));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _starFieldLogger = loggerFactory.CreateLogger<StarFieldEngine>();
         _catalogStarIndex = BuildCatalogStarIndex(constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog)));
 
         _cache = BuildCache(annotationMonitor.CurrentValue);
@@ -148,7 +155,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             flipHorizontal: flipHorizontal,
             fovDeg: MockFisheyeCameraAdapter.DefaultFovDeg,
             applyRefraction: true,
-            projector: _celestialProjector);
+            projector: _celestialProjector,
+            logger: _starFieldLogger);
 
 
         AnnotateTargets(cache.StarTargets, engine, canvas, haloPaint, textFont, labelPaint, bitmap.Width, bitmap.Height, cancellationToken);

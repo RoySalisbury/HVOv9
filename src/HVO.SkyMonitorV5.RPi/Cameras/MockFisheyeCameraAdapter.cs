@@ -32,6 +32,7 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MockFisheyeCameraAdapter> _logger;
+    private readonly ILogger<StarFieldEngine> _starFieldLogger;
     private readonly ICelestialProjector _celestialProjector;
     private readonly Random _random = new();
 
@@ -42,6 +43,7 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
         IOptionsMonitor<StarCatalogOptions> catalogOptions,
         IOptionsMonitor<CardinalDirectionsOptions> cardinalOptions,
         IServiceScopeFactory scopeFactory,
+        ILoggerFactory loggerFactory,
         ICelestialProjector celestialProjector,
         ILogger<MockFisheyeCameraAdapter>? logger = null)
     {
@@ -49,8 +51,13 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
         _catalogOptions = catalogOptions ?? throw new ArgumentNullException(nameof(catalogOptions));
         _cardinalMonitor = cardinalOptions ?? throw new ArgumentNullException(nameof(cardinalOptions));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        if (loggerFactory is null)
+        {
+            throw new ArgumentNullException(nameof(loggerFactory));
+        }
         _celestialProjector = celestialProjector ?? throw new ArgumentNullException(nameof(celestialProjector));
         _logger = logger ?? NullLogger<MockFisheyeCameraAdapter>.Instance;
+        _starFieldLogger = loggerFactory.CreateLogger<StarFieldEngine>();
     }
 
     public CameraDescriptor Descriptor { get; } = new(
@@ -206,7 +213,8 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
             flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
             fovDeg: 184.0, applyRefraction: true,
             sizeCurve: selectCurve,
-            projector: _celestialProjector);
+            projector: _celestialProjector,
+            logger: _starFieldLogger);
 
         // ring quotas (inner→outer), bias toward horizon
         var ringFractions = new[] { 0.06, 0.10, 0.18, 0.28, 0.38 };
@@ -314,7 +322,8 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
             flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
             fovDeg: 184.0, applyRefraction: true,
             sizeCurve: renderCurve,
-            projector: _celestialProjector);
+            projector: _celestialProjector,
+            logger: _starFieldLogger);
 
         using var starfield = engine.Render(
             stars: catalogStars,
