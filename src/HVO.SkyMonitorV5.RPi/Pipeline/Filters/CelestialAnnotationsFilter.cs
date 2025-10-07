@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Cameras;
-using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.Models;

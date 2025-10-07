@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 
 namespace HVO.SkyMonitorV5.RPi.Data;
 

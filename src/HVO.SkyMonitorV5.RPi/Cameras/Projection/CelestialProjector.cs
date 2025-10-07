@@ -1,18 +1,18 @@
 #nullable enable
-
 using System;
 
-namespace HVO.SkyMonitorV5.RPi.Cameras.Projection;
-
-public sealed class CelestialProjector : ICelestialProjector
+namespace HVO.SkyMonitorV5.RPi.Cameras.Projection
 {
-    public CelestialProjectionContext Create(CelestialProjectionSettings settings, DateTime utcUtc)
+    /// <summary>
+    /// DI-friendly projector service. Implements <see cref="ICelestialProjector"/> by
+    /// constructing a <see cref="CelestialProjectionContext"/> from settings + UTC.
+    /// </summary>
+    public sealed class CelestialProjector : ICelestialProjector
     {
-        if (settings is null)
+        public CelestialProjectionContext Create(CelestialProjectionSettings settings, DateTime utcUtc)
         {
-            throw new ArgumentNullException(nameof(settings));
+            if (settings is null) throw new ArgumentNullException(nameof(settings));
+            return new CelestialProjectionContext(settings, utcUtc);
         }
-
-        return new CelestialProjectionContext(settings, utcUtc);
     }
 }

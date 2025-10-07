@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HVO;
-using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

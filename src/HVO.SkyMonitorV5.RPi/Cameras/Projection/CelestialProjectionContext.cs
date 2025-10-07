@@ -2,7 +2,8 @@
 
 using System;
 using HVO.Astronomy;
-using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
+using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
@@ -11,7 +12,7 @@ public sealed class CelestialProjectionContext
     private readonly double _lstHours;
     private readonly double _latitudeDeg;
     private readonly double _longitudeDeg;
-    private readonly FisheyeModel _projection;
+    private readonly ProjectionModel _projectionModel;
     private readonly bool _applyRefraction;
     private readonly bool _flipHorizontal;
     private readonly double _fovDeg;
@@ -23,7 +24,7 @@ public sealed class CelestialProjectionContext
 
         _latitudeDeg = settings.LatitudeDegrees;
         _longitudeDeg = settings.LongitudeDegrees;
-        _projection = settings.Projection;
+    _projectionModel = settings.Projection;
         _applyRefraction = settings.ApplyRefraction;
         _flipHorizontal = settings.FlipHorizontal;
         _fovDeg = settings.FieldOfViewDegrees;
@@ -87,12 +88,12 @@ public sealed class CelestialProjectionContext
         var thetaMax = Math.PI * (_fovDeg / 360.0);
         theta = Math.Min(theta, thetaMax);
 
-        double rPrime = _projection switch
+        double rPrime = _projectionModel switch
         {
-            FisheyeModel.Equidistant => theta / thetaMax,
-            FisheyeModel.EquisolidAngle => Math.Sin(theta / 2.0) / Math.Sin(thetaMax / 2.0),
-            FisheyeModel.Orthographic => Math.Sin(theta) / Math.Sin(thetaMax),
-            FisheyeModel.Stereographic => Math.Tan(theta / 2.0) / Math.Tan(thetaMax / 2.0),
+            ProjectionModel.Equidistant => theta / thetaMax,
+            ProjectionModel.EquisolidAngle => Math.Sin(theta / 2.0) / Math.Sin(thetaMax / 2.0),
+            ProjectionModel.Orthographic => Math.Sin(theta) / Math.Sin(thetaMax),
+            ProjectionModel.Stereographic => Math.Tan(theta / 2.0) / Math.Tan(thetaMax / 2.0),
             _ => theta / thetaMax
         };
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HVO;
-using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

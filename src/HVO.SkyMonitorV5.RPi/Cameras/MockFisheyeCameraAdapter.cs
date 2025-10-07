@@ -4,8 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HVO;
-using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Cameras.Optics;
+using HVO.SkyMonitorV5.RPi.Cameras.Lenses;
 using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -23,7 +25,7 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     private const int FrameHeight = 960;
     private const int RandomFillerStars = 0;
 
-    internal const FisheyeModel DefaultProjection = FisheyeModel.Equidistant;
+    internal const ProjectionModel DefaultProjection = ProjectionModel.Equidistant;
     internal const double DefaultHorizonPadding = 0.98;
     internal const double DefaultFovDeg = 185.0; // match Stellarium view
 
@@ -204,14 +206,26 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
         var selectCurve = new StarSizeCurve(
             RMinPx: 0.8, RMaxPx: 2.9, MMid: 5.6, Slope: 1.40, BrightBoostPerMag: 0.18);
 
+        
+        // Build projection from Sensor + Lens (unified optics layer)
+        var sensor = new HVO.SkyMonitorV5.RPi.Cameras.Optics.SensorSpec(FrameWidth, FrameHeight, PixelSizeMicrons: 2.9);
+        var lens   = new HVO.SkyMonitorV5.RPi.Cameras.Lenses.FisheyeLens(HVO.SkyMonitorV5.RPi.Cameras.Optics.ProjectionModel.Equidistant, FovDeg: 184.0);
+        var projSettings = ProjectionConfigurator.Build(
+            sensor: sensor,
+            lens: lens,
+            latitudeDeg: location.LatitudeDegrees,
+            longitudeDeg: location.LongitudeDegrees,
+            fovDegOverride: 184.0,
+            flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest);
+
         var engineForSelect = new StarFieldEngine(
             width: FrameWidth, height: FrameHeight,
             latitudeDeg: location.LatitudeDegrees, longitudeDeg: location.LongitudeDegrees,
             utcUtc: nowUtc,
-            projection: DefaultProjection,
-            horizonPaddingPct: DefaultHorizonPadding,
-            flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
-            fovDeg: 184.0, applyRefraction: true,
+            projectionModel: projSettings.Projection,
+            horizonPaddingPct: projSettings.HorizonPaddingPercent,
+            flipHorizontal: projSettings.FlipHorizontal,
+            fovDeg: projSettings.FieldOfViewDegrees, applyRefraction: true,
             sizeCurve: selectCurve,
             projector: _celestialProjector,
             logger: _starFieldLogger);
@@ -317,10 +331,10 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
             width: FrameWidth, height: FrameHeight,
             latitudeDeg: location.LatitudeDegrees, longitudeDeg: location.LongitudeDegrees,
             utcUtc: nowUtc,
-            projection: DefaultProjection,
-            horizonPaddingPct: DefaultHorizonPadding,
-            flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
-            fovDeg: 184.0, applyRefraction: true,
+            projectionModel: projSettings.Projection,
+            horizonPaddingPct: projSettings.HorizonPaddingPercent,
+            flipHorizontal: projSettings.FlipHorizontal,
+            fovDeg: projSettings.FieldOfViewDegrees, applyRefraction: true,
             sizeCurve: renderCurve,
             projector: _celestialProjector,
             logger: _starFieldLogger);
