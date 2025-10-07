@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.HostedServices;
 using HVO.SkyMonitorV5.RPi.Middleware;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -145,10 +146,25 @@ services.AddMemoryCache(options =>
             .Bind(configuration.GetSection(StarCatalogOptions.SectionName))
             .ValidateOnStart();
 
+        services.AddOptions<CardinalDirectionsOptions>()
+            .Bind(configuration.GetSection(CardinalDirectionsOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<CircularMaskOptions>()
+            .Bind(configuration.GetSection(CircularMaskOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
     services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
     services.AddSingleton<IExposureController, AdaptiveExposureController>();
     services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+
+    services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
+    services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
+    services.AddSingleton<IFrameFilter, OverlayTextFilter>();
+    services.AddSingleton<IFrameFilter, CircularMaskFilter>();
 
     services.AddSingleton<IFrameFilterPipeline, FrameFilterPipeline>();
 

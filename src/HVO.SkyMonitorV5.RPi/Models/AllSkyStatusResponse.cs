@@ -8,4 +8,5 @@ public sealed record AllSkyStatusResponse(
     DateTimeOffset? LastFrameTimestamp,
     ExposureSettings? LastExposure,
     CameraDescriptor Camera,
-    CameraConfiguration Configuration);
+    CameraConfiguration Configuration,
+    ProcessedFrameSummary? ProcessedFrame);

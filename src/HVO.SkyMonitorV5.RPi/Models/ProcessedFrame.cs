@@ -7,4 +7,6 @@ public sealed record ProcessedFrame(
     DateTimeOffset Timestamp,
     ExposureSettings Exposure,
     byte[] ImageBytes,
-    string ContentType);
+    string ContentType,
+    int FramesCombined,
+    int IntegrationMilliseconds);

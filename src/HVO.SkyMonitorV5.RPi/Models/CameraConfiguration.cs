@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+
 namespace HVO.SkyMonitorV5.RPi.Models;
 
 /// <summary>
@@ -16,15 +18,21 @@ public sealed record CameraConfiguration(
     int StackingBufferIntegrationSeconds,
     IReadOnlyList<string> FrameFilters)
 {
-    public static CameraConfiguration FromOptions(Options.CameraPipelineOptions options) =>
-        new(
+    public static CameraConfiguration FromOptions(CameraPipelineOptions options)
+    {
+        var filters = BuildFilterList(options);
+        var overlaysEnabled = options.EnableImageOverlays || filters.Any(IsOverlayFilterName);
+        var maskEnabled = options.EnableMaskOverlay || filters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase));
+
+        return new CameraConfiguration(
             options.EnableStacking,
             options.StackingFrameCount,
-            options.EnableImageOverlays,
-            options.EnableMaskOverlay,
+            overlaysEnabled,
+            maskEnabled,
             options.StackingBufferMinimumFrames,
             options.StackingBufferIntegrationSeconds,
-            BuildFilterList(options));
+            filters);
+    }
 
     public CameraConfiguration WithUpdates(UpdateCameraConfigurationRequest request)
     {
@@ -35,9 +43,7 @@ public sealed record CameraConfiguration(
         {
             var requestFilters = request.FrameFilters!;
             updatedFilters = requestFilters.Count > 0
-                ? requestFilters.Where(static filter => !string.IsNullOrWhiteSpace(filter))
-                    .Select(static filter => filter.Trim())
-                    .ToArray()
+                ? NormalizeFilterList(requestFilters)
                 : Array.Empty<string>();
         }
         else
@@ -76,7 +82,7 @@ public sealed record CameraConfiguration(
                 }
             }
 
-            updatedFilters = mutableFilters.Count > 0 ? mutableFilters.ToArray() : Array.Empty<string>();
+            updatedFilters = mutableFilters.Count > 0 ? NormalizeFilterList(mutableFilters) : Array.Empty<string>();
         }
 
         return this with
@@ -93,6 +99,12 @@ public sealed record CameraConfiguration(
 
     private static IReadOnlyList<string> BuildFilterList(Options.CameraPipelineOptions options)
     {
+        var configuredFilters = BuildFromFilterOptions(options.Filters);
+        if (configuredFilters.Count > 0)
+        {
+            return configuredFilters;
+        }
+
         if (options.FrameFilters is { Length: > 0 } configured)
         {
             return configured.ToArray();
@@ -112,10 +124,33 @@ public sealed record CameraConfiguration(
             filters.Add(FrameFilterNames.CircularMask);
         }
 
-        return filters.Count > 0 ? filters.ToArray() : Array.Empty<string>();
+        return filters.Count > 0 ? NormalizeFilterList(filters) : Array.Empty<string>();
     }
 
     private static bool IsOverlayFilterName(string filterName) => string.Equals(filterName, FrameFilterNames.CardinalDirections, StringComparison.OrdinalIgnoreCase)
         || string.Equals(filterName, FrameFilterNames.CelestialAnnotations, StringComparison.OrdinalIgnoreCase)
         || string.Equals(filterName, FrameFilterNames.OverlayText, StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<string> BuildFromFilterOptions(FrameFilterOption[]? filterOptions)
+    {
+        if (filterOptions is not { Length: > 0 })
+        {
+            return Array.Empty<string>();
+        }
+
+        var enabledFilters = filterOptions
+            .Where(static option => option.Enabled && !string.IsNullOrWhiteSpace(option.Name))
+            .OrderBy(static option => option.Order)
+            .ThenBy(static option => option.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(static option => option.Name.Trim());
+
+        return NormalizeFilterList(enabledFilters);
+    }
+
+    private static IReadOnlyList<string> NormalizeFilterList(IEnumerable<string> filters)
+        => filters
+            .Where(static filter => !string.IsNullOrWhiteSpace(filter))
+            .Select(static filter => filter.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 }

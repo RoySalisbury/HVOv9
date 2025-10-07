@@ -161,7 +161,18 @@ public sealed class FrameStateStore : IFrameStateStore
                 LastFrameTimestamp: _lastFrameTimestamp,
                 LastExposure: _latestRawFrame?.Exposure,
                 Camera: descriptor,
-                Configuration: _configuration);
+                Configuration: _configuration,
+                ProcessedFrame: CreateSummary(_latestProcessedFrame));
         }
+    }
+
+    private static ProcessedFrameSummary? CreateSummary(ProcessedFrame? frame)
+    {
+        if (frame is null)
+        {
+            return null;
+        }
+
+        return new ProcessedFrameSummary(frame.FramesCombined, frame.IntegrationMilliseconds);
     }
 }

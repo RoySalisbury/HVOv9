@@ -27,6 +27,8 @@ public sealed class CameraPipelineOptions
 
     public bool EnableMaskOverlay { get; set; } = false;
 
+    public FrameFilterOption[] Filters { get; set; } = Array.Empty<FrameFilterOption>();
+
     public string[] FrameFilters { get; set; } = Array.Empty<string>();
 
     [Range(1, 60_000)]

@@ -60,6 +60,12 @@ public sealed class FrameFilterPipeline : IFrameFilterPipeline
             ? frame.Exposure with { ExposureMilliseconds = stackResult.IntegrationMilliseconds }
             : frame.Exposure;
 
-        return new ProcessedFrame(frame.Timestamp, processedExposure, data.ToArray(), "image/jpeg");
+        return new ProcessedFrame(
+            frame.Timestamp,
+            processedExposure,
+            data.ToArray(),
+            "image/jpeg",
+            stackResult.FramesCombined,
+            stackResult.IntegrationMilliseconds);
     }
 }

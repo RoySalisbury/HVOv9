@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
 using Microsoft.AspNetCore.Components;
 
@@ -104,18 +105,73 @@ public sealed partial class Home : ComponentBase, IDisposable
     {
         get
         {
-            if (_status?.Configuration is not { } configuration)
+            var status = _status;
+            if (status?.Configuration is not { } configuration)
             {
                 return "Unknown";
             }
 
-            if (!configuration.EnableImageOverlays)
+            if (!HasOverlaysEnabled(configuration))
             {
                 return "Disabled";
             }
 
-            return configuration.EnableMaskOverlay ? "Image + mask" : "Image overlays";
+            var overlayLabel = HasMaskEnabled(configuration) ? "Image + mask" : "Image overlays";
+
+            if (status.ProcessedFrame is not { } processed)
+            {
+                return FormattableString.Invariant($"{overlayLabel} · awaiting frame");
+            }
+
+            var frameText = processed.FramesCombined == 1
+                ? "1 frame"
+                : FormattableString.Invariant($"{processed.FramesCombined} frames");
+
+            var integrationText = FormatIntegrationText(processed.IntegrationMilliseconds);
+
+            return FormattableString.Invariant($"{overlayLabel} · {frameText} · {integrationText}");
         }
+    }
+
+    private static bool HasOverlaysEnabled(CameraConfiguration configuration)
+        => configuration.EnableImageOverlays
+            || HasMaskEnabled(configuration)
+            || configuration.FrameFilters.Any(IsOverlayFilterName);
+
+    private static bool HasMaskEnabled(CameraConfiguration configuration)
+        => configuration.EnableMaskOverlay
+            || configuration.FrameFilters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsOverlayFilterName(string filterName)
+        => string.Equals(filterName, FrameFilterNames.CardinalDirections, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(filterName, FrameFilterNames.CelestialAnnotations, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(filterName, FrameFilterNames.OverlayText, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(filterName, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatIntegrationText(int integrationMilliseconds)
+    {
+        if (integrationMilliseconds <= 0)
+        {
+            return "0 ms";
+        }
+
+        if (integrationMilliseconds < 1_000)
+        {
+            return FormattableString.Invariant($"{integrationMilliseconds} ms");
+        }
+
+        var totalSeconds = integrationMilliseconds / 1_000;
+        if (totalSeconds < 60)
+        {
+            return FormattableString.Invariant($"{totalSeconds} s");
+        }
+
+        var minutes = totalSeconds / 60;
+        var secondsRemainder = totalSeconds % 60;
+
+        return secondsRemainder == 0
+            ? FormattableString.Invariant($"{minutes} min")
+            : FormattableString.Invariant($"{minutes} min {secondsRemainder} s");
     }
 
     private string ExposureSummary

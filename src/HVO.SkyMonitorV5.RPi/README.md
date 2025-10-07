@@ -51,12 +51,66 @@ The effective integration time reported in the overlay equals the sum of the exp
   "EnableStacking": true,
   "EnableImageOverlays": false,
   "EnableMaskOverlay": false,
+  "Filters": [
+    { "Name": "CardinalDirections", "Order": 1, "Enabled": false },
+    { "Name": "CelestialAnnotations", "Order": 2, "Enabled": false },
+    { "Name": "OverlayText", "Order": 3, "Enabled": false },
+    { "Name": "CircularMask", "Order": 4, "Enabled": false }
+  ],
   "FrameFilters": [],
   "OverlayTextFormat": "yyyy-MM-dd HH:mm:ss 'UTC'"
 }
 ```
 
-If `FrameFilters` is omitted or empty, the runtime will apply whichever sequence you provide at runtime—when overlays are disabled (the default), the capture pipeline simply returns the raw starfield image from the camera adapter.
+`Filters` lets you toggle individual filters and control their default order without editing code. Only entries flagged `Enabled` are applied (sorted by `Order`). The legacy `FrameFilters` string array remains as a fallback for backward compatibility and is ignored when `Filters` contains at least one enabled entry. When both collections are empty the runtime keeps the live sequence supplied via runtime updates—when overlays are disabled (the default), the capture pipeline simply returns the raw starfield image from the camera adapter.
+
+`CardinalDirections` provides cosmetic controls for the cardinal overlay (offset, rotation, line styling, and label boxes). Example:
+
+```json
+"CardinalDirections": {
+  "OffsetXPixels": 0,
+  "OffsetYPixels": 0,
+  "RotationDegrees": 0,
+  "RadiusOffsetPixels": 0,
+  "LabelNorth": "N",
+  "LabelSouth": "S",
+  "LabelEast": "E",
+  "LabelWest": "W",
+  "SwapEastWest": false,
+  "CircleColor": "#C8D2E6",
+  "CircleOpacity": 170,
+  "CircleThickness": 2,
+  "CircleLineStyle": "LongDash",
+  "LabelFillOpacity": 160,
+  "LabelPadding": 6,
+  "LabelCornerRadius": 6,
+  "LabelFontSize": 22
+}
+```
+
+- Offsets treat the image centre as (0,0); positive X moves east (right) and positive Y moves north (up).
+- `RadiusOffsetPixels` nudges the synthetic horizon ring inward (negative values) or outward (positive values) relative to the simulated fisheye radius.
+- Custom labels let you switch between abbreviations (`N/E/S/W`) and full words. Provide any strings up to 32 characters.
+- `SwapEastWest` flips the east/west labels for mirrored optics without altering the rotation angle.
+- `RadiusOffsetPixels` nudges the synthetic horizon ring inward (negative values) or outward (positive values) relative to the simulated fisheye radius.
+- `CircleLineStyle` accepts `Solid`, `LongDash`, `ShortDash`, `Dotted`, or `DashDot`.
+- Labels use the same colour and thickness as the circle; padding, corner radius, and fill opacity tune legibility.
+
+`CircularMask` mirrors the same coordinate system, letting you trim the live frame with a configurable vignette:
+
+```json
+"CircularMask": {
+  "OffsetXPixels": 0,
+  "OffsetYPixels": 0,
+  "RadiusOffsetPixels": 0,
+  "MaskColor": "#000000",
+  "MaskOpacity": 220
+}
+```
+
+- Negative/positive radius offsets shrink or grow the clear aperture relative to the 95% auto-fit circle.
+- Offsets shift the mask centre, useful when the optics aren’t perfectly concentric with the sensor.
+- `MaskColor` accepts any hex colour; opacity (0–255) controls falloff strength.
 
   ### Observatory location
 
