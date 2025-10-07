@@ -1,0 +1,212 @@
+using System;
+using System.Collections.Generic;
+using SkiaSharp;
+
+namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
+
+public enum FisheyeModel
+{
+    Equidistant,     // r = f * θ       (default; realistic all-sky)
+    EquisolidAngle,  // r = 2f * sin(θ/2)
+    Orthographic,    // r = f * sin(θ)
+    Stereographic    // r = 2f * tan(θ/2)
+}
+
+public record Star(double RaHours, double DecDeg, double Mag, SKColor? Color = null);
+
+public class StarFieldEngine
+{
+    public double LatitudeDeg { get; }
+    public double LongitudeDeg { get; }
+    public DateTime Utc { get; }
+    public FisheyeModel Projection { get; }
+    public int Width { get; }
+    public int Height { get; }
+    public double HorizonPaddingPct { get; }  // e.g., 0.95
+
+    public StarFieldEngine(int width, int height, double latitudeDeg, double longitudeDeg,
+                           DateTime utc, FisheyeModel projection = FisheyeModel.Equidistant,
+                           double horizonPaddingPct = 0.95)
+    {
+        Width = width;
+        Height = height;
+        LatitudeDeg = latitudeDeg;
+        LongitudeDeg = longitudeDeg;
+        Utc = utc.ToUniversalTime();
+        Projection = projection;
+        HorizonPaddingPct = horizonPaddingPct;
+    }
+
+    // Render starfield ONLY (no labels). Returns the bitmap and, optionally, the projected 2D points.
+    public SKBitmap Render(IReadOnlyList<Star> stars,
+                           int randomFillerCount = 0,
+                           int? randomSeed = null,
+                           bool dimFaintStars = true,
+                           out List<(int index, float x, float y, double mag)> projected)
+    {
+        projected = new List<(int, float, float, double)>(stars.Count + randomFillerCount);
+
+        var bmp = new SKBitmap(Width, Height, true);
+        using var canvas = new SKCanvas(bmp);
+        canvas.Clear(SKColors.Black);
+
+        // Geometry
+        float cx = Width * 0.5f;
+        float cy = Height * 0.5f;
+        float maxR = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
+
+        // Prepare paints
+        using var starPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+
+        // Compute LST once
+        double lstHours = LocalSiderealTime(Utc, LongitudeDeg);
+        double latRad = DegToRad(LatitudeDeg);
+
+        // 1) Draw catalog stars
+        for (int i = 0; i < stars.Count; i++)
+        {
+            var s = stars[i];
+            if (!RaDecToAltAz(s.RaHours, s.DecDeg, lstHours, latRad, out double altDeg, out double azDeg))
+                continue;
+            if (!AltAzToFisheye(altDeg, azDeg, cx, cy, maxR, Projection, out var px, out var py))
+                continue;
+
+            // size scaling by magnitude (soft)
+            double mag = s.Mag;
+            double brightness = Math.Pow(10.0, -(mag + 1.0) / 2.5); // brighter => bigger
+            float radius = (float)(Math.Clamp(brightness, 0.001, 1.0) * 4.0 + 0.6f);
+
+            // color
+            var col = s.Color ?? (dimFaintStars && mag > 5.5
+                                  ? new SKColor(170,170,170)
+                                  : SKColors.White);
+
+            starPaint.Color = col;
+            canvas.DrawCircle(px, py, radius, starPaint);
+
+            projected.Add((i, px, py, mag));
+        }
+
+        // 2) Optional random filler stars (even full-sky coverage)
+        if (randomFillerCount > 0)
+        {
+            var rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
+            for (int i = 0; i < randomFillerCount; i++)
+            {
+                // Uniform on the sphere: RA ~ U[0,24), sin(Dec) ~ U[-1,1]
+                double ra = rng.NextDouble() * 24.0;
+                double sinDec = rng.NextDouble() * 2.0 - 1.0;
+                double dec = RadToDeg(Math.Asin(Math.Clamp(sinDec, -1, 1)));
+
+                // Mix faint and moderate magnitudes
+                double mag = (rng.NextDouble() < 0.67) ? 5.0 + rng.NextDouble() * 2.0  // 5..7
+                                                       : 3.0 + rng.NextDouble() * 2.0; // 3..5
+
+                if (!RaDecToAltAz(ra, dec, lstHours, latRad, out double altDeg, out double azDeg))
+                    continue;
+                if (!AltAzToFisheye(altDeg, azDeg, cx, cy, maxR, Projection, out var px, out var py))
+                    continue;
+
+                double b = Math.Pow(10.0, -(mag + 1.0) / 2.5);
+                float r = (float)(Math.Clamp(b, 0.001, 1.0) * 3.4 + 0.5f);
+                var c = (mag > 5.6) ? new SKColor(150,150,150) : new SKColor(210,210,210);
+
+                starPaint.Color = c;
+                canvas.DrawCircle(px, py, r, starPaint);
+                projected.Add((-1, px, py, mag)); // index = -1 => filler
+            }
+        }
+
+        return bmp;
+    }
+
+    // --- Public helper: project a single star to pixels (for your own label pipeline) ---
+    public bool ProjectStar(Star s, out float x, out float y)
+    {
+        double lst = LocalSiderealTime(Utc, LongitudeDeg);
+        double latRad = DegToRad(LatitudeDeg);
+
+        x = y = 0;
+        if (!RaDecToAltAz(s.RaHours, s.DecDeg, lst, latRad, out double altDeg, out double azDeg))
+            return false;
+
+        float cx = Width * 0.5f, cy = Height * 0.5f;
+        float maxR = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
+        return AltAzToFisheye(altDeg, azDeg, cx, cy, maxR, Projection, out x, out y);
+    }
+
+    // ----------------- Astronomy -----------------
+
+    private static bool RaDecToAltAz(double raHours, double decDeg, double lstHours, double latRad,
+                                     out double altDeg, out double azDeg)
+    {
+        double H = DegToRad((lstHours - raHours) * 15.0);
+        double decRad = DegToRad(decDeg);
+        double sinAlt = Math.Sin(decRad) * Math.Sin(latRad) + Math.Cos(decRad) * Math.Cos(latRad) * Math.Cos(H);
+        double alt = Math.Asin(Math.Clamp(sinAlt, -1, 1));
+
+        double cosAz = (Math.Sin(decRad) - Math.Sin(alt) * Math.Sin(latRad)) / (Math.Cos(alt) * Math.Cos(latRad));
+        cosAz = Math.Clamp(cosAz, -1, 1);
+        double az = Math.Acos(cosAz);
+        if (Math.Sin(H) > 0) az = 2 * Math.PI - az;
+
+        altDeg = RadToDeg(alt);
+        azDeg  = RadToDeg(az);
+        return altDeg > 0.0;  // above horizon only
+    }
+
+    private static bool AltAzToFisheye(double altDeg, double azDeg,
+                                       float cx, float cy, float maxR,
+                                       FisheyeModel model,
+                                       out float x, out float y)
+    {
+        // Zenith angle
+        double theta = DegToRad(90.0 - altDeg);
+        if (theta < 0) { x = y = 0; return false; }
+
+        // r normalized to [0,1] over 0..90°
+        double rNorm = model switch
+        {
+            FisheyeModel.Equidistant     => theta / (Math.PI / 2.0),
+            FisheyeModel.EquisolidAngle  => (2.0 * Math.Sin(theta / 2.0)) / 1.0,
+            FisheyeModel.Orthographic    => Math.Sin(theta),
+            FisheyeModel.Stereographic   => (2.0 * Math.Tan(theta / 2.0)) / 1.0,
+            _ => theta / (Math.PI / 2.0),
+        };
+
+        // Clamp (stereographic can exceed near horizon)
+        rNorm = Math.Min(rNorm, 1.0);
+
+        double r = rNorm * maxR;
+        double az = DegToRad(azDeg);
+
+        // Camera convention: +y up -> screen y down
+        double px = cx + r * Math.Sin(az);
+        double py = cy - r * Math.Cos(az);
+
+        x = (float)px;
+        y = (float)py;
+
+        // ensure dot is inside circle
+        double dx = x - cx, dy = y - cy;
+        return (dx * dx + dy * dy) <= (maxR * maxR + 1.0);
+    }
+
+    private static double LocalSiderealTime(DateTime utc, double longitudeDeg)
+    {
+        // Simple GMST/LST approximation (OK for visualization)
+        double jd = OADateToJulian(utc);
+        double T = (jd - 2451545.0) / 36525.0;
+        double GMST = 6.697374558 + 2400.051336 * T + 0.000025862 * T * T;
+        double frac = (jd + 0.5) % 1.0;
+        GMST = (GMST + frac * 24.0 * 1.00273790935) % 24.0;
+        double LST = (GMST + longitudeDeg / 15.0) % 24.0;
+        if (LST < 0) LST += 24.0;
+        return LST;
+    }
+
+    private static double OADateToJulian(DateTime utc) => utc.ToOADate() + 2415018.5;
+
+    private static double DegToRad(double d) => d * Math.PI / 180.0;
+    private static double RadToDeg(double r) => r * 180.0 / Math.PI;
+}

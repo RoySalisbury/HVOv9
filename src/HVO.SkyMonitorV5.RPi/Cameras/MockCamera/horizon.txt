@@ -1,0 +1,183 @@
+
+
+here’s a clean Horizon & Cardinal overlay you can render as a separate transparent layer and composite over any starfield bitmap later (just like your text labels).
+
+1) Overlay types
+using SkiaSharp;
+
+public record HorizonOverlayOptions(
+    SKColor CircleColor,
+    float   CircleStrokePx,
+    bool    DrawCardinals,
+    float   CardinalTextSize,
+    float   CardinalOffsetPx,
+    SKColor CardinalColor,
+    bool    DrawTicks,
+    float   MajorTickLenPx,
+    float   MinorTickLenPx,
+    float   TickStrokePx,
+    SKColor TickColor,
+    int     MajorTickEveryDeg,
+    int     MinorTickEveryDeg,
+    float   PaddingPercent // e.g., 0.95 to match your StarFieldEngine HorizonPaddingPct
+)
+{
+    public static HorizonOverlayOptions Default => new(
+        CircleColor:        new SKColor(255,255,255,200),
+        CircleStrokePx:     1.5f,
+        DrawCardinals:      true,
+        CardinalTextSize:   24f,
+        CardinalOffsetPx:   12f,
+        CardinalColor:      new SKColor(255,255,255,220),
+        DrawTicks:          true,
+        MajorTickLenPx:     12f,
+        MinorTickLenPx:     6f,
+        TickStrokePx:       1f,
+        TickColor:          new SKColor(255,255,255,160),
+        MajorTickEveryDeg:  30,    // N/E/S/W at 0/90/180/270; majors at 30°
+        MinorTickEveryDeg:  10,    // minors at each 10°
+        PaddingPercent:     0.95f
+    );
+}
+
+2) Overlay renderer (transparent)
+public static class HorizonOverlay
+{
+    /// <summary>
+    /// Creates a transparent overlay with a circular horizon and optional ticks/cardinals.
+    /// </summary>
+    public static SKBitmap Render(int width, int height, HorizonOverlayOptions opt)
+    {
+        var bmp = new SKBitmap(width, height, true);
+        using var canvas = new SKCanvas(bmp);
+        canvas.Clear(SKColors.Transparent);
+
+        float cx = width * 0.5f;
+        float cy = height * 0.5f;
+        float radius = Math.Min(cx, cy) * opt.PaddingPercent;
+
+        using var stroke = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke };
+        using var fill   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill  };
+
+        // 1) Horizon circle
+        stroke.Color = opt.CircleColor;
+        stroke.StrokeWidth = opt.CircleStrokePx;
+        canvas.DrawCircle(cx, cy, radius, stroke);
+
+        // 2) Ticks (optional)
+        if (opt.DrawTicks)
+        {
+            stroke.Color = opt.TickColor;
+            stroke.StrokeWidth = opt.TickStrokePx;
+
+            // Draw minor ticks
+            if (opt.MinorTickEveryDeg > 0)
+            {
+                for (int a = 0; a < 360; a += opt.MinorTickEveryDeg)
+                    DrawTick(canvas, cx, cy, radius, a, opt.MinorTickLenPx, stroke);
+            }
+            // Draw major ticks on top
+            if (opt.MajorTickEveryDeg > 0)
+            {
+                stroke.StrokeWidth = Math.Max(1.2f*opt.TickStrokePx, opt.TickStrokePx);
+                for (int a = 0; a < 360; a += opt.MajorTickEveryDeg)
+                    DrawTick(canvas, cx, cy, radius, a, opt.MajorTickLenPx, stroke);
+            }
+        }
+
+        // 3) Cardinal labels (optional)
+        if (opt.DrawCardinals)
+        {
+            using var text = new SKPaint { IsAntialias = true, Color = opt.CardinalColor, TextSize = opt.CardinalTextSize };
+
+            // Azimuth convention: 0° = North at top, +CW; matches your fisheye
+            PlaceCardinal(canvas, "N", 0,   cx, cy, radius, opt.CardinalOffsetPx, text);
+            PlaceCardinal(canvas, "E", 90,  cx, cy, radius, opt.CardinalOffsetPx, text);
+            PlaceCardinal(canvas, "S", 180, cx, cy, radius, opt.CardinalOffsetPx, text);
+            PlaceCardinal(canvas, "W", 270, cx, cy, radius, opt.CardinalOffsetPx, text);
+        }
+
+        return bmp;
+    }
+
+    static void DrawTick(SKCanvas c, float cx, float cy, float r, int azDeg, float len, SKPaint p)
+    {
+        double az = azDeg * Math.PI / 180.0;
+        // Horizon circle point
+        float x1 = cx + r * (float)Math.Sin(az);
+        float y1 = cy - r * (float)Math.Cos(az);
+        // Inward end
+        float x2 = cx + (r - len) * (float)Math.Sin(az);
+        float y2 = cy - (r - len) * (float)Math.Cos(az);
+        c.DrawLine(x1, y1, x2, y2, p);
+    }
+
+    static void PlaceCardinal(SKCanvas c, string label, int azDeg,
+                              float cx, float cy, float r, float offset, SKPaint text)
+    {
+        double az = azDeg * Math.PI / 180.0;
+        // position slightly outside the circle
+        float x = cx + (r + offset) * (float)Math.Sin(az);
+        float y = cy - (r + offset) * (float)Math.Cos(az);
+
+        // Basic centering
+        var bounds = new SKRect();
+        text.MeasureText(label, ref bounds);
+        c.DrawText(label, x - bounds.Width / 2f, y + bounds.Height / 2f, text);
+    }
+}
+
+3) Compositing overlays (cardinals/horizon and labels) over your starfield
+
+You already have AnnotationOverlay.DrawLabels(...). Compose overlays with Skia like this:
+
+// 1) Render your starfield (no lines/labels)
+var starBmp = engine.Render(
+    stars: catalog,
+    planets: planetMarks,                     // or null if you draw planets elsewhere
+    randomFillerCount: 600,
+    randomSeed: 123,
+    dimFaintStars: true,
+    planetOpt: new PlanetRenderOptions(),
+    out var projectedStars,
+    out var projectedPlanets);
+
+// 2) Build labels (optional, separate layer)
+var labels = new List<LabelMark>();
+// ... fill labels from ProjectStar(...) or your PlanetMarks list
+var labelsBmp = AnnotationOverlay.DrawLabels(starBmp, labels); // This returns a new bitmap with labels drawn IN
+// If you prefer labels as their own transparent layer, make a variant that starts with Transparent instead of Copy()
+
+// 3) Horizon overlay (transparent)
+var horizonBmp = HorizonOverlay.Render(
+    width: starBmp.Width,
+    height: starBmp.Height,
+    opt: HorizonOverlayOptions.Default with
+    {
+        // tweak here if desired
+        PaddingPercent = 0.95f,
+        CardinalTextSize = 22f,
+        MajorTickEveryDeg = 30,
+        MinorTickEveryDeg = 10
+    });
+
+// 4) Composite: starfield base -> horizon overlay -> (optional) labels overlay
+// If labelsBmp already has labels drawn onto a copy of starBmp, you can compose horizon first, then reapply labels.
+var composite = new SKBitmap(starBmp.Width, starBmp.Height, true);
+using (var canvas = new SKCanvas(composite))
+{
+    canvas.Clear(SKColors.Black);
+    canvas.DrawBitmap(starBmp, 0, 0);
+    canvas.DrawBitmap(horizonBmp, 0, 0);
+    canvas.DrawBitmap(labelsBmp, 0, 0);  // if labelsBmp is a transparent-only layer, otherwise skip this line
+}
+
+// Save final composite
+using var img  = SKImage.FromBitmap(composite);
+using var data = img.Encode(SKEncodedImageFormat.Png, 95);
+using var fs   = System.IO.File.OpenWrite("starfield_with_horizon_and_labels.png");
+data.SaveTo(fs);
+
+Want labels as a strictly separate transparent layer?
+
+Make a tiny variant of your AnnotationOverlay that starts from a transparent SKBitmap(width, height, true) instead of baseBitmap.Copy() and returns that; then in step (4), draw that labels layer on top instead of the “labels-in” copy.

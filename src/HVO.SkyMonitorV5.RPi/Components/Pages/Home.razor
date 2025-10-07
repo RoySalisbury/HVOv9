@@ -1,0 +1,167 @@
+@page "/"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>SkyMonitor v5</PageTitle>
+
+<section class="hero gradient-overlay py-5">
+    <div class="container">
+        <div class="row align-items-center text-light">
+            <div class="col-lg-8">
+                <h1 class="display-4 fw-semibold">HVO SkyMonitor v5</h1>
+                <p class="lead mb-0">Live all-sky imagery and capture telemetry from the observatory deck.</p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
+                <span class="status-badge @StatusBadgeClass">
+                    <i class="bi bi-circle-fill me-2"></i>@StatusText
+                </span>
+                <div class="refresh-hint mt-2">
+                    Updating every 10 seconds
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@if (_status is null)
+{
+    <section class="container py-5 text-center text-light">
+        <div class="spinner-border text-info" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-4 mb-0">Waiting for the first frame from the capture pipeline...</p>
+    </section>
+}
+else
+{
+    <section class="container-fluid py-4 content-section">
+        <div class="row g-4">
+            <div class="col-12 col-xl-6">
+                <div class="frame-card">
+                    <header class="frame-card__header">
+                        <i class="bi bi-magic"></i>
+                        <span>Processed Frame</span>
+                    </header>
+                    @if (ProcessedImageUrl is null)
+                    {
+                        <div class="frame-card__placeholder">
+                            <i class="bi bi-images"></i>
+                            <span>No processed frame available yet.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <a href="@ProcessedImageUrl" target="_blank" rel="noopener noreferrer" class="frame-card__image-link">
+                            <img src="@ProcessedImageUrl" alt="Latest processed frame" class="frame-card__image" />
+                        </a>
+                        <div class="frame-card__actions">
+                            <a href="@ProcessedImageUrl" target="_blank" rel="noopener noreferrer" class="frame-card__action-link">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                                <span>View full resolution</span>
+                            </a>
+                        </div>
+                    }
+                    <footer class="frame-card__meta">
+                        <span class="frame-card__meta-label">Overlays</span>
+                        <span class="frame-card__meta-value">@OverlayStatusText</span>
+                    </footer>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+                <div class="frame-card">
+                    <header class="frame-card__header">
+                        <i class="bi bi-camera"></i>
+                        <span>Raw Frame</span>
+                    </header>
+                    @if (RawImageUrl is null)
+                    {
+                        <div class="frame-card__placeholder">
+                            <i class="bi bi-images"></i>
+                            <span>No raw frame captured yet.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <a href="@RawImageUrl" target="_blank" rel="noopener noreferrer" class="frame-card__image-link">
+                            <img src="@RawImageUrl" alt="Latest raw frame" class="frame-card__image" />
+                        </a>
+                        <div class="frame-card__actions">
+                            <a href="@RawImageUrl" target="_blank" rel="noopener noreferrer" class="frame-card__action-link">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                                <span>View full resolution</span>
+                            </a>
+                        </div>
+                    }
+                    <footer class="frame-card__meta">
+                        <span class="frame-card__meta-label">Exposure</span>
+                        <span class="frame-card__meta-value">@ExposureSummary</span>
+                    </footer>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-1 status-grid">
+            <div class="col-12 col-lg-4">
+                <div class="status-card">
+                    <header class="status-card__header">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Capture Timeline</span>
+                    </header>
+                    <dl class="status-card__list">
+                        <div class="status-card__item">
+                            <dt>Last Frame</dt>
+                            <dd>@LastFrameTimestampText</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Configuration</dt>
+                            <dd>Stacking: @StackingSummary</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="status-card">
+                    <header class="status-card__header">
+                        <i class="bi bi-gear-wide-connected"></i>
+                        <span>Camera</span>
+                    </header>
+                    <dl class="status-card__list">
+                        <div class="status-card__item">
+                            <dt>Manufacturer</dt>
+                            <dd>@_status.Camera.Manufacturer</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Model</dt>
+                            <dd>@_status.Camera.Model</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Adapter</dt>
+                            <dd>@_status.Camera.AdapterName</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="status-card">
+                    <header class="status-card__header">
+                        <i class="bi bi-info-circle"></i>
+                        <span>Pipeline</span>
+                    </header>
+                    <dl class="status-card__list">
+                        <div class="status-card__item">
+                            <dt>Configuration Version</dt>
+                            <dd>@ConfigurationVersion</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Capabilities</dt>
+                            <dd>@CameraCapabilitiesText</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </section>
+}

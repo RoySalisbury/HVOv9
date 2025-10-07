@@ -1,0 +1,28 @@
+// Example: Las Vegas, default 1920x1080, “now”
+var engine = new StarFieldEngine(
+    width: 1920,
+    height: 1080,
+    latitudeDeg: 36.1699,
+    longitudeDeg: -115.1398,
+    utc: DateTime.UtcNow,
+    projection: FisheyeModel.Equidistant,
+    horizonPaddingPct: 0.95
+);
+
+// Minimal catalog (add your own, e.g., HIP/Tycho subset)
+var stars = new List<Star>
+{
+    new Star(18.6156, +38.7836, 0.03), // Vega
+    new Star(19.8464,  +8.869,  0.77), // Altair
+    new Star(20.6903, +45.2836, 1.25), // Deneb
+    // ... add constellation stars, belt stars, Polaris, etc.
+};
+
+var bmp = engine.Render(stars, randomFillerCount: 500, randomSeed: 42, dimFaintStars: true,
+                        out var projectedDots);
+
+// Save
+using var image = SKImage.FromBitmap(bmp);
+using var data = image.Encode(SKEncodedImageFormat.Png, 95);
+using var fs = System.IO.File.OpenWrite("starfield.png");
+data.SaveTo(fs);

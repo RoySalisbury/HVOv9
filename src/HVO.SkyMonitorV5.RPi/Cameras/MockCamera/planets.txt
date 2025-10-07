@@ -1,0 +1,467 @@
+dotnet add package Astronomy
+
+
+/* This converts Astronomy Engine outputs into your Star objects (with spectral-like tints for aesthetics). */
+
+using Astronomy;    // from the Astronomy Engine package
+using SkiaSharp;
+using System;
+using System.Collections.Generic;
+
+// Simple planet color palette (tweak to taste)
+static SKColor PlanetColor(Body b) => b switch
+{
+    Body.Mercury => new SKColor(220, 220, 220),
+    Body.Venus   => new SKColor(245, 245, 210),
+    Body.Mars    => new SKColor(255, 120, 80),
+    Body.Jupiter => new SKColor(255, 215, 0),
+    Body.Saturn  => new SKColor(245, 230, 170),
+    Body.Uranus  => new SKColor(180, 220, 255),
+    Body.Neptune => new SKColor(170, 190, 255),
+    Body.Moon    => new SKColor(210, 210, 210),
+    _            => SKColors.White
+};
+
+public static class PlanetCatalog
+{
+    // Returns planets (and Moon) as Star entries for your engine
+    public static List<Star> ComputePlanetsAsStars(
+        double latitudeDeg, double longitudeDeg, DateTime utc,
+        bool includeUranusNeptune = false)
+    {
+        var time = new Astronomy.Time(utc);
+        var obs  = new Observer(latitudeDeg, longitudeDeg, 0.0);
+
+        var bodies = new List<Body>
+        {
+            Body.Mercury, Body.Venus, Body.Mars, Body.Jupiter, Body.Saturn, Body.Moon
+        };
+        if (includeUranusNeptune)
+        {
+            bodies.Add(Body.Uranus);
+            bodies.Add(Body.Neptune);
+        }
+
+        var result = new List<Star>();
+
+        foreach (var b in bodies)
+        {
+            // Apparent, topocentric equatorial coordinates of date
+            var eq = Astronomy.Equator(b, time, obs, EquatorEpoch.OfDate, Aberration.Corrected);
+            // Visual magnitude and phase angle, etc.
+            var illum = Astronomy.Illumination(b, time);
+            double raHours = eq.ra / 15.0;          // Astronomy Engine returns RA in degrees
+            double decDeg  = eq.dec;                // degrees
+            double mag     = illum.mag;             // visual mag (good for scaling)
+
+            // Slightly “planet-appropriate” colors
+            var color = PlanetColor(b);
+
+            result.Add(new Star(raHours, decDeg, mag, color));
+        }
+
+        return result;
+    }
+}
+
+/*
+
+Notes
+• Equator(... EquatorEpoch.OfDate, Aberration.Corrected) gives you apparent RA/Dec corrected for light-time/aberration — perfect for plotting against stars.
+• Illumination(...).mag gives a realistic visual magnitude you can feed into your size scaling.
+• For the Sun, you generally don’t render it in a night-sky starfield; if you do, add Body.Sun (and maybe clamp its size).
+
+
+*/
+
+/* Use it with your StarFieldEngine */
+
+// Example: Las Vegas, 1920x1080, current time
+var engine = new StarFieldEngine(
+    width: 1920,
+    height: 1080,
+    latitudeDeg: 36.1699,
+    longitudeDeg: -115.1398,
+    utc: DateTime.UtcNow);
+
+// 1) Your catalogs (bright stars + constellations)
+var catalog = new List<Star>();
+catalog.AddRange(bright);                              // your bright spectral-tinted list
+foreach (var kv in Constellations)                    // your constellation packs
+    foreach (var cs in kv.Value)
+        catalog.Add(cs.Star);
+
+// 2) Add planets (and Moon)
+var planets = PlanetCatalog.ComputePlanetsAsStars(36.1699, -115.1398, DateTime.UtcNow, includeUranusNeptune: true);
+catalog.AddRange(planets);
+
+// 3) Render starfield (no labels yet)
+var bmp = engine.Render(
+    stars: catalog,
+    randomFillerCount: 600,     // or whatever density you like
+    randomSeed: 123,
+    dimFaintStars: true,
+    out var projectedDots);
+
+// (Optional) build annotation labels later with engine.ProjectStar(...)
+
+
+/* Label later: for any planet you want to annotate, call engine.ProjectStar(...) with the same Star and build a LabelMark list for AnnotationOverlay.DrawLabels(...). */
+
+
+/*
+Sizing & special-casing
+
+Your star size curve already scales by magnitude. For the Moon, you may want to cap its radius to a fixed pixel size (e.g., 1.25× Jupiter’s) so it doesn’t dominate the scene.
+
+You can add a tiny marker shape difference for planets (e.g., square or slightly larger disk) if you want them to stand out.
+*/
+
+/* Once you have the planet Star objects: */
+
+var labels = new List<LabelMark>();
+foreach (var p in planets)
+{
+    if (engine.ProjectStar(p, out var x, out var y))
+    {
+        // pick a name yourself, e.g., by matching color or keeping a parallel list of names
+        var name = "Jupiter"; // example; store alongside your planet star in a struct if needed
+        labels.Add(new LabelMark(name, x, y, p.Color ?? SKColors.White, 18f, 6f, 6f));
+    }
+}
+var annotated = AnnotationOverlay.DrawLabels(bmp, labels);
+
+Awesome — here’s a tidy way to carry both the planet’s identity (name) and its plot data (as your Star) together.
+
+1) PlanetMark record
+using SkiaSharp;
+using Astronomy;   // NuGet: Astronomy
+
+public record PlanetMark(string Name, Body Body, Star Star, SKColor Color);
+
+
+Star is your existing:
+public record Star(double RaHours, double DecDeg, double Mag, SKColor? Color = null);
+
+2) Helper to compute planets (incl. Moon) → List<PlanetMark>
+using System;
+using System.Collections.Generic;
+using SkiaSharp;
+using Astronomy;
+
+public static class PlanetMarks
+{
+    static readonly Dictionary<Body, string> Names = new()
+    {
+        [Body.Mercury] = "Mercury",
+        [Body.Venus]   = "Venus",
+        [Body.Mars]    = "Mars",
+        [Body.Jupiter] = "Jupiter",
+        [Body.Saturn]  = "Saturn",
+        [Body.Uranus]  = "Uranus",
+        [Body.Neptune] = "Neptune",
+        [Body.Moon]    = "Moon",
+        [Body.Sun]     = "Sun"
+    };
+
+    // Planet color palette (tweak to taste)
+    static SKColor PlanetColor(Body b) => b switch
+    {
+        Body.Mercury => new SKColor(220,220,220),
+        Body.Venus   => new SKColor(245,245,210),
+        Body.Mars    => new SKColor(255,120, 80),
+        Body.Jupiter => new SKColor(255,215,  0),
+        Body.Saturn  => new SKColor(245,230,170),
+        Body.Uranus  => new SKColor(180,220,255),
+        Body.Neptune => new SKColor(170,190,255),
+        Body.Moon    => new SKColor(210,210,210),
+        Body.Sun     => new SKColor(255,240,200),
+        _            => SKColors.White
+    };
+
+    /// <summary>
+    /// Computes apparent topocentric RA/Dec and visual magnitude for planets and Moon.
+    /// </summary>
+    public static List<PlanetMark> Compute(
+        double latitudeDeg, double longitudeDeg, DateTime utc,
+        bool includeUranusNeptune = false, bool includeSun = false)
+    {
+        var time = new Astronomy.Time(utc);
+        var obs  = new Observer(latitudeDeg, longitudeDeg, 0.0);
+
+        var bodies = new List<Body>
+        {
+            Body.Mercury, Body.Venus, Body.Mars, Body.Jupiter, Body.Saturn, Body.Moon
+        };
+        if (includeUranusNeptune) { bodies.Add(Body.Uranus); bodies.Add(Body.Neptune); }
+        if (includeSun) bodies.Add(Body.Sun);
+
+        var list = new List<PlanetMark>(bodies.Count);
+
+        foreach (var b in bodies)
+        {
+            // Apparent, topocentric equatorial coords of date:
+            var eq   = Astronomy.Equator(b, time, obs, EquatorEpoch.OfDate, Aberration.Corrected);
+            var illum= Astronomy.Illumination(b, time);
+
+            double raHours = eq.ra / 15.0;   // RA deg -> hours
+            double decDeg  = eq.dec;         // degrees
+            double mag     = illum.mag;      // visual magnitude
+
+            var color = PlanetColor(b);
+            var star  = new Star(raHours, decDeg, mag, color);
+
+            list.Add(new PlanetMark(Names[b], b, star, color));
+        }
+        return list;
+    }
+}
+
+3) Using PlanetMark with your renderer + labels
+// Build your star catalog (bright + constellations) as before...
+var catalog = new List<Star>();
+catalog.AddRange(bright);
+foreach (var kv in Constellations)
+    foreach (var cs in kv.Value)
+        catalog.Add(cs.Star);
+
+// Compute planets (and Moon)
+var planetMarks = PlanetMarks.Compute(
+    latitudeDeg: 36.1699,
+    longitudeDeg: -115.1398,
+    utc: DateTime.UtcNow,
+    includeUranusNeptune: true);
+
+// Add them to the dot field
+foreach (var pm in planetMarks)
+    catalog.Add(pm.Star);
+
+// Render starfield only
+var engine = new StarFieldEngine(1920, 1080, 36.1699, -115.1398, DateTime.UtcNow);
+var bmp = engine.Render(catalog, randomFillerCount: 600, randomSeed: 123, dimFaintStars: true,
+                        out var projectedDots);
+
+// Build label overlay from PlanetMarks (later step)
+var labels = new List<LabelMark>();
+foreach (var pm in planetMarks)
+{
+    if (engine.ProjectStar(pm.Star, out var x, out var y))
+        labels.Add(new LabelMark(pm.Name, x, y, pm.Color, 18f, 6f, 6f));
+}
+
+// Apply labels
+var labeled = AnnotationOverlay.DrawLabels(bmp, labels);
+
+// Save
+using var img  = SKImage.FromBitmap(labeled);
+using var data = img.Encode(SKEncodedImageFormat.Png, 95);
+using var fs   = System.IO.File.OpenWrite("starfield_planets_labeled.png");
+data.SaveTo(fs);
+
+Notes
+
+Accuracy: Astronomy Engine returns apparent, topocentric coordinates (right choice for sky plots).
+
+Sizing: Your magnitude-based point size will work; for the Moon, consider clamping to a fixed radius so it doesn’t dominate.
+
+Customization: Add a different marker (e.g., square) for planets if you want them to stand out from stars.
+
+
+
+**************************************
+
+Awesome — here’s a clean, drop-in update that lets your renderer treat planets differently (size clamps, special Moon size, optional shape), while keeping your starfield + separate annotations workflow intact.
+
+1) Configs and signatures
+public enum PlanetMarkerShape { Circle, Square, Diamond }
+
+public record PlanetRenderOptions(
+    float MinRadiusPx = 3.5f,     // clamp lower size
+    float MaxRadiusPx = 9.5f,     // clamp upper size (planets won’t explode)
+    float MoonRadiusPx = 12.0f,   // fixed Moon size
+    PlanetMarkerShape Shape = PlanetMarkerShape.Circle
+);
+
+2) New overload: render stars + planets (with separate planet handling)
+
+Add this method to your StarFieldEngine class (SkiaSharp version you already have). It reuses your existing projection and magnitude scaling, but clamps planet sizes, special-cases Moon, and optionally changes marker shape. It also returns projected positions for both stars and planets so you can label later.
+
+public SKBitmap Render(
+    IReadOnlyList<Star> stars,
+    IReadOnlyList<PlanetMark> planets,
+    int randomFillerCount,
+    int? randomSeed,
+    bool dimFaintStars,
+    PlanetRenderOptions planetOpt,
+    out List<(int index, float x, float y, double mag)> projectedStars,
+    out List<(string name, float x, float y, double mag, SKColor color)> projectedPlanets)
+{
+    projectedStars = new List<(int, float, float, double)>(stars.Count + randomFillerCount);
+    projectedPlanets = new List<(string, float, float, double, SKColor)>(planets?.Count ?? 0);
+
+    var bmp = new SKBitmap(Width, Height, true);
+    using var canvas = new SKCanvas(bmp);
+    canvas.Clear(SKColors.Black);
+
+    // Geometry
+    float cx = Width * 0.5f;
+    float cy = Height * 0.5f;
+    float maxR = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
+
+    // Paints
+    using var starPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+
+    // Time/geo
+    double lstHours = LocalSiderealTime(Utc, LongitudeDeg);
+    double latRad = DegToRad(LatitudeDeg);
+
+    // -------- Stars (unchanged behavior) --------
+    for (int i = 0; i < stars.Count; i++)
+    {
+        var s = stars[i];
+        if (!RaDecToAltAz(s.RaHours, s.DecDeg, lstHours, latRad, out double altDeg, out double azDeg)) continue;
+        if (!AltAzToFisheye(altDeg, azDeg, cx, cy, maxR, Projection, out var px, out var py)) continue;
+
+        double mag = s.Mag;
+        double brightness = Math.Pow(10.0, -(mag + 1.0) / 2.5);
+        float radius = (float)(Math.Clamp(brightness, 0.001, 1.0) * 4.0 + 0.6f);
+
+        var col = s.Color ?? (dimFaintStars && mag > 5.5 ? new SKColor(170,170,170) : SKColors.White);
+        starPaint.Color = col;
+        canvas.DrawCircle(px, py, radius, starPaint);
+        projectedStars.Add((i, px, py, mag));
+    }
+
+    // -------- Random filler (optional) --------
+    if (randomFillerCount > 0)
+    {
+        var rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
+        for (int i = 0; i < randomFillerCount; i++)
+        {
+            double ra = rng.NextDouble() * 24.0;
+            double sinDec = rng.NextDouble() * 2.0 - 1.0;
+            double dec = RadToDeg(Math.Asin(Math.Clamp(sinDec, -1, 1)));
+            double mag = (rng.NextDouble() < 0.67) ? 5.0 + rng.NextDouble() * 2.0 : 3.0 + rng.NextDouble() * 2.0;
+
+            if (!RaDecToAltAz(ra, dec, lstHours, latRad, out double altDeg, out double azDeg)) continue;
+            if (!AltAzToFisheye(altDeg, azDeg, cx, cy, maxR, Projection, out var px, out var py)) continue;
+
+            double b = Math.Pow(10.0, -(mag + 1.0) / 2.5);
+            float r = (float)(Math.Clamp(b, 0.001, 1.0) * 3.4 + 0.5f);
+            var c = (mag > 5.6) ? new SKColor(150,150,150) : new SKColor(210,210,210);
+
+            starPaint.Color = c;
+            canvas.DrawCircle(px, py, r, starPaint);
+            projectedStars.Add((-1, px, py, mag));
+        }
+    }
+
+    // -------- Planets (distinct behavior) --------
+    if (planets != null)
+    {
+        foreach (var pm in planets)
+        {
+            var p = pm.Star; // RA/Dec/mag/color
+            if (!RaDecToAltAz(p.RaHours, p.DecDeg, lstHours, latRad, out double altDeg, out double azDeg)) continue;
+            if (!AltAzToFisheye(altDeg, azDeg, cx, cy, maxR, Projection, out var px, out var py)) continue;
+
+            // Size: base by magnitude, then clamp; Moon fixed
+            float radius;
+            if (pm.Body == Astronomy.Body.Moon)
+            {
+                radius = planetOpt.MoonRadiusPx;
+            }
+            else
+            {
+                double brightness = Math.Pow(10.0, -(p.Mag + 1.0) / 2.5);
+                float r = (float)(Math.Clamp(brightness, 0.001, 1.0) * 6.0 + 1.2f);
+                radius = Math.Clamp(r, planetOpt.MinRadiusPx, planetOpt.MaxRadiusPx);
+            }
+
+            // Color
+            var col = pm.Color; // already your “planet color”
+            starPaint.Color = col;
+
+            // Shape
+            switch (planetOpt.Shape)
+            {
+                case PlanetMarkerShape.Square:
+                    canvas.DrawRect(px - radius, py - radius, radius * 2, radius * 2, starPaint);
+                    break;
+                case PlanetMarkerShape.Diamond:
+                    using (var path = new SKPath())
+                    {
+                        path.MoveTo(px, py - radius);
+                        path.LineTo(px + radius, py);
+                        path.LineTo(px, py + radius);
+                        path.LineTo(px - radius, py);
+                        path.Close();
+                        canvas.DrawPath(path, starPaint);
+                    }
+                    break;
+                default:
+                    canvas.DrawCircle(px, py, radius, starPaint);
+                    break;
+            }
+
+            projectedPlanets.Add((pm.Name, px, py, p.Mag, col));
+        }
+    }
+
+    return bmp;
+}
+
+
+This overload does not draw any text — you still add labels in your separate AnnotationOverlay step using the returned projectedPlanets.
+
+3) Example usage
+// Build your catalogs
+var catalog = new List<Star>();
+catalog.AddRange(bright);
+foreach (var kv in Constellations)
+    foreach (var cs in kv.Value)
+        catalog.Add(cs.Star);
+
+// Compute planets (and Moon) as PlanetMark
+var planetMarks = PlanetMarks.Compute(
+    latitudeDeg: 36.1699,
+    longitudeDeg: -115.1398,
+    utc: DateTime.UtcNow,
+    includeUranusNeptune: true);
+
+// Render with planet handling
+var planetOpts = new PlanetRenderOptions(
+    MinRadiusPx: 3.5f,
+    MaxRadiusPx: 9.0f,
+    MoonRadiusPx: 12.0f,
+    Shape: PlanetMarkerShape.Circle
+);
+
+var engine = new StarFieldEngine(1920, 1080, 36.1699, -115.1398, DateTime.UtcNow);
+var bmp = engine.Render(
+    stars: catalog,
+    planets: planetMarks,
+    randomFillerCount: 600,
+    randomSeed: 123,
+    dimFaintStars: true,
+    planetOpt: planetOpts,
+    out var projectedStars,
+    out var projectedPlanets);
+
+// Later: annotate only what you want
+var labels = new List<LabelMark>();
+foreach (var (name, x, y, mag, color) in projectedPlanets)
+{
+    labels.Add(new LabelMark(name, x, y, color, 18f, 6f, 6f));
+}
+var labeled = AnnotationOverlay.DrawLabels(bmp, labels);
+
+// Save
+using var img = SKImage.FromBitmap(labeled);
+using var png = img.Encode(SKEncodedImageFormat.Png, 95);
+using var fs = System.IO.File.OpenWrite("starfield_planets_labeled.png");
+png.SaveTo(fs);
+
+4) Optional: keep a strict “stars-only” path
+
+If you also want to keep your original Render(stars, ...) signature unchanged, leave it in place. This new overload is additive and won’t break callers.

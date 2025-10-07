@@ -1,0 +1,17 @@
+// Suppose you saved starfield.png, and you have positions for objects you want to label
+var toLabel = new List<LabelMark>
+{
+    new LabelMark("Polaris", x: 960f, y: 120f, SKColors.White, 18f),
+    new LabelMark("Jupiter", x: 1400f, y: 640f, SKColors.Gold, 18f),
+    // etc. (use engine.ProjectStar(...) to get x,y at runtime)
+};
+
+// Load or reuse the starfield bitmap
+using var starBmp = SKBitmap.Decode("starfield.png");
+var labeled = AnnotationOverlay.DrawLabels(starBmp, toLabel);
+
+// Save final
+using var img = SKImage.FromBitmap(labeled);
+using var png = img.Encode(SKEncodedImageFormat.Png, 95);
+using var fs2 = System.IO.File.OpenWrite("starfield_with_labels.png");
+png.SaveTo(fs2);

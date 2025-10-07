@@ -1,0 +1,402 @@
+// --- spectral → color helper (approximate) ---
+static SKColor SpectralColor(string s)
+{
+    if (string.IsNullOrWhiteSpace(s)) return SKColors.White;
+    char c = char.ToUpperInvariant(s[0]);
+    return c switch
+    {
+        'O' => new SKColor(155,176,255),
+        'B' => new SKColor(170,191,255),
+        'A' => new SKColor(202,215,255),
+        'F' => new SKColor(248,247,255),
+        'G' => new SKColor(255,244,234),
+        'K' => new SKColor(255,210,161),
+        'M' => new SKColor(255,180,140),
+        _   => SKColors.White
+    };
+}
+
+// Bright stars (mag ≤ 3.0) with spectral tinting
+var bright = new List<Star>
+{
+    // name (comment), RA(h), Dec(°), Vmag, ColorFromSpectral
+    new Star( 6.7525, -16.716, -1.46, SpectralColor("A1V")),     // Sirius
+    new Star( 6.3992, -52.695, -0.74, SpectralColor("A9II")),    // Canopus
+    new Star(14.6601, -60.833, -0.27, SpectralColor("G2V")),     // α Cen A (use G; visual blend)
+    new Star(14.2610, +19.182, -0.05, SpectralColor("K1III")),   // Arcturus
+    new Star(18.6156, +38.783,  0.03, SpectralColor("A0V")),     // Vega
+    new Star( 5.2782, +45.997,  0.08, SpectralColor("G8III")),   // Capella (yellowish)
+    new Star( 5.2423,  -8.202,  0.13, SpectralColor("B8Ia")),    // Rigel
+    new Star( 7.6550,  +5.225,  0.38, SpectralColor("F5IV")),    // Procyon
+    new Star( 1.6286, -57.236,  0.46, SpectralColor("B6V")),     // Achernar
+    new Star( 5.9195,  +7.407,  0.45, SpectralColor("M2Iab")),   // Betelgeuse (reddish, variable)
+    new Star(14.0637, -60.373,  0.61, SpectralColor("B1III")),   // Hadar / Agena
+    new Star(19.8464,  +8.869,  0.77, SpectralColor("A7V")),     // Altair
+    new Star(12.4433, -63.099,  0.77, SpectralColor("B0.5IV")),  // Acrux
+    new Star( 4.5987, +16.509,  0.85, SpectralColor("K5III")),   // Aldebaran
+    new Star(16.4901, -26.432,  0.96, SpectralColor("M1.5Iab")), // Antares (red)
+    new Star(13.4199, -11.161,  0.98, SpectralColor("B1V")),     // Spica
+    new Star( 7.7553, +28.026,  1.14, SpectralColor("K0III")),   // Pollux
+    new Star(22.9608, -29.622,  1.16, SpectralColor("A3V")),     // Fomalhaut
+    new Star(20.6905, +45.280,  1.25, SpectralColor("A2Ia")),    // Deneb
+    new Star(12.7953, -59.688,  1.25, SpectralColor("B0.5III")), // Mimosa
+    new Star(10.1395, +11.967,  1.35, SpectralColor("B7V")),     // Regulus
+    new Star( 6.9771, -28.972,  1.50, SpectralColor("B2II")),    // Adhara
+    new Star( 7.5766, +31.888,  1.58, SpectralColor("A1V")),     // Castor
+    new Star(12.5194, -57.114,  1.63, SpectralColor("M3.5III")), // Gacrux (red)
+    new Star( 5.4189,  +6.349,  1.64, SpectralColor("B2III")),   // Bellatrix
+    new Star( 5.4382, +28.607,  1.65, SpectralColor("B7III")),   // Elnath
+    new Star( 5.6036,  -1.201,  1.69, SpectralColor("B0Ia")),    // Alnilam
+    new Star(22.1372, -46.960,  1.74, SpectralColor("B7V")),     // Alnair
+    new Star(12.9004, +55.959,  1.76, SpectralColor("A0p")),     // Alioth
+    new Star( 5.6793,  -1.942,  1.77, SpectralColor("O9.5Ib")),  // Alnitak (blue)
+    new Star( 8.1589, -47.336,  1.78, SpectralColor("O7/B1")),   // Regor (γ Vel) (blue)
+    new Star(18.4029, -34.384,  1.79, SpectralColor("B9.5III")), // Kaus Australis
+    new Star( 3.4054, +49.861,  1.79, SpectralColor("F5Ib")),    // Mirfak
+    new Star(11.0621, +61.751,  1.79, SpectralColor("K0III")),   // Dubhe (orange)
+    new Star(17.5601, -37.104,  1.62, SpectralColor("B2IV")),    // Shaula
+    new Star(17.6229, -42.997,  1.86, SpectralColor("F1II")),    // Sargas
+    new Star(13.7923, +49.313,  1.86, SpectralColor("B3V")),     // Alkaid
+    new Star( 8.3752, -59.509,  1.86, SpectralColor("K3III")),   // Avior (orangish)
+    new Star( 5.9921, +44.947,  1.90, SpectralColor("A2IV")),    // Menkalinan
+    new Star(16.8111, -69.028,  1.91, SpectralColor("K2II")),    // Atria (orange)
+    new Star(20.4275, -56.735,  1.94, SpectralColor("B2IV")),    // Peacock
+    new Star( 9.4598,  -8.658,  1.98, SpectralColor("K3III")),   // Alphard (orange)
+    new Star( 2.5303, +89.264,  1.98, SpectralColor("F7Ib")),    // Polaris (yellow-white)
+    new Star( 2.1196, +23.462,  2.01, SpectralColor("K2III")),   // Hamal (orange)
+    new Star( 0.7265, -17.986,  2.04, SpectralColor("K0III")),   // Diphda (orange)
+    new Star(14.1114, -36.370,  2.06, SpectralColor("K0III")),   // Menkent (orange)
+    new Star( 1.1622, +35.621,  2.06, SpectralColor("M0III")),   // Mirach (red-orange)
+    new Star( 0.1398, +29.090,  2.07, SpectralColor("B9p/A0")),  // Alpheratz (blue-white)
+    new Star(14.8451, +74.155,  2.07, SpectralColor("K4III")),   // Kochab (orange)
+    new Star(17.5822, +12.560,  2.07, SpectralColor("A5III")),   // Rasalhague
+    new Star( 5.7959,  -9.669,  2.07, SpectralColor("B0.5Iab")), // Saiph (blue)
+    new Star(18.9211, -26.296,  2.05, SpectralColor("B2.5V")),   // Nunki
+    new Star(21.7364,  +9.875,  2.38, SpectralColor("K2Ib")),    // Enif (orange)
+    new Star(23.0629, +28.082,  2.42, SpectralColor("M2III")),   // Scheat (red-orange)
+    new Star(21.3097, +62.585,  2.45, SpectralColor("A7IV")),    // Alderamin
+    new Star(23.0793, +15.205,  2.49, SpectralColor("B9V")),     // Markab
+    new Star( 3.1361, +40.955,  2.12, SpectralColor("B8V")),     // Algol (composite, blue-white)
+    new Star(11.8177, +14.571,  2.14, SpectralColor("A3V")),     // Denebola
+    new Star( 2.0649, +42.329,  2.10, SpectralColor("K3III")),   // Almach (golden primary)
+    new Star( 3.7914, +24.105,  2.87, SpectralColor("B7III")),   // Alcyone (Pleiades)
+    new Star( 0.2206, +15.183,  2.83, SpectralColor("B2IV")),    // Algenib
+    new Star(14.8479, -16.041,  2.75, SpectralColor("A3IV")),    // Zubenelgenubi (approx A-type)
+    new Star(18.3499, -29.828,  2.72, SpectralColor("K3III")),   // Kaus Media (orange; approx)
+};
+
+/* Star is your existing: public record Star(double RaHours, double DecDeg, double Mag, SKColor? Color = null); */
+
+public record ConstellationStar(string Name, Star Star);
+
+
+var Constellations = new Dictionary<string, List<ConstellationStar>>
+{
+    ["Ursa Major (Big Dipper)"] = new()
+    {
+        new("Dubhe",   new Star(11.0621, +61.7511, 1.79, SpectralColor("K0III"))),
+        new("Merak",   new Star(11.0307, +56.3824, 2.37, SpectralColor("A1V"))),
+        new("Phecda",  new Star(11.8972, +53.6948, 2.43, SpectralColor("A0V"))),
+        new("Megrez",  new Star(12.2571, +57.0326, 3.31, SpectralColor("A3V"))),
+        new("Alioth",  new Star(12.9004, +55.9598, 1.76, SpectralColor("A0p"))),
+        new("Mizar",   new Star(13.3987, +54.9254, 2.23, SpectralColor("A2V"))),
+        new("Alkaid",  new Star(13.7923, +49.3133, 1.86, SpectralColor("B3V"))),
+    },
+
+    ["Ursa Minor (Little Dipper)"] = new()
+    {
+        new("Polaris", new Star( 2.5303, +89.2641, 1.98, SpectralColor("F7Ib"))),
+        new("Kochab",  new Star(14.8451, +74.1555, 2.07, SpectralColor("K4III"))),
+        new("Pherkad", new Star(15.3459, +71.8339, 3.00, SpectralColor("A2Iab"))),
+        new("Yildun",  new Star(17.5369, +86.5865, 4.35, SpectralColor("A1V"))),
+        new("Epsilon UMi", new Star(16.7661, +82.0373, 4.21, SpectralColor("G5III"))),
+        new("Zeta UMi",    new Star(15.7343, +77.7959, 4.29, SpectralColor("A3V"))),
+        new("Eta UMi",     new Star(16.2918, +75.7553, 4.95, SpectralColor("A3V"))),
+    },
+
+    ["Orion"] = new()
+    {
+        new("Betelgeuse", new Star( 5.9195,  +7.4071, 0.45, SpectralColor("M2Iab"))),
+        new("Bellatrix",  new Star( 5.4189,  +6.3497, 1.64, SpectralColor("B2III"))),
+        new("Alnilam",    new Star( 5.6036,  -1.2019, 1.69, SpectralColor("B0Ia"))), // Belt
+        new("Alnitak",    new Star( 5.6793,  -1.9426, 1.77, SpectralColor("O9.5Ib"))),// Belt
+        new("Mintaka",    new Star( 5.5333,  +0.2991, 2.23, SpectralColor("O9.5II"))),// Belt
+        new("Rigel",      new Star( 5.2423,  -8.2016, 0.13, SpectralColor("B8Ia"))),
+        new("Saiph",      new Star( 5.7959,  -9.6696, 2.07, SpectralColor("B0.5Iab"))),
+        // Extras you might like for pattern density:
+        new("Meissa",     new Star( 5.9195,  +9.9342, 3.54, SpectralColor("O8III")))
+    },
+
+    ["Cassiopeia"] = new()
+    {
+        new("Schedar",    new Star( 0.6751, +56.5373, 2.24, SpectralColor("K0III"))),
+        new("Caph",       new Star( 0.1530, +59.1498, 2.27, SpectralColor("F2III"))),
+        new("γ Cas",      new Star( 0.9451, +60.7167, 2.47, SpectralColor("B0.5IVe"))),
+        new("Ruchbah",    new Star( 1.4303, +60.2353, 2.68, SpectralColor("A5V"))),
+        new("Segin",      new Star( 2.0969, +63.6700, 3.35, SpectralColor("B3V"))),
+    },
+
+    ["Cygnus (Northern Cross)"] = new()
+    {
+        new("Deneb",   new Star(20.6905, +45.2803, 1.25, SpectralColor("A2Ia"))),
+        new("Sadr",    new Star(20.3705, +40.2567, 2.23, SpectralColor("F8Ib"))),
+        new("Gienah",  new Star(20.7702, +33.9703, 2.48, SpectralColor("B8II"))),
+        new("Albireo", new Star(19.5120, +27.9597, 3.05, SpectralColor("K3II+B8V"))),
+        new("Delta Cyg", new Star(19.7499, +45.1308, 2.87, SpectralColor("B9V"))),
+    },
+
+    ["Aquila"] = new()
+    {
+        new("Altair",  new Star(19.8464,  +8.8683, 0.77, SpectralColor("A7V"))),
+        new("Tarazed", new Star(19.7711, +10.6132, 2.72, SpectralColor("K3II"))),
+        new("Alshain", new Star(19.9219,  +6.4079, 3.72, SpectralColor("G8IV"))),
+    },
+
+    ["Lyra"] = new()
+    {
+        new("Vega",    new Star(18.6156, +38.7837, 0.03, SpectralColor("A0V"))),
+        new("Zeta Lyr",new Star(18.7469, +37.6050, 4.35, SpectralColor("A4V"))),
+        new("Delta Lyr",new Star(18.9080, +36.8986, 4.22, SpectralColor("M4II"))),
+        new("Sheliak", new Star(18.8347, +33.3627, 3.52, SpectralColor("B7IV"))),
+        new("Sulafat", new Star(18.9824, +32.6896, 3.25, SpectralColor("B9III"))),
+    },
+
+    ["Taurus"] = new()
+    {
+        new("Aldebaran", new Star( 4.5987, +16.5093, 0.85, SpectralColor("K5III"))),
+        new("Elnath",    new Star( 5.4382, +28.6075, 1.65, SpectralColor("B7III"))),
+        new("Alcyone",   new Star( 3.7914, +24.1051, 2.87, SpectralColor("B7III"))), // Pleiades core
+        new("Atlas",     new Star( 3.6273, +24.0534, 3.62, SpectralColor("B8III"))),
+        new("Electra",   new Star( 3.7169, +24.1133, 3.70, SpectralColor("B6III"))),
+        new("Maia",      new Star( 3.7638, +24.3678, 3.86, SpectralColor("B8III"))),
+        new("Merope",    new Star( 3.7723, +23.9483, 4.17, SpectralColor("B6IV"))),
+        new("Taygeta",   new Star( 3.7913, +24.4673, 4.29, SpectralColor("B6IV"))),
+        new("Pleione",   new Star( 3.8281, +24.1367, 5.05, SpectralColor("B8V"))),
+    },
+
+    ["Perseus"] = new()
+    {
+        new("Mirfak", new Star( 3.4054, +49.8612, 1.79, SpectralColor("F5Ib"))),
+        new("Algol",  new Star( 3.1361, +40.9556, 2.12, SpectralColor("B8V"))),
+        new("Atik",   new Star( 3.2020, +32.2883, 2.87, SpectralColor("B1III"))),
+        new("Zeta Per", new Star( 3.9250, +31.8836, 2.85, SpectralColor("B1Ib"))),
+    },
+
+    ["Pegasus (Great Square) & Andromeda"] = new()
+    {
+        new("Markab",   new Star(23.0793, +15.2053, 2.49, SpectralColor("B9V"))),
+        new("Scheat",   new Star(23.0629, +28.0825, 2.42, SpectralColor("M2III"))),
+        new("Algenib",  new Star( 0.2206, +15.1836, 2.83, SpectralColor("B2IV"))),
+        new("Alpheratz",new Star( 0.1398, +29.0904, 2.07, SpectralColor("B9p"))),
+        new("Mirach",   new Star( 1.1622, +35.6206, 2.06, SpectralColor("M0III"))),
+        new("Almach",   new Star( 2.0649, +42.3297, 2.10, SpectralColor("K3III"))),
+    },
+
+    ["Scorpius"] = new()
+    {
+        new("Antares", new Star(16.4901, -26.4320, 0.96, SpectralColor("M1.5Iab"))),
+        new("Shaula",  new Star(17.5601, -37.1038, 1.62, SpectralColor("B2IV"))),
+        new("Sargas",  new Star(17.6229, -42.9978, 1.86, SpectralColor("F1II"))),
+        new("Dschubba",new Star(16.0056, -22.6217, 2.29, SpectralColor("B1.5V"))),
+    },
+
+    ["Sagittarius (Teapot)"] = new()
+    {
+        new("Kaus Australis", new Star(18.4029, -34.3846, 1.79, SpectralColor("B9.5III"))),
+        new("Nunki",          new Star(18.9211, -26.2967, 2.05, SpectralColor("B2.5V"))),
+        new("Kaus Media",     new Star(18.3499, -29.8281, 2.72, SpectralColor("K3III"))),
+        new("Kaus Borealis",  new Star(18.4662, -25.4216, 2.81, SpectralColor("K2III"))),
+        new("Ascella",        new Star(19.0435, -29.8801, 2.60, SpectralColor("B3V"))),
+        new("Phi Sgr",        new Star(19.1553, -26.2967, 3.17, SpectralColor("B8V"))),
+    },
+
+    ["Cepheus"] = new()
+    {
+        new("Alderamin", new Star(21.3097, +62.5856, 2.45, SpectralColor("A7IV"))),
+        new("Alfirk",    new Star(21.4777, +70.5607, 3.23, SpectralColor("B2III"))),
+        new("Mu Cep",    new Star(21.7337, +58.7800, 4.00, SpectralColor("M2Ia"))), // Garnet Star (nice tint)
+        new("Zeta Cep",  new Star(22.1809, +58.2013, 3.40, SpectralColor("K1III"))),
+    },
+};
+
+
+/* more constallations */
+
+// ==== Additional Constellations ====
+// Make sure you have:
+// public record ConstellationStar(string Name, Star Star);
+// public record Star(double RaHours, double DecDeg, double Mag, SKColor? Color = null);
+// static SKColor SpectralColor(string spectral);
+
+// --- Crux (Southern Cross) ---
+Constellations["Crux"] = new()
+{
+    new("Acrux (α Cru)",   new Star(12.4433, -63.099, 0.77, SpectralColor("B0.5IV"))),
+    new("Mimosa (β Cru)",  new Star(12.7953, -59.688, 1.25, SpectralColor("B0.5III"))),
+    new("Gacrux (γ Cru)",  new Star(12.5194, -57.114, 1.63, SpectralColor("M3.5III"))),
+    new("δ Crucis",        new Star(12.2524, -58.749, 2.60, SpectralColor("B2IV"))),
+    new("ε Crucis",        new Star(12.3560, -60.401, 3.59, SpectralColor("K3III"))),
+};
+
+// --- Carina ---
+Constellations["Carina"] = new()
+{
+    new("Canopus (α Car)",     new Star( 6.3992, -52.695, -0.74, SpectralColor("A9II"))),
+    new("Miaplacidus (β Car)", new Star( 9.2203, -69.718,  1.67, SpectralColor("A2IV"))),
+    new("Avior (ε Car)",       new Star( 8.3752, -59.509,  1.86, SpectralColor("K3III"))),
+    new("Aspidiske (ι Car)",   new Star( 9.2848, -59.275,  2.21, SpectralColor("A9Ib"))),
+    new("θ Carinae",           new Star(10.7159, -64.394,  2.76, SpectralColor("B0V"))),
+};
+
+// --- Canis Major ---
+Constellations["Canis Major"] = new()
+{
+    new("Sirius (α CMa)",  new Star( 6.7525, -16.716, -1.46, SpectralColor("A1V"))),
+    new("Mirzam (β CMa)",  new Star( 6.3783, -17.955,  1.98, SpectralColor("B1III"))),
+    new("Adhara (ε CMa)",  new Star( 6.9771, -28.972,  1.50, SpectralColor("B2II"))),
+    new("Wezen (δ CMa)",   new Star( 7.1399, -26.393,  1.83, SpectralColor("F8Ia"))),
+    new("Aludra (η CMa)",  new Star( 7.4016, -29.303,  2.45, SpectralColor("B5Ia"))),
+    new("Muliphein (ο² CMa)", new Star( 7.0504, -24.393, 2.93, SpectralColor("B1IV"))),
+};
+
+// --- Leo ---
+Constellations["Leo"] = new()
+{
+    new("Regulus (α Leo)",  new Star(10.1395, +11.967, 1.35, SpectralColor("B7V"))),
+    new("Algieba (γ Leo)",  new Star(10.3329, +19.841, 2.01, SpectralColor("K1III"))),
+    new("Zosma (δ Leo)",    new Star(11.2351, +20.523, 2.56, SpectralColor("A4V"))),
+    new("Chertan (θ Leo)",  new Star(11.2373, +15.429, 3.34, SpectralColor("A2V"))),
+    new("Denebola (β Leo)", new Star(11.8177, +14.571, 2.14, SpectralColor("A3V"))),
+};
+
+// --- Virgo ---
+Constellations["Virgo"] = new()
+{
+    new("Spica (α Vir)",      new Star(13.4199, -11.161, 0.98, SpectralColor("B1V"))),
+    new("Porrima (γ Vir)",    new Star(12.6943,  -1.449, 2.74, SpectralColor("F0V"))),
+    new("Vindemiatrix (ε Vir)", new Star(13.0363, +10.959, 2.83, SpectralColor("G8III"))),
+    new("Heze (ζ Vir)",       new Star(13.9114,  -0.595, 3.37, SpectralColor("A3V"))), // slightly >3, useful for pattern
+};
+
+// --- Gemini ---
+Constellations["Gemini"] = new()
+{
+    new("Castor (α Gem)",   new Star( 7.5766, +31.888, 1.58, SpectralColor("A1V"))),
+    new("Pollux (β Gem)",   new Star( 7.7553, +28.026, 1.14, SpectralColor("K0III"))),
+    new("Alhena (γ Gem)",   new Star( 6.6285, +16.399, 1.93, SpectralColor("A0IV"))),
+    new("Tejat (μ Gem)",    new Star( 6.3827, +22.513, 2.87, SpectralColor("M3III"))),
+    // Optional pattern anchors:
+    new("Mebsuta (ε Gem)",  new Star( 6.7321, +25.131, 3.06, SpectralColor("G8Ib"))),
+    new("Wasat (δ Gem)",    new Star( 7.3354, +21.982, 3.53, SpectralColor("F0IV"))),
+};
+
+/* For labeling later, iterate this dictionary and call engine.ProjectStar(cs.Star, out x, out y) to build your LabelMarks selectively. */
+
+
+// ==== Canis Minor ====
+Constellations["Canis Minor"] = new()
+{
+    new("Procyon (α CMi)", new Star( 7.6550,  +5.225, 0.38, SpectralColor("F5IV"))),
+    new("Gomeisa (β CMi)", new Star( 7.4525,  +8.289, 2.89, SpectralColor("B8V"))),
+    // (pattern is basically a short line; these two suffice)
+};
+
+// ==== Auriga ====
+Constellations["Auriga"] = new()
+{
+    new("Capella (α Aur)",     new Star( 5.2782, +45.997, 0.08, SpectralColor("G8III"))),
+    new("Menkalinan (β Aur)",  new Star( 5.9921, +44.947, 1.90, SpectralColor("A2IV"))),
+    new("Mahasim (θ Aur)",     new Star( 5.9922, +37.213, 2.65, SpectralColor("A0p"))),
+    new("Hassaleh (ι Aur)",    new Star( 5.1071, +33.359, 2.69, SpectralColor("K3II"))),
+    new("Almaaz (ε Aur)",      new Star( 5.0260, +43.823, 3.00, SpectralColor("F0Ia"))),
+    // Optional pattern helper:
+    // new("δ Aur",            new Star( 5.5334, +54.284, 3.72, SpectralColor("K0III"))),
+};
+
+// ==== Andromeda ====
+Constellations["Andromeda"] = new()
+{
+    new("Alpheratz (α And)", new Star( 0.1398, +29.090, 2.07, SpectralColor("B9p"))),
+    new("Mirach (β And)",    new Star( 1.1622, +35.621, 2.06, SpectralColor("M0III"))),
+    new("Almach (γ And)",    new Star( 2.0649, +42.330, 2.10, SpectralColor("K3III"))),
+    new("δ And",             new Star( 0.6559, +30.861, 3.28, SpectralColor("K3III"))),
+    // (Square corner shared with Pegasus via Alpheratz)
+};
+
+// ==== Pegasus (Great Square) ====
+Constellations["Pegasus (Great Square)"] = new()
+{
+    new("Markab (α Peg)",  new Star(23.0793, +15.205, 2.49, SpectralColor("B9V"))),
+    new("Scheat (β Peg)",  new Star(23.0629, +28.082, 2.42, SpectralColor("M2III"))),
+    new("Algenib (γ Peg)", new Star( 0.2206, +15.183, 2.83, SpectralColor("B2IV"))),
+    // Fourth corner is Alpheratz (α And) — already in Andromeda
+    new("Enif (ε Peg)",    new Star(21.7364,  +9.875, 2.38, SpectralColor("K2Ib"))), // Pegasus "nose"
+};
+
+// ==== Scorpius ====
+Constellations["Scorpius"] = new()
+{
+    new("Antares (α Sco)",  new Star(16.4901, -26.432, 0.96, SpectralColor("M1.5Iab"))),
+    new("Dschubba (δ Sco)", new Star(16.0056, -22.622, 2.29, SpectralColor("B1.5V"))),
+    new("Acrab (β¹ Sco)",   new Star(16.0906, -19.806, 2.62, SpectralColor("B1V"))),
+    new("Shaula (λ Sco)",   new Star(17.5601, -37.104, 1.62, SpectralColor("B2IV"))),
+    new("Sargas (θ Sco)",   new Star(17.6229, -42.998, 1.86, SpectralColor("F1II"))),
+    new("Larawag (ε Sco)",  new Star(16.8361, -34.293, 2.29, SpectralColor("K1III"))),
+    // Optional tail members:
+    // new("μ¹ Sco",        new Star(16.8647, -38.047, 2.97, SpectralColor("B1.5III"))),
+};
+
+// ==== Sagittarius (Teapot) ====
+Constellations["Sagittarius (Teapot)"] = new()
+{
+    new("Kaus Australis (ε Sgr)", new Star(18.4029, -34.385, 1.79, SpectralColor("B9.5III"))),
+    new("Kaus Media (δ Sgr)",     new Star(18.3499, -29.828, 2.72, SpectralColor("K3III"))),
+    new("Kaus Borealis (λ Sgr)",  new Star(18.4662, -25.422, 2.81, SpectralColor("K2III"))),
+    new("Nunki (σ Sgr)",          new Star(18.9211, -26.297, 2.05, SpectralColor("B2.5V"))),
+    new("Ascella (ζ Sgr)",        new Star(19.0435, -29.880, 2.60, SpectralColor("B3V"))),
+    new("Alnasl (γ² Sgr)",        new Star(18.0968, -30.424, 2.98, SpectralColor("K0III"))),
+    // Optional:
+    // new("Rukbat (α Sgr)",     new Star(19.3981, -40.616, 3.97, SpectralColor("B8V"))),
+};
+
+
+/* You can keep labels separate using your AnnotationOverlay pipeline — e.g., label Polaris or Orion’s Belt only. */
+
+
+
+/* Add the dots to your starfield (no labels): */
+
+// Combine all constellation stars into one catalog
+var constellationsCatalog = new List<Star>();
+foreach (var kv in Constellations)
+    foreach (var cs in kv.Value)
+        constellationsCatalog.Add(cs.Star);
+
+// Render (you can also add your bright baseline list and filler stars)
+var bmp = engine.Render(
+    stars: constellationsCatalog,
+    randomFillerCount: 500,
+    randomSeed: 42,
+    dimFaintStars: true,
+    out var projectedDots);
+
+
+/* Later, annotate selected names (separate step): */
+
+var labels = new List<LabelMark>();
+foreach (var (name, stars) in Constellations)
+{
+    foreach (var cs in stars)
+    {
+        if (engine.ProjectStar(cs.Star, out var x, out var y))
+        {
+            // label only key ones if you want (e.g., Polaris, Orion’s belt):
+            if (name.Contains("Ursa Minor") && cs.Name == "Polaris"
+             || name.Contains("Orion") && (cs.Name == "Alnitak" || cs.Name == "Alnilam" || cs.Name == "Mintaka"))
+            {
+                labels.Add(new LabelMark(cs.Name, x, y, cs.Star.Color ?? SKColors.White, 16f, 6f, 6f));
+            }
+        }
+    }
+}
+var annotated = AnnotationOverlay.DrawLabels(bmp, labels);

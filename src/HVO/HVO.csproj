@@ -10,5 +10,9 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Astronomy/" />
+  </ItemGroup>
+
 
 </Project>

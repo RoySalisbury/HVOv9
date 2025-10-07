@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HVO.SkyMonitorV5.RPi</RootNamespace>
+    <AssemblyName>HVO.SkyMonitorV5.RPi</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.6" />
+  <PackageReference Include="Scalar.AspNetCore" Version="2.5.3" />
+  <PackageReference Include="SkiaSharp" Version="3.119.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../HVO/HVO.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Data/hyg_v42.sqlite">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

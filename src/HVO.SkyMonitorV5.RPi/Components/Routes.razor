@@ -1,0 +1,21 @@
+@namespace HVO.SkyMonitorV5.RPi.Components
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Routing
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <section class="container py-5 text-center text-light">
+                <h1 class="display-5">Page not found</h1>
+                <p class="lead">The requested resource could not be located.</p>
+                <a class="btn btn-outline-light" href="/">
+                    <i class="bi bi-house-door"></i> Return home
+                </a>
+            </section>
+        </LayoutView>
+    </NotFound>
+</Router>

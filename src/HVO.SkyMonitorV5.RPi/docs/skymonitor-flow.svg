@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1400" viewBox="0 0 900 1400">
+  <style>
+    .title { font: bold 24px 'Segoe UI', sans-serif; fill: #102a43; }
+    .node { fill: #f4f8fb; stroke: #2b6cb0; stroke-width: 2; }
+    .decision { fill: #fef3c7; stroke: #c05621; stroke-width: 2; }
+    .action-text { font: 18px 'Segoe UI', sans-serif; fill: #1a202c; text-anchor: middle; }
+    .label { font: 16px 'Segoe UI', sans-serif; fill: #334155; }
+    .arrow { stroke: #1f3d78; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1f3d78"/>
+    </marker>
+  </defs>
+  <rect width="900" height="1400" fill="#ffffff"/>
+  <text x="450" y="60" class="title" text-anchor="middle">SkyMonitor Capture Flow</text>
+
+  <!-- Nodes -->
+  <rect x="325" y="100" width="250" height="70" rx="20" class="node"/>
+  <text x="450" y="142" class="action-text">Timer tick</text>
+
+  <rect x="325" y="210" width="250" height="70" rx="12" class="node"/>
+  <text x="450" y="252" class="action-text">Capture frame</text>
+
+  <rect x="305" y="320" width="290" height="90" rx="12" class="node"/>
+  <text x="450" y="360" class="action-text">RollingFrameStacker</text>
+  <text x="450" y="384" class="action-text">Accumulate</text>
+
+  <polygon points="450,460 540,540 450,620 360,540" class="decision"/>
+  <text x="450" y="522" class="action-text">Stacking enabled</text>
+  <text x="450" y="546" class="action-text">&amp; enough frames?</text>
+
+  <rect x="80" y="700" width="260" height="100" rx="12" class="node"/>
+  <text x="210" y="744" class="action-text">Use latest frame</text>
+  <text x="210" y="768" class="action-text">(no stacking output)</text>
+
+  <rect x="560" y="700" width="260" height="100" rx="12" class="node"/>
+  <text x="690" y="744" class="action-text">Average frames</text>
+  <text x="690" y="768" class="action-text">(stacking result)</text>
+
+  <rect x="325" y="860" width="250" height="80" rx="12" class="node"/>
+  <text x="450" y="902" class="action-text">FrameFilterPipeline</text>
+
+  <rect x="325" y="970" width="250" height="80" rx="12" class="node"/>
+  <text x="450" y="1012" class="action-text">Apply filters in order</text>
+
+  <rect x="325" y="1080" width="250" height="70" rx="12" class="node"/>
+  <text x="450" y="1122" class="action-text">Encode JPEG</text>
+
+  <rect x="325" y="1180" width="250" height="70" rx="12" class="node"/>
+  <text x="450" y="1222" class="action-text">FrameStateStore</text>
+
+  <rect x="325" y="1290" width="250" height="70" rx="12" class="node"/>
+  <text x="450" y="1332" class="action-text">API / UI consumers</text>
+
+  <!-- Arrows -->
+  <path d="M450 170 V210" class="arrow"/>
+  <path d="M450 280 V320" class="arrow"/>
+  <path d="M450 410 V460" class="arrow"/>
+  <path d="M360 540 C260 540 260 660 210 700" class="arrow"/>
+  <text x="300" y="620" class="label">No</text>
+  <path d="M540 540 C640 540 640 700 690 700" class="arrow"/>
+  <text x="600" y="610" class="label">Yes</text>
+  <path d="M340 750 C380 800 410 840 450 860" class="arrow"/>
+  <path d="M820 750 C760 820 600 850 450 860" class="arrow"/>
+  <path d="M450 940 V970" class="arrow"/>
+  <path d="M450 1050 V1080" class="arrow"/>
+  <path d="M450 1150 V1180" class="arrow"/>
+  <path d="M450 1250 V1290" class="arrow"/>
+</svg>
