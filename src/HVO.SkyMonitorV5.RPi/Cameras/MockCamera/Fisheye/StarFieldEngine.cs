@@ -1,3 +1,4 @@
+#nullable enable
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
@@ -13,7 +14,6 @@ public enum FisheyeModel
 public sealed record Star(double RightAscensionHours, double DeclinationDegrees, double Magnitude, SKColor? Color = null);
 
 public readonly record struct StarProjection(int Index, float X, float Y, double Magnitude);
-
 public readonly record struct PlanetProjection(string Name, float X, float Y, double Magnitude, SKColor Color);
 
 public sealed class StarFieldEngine
@@ -21,34 +21,41 @@ public sealed class StarFieldEngine
     private readonly double _latitudeDeg;
     private readonly double _longitudeDeg;
     private readonly DateTime _utc;
+    private readonly bool _flipHorizontal;
+    private readonly double _fovDeg;
+    private readonly bool _applyRefraction;
 
-    public StarFieldEngine(int width, int height, double latitudeDeg, double longitudeDeg, DateTime utcUtc, FisheyeModel projection = FisheyeModel.Equidistant, double horizonPaddingPct = 0.95)
+    public StarFieldEngine(
+        int width,
+        int height,
+        double latitudeDeg,
+        double longitudeDeg,
+        DateTime utcUtc,
+        FisheyeModel projection = FisheyeModel.Equidistant,
+        double horizonPaddingPct = 0.95,
+        bool flipHorizontal = false,
+        double fovDeg = 180.0,
+        bool applyRefraction = false)
     {
-        if (width <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(width));
-        }
-
-        if (height <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(height));
-        }
+        if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+        if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
 
         Width = width;
         Height = height;
         Projection = projection;
         HorizonPaddingPct = horizonPaddingPct;
+
         _latitudeDeg = latitudeDeg;
         _longitudeDeg = longitudeDeg;
         _utc = utcUtc.ToUniversalTime();
+        _flipHorizontal = flipHorizontal;
+        _fovDeg = Math.Clamp(fovDeg, 120.0, 200.0);
+        _applyRefraction = applyRefraction;
     }
 
     public int Width { get; }
-
     public int Height { get; }
-
     public FisheyeModel Projection { get; }
-
     public double HorizonPaddingPct { get; }
 
     public SKBitmap Render(
@@ -80,13 +87,11 @@ public sealed class StarFieldEngine
         out List<PlanetProjection> projectedPlanets)
     {
         projectedStars = new List<StarProjection>(stars.Count + randomFillerCount);
-        projectedPlanets = planets.Count == 0
-            ? new List<PlanetProjection>()
-            : new List<PlanetProjection>(planets.Count);
+        projectedPlanets = planets.Count == 0 ? new List<PlanetProjection>() : new List<PlanetProjection>(planets.Count);
 
-    var bitmap = new SKBitmap(Width, Height, true);
-    using var canvas = new SKCanvas(bitmap);
-    canvas.Clear(SKColors.Transparent);
+        var bitmap = new SKBitmap(Width, Height, true);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
 
         var cx = Width * 0.5f;
         var cy = Height * 0.5f;
@@ -97,27 +102,27 @@ public sealed class StarFieldEngine
         var lstHours = LocalSiderealTime(_utc, _longitudeDeg);
         var latitudeRad = DegreesToRadians(_latitudeDeg);
 
+        // Stars
         for (var i = 0; i < stars.Count; i++)
         {
             var star = stars[i];
-            if (!TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeRad, cx, cy, maxRadius, Projection, out var px, out var py))
-            {
+            if (!TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeRad,
+                            cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
+                            out var px, out var py))
                 continue;
-            }
 
             var magnitude = star.Magnitude;
             var brightness = Math.Pow(10.0, -(magnitude + 1.0) / 2.5);
             var radius = (float)(Math.Clamp(brightness, 0.001, 1.0) * 4.0 + 0.6f);
 
-            var color = star.Color ?? (dimFaintStars && magnitude > 5.5
-                ? new SKColor(170, 170, 170)
-                : SKColors.White);
+            var color = star.Color ?? (dimFaintStars && magnitude > 5.5 ? new SKColor(170, 170, 170) : SKColors.White);
 
             paint.Color = color;
             canvas.DrawCircle(px, py, radius, paint);
             projectedStars.Add(new StarProjection(i, px, py, magnitude));
         }
 
+        // Random filler
         if (randomFillerCount > 0)
         {
             var rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
@@ -126,20 +131,16 @@ public sealed class StarFieldEngine
                 var raHours = rng.NextDouble() * 24.0;
                 var sinDec = rng.NextDouble() * 2.0 - 1.0;
                 var decDegrees = RadiansToDegrees(Math.Asin(Math.Clamp(sinDec, -1.0, 1.0)));
-                var magnitude = rng.NextDouble() < 0.67
-                    ? 5.0 + rng.NextDouble() * 2.0
-                    : 3.0 + rng.NextDouble() * 2.0;
+                var magnitude = rng.NextDouble() < 0.67 ? 5.0 + rng.NextDouble() * 2.0 : 3.0 + rng.NextDouble() * 2.0;
 
-                if (!TryProject(raHours, decDegrees, lstHours, latitudeRad, cx, cy, maxRadius, Projection, out var px, out var py))
-                {
+                if (!TryProject(raHours, decDegrees, lstHours, latitudeRad,
+                                cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
+                                out var px, out var py))
                     continue;
-                }
 
                 var fillerBrightness = Math.Pow(10.0, -(magnitude + 1.0) / 2.5);
                 var fillerRadius = (float)(Math.Clamp(fillerBrightness, 0.001, 1.0) * 3.4 + 0.5f);
-                var fillerColor = magnitude > 5.6
-                    ? new SKColor(150, 150, 150)
-                    : new SKColor(210, 210, 210);
+                var fillerColor = magnitude > 5.6 ? new SKColor(150, 150, 150) : new SKColor(210, 210, 210);
 
                 paint.Color = fillerColor;
                 canvas.DrawCircle(px, py, fillerRadius, paint);
@@ -147,18 +148,28 @@ public sealed class StarFieldEngine
             }
         }
 
+        // Planets
         if (planets.Count > 0)
         {
             foreach (var planet in planets)
             {
-                if (!TryProject(planet.Star.RightAscensionHours, planet.Star.DeclinationDegrees, lstHours, latitudeRad, cx, cy, maxRadius, Projection, out var px, out var py))
-                {
-                    continue;
-                }
+                var ok = TryProject(
+                    planet.Star.RightAscensionHours, planet.Star.DeclinationDegrees,
+                    lstHours, latitudeRad, cx, cy, maxRadius,
+                    Projection, _flipHorizontal, _applyRefraction, _fovDeg,
+                    out var px, out var py);
+
+                if (planet.Name == "Jupiter")
+                    Console.WriteLine($"Jupiter TryProject={ok} px={px} py={py}");
+
+                if (!ok) continue;
 
                 var radius = planet.Body == PlanetBody.Moon
                     ? planetOptions.MoonRadiusPx
                     : CalculatePlanetRadius(planet.Star.Magnitude, planetOptions);
+
+                // safety: ensure visible
+                radius = Math.Max(radius, 2.0f);
 
                 DrawPlanetGlyph(canvas, px, py, radius, planet, planetOptions.Shape, paint);
                 projectedPlanets.Add(new PlanetProjection(planet.Name, px, py, planet.Star.Magnitude, planet.Color));
@@ -175,7 +186,10 @@ public sealed class StarFieldEngine
         var cx = Width * 0.5f;
         var cy = Height * 0.5f;
         var maxRadius = (float)(Math.Min(cx, cy) * HorizonPaddingPct);
-        return TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeRad, cx, cy, maxRadius, Projection, out x, out y);
+
+        return TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeRad,
+                          cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
+                          out x, out y);
     }
 
     private static float CalculatePlanetRadius(double magnitude, PlanetRenderOptions options)
@@ -185,7 +199,7 @@ public sealed class StarFieldEngine
         return Math.Clamp(unclamped, options.MinRadiusPx, options.MaxRadiusPx);
     }
 
-    private static void DrawPlanetGlyph(SKCanvas canvas, float x, float y, float radius, PlanetMark planet, PlanetMarkerShape shape, SKPaint paint)
+private static void DrawPlanetGlyph(SKCanvas canvas, float x, float y, float radius, PlanetMark planet, PlanetMarkerShape shape, SKPaint paint)
     {
         paint.Color = planet.Color;
         switch (shape)
@@ -219,28 +233,37 @@ public sealed class StarFieldEngine
         float cy,
         float maxRadius,
         FisheyeModel projection,
+        bool flipHorizontal,
+        bool applyRefraction,
+        double fovDeg,
         out float x,
         out float y)
     {
         x = 0f;
         y = 0f;
 
-        if (!RaDecToAltAz(raHours, decDeg, lstHours, latitudeRad, out var altitudeDeg, out var azimuthDeg))
+        // RA/Dec -> Alt/Az (always succeed; cull later)
+        RaDecToAltAz(raHours, decDeg, lstHours, latitudeRad, out var altitudeDeg, out var azimuthDeg);
+
+        // Apply refraction before horizon cull (apparent sky)
+        if (applyRefraction)
         {
-            return false;
+            altitudeDeg += BennettRefractionDeg(altitudeDeg);
         }
 
-        if (!AltAzToFisheye(altitudeDeg, azimuthDeg, cx, cy, maxRadius, projection, out x, out y))
-        {
+        // Now cull if still below the apparent horizon
+        if (altitudeDeg < 0.0) return false;
+
+        // Alt/Az -> fisheye
+        if (!AltAzToFisheye(altitudeDeg, azimuthDeg, cx, cy, maxRadius, projection, flipHorizontal, fovDeg, out x, out y))
             return false;
-        }
 
         var dx = x - cx;
         var dy = y - cy;
         return dx * dx + dy * dy <= maxRadius * maxRadius + 1.0f;
     }
 
-    private static bool RaDecToAltAz(double raHours, double decDeg, double lstHours, double latitudeRad, out double altitudeDeg, out double azimuthDeg)
+    private static void RaDecToAltAz(double raHours, double decDeg, double lstHours, double latitudeRad, out double altitudeDeg, out double azimuthDeg)
     {
         var hourAngle = DegreesToRadians((lstHours - raHours) * 15.0);
         var declinationRad = DegreesToRadians(decDeg);
@@ -251,46 +274,50 @@ public sealed class StarFieldEngine
         cosAz = Math.Clamp(cosAz, -1.0, 1.0);
 
         var azimuth = Math.Acos(cosAz);
-        if (Math.Sin(hourAngle) > 0)
-        {
-            azimuth = Math.PI * 2.0 - azimuth;
-        }
+        if (Math.Sin(hourAngle) > 0) azimuth = Math.PI * 2.0 - azimuth;
 
         altitudeDeg = RadiansToDegrees(altitude);
         azimuthDeg = RadiansToDegrees(azimuth);
-        return altitudeDeg > 0.0;
     }
 
-    private static bool AltAzToFisheye(double altitudeDeg, double azimuthDeg, float cx, float cy, float maxRadius, FisheyeModel projection, out float x, out float y)
+    private static bool AltAzToFisheye(double altitudeDeg, double azimuthDeg, float cx, float cy, float maxRadius, FisheyeModel projection, bool flipHorizontal, double fovDeg, out float x, out float y)
     {
-        x = 0f;
-        y = 0f;
+        x = 0f; y = 0f;
 
-        var zenithAngle = DegreesToRadians(90.0 - altitudeDeg);
-        if (zenithAngle < 0)
-        {
-            return false;
-        }
+        var theta = DegreesToRadians(90.0 - altitudeDeg); // zenith angle
+        if (theta < 0) return false;
 
-        double normalizedRadius = projection switch
+        var thetaMax = Math.PI * (fovDeg / 360.0); // FOV/2 in radians
+        theta = Math.Min(theta, thetaMax);
+
+        double rPrime = projection switch
         {
-            FisheyeModel.Equidistant => zenithAngle / (Math.PI / 2.0),
-            FisheyeModel.EquisolidAngle => 2.0 * Math.Sin(zenithAngle / 2.0),
-            FisheyeModel.Orthographic => Math.Sin(zenithAngle),
-            FisheyeModel.Stereographic => 2.0 * Math.Tan(zenithAngle / 2.0),
-            _ => zenithAngle / (Math.PI / 2.0)
+            FisheyeModel.Equidistant      => theta / thetaMax,
+            FisheyeModel.EquisolidAngle   => Math.Sin(theta / 2.0) / Math.Sin(thetaMax / 2.0),
+            FisheyeModel.Orthographic     => Math.Sin(theta) / Math.Sin(thetaMax),
+            FisheyeModel.Stereographic    => Math.Tan(theta / 2.0) / Math.Tan(thetaMax / 2.0),
+            _                             => theta / thetaMax
         };
 
-        normalizedRadius = Math.Min(normalizedRadius, 1.0);
-        var radius = normalizedRadius * maxRadius;
+        rPrime = Math.Min(rPrime, 1.0);
+        var radius = (float)(rPrime * maxRadius);
         var azimuthRad = DegreesToRadians(azimuthDeg);
 
-        x = cx + (float)(radius * Math.Sin(azimuthRad));
+        var horizontalOffset = (float)(radius * Math.Sin(azimuthRad));
+        x = flipHorizontal ? cx - horizontalOffset : cx + horizontalOffset;
         y = cy - (float)(radius * Math.Cos(azimuthRad));
         return true;
     }
 
-    private static double LocalSiderealTime(DateTime utc, double longitudeDeg)
+    // Bennett 1982 refraction (deg). Good near horizon.
+    private static double BennettRefractionDeg(double altDeg)
+    {
+        var a = Math.Max(altDeg, -0.9);
+        var rArcMin = 1.02 / Math.Tan((a + 10.3 / (a + 5.11)) * Math.PI / 180.0);
+        return rArcMin / 60.0;
+    }
+
+    public static double LocalSiderealTime(DateTime utc, double longitudeDeg)
     {
         var jd = OADateToJulian(utc);
         var t = (jd - 2451545.0) / 36525.0;
@@ -298,31 +325,19 @@ public sealed class StarFieldEngine
         var fractionalDay = (jd + 0.5) % 1.0;
         gmst = (gmst + fractionalDay * 24.0 * 1.00273790935) % 24.0;
         var lst = (gmst + longitudeDeg / 15.0) % 24.0;
-        if (lst < 0)
-        {
-            lst += 24.0;
-        }
+        if (lst < 0) lst += 24.0;
         return lst;
     }
 
     private static double OADateToJulian(DateTime utc) => utc.ToOADate() + 2415018.5;
-
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
-
     private static double RadiansToDegrees(double radians) => radians * 180.0 / Math.PI;
 }
 
-
 public static class StarColors
 {
-    // B–V (ci) → color, with fallback to spectral class if ci is missing.
     public static SKColor FromCatalog(string? spectral, double? colorIndexBV)
-    {
-        if (colorIndexBV is double bv && !double.IsNaN(bv))
-            return FromBV(bv);
-
-        return SpectralColor(spectral);
-    }
+        => (colorIndexBV is double bv && !double.IsNaN(bv)) ? FromBV(bv) : SpectralColor(spectral);
 
     public static SKColor SpectralColor(string? spectral)
     {
@@ -341,26 +356,21 @@ public static class StarColors
         };
     }
 
-    // Approximate B–V → RGB (based on a common piecewise approximation)
-    // Clamp input to [-0.4 .. 2.0] which covers most stars.
     public static SKColor FromBV(double bv)
     {
         bv = Math.Clamp(bv, -0.4, 2.0);
         double r, g, b;
 
-        // Red
         if (bv < 0.0)       r = 0.61 + 0.11 * bv + 0.1 * bv * bv;
         else if (bv < 0.4)  r = 0.83 + 0.17 * bv;
         else if (bv < 1.6)  r = 1.00;
         else                r = 1.00;
 
-        // Green
         if (bv < 0.0)       g = 0.70 + 0.07 * bv + 0.1 * bv * bv;
         else if (bv < 0.4)  g = 0.87 + 0.11 * bv;
         else if (bv < 1.5)  g = 0.98 - 0.16 * (bv - 0.4);
         else                g = 0.82 - 0.5  * (bv - 1.5);
 
-        // Blue
         if (bv < 0.4)       b = 1.00;
         else if (bv < 1.5)  b = 1.00 - 0.47 * (bv - 0.4);
         else                b = 0.63 - 0.6  * (bv - 1.5);

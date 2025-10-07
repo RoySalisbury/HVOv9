@@ -13,17 +13,19 @@ using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras;
 
-/// <summary>
-/// Synthetic fisheye camera adapter that renders a realistic all-sky projection using the starfield engine.
-/// </summary>
 public sealed class MockFisheyeCameraAdapter : ICameraAdapter
 {
     private const int FrameWidth = 1280;
     private const int FrameHeight = 960;
     private const int RandomFillerStars = 0;
 
+    internal const FisheyeModel DefaultProjection = FisheyeModel.Equidistant;
+    internal const double DefaultHorizonPadding = 0.98;
+    internal const double DefaultFovDeg = 185.0; // match Stellarium view
+
     private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
     private readonly IOptionsMonitor<StarCatalogOptions> _catalogOptions;
+    private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MockFisheyeCameraAdapter> _logger;
     private readonly Random _random = new();
@@ -33,11 +35,13 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     public MockFisheyeCameraAdapter(
         IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
         IOptionsMonitor<StarCatalogOptions> catalogOptions,
+        IOptionsMonitor<CardinalDirectionsOptions> cardinalOptions,
         IServiceScopeFactory scopeFactory,
         ILogger<MockFisheyeCameraAdapter>? logger = null)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogOptions = catalogOptions ?? throw new ArgumentNullException(nameof(catalogOptions));
+        _cardinalMonitor = cardinalOptions ?? throw new ArgumentNullException(nameof(cardinalOptions));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? NullLogger<MockFisheyeCameraAdapter>.Instance;
     }
@@ -55,11 +59,7 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     {
         _initialized = true;
         var location = _locationMonitor.CurrentValue;
-        _logger.LogInformation(
-            "Mock fisheye camera initialized for latitude {LatitudeDegrees}°, longitude {LongitudeDegrees}°.",
-            location.LatitudeDegrees,
-            location.LongitudeDegrees);
-
+        _logger.LogInformation("Mock fisheye camera initialized at {Lat}°, {Lon}°.", location.LatitudeDegrees, location.LongitudeDegrees);
         return Task.FromResult(Result<bool>.Success(true));
     }
 
@@ -73,9 +73,7 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken)
     {
         if (!_initialized)
-        {
             return Result<CameraFrame>.Failure(new InvalidOperationException("Camera adapter has not been initialized."));
-        }
 
         try
         {
@@ -88,11 +86,11 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
             using var scope = _scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
 
+            // Build star list
             List<Star> catalogStars;
-
             if (catalogConfig.IncludeConstellationHighlight)
             {
-                var visibleConstellations = await repository.GetVisibleByConstellationAsync(
+                var groups = await repository.GetVisibleByConstellationAsync(
                     latitudeDeg: location.LatitudeDegrees,
                     longitudeDeg: location.LongitudeDegrees,
                     utc: nowUtc,
@@ -102,44 +100,29 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
                     screenHeight: FrameHeight);
 
                 var starsWithLabels = new List<Star>(catalogConfig.TopStarCount);
-
-                foreach (var group in visibleConstellations)
+                foreach (var group in groups)
                 {
                     var count = 0;
-                    foreach (var star in group.Stars)
+                    foreach (var s in group.Stars)
                     {
-                        starsWithLabels.Add(star);
-                        count++;
-                        if (count >= catalogConfig.ConstellationStarCap)
-                        {
-                            break;
-                        }
+                        starsWithLabels.Add(s);
+                        if (++count >= catalogConfig.ConstellationStarCap) break;
                     }
                 }
 
                 if (starsWithLabels.Count < catalogConfig.TopStarCount)
                 {
                     var fallback = await repository.GetVisibleStarsAsync(
-                        latitudeDeg: location.LatitudeDegrees,
-                        longitudeDeg: location.LongitudeDegrees,
-                        utc: nowUtc,
-                        magnitudeLimit: catalogConfig.MagnitudeLimit,
-                        minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
-                        topN: catalogConfig.TopStarCount,
-                        stratified: catalogConfig.StratifiedSelection,
-                        raBins: catalogConfig.RightAscensionBins,
-                        decBands: catalogConfig.DeclinationBands,
-                        screenWidth: FrameWidth,
-                        screenHeight: FrameHeight);
+                        location.LatitudeDegrees, location.LongitudeDegrees, nowUtc,
+                        catalogConfig.MagnitudeLimit, catalogConfig.MinMaxAltitudeDegrees,
+                        catalogConfig.TopStarCount, catalogConfig.StratifiedSelection,
+                        catalogConfig.RightAscensionBins, catalogConfig.DeclinationBands,
+                        FrameWidth, FrameHeight);
 
-                    foreach (var star in fallback)
+                    foreach (var s in fallback)
                     {
-                        if (starsWithLabels.Count >= catalogConfig.TopStarCount)
-                        {
-                            break;
-                        }
-
-                        starsWithLabels.Add(star);
+                        if (starsWithLabels.Count >= catalogConfig.TopStarCount) break;
+                        starsWithLabels.Add(s);
                     }
                 }
 
@@ -148,91 +131,124 @@ public sealed class MockFisheyeCameraAdapter : ICameraAdapter
             else
             {
                 catalogStars = await repository.GetVisibleStarsAsync(
+                    location.LatitudeDegrees, location.LongitudeDegrees, nowUtc,
+                    catalogConfig.MagnitudeLimit, catalogConfig.MinMaxAltitudeDegrees,
+                    catalogConfig.TopStarCount, catalogConfig.StratifiedSelection,
+                    catalogConfig.RightAscensionBins, catalogConfig.DeclinationBands,
+                    FrameWidth, FrameHeight);
+            }
+
+            // Planets
+            IReadOnlyList<PlanetMark> planetMarks = Array.Empty<PlanetMark>();
+            if (ShouldComputePlanets(catalogConfig))
+            {
+                var computed = PlanetMarks.Compute(
                     latitudeDeg: location.LatitudeDegrees,
                     longitudeDeg: location.LongitudeDegrees,
                     utc: nowUtc,
-                    magnitudeLimit: catalogConfig.MagnitudeLimit,
-                    minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
-                    topN: catalogConfig.TopStarCount,
-                    stratified: catalogConfig.StratifiedSelection,
-                    raBins: catalogConfig.RightAscensionBins,
-                    decBands: catalogConfig.DeclinationBands,
-                    screenWidth: FrameWidth,
-                    screenHeight: FrameHeight);
+                    includeUranusNeptune: catalogConfig.IncludeOuterPlanets,
+                    includeSun: catalogConfig.IncludeSun);
+
+                var filtered = new List<PlanetMark>(computed.Count);
+                foreach (var p in computed)
+                {
+                    if (!ShouldIncludePlanet(p, catalogConfig)) continue;
+                    filtered.Add(p);
+                    catalogStars.Add(p.Star); // draw a point underneath glyph
+                }
+                if (filtered.Count > 0) planetMarks = filtered;
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogInformation("Planets to render: {List}", string.Join(", ", planetMarks.Select(p => p.Name)));
 
+            // Render (equidistant fisheye; apparent sky)
             var engine = new StarFieldEngine(
-                FrameWidth,
-                FrameHeight,
-                location.LatitudeDegrees,
-                location.LongitudeDegrees,
-                nowUtc,
-                projection: FisheyeModel.EquisolidAngle,
-                horizonPaddingPct: 0.98);
+                FrameWidth, FrameHeight,
+                location.LatitudeDegrees, location.LongitudeDegrees, nowUtc,
+                projection: DefaultProjection,
+                horizonPaddingPct: DefaultHorizonPadding,
+                flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
+                fovDeg: DefaultFovDeg,
+                applyRefraction: true);
 
-            using var starfield = engine.Render(
-                catalogStars,
-                RandomFillerStars,
-                randomSeed: null,
+            using var sky = engine.Render(
+                catalogStars, planetMarks,
+                RandomFillerStars, randomSeed: null,
                 dimFaintStars: true,
-                out _);
+                PlanetRenderOptions.Default,
+                out _, out _);
 
-            ApplySensorNoise(starfield, exposure);
+            ApplySensorNoise(sky, exposure);
 
-            var pixelBuffer = FramePixelBuffer.FromBitmap(starfield);
-
-            using var image = SKImage.FromBitmap(starfield);
+            var pixelBuffer = FramePixelBuffer.FromBitmap(sky);
+            using var image = SKImage.FromBitmap(sky);
             using var data = image.Encode(SKEncodedImageFormat.Png, 90);
             var bytes = data.ToArray();
 
             var frame = new CameraFrame(DateTimeOffset.UtcNow, exposure, bytes, "image/png", pixelBuffer);
-
-            _logger.LogTrace(
-                "Mock fisheye camera captured frame at {TimestampUtc} with exposure {ExposureMs} ms, gain {Gain}, and {StarCount} catalog stars.",
-                frame.Timestamp.UtcDateTime,
-                exposure.ExposureMilliseconds,
-                exposure.Gain,
-                catalogStars.Count);
-
+            _logger.LogTrace("Mock fisheye captured {Stars} stars at {Utc}.", catalogStars.Count, frame.Timestamp.UtcDateTime);
             return Result<CameraFrame>.Success(frame);
         }
-        catch (OperationCanceledException ex)
+        catch (OperationCanceledException oce)
         {
-            _logger.LogDebug(ex, "Mock fisheye capture cancelled.");
-            return Result<CameraFrame>.Failure(ex);
+            _logger.LogDebug(oce, "Capture cancelled.");
+            return Result<CameraFrame>.Failure(oce);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Mock fisheye capture failed.");
+            _logger.LogError(ex, "Capture failed.");
             return Result<CameraFrame>.Failure(ex);
         }
     }
 
-    private void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
+private void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
+{
+    // Tunables
+    double noiseLevel = Math.Clamp(exposure.Gain / 480d, 0.012d, 0.09d);
+    double twinkleProbability = 0.0015d + exposure.Gain * 0.000012d;
+    const double kMin = 0.6;   // clamp luminance scale to avoid crushing colors
+    const double kMax = 1.4;
+
+    var span = bitmap.GetPixelSpan();            // BGRA for SkiaSharp default
+    for (int i = 0; i < span.Length; i += 4)
     {
-        var noiseLevel = Math.Clamp(exposure.Gain / 480d, 0.012d, 0.09d);
-        var twinkleProbability = 0.0015d + exposure.Gain * 0.000012d;
+        byte b = span[i + 0];
+        byte g = span[i + 1];
+        byte r = span[i + 2];
+        byte a = span[i + 3];
+        if (a == 0) continue;                    // skip transparent
 
-        var span = bitmap.GetPixelSpan();
-        for (var i = 0; i < span.Length; i += 4)
-        {
-            var alpha = span[i + 3];
-            var current = span[i + 2];
-            var noise = (int)((_random.NextDouble() - 0.5d) * 512 * noiseLevel);
-            var twinkleBoost = 0;
+        // Rec.709 luminance (don’t change hue/saturation)
+        double Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-            if (current > 225 && _random.NextDouble() < twinkleProbability)
-            {
-                twinkleBoost = _random.Next(5, 22);
-            }
+        int noise = (int)((_random.NextDouble() - 0.5d) * 512 * noiseLevel);
 
-            var value = (byte)Math.Clamp(current + noise + twinkleBoost, 0, 255);
-            span[i] = value;
-            span[i + 1] = value;
-            span[i + 2] = value;
-            span[i + 3] = alpha;
-        }
+        // Tiny chance to “sparkle” very bright points (stars)
+        int twinkle = (Y > 225 && _random.NextDouble() < twinkleProbability)
+            ? _random.Next(5, 22)
+            : 0;
+
+        double Y2 = Math.Clamp(Y + noise + twinkle, 0, 255);
+
+        // Scale RGB uniformly by luminance ratio → hue/saturation preserved
+        double k = (Y <= 1.0) ? (Y2 == 0 ? 0.0 : Y2) : (Y2 / Y);
+        k = Math.Clamp(k, kMin, kMax);
+
+        span[i + 0] = (byte)Math.Clamp(Math.Round(b * k), 0, 255);
+        span[i + 1] = (byte)Math.Clamp(Math.Round(g * k), 0, 255);
+        span[i + 2] = (byte)Math.Clamp(Math.Round(r * k), 0, 255);
+        span[i + 3] = a;
     }
+}
+
+    private static bool ShouldComputePlanets(StarCatalogOptions o)
+        => o.IncludePlanets || o.IncludeMoon || o.IncludeOuterPlanets || o.IncludeSun;
+
+    private static bool ShouldIncludePlanet(PlanetMark p, StarCatalogOptions o) => p.Body switch
+    {
+        PlanetBody.Moon => o.IncludeMoon,
+        PlanetBody.Sun => o.IncludeSun,
+        PlanetBody.Uranus or PlanetBody.Neptune => o.IncludeOuterPlanets,
+        _ => o.IncludePlanets
+    };
 }

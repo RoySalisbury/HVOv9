@@ -156,6 +156,11 @@ services.AddMemoryCache(options =>
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<CelestialAnnotationsOptions>()
+            .Bind(configuration.GetSection(CelestialAnnotationsOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
     services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
     services.AddSingleton<IExposureController, AdaptiveExposureController>();

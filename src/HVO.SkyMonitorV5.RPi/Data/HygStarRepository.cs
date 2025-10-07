@@ -34,7 +34,7 @@ public sealed class HygStarRepository : IStarRepository
         DateTime utc,
         double magnitudeLimit = 6.5,
         double minMaxAltitudeDeg = 10.0,
-        int topN = 300,
+        int topN = 500,
         bool stratified = false,
         int raBins = 24,
         int decBands = 8,
@@ -52,6 +52,7 @@ public sealed class HygStarRepository : IStarRepository
                 s.Magnitude,
                 s.SpectralType
             })
+            .OrderBy(s => s.Magnitude)
             .ToListAsync();
 
         // Instantiate a tiny projector (1x1 is enough; projection truth is the same)

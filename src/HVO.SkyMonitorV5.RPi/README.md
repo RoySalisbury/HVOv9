@@ -18,8 +18,8 @@ HVO SkyMonitor v5 is the Raspberry Pi service that captures synthetic or hardwar
 | Filter | Name (for configuration) | Purpose |
 | ------ | ------------------------ | ------- |
 | Cardinal directions | `CardinalDirections` | Draws a dashed azimuth ring with north/east/south/west tick marks and labels, helping viewers orient the dome.
-| Celestial annotations | `CelestialAnnotations` | Projects a curated set of celestial labels (Polaris, Vega, Mars, etc.) in their sidereal-corrected positions with color-coded markers.
-| Overlay text | `OverlayText` | Renders timestamp, exposure, gain, and rolling integration summary in the lower-left corner of the frame.
+| Celestial annotations | `CelestialAnnotations` | Projects configurable star, planet, and deep-sky object labels in their sidereal-corrected positions with color-coded markers.
+| Overlay text | `OverlayText` | Displays observatory coordinates, localised timestamp, exposure, gain, and rolling integration summary in the lower-left corner of the frame.
 | Circular mask | `CircularMask` | Darkens the corners outside a 95% diameter circle to mimic traditional all-sky fisheye vignetting or privacy masks.
 
 Each filter implements `IFrameFilter`, receives the `SKBitmap` for the current frame, and may decide whether to run based on the live `CameraConfiguration` (for example, both overlay filters respect `EnableImageOverlays`, and the mask filter checks `EnableMaskOverlay`).
@@ -58,10 +58,11 @@ The effective integration time reported in the overlay equals the sum of the exp
     { "Name": "CircularMask", "Order": 4, "Enabled": false }
   ],
   "FrameFilters": [],
-  "OverlayTextFormat": "yyyy-MM-dd HH:mm:ss 'UTC'"
+  "OverlayTextFormat": "yyyy-MM-dd HH:mm:ss zzz"
 }
 ```
 
+- The overlay now reports the configured latitude/longitude and converts timestamps to the appropriate local time zone for that location.
 `Filters` lets you toggle individual filters and control their default order without editing code. Only entries flagged `Enabled` are applied (sorted by `Order`). The legacy `FrameFilters` string array remains as a fallback for backward compatibility and is ignored when `Filters` contains at least one enabled entry. When both collections are empty the runtime keeps the live sequence supplied via runtime updates—when overlays are disabled (the default), the capture pipeline simply returns the raw starfield image from the camera adapter.
 
 `CardinalDirections` provides cosmetic controls for the cardinal overlay (offset, rotation, line styling, and label boxes). Example:
@@ -111,6 +112,73 @@ The effective integration time reported in the overlay equals the sum of the exp
 - Negative/positive radius offsets shrink or grow the clear aperture relative to the 95% auto-fit circle.
 - Offsets shift the mask centre, useful when the optics aren’t perfectly concentric with the sensor.
 - `MaskColor` accepts any hex colour; opacity (0–255) controls falloff strength.
+
+`CelestialAnnotations` drives which stars, planets, and deep-sky objects receive labels:
+
+```json
+"CelestialAnnotations": {
+  "LabelFontSize": 8.0,
+  "StarLabelColor": "#EBF5FF",
+  "PlanetLabelColor": "#FFE8C5",
+  "DeepSkyLabelColor": "#F0E4FF",
+  "StarRingRadius": 3.0,
+  "PlanetRingRadius": 3.6,
+  "DeepSkyRingRadius": 4.0,
+  "StarNames": [
+    "Polaris",
+    "Spica",
+    "Altair"
+  ],
+  "PlanetNames": [
+    "Mars",
+    "Jupiter",
+    "Moon"
+  ],
+  "DeepSkyObjects": [
+    {
+      "Name": "M31 (Andromeda Galaxy)",
+      "RightAscensionHours": 0.712,
+      "DeclinationDegrees": 41.269,
+      "Magnitude": 3.4,
+      "Color": "#8FB7FF"
+    }
+  ]
+}
+```
+
+- `LabelFontSize` tunes the label typography; the defaults shrink the overlay labels to half of their previous size with a legible glow.
+- `StarLabelColor`, `PlanetLabelColor`, and `DeepSkyLabelColor` control the text colour for each annotation type.
+- `StarRingRadius`, `PlanetRingRadius`, and `DeepSkyRingRadius` adjust the diameter of the dotted locator rings.
+- `StarNames` is case-insensitive and matches the curated constellation catalog bundled with the mock camera. Add any missing targets by supplying precise coordinates through `DeepSkyObjects`.
+- `PlanetNames` accepts values from the internal ephemeris (`Mercury`, `Venus`, `Mars`, `Jupiter`, `Saturn`, `Uranus`, `Neptune`, `Moon`, `Sun`). Labels only appear when the corresponding `StarCatalog` switches render those bodies.
+- `DeepSkyObjects` annotate arbitrary RA/Dec coordinates with optional magnitude and colour overrides.
+- The annotation projection honours the cardinal overlay’s `SwapEastWest` flag, so mirrored optics automatically flip both the labels and the marker positions in sync.
+
+Every annotated target is surrounded by a dotted locator ring—deep-sky objects use a softer outline—so the label and location remain legible without adding solid markers.
+
+`StarCatalog` governs which synthetic sources are plotted by the mock fisheye camera:
+
+```json
+"StarCatalog": {
+  "MagnitudeLimit": 6.5,
+  "MinMaxAltitudeDegrees": 10,
+  "TopStarCount": 300,
+  "StratifiedSelection": false,
+  "IncludeConstellationHighlight": true,
+  "IncludePlanets": true,
+  "IncludeMoon": true,
+  "IncludeOuterPlanets": false,
+  "IncludeSun": false,
+  "AnnotatePlanets": true,
+  "RightAscensionBins": 24,
+  "DeclinationBands": 8
+}
+```
+
+- `IncludeConstellationHighlight` adds branded asterisms on top of the brightest catalog stars.
+- `IncludePlanets` renders Mercury through Saturn; toggle `IncludeOuterPlanets` to extend to Uranus and Neptune.
+- `IncludeMoon` controls whether the lunar disk is plotted, while `IncludeSun` can be enabled for daytime simulations.
+- `AnnotatePlanets` allows the `CelestialAnnotations` overlay to render labels for configured planet names when those bodies are included in the starfield output.
 
   ### Observatory location
 

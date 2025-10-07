@@ -39,6 +39,31 @@ public sealed class StarCatalogOptions
     public bool IncludeConstellationHighlight { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether visible planets (Mercury through Saturn) should be rendered alongside catalog stars.
+    /// </summary>
+    public bool IncludePlanets { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Moon should be rendered alongside catalog stars.
+    /// </summary>
+    public bool IncludeMoon { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the outer planets (Uranus and Neptune) should be rendered when planets are enabled.
+    /// </summary>
+    public bool IncludeOuterPlanets { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Sun should be rendered in daytime simulation scenarios.
+    /// </summary>
+    public bool IncludeSun { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the overlay pipeline should annotate planets when projected onto the frame.
+    /// </summary>
+    public bool AnnotatePlanets { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the maximum number of stars to include per constellation when highlighting is enabled.
     /// </summary>
     [Range(1, 200)]

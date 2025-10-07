@@ -46,5 +46,5 @@ public sealed class CameraPipelineOptions
     [Range(-12, 12)]
     public double DayNightTransitionHourOffset { get; set; } = 0;
 
-    public string OverlayTextFormat { get; set; } = "yyyy-MM-dd HH:mm:ss 'UTC'";
+    public string OverlayTextFormat { get; set; } = "yyyy-MM-dd HH:mm:ss zzz";
 }
