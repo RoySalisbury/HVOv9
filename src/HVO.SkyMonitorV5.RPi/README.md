@@ -156,6 +156,19 @@ The effective integration time reported in the overlay equals the sum of the exp
 
 Every annotated target is surrounded by a dotted locator ring—deep-sky objects use a softer outline—so the label and location remain legible without adding solid markers.
 
+## Synthetic starfield (mock camera)
+
+The `MockFisheyeCameraAdapter` now generates a more balanced all-sky scene so preview imagery better matches what the observatory’s optics see overnight.
+
+- **Multi-band star selection** – Stars are pulled from the HYG catalog in three passes (bright, mid, faint). Bright anchors are capped, mid-range stars use the configured RA/Dec binning, and faint stars are over-sampled and thinned in screen space to keep uniform coverage.
+- **Ring quotas** – After projection the adapter fills concentric horizon rings to avoid crowding the zenith. The quotas bias toward the horizon so Milky Way density looks natural when the fisheye is level.
+- **Constellation highlights** – When `IncludeConstellationHighlight` is enabled a small number of asterism members are layered into the candidate pool per constellation, making outreach-friendly shapes pop without overwhelming the frame.
+- **Refraction-aware culling** – The selection engine and renderer both apply Bennett atmospheric refraction and the same fisheye FOV so a star that passes the candidate screen-space test cannot disappear in the final render.
+- **Adaptive star sizing** – Rendering uses the new `StarSizeCurve` logistic to give bright stars bloom without blowing out faint stars. Very dim targets automatically switch to 1×1 or 2×2 "microdot" pixels that hold up after video encoding.
+- **Colour-preserving noise** – Sensor noise now perturbs luminance while leaving RGB ratios mostly intact, so star colours survive simulated gain spikes.
+
+> Tip: `StarCatalog.TopStarCount` is treated as a minimum and the adapter will request at least 300 candidates so the final frame always fills the dome. Increase it if you want denser skies; the ring quotas will adapt automatically.
+
 `StarCatalog` governs which synthetic sources are plotted by the mock fisheye camera:
 
 ```json
@@ -179,6 +192,7 @@ Every annotated target is surrounded by a dotted locator ring—deep-sky objects
 - `IncludePlanets` renders Mercury through Saturn; toggle `IncludeOuterPlanets` to extend to Uranus and Neptune.
 - `IncludeMoon` controls whether the lunar disk is plotted, while `IncludeSun` can be enabled for daytime simulations.
 - `AnnotatePlanets` allows the `CelestialAnnotations` overlay to render labels for configured planet names when those bodies are included in the starfield output.
+- `RightAscensionBins` and `DeclinationBands` influence the mid-tier stratification pass; lowering the values produces looser clustering while higher values aim for uniform coverage.
 
   ### Observatory location
 
@@ -311,3 +325,4 @@ curl -X POST http://localhost:5136/api/v1.0/all-sky/configuration \
 - `Program.cs` – service registration and DI wiring
 - `Pipeline/Filters/*` – reference filter implementations
 - `Controllers/v1_0/AllSkyController.cs` – REST API for status and configuration
+- `../../docs/sky-monitor-starfield.md` – detailed notes on the mock fisheye starfield pipeline
