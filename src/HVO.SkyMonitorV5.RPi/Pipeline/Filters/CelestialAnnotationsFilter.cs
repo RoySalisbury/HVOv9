@@ -26,7 +26,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
     private static readonly float[] DottedRingPattern = { 4f, 4f };
 
-    private static readonly IReadOnlyDictionary<string, Star> CatalogStarIndex = BuildCatalogStarIndex();
+    private readonly IReadOnlyDictionary<string, Star> _catalogStarIndex;
 
     private static readonly SKColor DefaultStarColor = new(173, 216, 230, 230);
     private static readonly SKColor DefaultDeepSkyColor = new(202, 180, 255, 230);
@@ -50,6 +50,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         IOptionsMonitor<StarCatalogOptions> catalogMonitor,
         IOptionsMonitor<CelestialAnnotationsOptions> annotationMonitor,
         IOptionsMonitor<CardinalDirectionsOptions> cardinalMonitor,
+        IConstellationCatalog constellationCatalog,
         ILogger<CelestialAnnotationsFilter> logger)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
@@ -57,6 +58,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         _annotationMonitor = annotationMonitor ?? throw new ArgumentNullException(nameof(annotationMonitor));
         _cardinalMonitor = cardinalMonitor ?? throw new ArgumentNullException(nameof(cardinalMonitor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _catalogStarIndex = BuildCatalogStarIndex(constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog)));
 
         _cache = BuildCache(annotationMonitor.CurrentValue);
 
@@ -204,7 +206,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                 continue;
             }
 
-            if (CatalogStarIndex.TryGetValue(name, out var star))
+            if (_catalogStarIndex.TryGetValue(name, out var star))
             {
                 starTargets.Add(new ResolvedAnnotation(name, star, DefaultStarColor, starRingRadius, UseFaintRing: false, starLabelColor));
             }
@@ -465,11 +467,12 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private static SKColor ResolveColor(string? hex, SKColor fallback)
         => !string.IsNullOrWhiteSpace(hex) && SKColor.TryParse(hex, out var parsed) ? parsed : fallback;
 
-    private static IReadOnlyDictionary<string, Star> BuildCatalogStarIndex()
+    private static IReadOnlyDictionary<string, Star> BuildCatalogStarIndex(IConstellationCatalog catalog)
     {
-        var index = new Dictionary<string, Star>(StringComparer.OrdinalIgnoreCase);
+    var index = new Dictionary<string, Star>(StringComparer.OrdinalIgnoreCase);
+    var constellations = catalog.GetAll();
 
-        foreach (var constellation in ConstellationCatalog.All.Values)
+    foreach (var constellation in constellations.Values)
         {
             foreach (var star in constellation)
             {

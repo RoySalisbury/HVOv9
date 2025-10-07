@@ -1,5 +1,8 @@
 #nullable enable
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.MockCamera;
 using HVO.SkyMonitorV5.RPi.Data;
@@ -98,45 +101,80 @@ public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, C
         var faintCapMag  = Math.Min(6.5, cfg.MagnitudeLimit);
 
         // ----- fetch candidates from repository -----
-        var bright = await repository.GetVisibleStarsAsync(
+        var brightResult = await repository.GetVisibleStarsAsync(
             latitudeDeg: location.LatitudeDegrees, longitudeDeg: location.LongitudeDegrees, utc: nowUtc,
             magnitudeLimit: brightCapMag, minMaxAltitudeDeg: cfg.MinMaxAltitudeDegrees,
             topN: brightN, stratified: false, raBins: 0, decBands: 0,
-            screenWidth: FrameWidth, screenHeight: FrameHeight);
+            screenWidth: FrameWidth, screenHeight: FrameHeight).ConfigureAwait(false);
+
+        if (brightResult.IsFailure)
+        {
+            var error = brightResult.Error ?? new InvalidOperationException("Failed to retrieve bright star set.");
+            _logger.LogError(error, "Star repository failed to provide bright visible stars.");
+            return Result<CameraFrame>.Failure(error);
+        }
 
         int midRaBins   = cfg.RightAscensionBins > 0 ? cfg.RightAscensionBins : 24;
         int midDecBands = cfg.DeclinationBands   > 0 ? cfg.DeclinationBands   : 12;
 
-        var mid = await repository.GetVisibleStarsAsync(
+        var midResult = await repository.GetVisibleStarsAsync(
             latitudeDeg: location.LatitudeDegrees, longitudeDeg: location.LongitudeDegrees, utc: nowUtc,
             magnitudeLimit: midCapMag, minMaxAltitudeDeg: cfg.MinMaxAltitudeDegrees,
             topN: midN, stratified: true, raBins: midRaBins, decBands: midDecBands,
-            screenWidth: FrameWidth, screenHeight: FrameHeight);
+            screenWidth: FrameWidth, screenHeight: FrameHeight).ConfigureAwait(false);
 
-        var faintRaw = await repository.GetVisibleStarsAsync(
+        if (midResult.IsFailure)
+        {
+            var error = midResult.Error ?? new InvalidOperationException("Failed to retrieve mid-range star set.");
+            _logger.LogError(error, "Star repository failed to provide mid-range visible stars.");
+            return Result<CameraFrame>.Failure(error);
+        }
+
+        var faintResult = await repository.GetVisibleStarsAsync(
             latitudeDeg: location.LatitudeDegrees, longitudeDeg: location.LongitudeDegrees, utc: nowUtc,
             magnitudeLimit: faintCapMag, minMaxAltitudeDeg: cfg.MinMaxAltitudeDegrees,
-            topN: Math.Max(faintN * 2, faintN + 200), // over-request; we’ll thin in screen space
+            topN: Math.Max(faintN * 2, faintN + 200), // over-request; we’ll thin in screen space later
             stratified: true, raBins: Math.Max(30, midRaBins + 6), decBands: Math.Max(15, midDecBands + 3),
-            screenWidth: FrameWidth, screenHeight: FrameHeight);
+            screenWidth: FrameWidth, screenHeight: FrameHeight).ConfigureAwait(false);
+
+        if (faintResult.IsFailure)
+        {
+            var error = faintResult.Error ?? new InvalidOperationException("Failed to retrieve faint star set.");
+            _logger.LogError(error, "Star repository failed to provide faint visible stars.");
+            return Result<CameraFrame>.Failure(error);
+        }
+
+        var bright = brightResult.Value;
+        var mid = midResult.Value;
+        var faintRaw = faintResult.Value;
 
         // optional constellation sprinkles
         var highlights = new List<Star>();
         if (cfg.IncludeConstellationHighlight)
         {
-            var groups = await repository.GetVisibleByConstellationAsync(
+            var groupsResult = await repository.GetVisibleByConstellationAsync(
                 latitudeDeg: location.LatitudeDegrees, longitudeDeg: location.LongitudeDegrees, utc: nowUtc,
                 magnitudeLimit: cfg.MagnitudeLimit, minMaxAltitudeDeg: cfg.MinMaxAltitudeDegrees,
-                screenWidth: FrameWidth, screenHeight: FrameHeight);
+                screenWidth: FrameWidth, screenHeight: FrameHeight).ConfigureAwait(false);
+
+            if (groupsResult.IsFailure)
+            {
+                var error = groupsResult.Error ?? new InvalidOperationException("Failed to retrieve constellation highlights.");
+                _logger.LogError(error, "Star repository failed to provide visible constellation highlights.");
+                return Result<CameraFrame>.Failure(error);
+            }
 
             int perConst = Math.Max(2, cfg.ConstellationStarCap);
-            foreach (var g in groups)
+            foreach (var group in groupsResult.Value)
             {
-                int taken = 0;
-                foreach (var s in g.Stars)
+                var taken = 0;
+                foreach (var star in group.Stars)
                 {
-                    highlights.Add(s);
-                    if (++taken >= perConst) break;
+                    highlights.Add(star);
+                    if (++taken >= perConst)
+                    {
+                        break;
+                    }
                 }
             }
         }

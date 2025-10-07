@@ -4,9 +4,7 @@ using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Data;
 
-public sealed record ConstellationStar(string Name, Star Star);
-
-public static class ConstellationCatalog
+public sealed class ConstellationCatalog : IConstellationCatalog
 {
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<ConstellationStar>> Constellations;
 
@@ -210,7 +208,7 @@ public static class ConstellationCatalog
         Constellations = new ReadOnlyDictionary<string, IReadOnlyList<ConstellationStar>>(dictionary);
     }
 
-    public static IReadOnlyDictionary<string, IReadOnlyList<ConstellationStar>> All => Constellations;
+    public IReadOnlyDictionary<string, IReadOnlyList<ConstellationStar>> GetAll() => Constellations;
 
     private static ConstellationStar Create(string name, double rightAscensionHours, double declinationDegrees, double magnitude, string? spectralType)
     {

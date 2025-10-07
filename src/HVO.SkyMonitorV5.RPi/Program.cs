@@ -16,6 +16,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using System.IO;
@@ -47,22 +48,27 @@ public static class Program
 
         services.AddDbContext<HygContext>(opt => opt.UseSqlite(hygConnectionString));
 
-// Memory cache
-services.AddMemoryCache(options =>
-{
-    // Optional: limit total cache size (each entry uses Size=1 in our repo)
-    options.SizeLimit = 256; // 256 entries; tune to taste
-});
+        services.AddMemoryCache(options =>
+        {
+            options.SizeLimit = 256;
+        });
 
+        services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
+
+        services.AddScoped<HygStarRepository>();
 
         services.AddScoped<IStarRepository>(sp =>
-{
-    var inner = new HygStarRepository(sp.GetRequiredService<HygContext>());
-    var cache = sp.GetRequiredService<IMemoryCache>();
-    return new CachedStarRepository(inner, cache,
-        absoluteTtl: TimeSpan.FromMinutes(30),
-        slidingTtl: TimeSpan.FromMinutes(10));
-});        
+        {
+            var inner = sp.GetRequiredService<HygStarRepository>();
+            var cache = sp.GetRequiredService<IMemoryCache>();
+            var logger = sp.GetRequiredService<ILogger<CachedStarRepository>>();
+            return new CachedStarRepository(
+                inner,
+                cache,
+                absoluteTtl: TimeSpan.FromMinutes(30),
+                slidingTtl: TimeSpan.FromMinutes(10),
+                logger: logger);
+        });
 
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
