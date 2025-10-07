@@ -11,6 +11,14 @@ public enum FisheyeModel
     Stereographic
 }
 
+public sealed record StarSizeCurve(
+    double RMinPx = 0.8,      // was 0.9/1.1
+    double RMaxPx = 2.9,      // was 3.4/5.0
+    double MMid = 5.6,      // was 5.2/3.6  (moves “halfway” toward fainter)
+    double Slope = 1.40,     // was 1.30/0.85 (softer transition)
+    double BrightBoostPerMag = 0.18 // was 0.25/0.6
+);
+
 public sealed record Star(double RightAscensionHours, double DeclinationDegrees, double Magnitude, SKColor? Color = null);
 
 public readonly record struct StarProjection(int Index, float X, float Y, double Magnitude);
@@ -24,6 +32,12 @@ public sealed class StarFieldEngine
     private readonly bool _flipHorizontal;
     private readonly double _fovDeg;
     private readonly bool _applyRefraction;
+    private readonly StarSizeCurve _sizeCurve;
+
+private const double MicroDotMagThreshold1x1 = 5.2;  // ≥ this → consider microdot
+private const double MicroDotMagThreshold2x2 = 6.0;  // ≥ this → 2×2 pixel
+private const float  MicroDotRadiusCutoff    = 1.05f;
+
 
     public StarFieldEngine(
         int width,
@@ -35,7 +49,8 @@ public sealed class StarFieldEngine
         double horizonPaddingPct = 0.95,
         bool flipHorizontal = false,
         double fovDeg = 180.0,
-        bool applyRefraction = false)
+        bool applyRefraction = false,
+        StarSizeCurve? sizeCurve = null)
     {
         if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
         if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
@@ -51,6 +66,7 @@ public sealed class StarFieldEngine
         _flipHorizontal = flipHorizontal;
         _fovDeg = Math.Clamp(fovDeg, 120.0, 200.0);
         _applyRefraction = applyRefraction;
+        _sizeCurve = sizeCurve ?? new StarSizeCurve();
     }
 
     public int Width { get; }
@@ -58,6 +74,8 @@ public sealed class StarFieldEngine
     public FisheyeModel Projection { get; }
     public double HorizonPaddingPct { get; }
 
+
+    // Convenience overload (unchanged signature)
     public SKBitmap Render(
         IReadOnlyList<Star> stars,
         int randomFillerCount,
@@ -76,6 +94,7 @@ public sealed class StarFieldEngine
             out _);
     }
 
+    // Full renderer (micro-dot stars, calmer sizing)
     public SKBitmap Render(
         IReadOnlyList<Star> stars,
         IReadOnlyList<PlanetMark> planets,
@@ -102,27 +121,71 @@ public sealed class StarFieldEngine
         var lstHours = LocalSiderealTime(_utc, _longitudeDeg);
         var latitudeRad = DegreesToRadians(_latitudeDeg);
 
-        // Stars
+        // --- Stars ---
+        var scaleRatio = maxRadius / 480f; // baseline ~480px fisheye radius
         for (var i = 0; i < stars.Count; i++)
         {
-            var star = stars[i];
-            if (!TryProject(star.RightAscensionHours, star.DeclinationDegrees, lstHours, latitudeRad,
+            var s = stars[i];
+            if (!TryProject(s.RightAscensionHours, s.DeclinationDegrees, lstHours, latitudeRad,
                             cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
                             out var px, out var py))
                 continue;
 
-            var magnitude = star.Magnitude;
-            var brightness = Math.Pow(10.0, -(magnitude + 1.0) / 2.5);
-            var radius = (float)(Math.Clamp(brightness, 0.001, 1.0) * 4.0 + 0.6f);
+            var magnitude = s.Magnitude;
 
-            var color = star.Color ?? (dimFaintStars && magnitude > 5.5 ? new SKColor(170, 170, 170) : SKColors.White);
+            // size scaled by actual fisheye radius (baseline 480 px)
+            var radius = RadiusFromMagnitude(magnitude, _sizeCurve, scaleRatio);
 
-            paint.Color = color;
-            canvas.DrawCircle(px, py, radius, paint);
+            // color: keep spectral color; fade faint by alpha
+            var color = s.Color ?? SKColors.White;
+            if (dimFaintStars)
+            {
+                var a = AlphaFromMagnitude(magnitude);
+                color = new SKColor(color.Red, color.Green, color.Blue, a);
+            }
+
+            // microdot policy:
+            // - mag >= 6.0  → draw 2×2 pixel (survives down-scaling)
+            // - 5.2 ≤ mag < 6.0 OR tiny radius → draw 1×1 pixel
+            // - otherwise draw small AA circle
+bool micro2x2 = magnitude >= MicroDotMagThreshold2x2;
+bool micro1x1 = (magnitude >= MicroDotMagThreshold1x1) || (radius < MicroDotRadiusCutoff);
+
+            if (micro2x2)
+            {
+                var pxI = (int)Math.Round(px);
+                var pyI = (int)Math.Round(py);
+                var oldAA = paint.IsAntialias;
+                paint.IsAntialias = false;
+                paint.Color = color;
+                // 2×2 crisp block
+                canvas.DrawRect(SKRect.Create(pxI, pyI, 2, 2), paint);
+                paint.IsAntialias = oldAA;
+            }
+            else if (micro1x1)
+            {
+                var pxI = (int)Math.Round(px);
+                var pyI = (int)Math.Round(py);
+                var oldAA = paint.IsAntialias;
+                paint.IsAntialias = false;
+                paint.Color = color;
+                // 1×1 crisp pixel
+                canvas.DrawRect(SKRect.Create(pxI, pyI, 1, 1), paint);
+                paint.IsAntialias = oldAA;
+            }
+            else
+            {
+                paint.Color = color;
+                canvas.DrawCircle(px, py, Math.Max(1.0f, radius), paint);
+            }
+
             projectedStars.Add(new StarProjection(i, px, py, magnitude));
+
+
+
         }
 
-        // Random filler
+        // --- Optional random filler ---
         if (randomFillerCount > 0)
         {
             var rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
@@ -131,53 +194,64 @@ public sealed class StarFieldEngine
                 var raHours = rng.NextDouble() * 24.0;
                 var sinDec = rng.NextDouble() * 2.0 - 1.0;
                 var decDegrees = RadiansToDegrees(Math.Asin(Math.Clamp(sinDec, -1.0, 1.0)));
-                var magnitude = rng.NextDouble() < 0.67 ? 5.0 + rng.NextDouble() * 2.0 : 3.0 + rng.NextDouble() * 2.0;
+                var mag = rng.NextDouble() < 0.67 ? 5.0 + rng.NextDouble() * 2.0 : 3.0 + rng.NextDouble() * 2.0;
 
                 if (!TryProject(raHours, decDegrees, lstHours, latitudeRad,
                                 cx, cy, maxRadius, Projection, _flipHorizontal, _applyRefraction, _fovDeg,
                                 out var px, out var py))
                     continue;
 
-                var fillerBrightness = Math.Pow(10.0, -(magnitude + 1.0) / 2.5);
-                var fillerRadius = (float)(Math.Clamp(fillerBrightness, 0.001, 1.0) * 3.4 + 0.5f);
-                var fillerColor = magnitude > 5.6 ? new SKColor(150, 150, 150) : new SKColor(210, 210, 210);
+                var radius = RadiusFromMagnitude(mag, _sizeCurve, scaleRatio);
+                var a = dimFaintStars ? AlphaFromMagnitude(mag) : (byte)210;
+                var color = mag > 5.6
+                    ? new SKColor(170, 170, 170, a)
+                    : new SKColor(210, 210, 210, a);
 
-                paint.Color = fillerColor;
-                canvas.DrawCircle(px, py, fillerRadius, paint);
-                projectedStars.Add(new StarProjection(-1, px, py, magnitude));
+                if (ShouldMicroDot(mag, radius))
+                {
+                    var pxI = (int)Math.Round(px);
+                    var pyI = (int)Math.Round(py);
+                    var oldAA = paint.IsAntialias;
+                    paint.IsAntialias = false;
+                    paint.Color = color;
+                    canvas.DrawRect(SKRect.Create(pxI, pyI, 1, 1), paint);
+                    paint.IsAntialias = oldAA;
+                }
+                else
+                {
+                    paint.Color = color;
+                    canvas.DrawCircle(px, py, Math.Max(1.0f, radius), paint);
+                }
+
+                projectedStars.Add(new StarProjection(-1, px, py, mag));
             }
         }
 
-        // Planets
+        // --- Planets ---
         if (planets.Count > 0)
         {
-            foreach (var planet in planets)
+            foreach (var p in planets)
             {
-                var ok = TryProject(
-                    planet.Star.RightAscensionHours, planet.Star.DeclinationDegrees,
-                    lstHours, latitudeRad, cx, cy, maxRadius,
-                    Projection, _flipHorizontal, _applyRefraction, _fovDeg,
-                    out var px, out var py);
+                if (!TryProject(p.Star.RightAscensionHours, p.Star.DeclinationDegrees,
+                                lstHours, latitudeRad, cx, cy, maxRadius,
+                                Projection, _flipHorizontal, _applyRefraction, _fovDeg,
+                                out var px, out var py))
+                    continue;
 
-                if (planet.Name == "Jupiter")
-                    Console.WriteLine($"Jupiter TryProject={ok} px={px} py={py}");
-
-                if (!ok) continue;
-
-                var radius = planet.Body == PlanetBody.Moon
+                var radius = p.Body == PlanetBody.Moon
                     ? planetOptions.MoonRadiusPx
-                    : CalculatePlanetRadius(planet.Star.Magnitude, planetOptions);
+                    : CalculatePlanetRadius(p.Star.Magnitude, planetOptions);
 
-                // safety: ensure visible
-                radius = Math.Max(radius, 2.0f);
+                radius = Math.Max(radius, 2.0f); // ensure visible
 
-                DrawPlanetGlyph(canvas, px, py, radius, planet, planetOptions.Shape, paint);
-                projectedPlanets.Add(new PlanetProjection(planet.Name, px, py, planet.Star.Magnitude, planet.Color));
+                DrawPlanetGlyph(canvas, px, py, radius, p, planetOptions.Shape, paint);
+                projectedPlanets.Add(new PlanetProjection(p.Name, px, py, p.Star.Magnitude, p.Color));
             }
         }
 
         return bitmap;
     }
+
 
     public bool ProjectStar(Star star, out float x, out float y)
     {
@@ -199,7 +273,7 @@ public sealed class StarFieldEngine
         return Math.Clamp(unclamped, options.MinRadiusPx, options.MaxRadiusPx);
     }
 
-private static void DrawPlanetGlyph(SKCanvas canvas, float x, float y, float radius, PlanetMark planet, PlanetMarkerShape shape, SKPaint paint)
+    private static void DrawPlanetGlyph(SKCanvas canvas, float x, float y, float radius, PlanetMark planet, PlanetMarkerShape shape, SKPaint paint)
     {
         paint.Color = planet.Color;
         switch (shape)
@@ -292,11 +366,11 @@ private static void DrawPlanetGlyph(SKCanvas canvas, float x, float y, float rad
 
         double rPrime = projection switch
         {
-            FisheyeModel.Equidistant      => theta / thetaMax,
-            FisheyeModel.EquisolidAngle   => Math.Sin(theta / 2.0) / Math.Sin(thetaMax / 2.0),
-            FisheyeModel.Orthographic     => Math.Sin(theta) / Math.Sin(thetaMax),
-            FisheyeModel.Stereographic    => Math.Tan(theta / 2.0) / Math.Tan(thetaMax / 2.0),
-            _                             => theta / thetaMax
+            FisheyeModel.Equidistant => theta / thetaMax,
+            FisheyeModel.EquisolidAngle => Math.Sin(theta / 2.0) / Math.Sin(thetaMax / 2.0),
+            FisheyeModel.Orthographic => Math.Sin(theta) / Math.Sin(thetaMax),
+            FisheyeModel.Stereographic => Math.Tan(theta / 2.0) / Math.Tan(thetaMax / 2.0),
+            _ => theta / thetaMax
         };
 
         rPrime = Math.Min(rPrime, 1.0);
@@ -332,6 +406,39 @@ private static void DrawPlanetGlyph(SKCanvas canvas, float x, float y, float rad
     private static double OADateToJulian(DateTime utc) => utc.ToOADate() + 2415018.5;
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
     private static double RadiansToDegrees(double radians) => radians * 180.0 / Math.PI;
+
+    private static float RadiusFromMagnitude(double mag, StarSizeCurve c, double scaleRatio)
+    {
+        // logistic core
+        double r = c.RMinPx + (c.RMaxPx - c.RMinPx) / (1.0 + Math.Exp((mag - c.MMid) / c.Slope));
+
+        // give very bright stars a little extra punch
+        if (mag < -1.0)
+            r += (-1.0 - mag) * c.BrightBoostPerMag;
+
+        // scale for different image sizes (baseline: radius≈480 px)
+        r *= Math.Sqrt(Math.Max(0.25, scaleRatio)); // gentle scaling
+        return (float)r;
+    }
+
+    private static byte AlphaFromMagnitude(double mag)
+    {
+        // bright solid, mid modest, faint subtle but still visible
+        double a = mag switch
+        {
+            <= 1.0 => 255,
+            <= 3.0 => 245 - 17.5 * (mag - 1.0),   // 245 → 210
+            <= 5.0 => 210 - 17.5 * (mag - 3.0),   // 210 → 175
+            _ => 175 - 10.0 * (mag - 5.0)    // 175 → ~165 at 6.5
+        };
+        return (byte)Math.Clamp(a, 165, 255);     // raise floor a touch
+    }
+
+    // Treat very faint/small stars as microdots for a crisp look.
+    private static bool ShouldMicroDot(double mag, float radius) =>
+        (mag >= 5.2) || (radius < 1.05f);
+
+
 }
 
 public static class StarColors
@@ -352,7 +459,7 @@ public static class StarColors
             'G' => new SKColor(255, 244, 234),
             'K' => new SKColor(255, 210, 161),
             'M' => new SKColor(255, 180, 140),
-            _   => SKColors.White
+            _ => SKColors.White
         };
     }
 
@@ -361,19 +468,19 @@ public static class StarColors
         bv = Math.Clamp(bv, -0.4, 2.0);
         double r, g, b;
 
-        if (bv < 0.0)       r = 0.61 + 0.11 * bv + 0.1 * bv * bv;
-        else if (bv < 0.4)  r = 0.83 + 0.17 * bv;
-        else if (bv < 1.6)  r = 1.00;
-        else                r = 1.00;
+        if (bv < 0.0) r = 0.61 + 0.11 * bv + 0.1 * bv * bv;
+        else if (bv < 0.4) r = 0.83 + 0.17 * bv;
+        else if (bv < 1.6) r = 1.00;
+        else r = 1.00;
 
-        if (bv < 0.0)       g = 0.70 + 0.07 * bv + 0.1 * bv * bv;
-        else if (bv < 0.4)  g = 0.87 + 0.11 * bv;
-        else if (bv < 1.5)  g = 0.98 - 0.16 * (bv - 0.4);
-        else                g = 0.82 - 0.5  * (bv - 1.5);
+        if (bv < 0.0) g = 0.70 + 0.07 * bv + 0.1 * bv * bv;
+        else if (bv < 0.4) g = 0.87 + 0.11 * bv;
+        else if (bv < 1.5) g = 0.98 - 0.16 * (bv - 0.4);
+        else g = 0.82 - 0.5 * (bv - 1.5);
 
-        if (bv < 0.4)       b = 1.00;
-        else if (bv < 1.5)  b = 1.00 - 0.47 * (bv - 0.4);
-        else                b = 0.63 - 0.6  * (bv - 1.5);
+        if (bv < 0.4) b = 1.00;
+        else if (bv < 1.5) b = 1.00 - 0.47 * (bv - 0.4);
+        else b = 0.63 - 0.6 * (bv - 1.5);
 
         byte R = (byte)Math.Clamp((int)Math.Round(r * 255), 0, 255);
         byte G = (byte)Math.Clamp((int)Math.Round(g * 255), 0, 255);
