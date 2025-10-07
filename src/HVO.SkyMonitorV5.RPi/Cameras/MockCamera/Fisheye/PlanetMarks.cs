@@ -24,13 +24,14 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
     }
 
     /// <summary>
-    /// Ephemerides for planets/Sun (Kepler J2000 + secular rates) with topocentric parallax.
-    /// Moon is still a lightweight model but corrected for parallax + distance variation.
+    /// Planets: J2000 Kepler elements with secular rates (+1 light-time iteration) → geocentric RA/Dec.
+    /// Sun: from Earth's heliocentric vector.
+    /// Moon: compact Meeus-style model with dominant terms + topocentric parallax.
     /// </summary>
     public static class PlanetMarks
     {
-        private const double ObliquityDeg = 23.439291;                 // J2000 mean obliquity (deg)
-        private const double AU_LIGHT_TIME_DAYS = 0.0057755183;        // 1 AU in days (light-time)
+        private const double ObliquityDeg = 23.439291;
+        private const double AU_LIGHT_TIME_DAYS = 0.0057755183; // 1 AU in light-days
         private static readonly DateTime J2000 = new(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
         private static readonly IReadOnlyDictionary<PlanetBody, string> Names = new Dictionary<PlanetBody, string>
@@ -46,9 +47,9 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             [PlanetBody.Sun]     = "Sun"
         };
 
-        // Styling only (brightness and color for glyphs/labels)
         private sealed record PlanetStyle(double BaseMagnitude, double Variation, SKColor Color);
 
+        // Display-only styling
         private static readonly IReadOnlyDictionary<PlanetBody, PlanetStyle> Style = new Dictionary<PlanetBody, PlanetStyle>
         {
             [PlanetBody.Mercury] = new(-0.6, 0.8, new SKColor(220,220,220)),
@@ -62,19 +63,18 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             [PlanetBody.Sun]     = new(-26.7,0.0, new SKColor(255,240,200)),
         };
 
-        // J2000 mean elements (AU/deg) + secular rates per Julian century (low-precision model, good to < ~1°)
         private sealed record KeplerElements(
-            double a,  double aDot,          // semimajor axis (AU), per century
-            double e,  double eDot,          // eccentricity, per century
-            double I,  double IDot,          // inclination (deg), per century
-            double L,  double LDot,          // mean longitude (deg), per century
-            double longPeri,  double longPeriDot, // longitude of perihelion ϖ (deg), per century
-            double longNode,  double longNodeDot  // longitude of ascending node Ω (deg), per century
+            double a,  double aDot,
+            double e,  double eDot,
+            double I,  double IDot,
+            double L,  double LDot,
+            double longPeri,  double longPeriDot,
+            double longNode,  double longNodeDot
         );
 
+        // J2000 mean elements + secular rates per Julian century (compact/low-precision set)
         private static readonly Dictionary<PlanetBody, KeplerElements> KeplerJ2000 = new()
         {
-            // NASA/JPL barycentric J2000-ish (rounded). Good for illustrative sky placement.
             [PlanetBody.Mercury] = new(0.38709927, 0.00000037, 0.20563593,  0.00001906,  7.00497902, -0.00594749,
                                        252.25032350, 149472.67411175, 77.45779628, 0.16047689,  48.33076593, -0.12534081),
 
@@ -96,7 +96,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             [PlanetBody.Neptune] = new(30.06992276, 0.00026291,0.00859048,  0.00005105,  1.77004347,  0.00035372,
                                        -55.12002969,   218.45945325,  44.96476227,-0.32241464, 131.78422574, -0.00508664),
 
-            // Earth (for Sun and geocentric vector)
+            // Earth's elements (used to get the Sun and geocentric planet vectors)
             [PlanetBody.Sun]     = new(1.00000261, 0.00000562, 0.01671123, -0.00004392, -0.00001531,-0.01294668,
                                        100.46457166, 35999.37244981, 102.93768193, 0.32327364,  0.0,          0.0)
         };
@@ -121,41 +121,26 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             foreach (var body in bodies)
             {
                 Star star;
-                SKColor color = Style[body].Color;
+                var color = Style[body].Color;
 
                 if (body == PlanetBody.Moon)
                 {
-                    // Lightweight lunar position (synthetic), then apply strong topocentric parallax.
-                    var days = (utc.ToUniversalTime() - J2000).TotalDays;
-
-                    double lonDeg = NormalizeDeg(218.3164477 + 13.17639648 * days
-                        + 28.0 * Math.Sin(ToRad(days * 0.1 + body.GetHashCode())));  // small wobble
-                    double latDeg = 5.1 * Math.Sin(ToRad(days * 3.2 + 125.0));       // rough
-
-                    var (raH, decD) = EclipticToEquatorial(lonDeg, latDeg);
-                    // Vary Moon distance ±5.5% (perigee/apogee) and apply topocentric parallax
-                    double distAu = 0.00257 * (1.0 + 0.055 * Math.Sin(ToRad(13.1764 * days)));
+                    // New: compact lunar model → geocentric RA/Dec + topocentric parallax
+                    var (raH, decD, distAu) = MoonGeocentricEquatorial(utc);
                     (raH, decD) = ApplyTopocentricParallax(raH, decD, distAu, latitudeDeg, longitudeDeg, utc);
-
-                    double mag = Style[PlanetBody.Moon].BaseMagnitude;
-                    star = new Star(raH, decD, mag, color);
+                    star = new Star(raH, decD, Style[PlanetBody.Moon].BaseMagnitude, color);
                 }
                 else if (body == PlanetBody.Sun)
                 {
                     var (raH, decD, distAu) = GeocentricSunEquatorial(utc);
                     (raH, decD) = ApplyTopocentricParallax(raH, decD, distAu, latitudeDeg, longitudeDeg, utc);
-
-                    double mag = Style[PlanetBody.Sun].BaseMagnitude;
-                    star = new Star(raH, decD, mag, color);
+                    star = new Star(raH, decD, Style[PlanetBody.Sun].BaseMagnitude, color);
                 }
                 else
                 {
                     var (raH, decD, distAu) = GeocentricEquatorial(body, utc);
                     (raH, decD) = ApplyTopocentricParallax(raH, decD, distAu, latitudeDeg, longitudeDeg, utc);
-
-                    // Keep simple base magnitude; you can refine with phase if desired.
-                    double mag = Style[body].BaseMagnitude;
-                    star = new Star(raH, decD, mag, color);
+                    star = new Star(raH, decD, Style[body].BaseMagnitude, color);
                 }
 
                 marks.Add(new PlanetMark(Names[body], body, star, color));
@@ -164,35 +149,31 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             return marks;
         }
 
-        // ---------- Core math ----------
+        // ---------------- Planets & Sun ----------------
 
         private static (double raHours, double decDeg, double distAu) GeocentricEquatorial(PlanetBody body, DateTime utc)
         {
-            // Julian centuries from J2000
             double jd = ToJulian(utc);
             double T = (jd - 2451545.0) / 36525.0;
 
-            // Earth heliocentric at time T
-            var earthEl = KeplerJ2000[PlanetBody.Sun];
-            var (xE, yE, zE, _) = HeliocentricEcliptic(earthEl, T);
+            // Earth heliocentric
+            var eEl = KeplerJ2000[PlanetBody.Sun];
+            var (xE, yE, zE, _) = HeliocentricEcliptic(eEl, T);
 
-            // Planet heliocentric initial
+            // Planet heliocentric (with one light-time iteration)
             var pEl = KeplerJ2000[body];
             var (xP, yP, zP, _) = HeliocentricEcliptic(pEl, T);
 
-            // Initial geocentric vector
             double X0 = xP - xE, Y0 = yP - yE, Z0 = zP - zE;
             double dist0 = Math.Sqrt(X0 * X0 + Y0 * Y0 + Z0 * Z0);
-            double tauDays = dist0 * AU_LIGHT_TIME_DAYS; // light-time in days
+            double tau = dist0 * AU_LIGHT_TIME_DAYS;
 
-            // One light-time iteration for better accuracy
-            double Tplanet = ((jd - tauDays) - 2451545.0) / 36525.0;
+            double Tplanet = ((jd - tau) - 2451545.0) / 36525.0;
             (xP, yP, zP, _) = HeliocentricEcliptic(pEl, Tplanet);
 
             double X = xP - xE, Y = yP - yE, Z = zP - zE;
             double dist = Math.Sqrt(X * X + Y * Y + Z * Z);
 
-            // Ecliptic → equatorial
             var (raH, decD) = EclipticVectorToRaDec(X, Y, Z);
             return (raH, decD, dist);
         }
@@ -202,18 +183,16 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             double jd = ToJulian(utc);
             double T = (jd - 2451545.0) / 36525.0;
 
-            var eEl = KeplerJ2000[PlanetBody.Sun]; // Earth's heliocentric elements
+            var eEl = KeplerJ2000[PlanetBody.Sun];
             var (xE, yE, zE, rE) = HeliocentricEcliptic(eEl, T);
 
-            // Geocentric Sun vector is simply the negative Earth heliocentric vector
-            double X = -xE, Y = -yE, Z = -zE;
+            double X = -xE, Y = -yE, Z = -zE; // geocentric Sun vector
             var (raH, decD) = EclipticVectorToRaDec(X, Y, Z);
             return (raH, decD, rE);
         }
 
         private static (double x, double y, double z, double r) HeliocentricEcliptic(KeplerElements el, double T)
         {
-            // Elements for epoch T (Julian centuries)
             double a = el.a + el.aDot * T;
             double e = el.e + el.eDot * T;
             double I = ToRad(el.I + el.IDot * T);
@@ -221,10 +200,10 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             double p = NormalizeDeg(el.longPeri + el.longPeriDot * T); // ϖ
             double O = NormalizeDeg(el.longNode + el.longNodeDot * T); // Ω
 
-            double M = ToRad(NormalizeDeg(L - p));       // mean anomaly
-            double w = ToRad(NormalizeDeg(p - O));       // argument of perihelion
+            double M = ToRad(NormalizeDeg(L - p));
+            double w = ToRad(NormalizeDeg(p - O));
 
-            // Solve Kepler's equation for E
+            // Kepler's equation (solve for E)
             double E = M;
             for (int i = 0; i < 6; i++)
             {
@@ -237,11 +216,9 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             double nu = Math.Atan2(Math.Sqrt(1 - e * e) * sinE, cosE - e);
             double r = a * (1 - e * cosE);
 
-            // Position in orbital plane
             double x_orb = r * Math.Cos(nu);
             double y_orb = r * Math.Sin(nu);
 
-            // Rotate to ecliptic heliocentric (ω, I, Ω)
             double cO = Math.Cos(ToRad(O)), sO = Math.Sin(ToRad(O));
             double cI = Math.Cos(I),        sI = Math.Sin(I);
             double cw = Math.Cos(w),        sw = Math.Sin(w);
@@ -267,9 +244,61 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             return (ra * 12.0 / Math.PI, ToDeg(dec));
         }
 
+        // ---------------- Moon (new) ----------------
+
+        /// <summary>
+        /// Geocentric Moon RA/Dec using a compact Meeus-style model (dominant terms only).
+        /// Good to ~0.2–0.5° for most dates. Distance returned in AU for parallax.
+        /// </summary>
+        private static (double raHours, double decDeg, double distAu) MoonGeocentricEquatorial(DateTime utc)
+        {
+            double jd = ToJulian(utc);
+            double T = (jd - 2451545.0) / 36525.0;
+
+            // Mean elements (deg) — Meeus AA (J2000)
+            double Lp = NormalizeDeg(218.3164477 + 481267.88123421 * T - 0.0015786 * T * T + T * T * T / 538841.0 - T * T * T * T / 65194000.0); // mean longitude
+            double D  = NormalizeDeg(297.8501921 + 445267.1114034 * T - 0.0018819 * T * T + T * T * T / 545868.0 - T * T * T * T / 113065000.0);  // mean elongation
+            double M  = NormalizeDeg(357.5291092 + 35999.0502909 * T - 0.0001536 * T * T + T * T * T / 24490000.0);                                // Sun mean anomaly
+            double Mp = NormalizeDeg(134.9633964 + 477198.8675055 * T + 0.0087414 * T * T + T * T * T / 69699.0 - T * T * T * T / 14712000.0);     // Moon mean anomaly
+            double F  = NormalizeDeg(93.2720950  + 483202.0175233 * T - 0.0036539 * T * T - T * T * T / 3526000.0 + T * T * T * T / 863310000.0);  // argument of latitude
+
+            // Convert to radians
+            double Dr = ToRad(D), Mr = ToRad(M), Mpr = ToRad(Mp), Fr = ToRad(F);
+
+            // Low-precision corrections (degrees). Dominant terms only.
+            // (Common compact model used by many apps; good for planetarium alignment.)
+            double lon = Lp
+                + 6.289  * Math.Sin(Mpr)
+                + 1.274  * Math.Sin(2 * Dr - Mpr)
+                + 0.658  * Math.Sin(2 * Dr)
+                + 0.214  * Math.Sin(2 * Mpr)
+                - 0.186  * Math.Sin(Mr)
+                - 0.114  * Math.Sin(2 * Fr);
+
+            double lat = 5.128 * Math.Sin(Fr)
+                + 0.280 * Math.Sin(Mpr + Fr)
+                + 0.277 * Math.Sin(Mpr - Fr)
+                + 0.173 * Math.Sin(2 * Dr - Fr)
+                + 0.055 * Math.Sin(2 * Dr + Fr)
+                + 0.046 * Math.Sin(2 * Dr - Mpr + Fr)
+                + 0.033 * Math.Sin(2 * Dr - Mpr - Fr)
+                + 0.017 * Math.Sin(2 * Mpr + Fr);
+
+            // Distance (km), simplified series → convert to AU
+            double distanceKm = 385001.0
+                - 20905.0 * Math.Cos(Mpr)
+                - 3699.0  * Math.Cos(2 * Dr - Mpr)
+                - 2956.0  * Math.Cos(2 * Dr)
+                -  570.0  * Math.Cos(2 * Mpr);
+            double distAu = distanceKm / 149_597_870.700;
+
+            // Ecliptic → RA/Dec
+            var (raH, decD) = EclipticToEquatorial(lon, lat);
+            return (raH, decD, distAu);
+        }
+
         private static (double raHours, double decDeg) EclipticToEquatorial(double lonDeg, double latDeg)
         {
-            // convenience for Moon’s simple model
             double lon = ToRad(lonDeg);
             double lat = ToRad(latDeg);
             double eps = ToRad(ObliquityDeg);
@@ -284,26 +313,26 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             return (ra * 12.0 / Math.PI, ToDeg(dec));
         }
 
-        /// <summary>Apply topocentric parallax to geocentric RA/Dec.</summary>
+        // ---------------- Topocentric parallax ----------------
+
         private static (double RaHours, double DecDeg) ApplyTopocentricParallax(
             double raHours, double decDeg, double distanceAu,
             double latitudeDeg, double longitudeDeg, DateTime utc)
         {
-            // Earth radius in AU (~6378 km / 149,597,870.7 km)
+            // Earth equatorial radius ≈ 6378.14 km → AU
             const double EarthRadiusAu = 1.0 / 23455.0;
 
             double ra = raHours * Math.PI / 12.0;
             double dec = ToRad(decDeg);
             double phi = ToRad(latitudeDeg);
 
-            // Local sidereal time in radians
             double lstHours = LocalSiderealTime(utc, longitudeDeg);
             double LST = lstHours * Math.PI / 12.0;
 
             double H = LST - ra; // hour angle
-            double pi = Math.Asin(EarthRadiusAu / Math.Max(distanceAu, 1e-6)); // equatorial horizontal parallax
+            double pi = Math.Asin(EarthRadiusAu / Math.Max(distanceAu, 1e-6)); // horizontal parallax (rad)
 
-            // Meeus ch. 40 small-angle form
+            // Meeus ch. 40 small-angle topocentric corrections
             double dRA  = -pi * Math.Cos(phi) * Math.Sin(H) / Math.Cos(dec);
             double dDec = -pi * (Math.Sin(phi) * Math.Cos(dec) - Math.Cos(phi) * Math.Cos(H) * Math.Sin(dec));
 
@@ -316,7 +345,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.MockCamera
             return (raHoursTop, ToDeg(decTop));
         }
 
-        // ---------- Utilities ----------
+        // ---------------- Utilities ----------------
 
         private static double LocalSiderealTime(DateTime utc, double longitudeDeg)
         {

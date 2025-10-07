@@ -1,9 +1,0 @@
-Tips & knobs
-
-Projection model: switch via FisheyeModel. Equidistant is ideal for “all-sky camera” look; Stereographic makes horizon stars a touch larger.
-
-Even coverage: the filler uses uniform-on-sphere sampling (via uniform sin(dec)), so stars populate north & south naturally.
-
-Horizon enforcement: everything is clipped to a circular fisheye of radius HorizonPaddingPct * min(width,height)/2.
-
-Label later: store (name, ra, dec, mag) for your objects; at render time, call engine.ProjectStar() to get pixel coords for the annotation step.
