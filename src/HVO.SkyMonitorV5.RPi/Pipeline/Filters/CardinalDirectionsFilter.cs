@@ -1,231 +1,116 @@
 #nullable enable
-
 using System;
-using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
-using HVO.SkyMonitorV5.RPi.Simulation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 
-namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
-
-public sealed class CardinalDirectionsFilter : IFrameFilter
+namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
 {
-    private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
-    private readonly IOptionsMonitor<CardinalDirectionsOptions> _optionsMonitor;
-
-    public CardinalDirectionsFilter(
-        IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
-        IOptionsMonitor<CardinalDirectionsOptions> optionsMonitor)
+    /// <summary>
+    /// Draws simple N/E/S/W markers using the shared StarFieldEngine provided by the pipeline.
+    /// </summary>
+    public sealed class CardinalDirectionsFilter : IFrameFilter
     {
-        _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
-        _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
-    }
+        private readonly IOptionsMonitor<ObservatoryLocationOptions> _loc;
+        private readonly IOptionsMonitor<CardinalDirectionsOptions> _opts;
+        private readonly IRenderEngineProvider _provider;
+        private readonly ILogger<CardinalDirectionsFilter> _logger;
 
-    public string Name => FrameFilterNames.CardinalDirections;
-
-    public bool ShouldApply(CameraConfiguration configuration) => configuration.EnableImageOverlays;
-
-    public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var overlayOptions = _optionsMonitor.CurrentValue;
-
-        var baseCenter = new SKPoint(bitmap.Width / 2f, bitmap.Height / 2f);
-        var center = new SKPoint(
-            baseCenter.X + overlayOptions.OffsetXPixels,
-            baseCenter.Y + overlayOptions.OffsetYPixels);
-        var baseRadius = SkySimulationMath.GetSkyRadius(bitmap.Width, bitmap.Height);
-        var radius = Math.Max(32f, baseRadius + overlayOptions.RadiusOffsetPixels);
-        var tickLength = MathF.Min(16f, radius * 0.2f);
-
-        var circleColor = ResolveColor(overlayOptions.CircleColor, new SKColor(200, 210, 230));
-        var circleStrokeColor = circleColor.WithAlpha((byte)Math.Clamp(overlayOptions.CircleOpacity, 0, 255));
-        var lineThickness = overlayOptions.CircleThickness;
-
-        using var canvas = new SKCanvas(bitmap);
-        using var ringPaint = new SKPaint
+        public CardinalDirectionsFilter(
+            IOptionsMonitor<ObservatoryLocationOptions> location,
+            IOptionsMonitor<CardinalDirectionsOptions> options,
+            IRenderEngineProvider provider,
+            ILogger<CardinalDirectionsFilter> logger)
         {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            Color = circleStrokeColor,
-            StrokeWidth = lineThickness
-        };
-
-        using var tickPaint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            Color = circleStrokeColor,
-            StrokeWidth = lineThickness
-        };
-
-        ringPaint.PathEffect = CreatePathEffect(overlayOptions.CircleLineStyle, lineThickness);
-        tickPaint.PathEffect = CreatePathEffect(overlayOptions.CircleLineStyle, lineThickness);
-
-        canvas.DrawCircle(center, radius, ringPaint);
-
-        static string ResolveLabel(string? label, string fallback) => string.IsNullOrWhiteSpace(label) ? fallback : label;
-
-        var northLabel = ResolveLabel(overlayOptions.LabelNorth, "N");
-        var southLabel = ResolveLabel(overlayOptions.LabelSouth, "S");
-        var eastLabel = ResolveLabel(overlayOptions.LabelEast, "E");
-        var westLabel = ResolveLabel(overlayOptions.LabelWest, "W");
-
-        if (overlayOptions.SwapEastWest)
-        {
-            (eastLabel, westLabel) = (westLabel, eastLabel);
+            _loc = location ?? throw new ArgumentNullException(nameof(location));
+            _opts = options ?? throw new ArgumentNullException(nameof(options));
+            _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        var cardinals = new (string Label, float AngleDegrees)[]
+        public string Name => FrameFilterNames.CardinalDirections;
+
+        public bool ShouldApply(CameraConfiguration configuration)
         {
-            (northLabel, 90f),
-            (eastLabel, 0f),
-            (southLabel, -90f),
-            (westLabel, 180f)
-        };
-
-        using var labelTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
-        using var labelFont = new SKFont(labelTypeface, overlayOptions.LabelFontSize);
-        using var labelPaint = new SKPaint { IsAntialias = true, Color = new SKColor(225, 235, 255, 255) };
-        var labelMetrics = labelFont.Metrics;
-        var labelPadding = overlayOptions.LabelPadding;
-        var cornerRadius = overlayOptions.LabelCornerRadius;
-        var rotation = overlayOptions.RotationDegrees;
-
-        using var labelStrokePaint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            Color = circleStrokeColor,
-            StrokeWidth = lineThickness
-        };
-
-        foreach (var (label, angleDegrees) in cardinals)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var angleRad = DegreesToRadians(angleDegrees + rotation);
-            var outer = new SKPoint(
-                center.X + radius * MathF.Cos(angleRad),
-                center.Y - radius * MathF.Sin(angleRad));
-            var innerRadius = Math.Max(radius - tickLength, radius * 0.6f);
-            var inner = new SKPoint(
-                center.X + innerRadius * MathF.Cos(angleRad),
-                center.Y - innerRadius * MathF.Sin(angleRad));
-            canvas.DrawLine(inner, outer, tickPaint);
-
-            var textWidth = labelFont.MeasureText(label, labelPaint);
-            var textHeight = labelMetrics.Descent - labelMetrics.Ascent;
-            var halfWidth = textWidth / 2f + labelPadding;
-            var halfHeight = textHeight / 2f + labelPadding;
-
-            var labelClearance = Math.Max(halfHeight + lineThickness * 1.5f, tickLength + 4f);
-            var labelRadius = radius - labelClearance;
-            var minLabelRadius = Math.Max(radius * 0.4f, halfHeight + lineThickness * 1.5f);
-            var maxLabelRadius = Math.Max(minLabelRadius, radius - tickLength);
-            labelRadius = Math.Clamp(labelRadius, minLabelRadius, maxLabelRadius);
-
-            var boxCenter = new SKPoint(
-                center.X + labelRadius * MathF.Cos(angleRad),
-                center.Y - labelRadius * MathF.Sin(angleRad));
-
-            var boxRect = new SKRect(
-                boxCenter.X - halfWidth,
-                boxCenter.Y - halfHeight,
-                boxCenter.X + halfWidth,
-                boxCenter.Y + halfHeight);
-
-            ClampRectToCanvas(ref boxRect, bitmap.Width, bitmap.Height);
-            boxCenter = new SKPoint((boxRect.Left + boxRect.Right) / 2f, (boxRect.Top + boxRect.Bottom) / 2f);
-
-            canvas.DrawRoundRect(boxRect, cornerRadius, cornerRadius, labelStrokePaint);
-
-            var baseline = boxCenter.Y - (labelMetrics.Ascent + labelMetrics.Descent) / 2f;
-            canvas.DrawText(label, boxCenter.X, baseline, SKTextAlign.Center, labelFont, labelPaint);
+            // Only gate on top-level overlays flag; per-option toggles can be added later.
+            return configuration.EnableImageOverlays;
         }
 
-        return ValueTask.CompletedTask;
-    }
-
-    private static float DegreesToRadians(float degrees) => (float)(Math.PI / 180d) * degrees;
-
-    private static SKColor ResolveColor(string? color, SKColor fallback)
-    {
-        if (string.IsNullOrWhiteSpace(color))
+        public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stack, CameraConfiguration configuration, CancellationToken cancellationToken)
         {
-            return fallback;
-        }
+            var engine = _provider.Current;
+            if (engine is null) return ValueTask.CompletedTask;
 
-        var span = color.AsSpan().Trim();
-
-        if (span.StartsWith("#", StringComparison.Ordinal))
-        {
-            span = span[1..];
-        }
-
-        if (span.Length is 6 or 8 && uint.TryParse(span, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
-        {
-            if (span.Length == 6)
+            var altDeg = 5.0; // draw 5° above the horizon
+            var labels = new (string Label, double AzimuthDeg)[]
             {
-                return new SKColor(
-                    (byte)((value & 0xFF0000) >> 16),
-                    (byte)((value & 0x00FF00) >> 8),
-                    (byte)(value & 0x0000FF));
+                ("N", 0.0),
+                ("E", 90.0),
+                ("S", 180.0),
+                ("W", 270.0),
+            };
+
+            using var canvas = new SKCanvas(bitmap);
+            using var typeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
+            using var font = new SKFont(typeface, 16f);
+            using var paint = new SKPaint { IsAntialias = true, Color = new SKColor(245,245,245,240) };
+            using var halo = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 150) };
+
+            var loc = _loc.CurrentValue;
+            var lst = StarFieldEngine.LocalSiderealTime(stack.Frame.Timestamp.UtcDateTime, loc.LongitudeDegrees);
+            var latRad = DegreesToRadians(loc.LatitudeDegrees);
+
+            foreach (var (label, az) in labels)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Alt/Az -> RA/Dec for the current site/time
+                var (raHours, decDeg) = AltAzToRaDec(altDeg, az, lst, latRad);
+                if (!engine.ProjectStar(new Star(raHours, decDeg, 2.0), out var x, out var y))
+                    continue;
+
+                // Halo box
+                var textWidth = font.MeasureText(label, paint);
+                var textHeight = font.Metrics.CapHeight;
+                var rect = SKRect.Create(x - textWidth / 2f - 6f, y - textHeight - 10f, textWidth + 12f, textHeight + 8f);
+                canvas.DrawRoundRect(rect, 4f, 4f, halo);
+
+                // Text
+                canvas.DrawText(label, rect.MidX - textWidth/2f, rect.Bottom - 4f, font, paint);
             }
 
-            var r = (byte)((value & 0x00FF0000) >> 16);
-            var g = (byte)((value & 0x0000FF00) >> 8);
-            var b = (byte)(value & 0x000000FF);
-            var a = (byte)((value & 0xFF000000) >> 24);
-            return new SKColor(r, g, b, a);
+            return ValueTask.CompletedTask;
         }
 
-        return fallback;
-    }
-
-    private static SKPathEffect? CreatePathEffect(CardinalLineStyle style, float thickness) => style switch
-    {
-        CardinalLineStyle.Solid => null,
-        CardinalLineStyle.LongDash => SKPathEffect.CreateDash(new[] { 18f, 12f }, 0f),
-        CardinalLineStyle.ShortDash => SKPathEffect.CreateDash(new[] { 8f, 8f }, 0f),
-        CardinalLineStyle.Dotted => SKPathEffect.CreateDash(new[] { Math.Max(thickness, 1f), Math.Max(thickness * 1.5f, 1.5f) }, 0f),
-        CardinalLineStyle.DashDot => SKPathEffect.CreateDash(new[] { 16f, 10f, 2f, 10f }, 0f),
-        _ => null
-    };
-
-    private static void ClampRectToCanvas(ref SKRect rect, int width, int height)
-    {
-        const float margin = 4f;
-        var minX = margin;
-        var minY = margin;
-        var maxX = Math.Max(width - margin, minX);
-        var maxY = Math.Max(height - margin, minY);
-
-        var offsetX = 0f;
-        if (rect.Left < minX)
+        private static (double RaHours, double DecDeg) AltAzToRaDec(double altDeg, double azDeg, double lstHours, double latRad)
         {
-            offsetX = minX - rect.Left;
-        }
-        else if (rect.Right > maxX)
-        {
-            offsetX = maxX - rect.Right;
+            // Convert Alt/Az to RA/Dec for az measured from North (0°) toward East (90°),
+            // consistent with StarFieldEngine's azimuth.
+            double alt = DegreesToRadians(altDeg);
+            double az = DegreesToRadians(azDeg);
+
+            double sinDec = Math.Sin(alt) * Math.Sin(latRad) + Math.Cos(alt) * Math.Cos(latRad) * Math.Cos(az);
+            double dec = Math.Asin(Math.Clamp(sinDec, -1.0, 1.0));
+
+            double cosH = (Math.Sin(alt) - Math.Sin(latRad) * Math.Sin(dec)) / (Math.Cos(latRad) * Math.Cos(dec));
+            cosH = Math.Clamp(cosH, -1.0, 1.0);
+            double sinH = -Math.Sin(az) * Math.Cos(alt) / Math.Cos(dec);
+
+            double H = Math.Atan2(sinH, cosH); // hour angle (radians)
+            double ra = (lstHours * Math.PI / 12.0) - H; // RA = LST - H
+            // normalize
+            ra %= (Math.PI * 2.0);
+            if (ra < 0) ra += Math.PI * 2.0;
+
+            double raHours = ra * 12.0 / Math.PI;
+            double decDeg = dec * 180.0 / Math.PI;
+            return (raHours, decDeg);
         }
 
-        var offsetY = 0f;
-        if (rect.Top < minY)
-        {
-            offsetY = minY - rect.Top;
-        }
-        else if (rect.Bottom > maxY)
-        {
-            offsetY = maxY - rect.Bottom;
-        }
-
-        rect.Offset(offsetX, offsetY);
+        private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
     }
 }

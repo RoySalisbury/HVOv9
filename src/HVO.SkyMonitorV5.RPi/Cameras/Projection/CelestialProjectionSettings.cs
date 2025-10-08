@@ -3,6 +3,7 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Lenses;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Projection
 {

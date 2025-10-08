@@ -3,6 +3,7 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Lenses;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Projection
 {
@@ -93,7 +94,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Projection
         /// <summary>Compute diagonal FOV (degrees) for a rectilinear lens + sensor.</summary>
         public static double ComputeRectilinearDiagonalFovDeg(SensorSpec sensor, RectilinearLens lens)
         {
-            var fPx = lens.FocalPx(sensor, Math.Min(sensor.Cx, sensor.Cy));
+            var fPx = lens.Fx;
             var halfDiag = 0.5 * (new System.Numerics.Vector2((float)sensor.WidthPx, (float)sensor.HeightPx)).Length();
             var fovRad = 2.0 * Math.Atan(halfDiag / fPx);
             return fovRad * 180.0 / Math.PI;

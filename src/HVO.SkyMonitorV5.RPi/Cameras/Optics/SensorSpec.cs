@@ -1,21 +1,25 @@
-
 #nullable enable
+using System;
+
 namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
 {
     /// <summary>
-    /// Physical and raster specs of an imaging sensor.
+    /// Sensor model (pixel dimensions and pitch). Provides principal point Cx/Cy defaults to image center.
+    /// Includes aliases so older call-sites using <c>PixelSizeMicrons</c> and Cx/Cy expectancies continue to compile.
     /// </summary>
     public sealed record SensorSpec(
         int WidthPx,
         int HeightPx,
-        double PixelSizeMicrons,     // e.g., 2.9 µm for IMX462
-        double? PrincipalPointXPx = null,  // null → center
-        double? PrincipalPointYPx = null,
-        double? Skew = null          // rarely used; keep 0 for most cameras
-    )
+        double PixelSizeMicrons,   // keep this parameter name to match existing named-arg call sites
+        double? CxPx = null,
+        double? CyPx = null)
     {
-        public double PixelSizeMm => PixelSizeMicrons / 1000.0;
-        public double Cx => PrincipalPointXPx ?? (WidthPx * 0.5);
-        public double Cy => PrincipalPointYPx ?? (HeightPx * 0.5);
+        /// <summary>Pixel pitch in µm (alias of PixelSizeMicrons).</summary>
+        public double PixelPitchUm => PixelSizeMicrons;
+
+        /// <summary>Principal point X (px). Defaults to center if null supplied.</summary>
+        public double Cx => CxPx ?? (WidthPx * 0.5);
+        /// <summary>Principal point Y (px). Defaults to center if null supplied.</summary>
+        public double Cy => CyPx ?? (HeightPx * 0.5);
     }
 }

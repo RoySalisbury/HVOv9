@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using HVO.SkyMonitorV5.RPi.Cameras;
 
 namespace HVO.SkyMonitorV5.RPi.Data;
 
@@ -82,15 +83,18 @@ public sealed class HygStarRepository : IStarRepository
                 .ToListAsync()
                 .ConfigureAwait(false);
 
-            var projector = new StarFieldEngine(
-                width: Math.Max(1, screenWidth),
-                height: Math.Max(1, screenHeight),
-                latitudeDeg: latitudeDeg,
-                longitudeDeg: longitudeDeg,
-                utcUtc: utc,
-                projector: _celestialProjector,
-                logger: _starFieldLogger);
-
+var engine = new StarFieldEngine(
+    width:           screenWidth,
+    height:          screenHeight,
+    latitudeDeg:     latitudeDeg,
+    longitudeDeg:    longitudeDeg,
+    utcUtc:          utc,
+    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,   // ✅ new name
+    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
+    flipHorizontal:  false,
+    fovDeg:          MockFisheyeCameraAdapter.DefaultFovDeg,
+    applyRefraction: true);
+    
             var visible = new List<Star>(pool.Count);
             foreach (var row in pool)
             {
@@ -105,7 +109,7 @@ public sealed class HygStarRepository : IStarRepository
                     continue;
                 }
 
-                if (!IsVisibleNow(projector, star))
+                if (!IsVisibleNow(engine, star))
                 {
                     continue;
                 }
@@ -331,14 +335,18 @@ public sealed class HygStarRepository : IStarRepository
                 .ToListAsync()
                 .ConfigureAwait(false);
 
-            var engine = new StarFieldEngine(
-                width: Math.Max(1, screenWidth),
-                height: Math.Max(1, screenHeight),
-                latitudeDeg: latitudeDeg,
-                longitudeDeg: longitudeDeg,
-                utcUtc: utc,
-                projector: _celestialProjector,
-                logger: _starFieldLogger);
+var engine = new StarFieldEngine(
+    width:           screenWidth,
+    height:          screenHeight,
+    latitudeDeg:     latitudeDeg,
+    longitudeDeg:    longitudeDeg,
+    utcUtc:          utc,
+    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,   // ✅ new name
+    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
+    flipHorizontal:  false,
+    fovDeg:          MockFisheyeCameraAdapter.DefaultFovDeg,
+    applyRefraction: true);
+
 
             var visible = new List<(string Constellation, Star Star)>(pool.Count);
             foreach (var row in pool)

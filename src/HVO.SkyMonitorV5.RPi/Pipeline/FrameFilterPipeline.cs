@@ -1,8 +1,6 @@
-﻿#nullable enable
-
+#nullable enable
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -10,62 +8,102 @@ using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
-namespace HVO.SkyMonitorV5.RPi.Pipeline;
-
-public sealed class FrameFilterPipeline : IFrameFilterPipeline
+namespace HVO.SkyMonitorV5.RPi.Pipeline
 {
-    private readonly IReadOnlyDictionary<string, IFrameFilter> _filters;
-    private readonly ILogger<FrameFilterPipeline> _logger;
-
-    public FrameFilterPipeline(IEnumerable<IFrameFilter> filters, ILogger<FrameFilterPipeline> logger)
+    /// <summary>
+    /// Orchestrates running all registered IFrameFilter instances, in order,
+    /// against the current stacked frame. Produces a processed frame image
+    /// that can be distributed to downstream consumers.
+    /// </summary>
+    public sealed class FrameFilterPipeline : IFrameFilterPipeline
     {
-        _filters = filters.ToDictionary(filter => filter.Name, StringComparer.OrdinalIgnoreCase);
-        _logger = logger;
-    }
+        private readonly IEnumerable<IFrameFilter> _filters;
+        private readonly ILogger<FrameFilterPipeline> _logger;
 
-    public async Task<ProcessedFrame> ProcessAsync(FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
-    {
-        var frame = stackResult.Frame;
-        using var bitmap = SKBitmap.Decode(frame.ImageBytes) ?? throw new InvalidOperationException("Unable to decode camera frame.");
-
-        var filterSequence = configuration.FrameFilters ?? Array.Empty<string>();
-        if (filterSequence.Count == 0)
+        public FrameFilterPipeline(IEnumerable<IFrameFilter> filters, ILogger<FrameFilterPipeline> logger)
         {
-            _logger.LogTrace("No frame filters configured for the current camera. Returning original frame without additional processing.");
+            _filters = filters ?? throw new ArgumentNullException(nameof(filters));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        foreach (var filterName in filterSequence)
+        /// <summary>
+        /// Runs all applicable filters. Filters draw directly into the SKBitmap.
+        /// </summary>
+        public async Task<ProcessedFrame> ProcessAsync(
+            FrameStackResult stackResult,
+            CameraConfiguration configuration,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!_filters.TryGetValue(filterName, out var filter))
+            var frame = stackResult.Frame;
+            using var bitmap = DecodeBitmap(frame);
+
+            foreach (var filter in _filters)
             {
-                _logger.LogWarning("Frame filter {FilterName} is configured but not registered.", filterName);
-                continue;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                bool apply = false;
+                try
+                {
+                    apply = filter.ShouldApply(configuration);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Filter {Filter} ShouldApply() threw.", filter.Name);
+                }
+
+                if (!apply) continue;
+
+                try
+                {
+                    await filter.ApplyAsync(bitmap, stackResult, configuration, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Filter {Filter} ApplyAsync() failed; continuing.", filter.Name);
+                }
             }
 
-            if (!filter.ShouldApply(configuration))
-            {
-                _logger.LogTrace("Skipping frame filter {FilterName} due to configuration state.", filterName);
-                continue;
-            }
+            // Encode the updated bitmap into the processed frame payload
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
+            var bytes = data.ToArray();
 
-            _logger.LogDebug("Applying frame filter {FilterName}.", filterName);
-            await filter.ApplyAsync(bitmap, stackResult, configuration, cancellationToken);
+            return new ProcessedFrame(
+                frame.Timestamp,
+                frame.Exposure,
+                bytes,
+                "image/png",
+                stackResult.FramesCombined,
+                stackResult.IntegrationMilliseconds);
         }
 
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
-        var processedExposure = stackResult.FramesCombined > 1
-            ? frame.Exposure with { ExposureMilliseconds = stackResult.IntegrationMilliseconds }
-            : frame.Exposure;
+        private static SKBitmap DecodeBitmap(CameraFrame frame)
+        {
+            // Prefer the raw pixel buffer if present for lossless overlays
+            if (frame.RawPixelBuffer is { } buf)
+            {
+                var bmp = new SKBitmap(new SKImageInfo(buf.Width, buf.Height, SKColorType.Bgra8888));
+                var span = bmp.GetPixelSpan();
+                var src = buf.PixelBytes;
+                if (src.Length == span.Length)
+                {
+                    src.CopyTo(span);
+                }
+                else
+                {
+                    // Fallback to decode if the buffer metadata mismatched (shouldn't happen)
+                    return SKBitmap.Decode(frame.ImageBytes) ?? new SKBitmap(1280, 960);
+                }
+                return bmp;
+            }
 
-        return new ProcessedFrame(
-            frame.Timestamp,
-            processedExposure,
-            data.ToArray(),
-            "image/jpeg",
-            stackResult.FramesCombined,
-            stackResult.IntegrationMilliseconds);
+            return SKBitmap.Decode(frame.ImageBytes) ?? new SKBitmap(1280, 960);
+        }
     }
 }

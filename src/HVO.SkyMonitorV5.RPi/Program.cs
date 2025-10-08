@@ -22,6 +22,8 @@ using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using System.IO;
 using System.Text.Json.Serialization;
+using HVO.SkyMonitorV5.RPi.Cameras.Optics;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 
 namespace HVO.SkyMonitorV5.RPi;
 
@@ -53,6 +55,15 @@ public static class Program
         {
             options.SizeLimit = 256;
         });
+
+        // 1) Choose a rig preset (sensor + lens) and expose IRigProvider + RigSpec.
+        services.AddSkyRigPreset(RigPresets.MockAsi174_Fujinon);
+
+        // 2) Build an IImageProjector from the active RigSpec (fisheye vs rectilinear is decided by the lens model).
+        services.AddSingleton<IImageProjector>(sp => RigFactory.CreateProjector(sp.GetRequiredService<RigSpec>()));
+        services.AddSingleton<IRenderEngineProvider, RenderEngineProvider>();
+        services.AddSingleton<ICelestialProjector, CelestialProjector>();
+
 
         services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
         services.AddSingleton<ICelestialProjector, CelestialProjector>();

@@ -2,6 +2,7 @@
 #nullable enable
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Lenses
 {

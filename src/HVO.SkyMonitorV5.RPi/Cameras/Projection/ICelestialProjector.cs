@@ -8,3 +8,4 @@ public interface ICelestialProjector
 {
     CelestialProjectionContext Create(CelestialProjectionSettings settings, DateTime utcUtc);
 }
+
