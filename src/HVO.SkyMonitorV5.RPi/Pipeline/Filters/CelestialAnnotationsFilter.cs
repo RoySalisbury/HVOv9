@@ -17,8 +17,8 @@ using SkiaSharp;
 namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 
 /// <summary>
-/// Draws star / DSO rings and planet labels using the SAME StarFieldEngine instance
-/// as the renderer (via IRenderEngineProvider).
+/// Draws star / DSO rings and planet labels using the same StarFieldEngine instance
+/// that rendered the frame (supplied via FrameRenderContext).
 /// </summary>
 public sealed class CelestialAnnotationsFilter : IFrameFilter
 {
@@ -40,7 +40,6 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private readonly IOptionsMonitor<CelestialAnnotationsOptions> _annotationMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<CelestialAnnotationsFilter> _logger;
-    private readonly IRenderEngineProvider _engineProvider;
 
     private readonly object _planetWarningLock = new();
     private readonly HashSet<PlanetBody> _suppressedPlanetWarnings = new();
@@ -54,14 +53,12 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         IOptionsMonitor<CelestialAnnotationsOptions> annotationMonitor,
         IConstellationCatalog constellationCatalog,
         IServiceScopeFactory scopeFactory,
-        IRenderEngineProvider engineProvider,
         ILogger<CelestialAnnotationsFilter> logger)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogMonitor = catalogMonitor ?? throw new ArgumentNullException(nameof(catalogMonitor));
         _annotationMonitor = annotationMonitor ?? throw new ArgumentNullException(nameof(annotationMonitor));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _engineProvider = engineProvider ?? throw new ArgumentNullException(nameof(engineProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _catalogStarIndex = BuildCatalogStarIndex(constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog)));
@@ -93,20 +90,26 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             || ShouldAnnotatePlanets(catalogOptions, cache);
     }
 
+    public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
+        => ApplyAsync(bitmap, stackResult, configuration, renderContext: null, cancellationToken);
+
     public async ValueTask ApplyAsync(
         SKBitmap bitmap,
         FrameStackResult stackResult,
         CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var engine = _engineProvider.Current;
+        var engine = renderContext?.Engine;
         if (engine is null)
         {
             _logger.LogWarning("CelestialAnnotations: no StarFieldEngine available; skipping overlay.");
             return;
         }
+
+        var context = renderContext!;
 
         var cache = Volatile.Read(ref _cache);
         var catalogOptions = _catalogMonitor.CurrentValue;
@@ -117,7 +120,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         var location = _locationMonitor.CurrentValue;
 
-        var frameTimestampUtc = stackResult.Frame.Timestamp.UtcDateTime;
+    var frameTimestampUtc = context.Timestamp.UtcDateTime;
         if (frameTimestampUtc == default) frameTimestampUtc = DateTime.UtcNow;
 
         var labelFontSize = Math.Max(4f, cache.LabelFontSize);

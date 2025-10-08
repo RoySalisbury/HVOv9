@@ -65,7 +65,8 @@ public sealed class HygStarRepository : IStarRepository
         int raBins = 24,
         int decBands = 8,
         int screenWidth = 1,
-        int screenHeight = 1)
+        int screenHeight = 1,
+        StarFieldEngine? engine = null)
     {
         try
         {
@@ -83,97 +84,114 @@ public sealed class HygStarRepository : IStarRepository
                 .ToListAsync()
                 .ConfigureAwait(false);
 
-var engine = new StarFieldEngine(
-    width:           screenWidth,
-    height:          screenHeight,
-    latitudeDeg:     latitudeDeg,
-    longitudeDeg:    longitudeDeg,
-    utcUtc:          utc,
-    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,   // ✅ new name
-    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
-    flipHorizontal:  false,
-    fovDeg:          MockFisheyeCameraAdapter.DefaultFovDeg,
-    applyRefraction: true);
+            var engineToUse = engine;
+            var disposeEngine = false;
+            if (engineToUse is null)
+            {
+                engineToUse = new StarFieldEngine(
+                    width: screenWidth,
+                    height: screenHeight,
+                    latitudeDeg: latitudeDeg,
+                    longitudeDeg: longitudeDeg,
+                    utcUtc: utc,
+                    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,
+                    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
+                    flipHorizontal: false,
+                    fovDeg: MockFisheyeCameraAdapter.DefaultFovDeg,
+                    applyRefraction: true);
+                disposeEngine = true;
+            }
     
-            var visible = new List<Star>(pool.Count);
-            foreach (var row in pool)
+            try
             {
-                var star = new Star(
-                    row.RightAscensionHours!.Value,
-                    row.DeclinationDegrees!.Value,
-                    row.Magnitude!.Value,
-                    StarColors.FromCatalog(row.SpectralType, row.ColorIndexBv));
-
-                if (MaxAltitudeDeg(latitudeDeg, star.DeclinationDegrees) < minMaxAltitudeDeg)
+                var visible = new List<Star>(pool.Count);
+                foreach (var row in pool)
                 {
-                    continue;
-                }
+                    var star = new Star(
+                        row.RightAscensionHours!.Value,
+                        row.DeclinationDegrees!.Value,
+                        row.Magnitude!.Value,
+                        StarColors.FromCatalog(row.SpectralType, row.ColorIndexBv));
 
-                if (!IsVisibleNow(engine, star))
-                {
-                    continue;
-                }
-
-                visible.Add(star);
-            }
-
-            IReadOnlyList<Star> result;
-            if (!stratified || raBins <= 0 || decBands <= 0)
-            {
-                result = visible.OrderBy(s => s.Magnitude).Take(topN).ToList();
-            }
-            else
-            {
-                var normalizedRaBins = Math.Max(1, raBins);
-                var normalizedDecBands = Math.Max(1, decBands);
-                const double decMin = -10.0;
-                const double decMax = 90.0;
-
-                var buckets = new List<Star>[normalizedRaBins, normalizedDecBands];
-                for (var i = 0; i < normalizedRaBins; i++)
-                {
-                    for (var j = 0; j < normalizedDecBands; j++)
+                    if (MaxAltitudeDeg(latitudeDeg, star.DeclinationDegrees) < minMaxAltitudeDeg)
                     {
-                        buckets[i, j] = new List<Star>(16);
+                        continue;
                     }
-                }
 
-                foreach (var star in visible)
-                {
-                    var raIndex = Math.Clamp((int)Math.Floor((star.RightAscensionHours / 24.0) * normalizedRaBins), 0, normalizedRaBins - 1);
-                    var decIndex = Math.Clamp((int)Math.Floor(((star.DeclinationDegrees - decMin) / (decMax - decMin)) * normalizedDecBands), 0, normalizedDecBands - 1);
-                    buckets[raIndex, decIndex].Add(star);
-                }
-
-                var perBucket = Math.Max(1, topN / (normalizedRaBins * normalizedDecBands));
-                var selected = new List<Star>(topN);
-
-                for (var i = 0; i < normalizedRaBins; i++)
-                {
-                    for (var j = 0; j < normalizedDecBands; j++)
+                    if (!IsVisibleNow(engineToUse, star))
                     {
-                        selected.AddRange(buckets[i, j].OrderBy(s => s.Magnitude).Take(perBucket));
+                        continue;
                     }
+
+                    visible.Add(star);
                 }
 
-                if (selected.Count < topN)
+                IReadOnlyList<Star> result;
+                if (!stratified || raBins <= 0 || decBands <= 0)
                 {
-                    var remainder = buckets
-                        .Cast<List<Star>>()
-                        .SelectMany(b => b)
-                        .Except(selected)
-                        .OrderBy(s => s.Magnitude);
+                    result = visible.OrderBy(s => s.Magnitude).Take(topN).ToList();
+                }
+                else
+                {
+                    var normalizedRaBins = Math.Max(1, raBins);
+                    var normalizedDecBands = Math.Max(1, decBands);
+                    const double decMin = -10.0;
+                    const double decMax = 90.0;
 
-                    selected.AddRange(remainder.Take(topN - selected.Count));
+                    var buckets = new List<Star>[normalizedRaBins, normalizedDecBands];
+                    for (var i = 0; i < normalizedRaBins; i++)
+                    {
+                        for (var j = 0; j < normalizedDecBands; j++)
+                        {
+                            buckets[i, j] = new List<Star>(16);
+                        }
+                    }
+
+                    foreach (var star in visible)
+                    {
+                        var raIndex = Math.Clamp((int)Math.Floor((star.RightAscensionHours / 24.0) * normalizedRaBins), 0, normalizedRaBins - 1);
+                        var decIndex = Math.Clamp((int)Math.Floor(((star.DeclinationDegrees - decMin) / (decMax - decMin)) * normalizedDecBands), 0, normalizedDecBands - 1);
+                        buckets[raIndex, decIndex].Add(star);
+                    }
+
+                    var perBucket = Math.Max(1, topN / (normalizedRaBins * normalizedDecBands));
+                    var selected = new List<Star>(topN);
+
+                    for (var i = 0; i < normalizedRaBins; i++)
+                    {
+                        for (var j = 0; j < normalizedDecBands; j++)
+                        {
+                            selected.AddRange(buckets[i, j].OrderBy(s => s.Magnitude).Take(perBucket));
+                        }
+                    }
+
+                    if (selected.Count < topN)
+                    {
+                        var remainder = buckets
+                            .Cast<List<Star>>()
+                            .SelectMany(b => b)
+                            .Except(selected)
+                            .OrderBy(s => s.Magnitude);
+
+                        selected.AddRange(remainder.Take(topN - selected.Count));
+                    }
+
+                    result = selected.OrderBy(s => s.RightAscensionHours).ToList();
                 }
 
-                result = selected.OrderBy(s => s.RightAscensionHours).ToList();
+                _logger.LogDebug("Computed {Count} visible stars (stratified={Stratified}) for {LatitudeDeg}, {LongitudeDeg} at {Utc}.",
+                    result.Count, stratified, latitudeDeg, longitudeDeg, utc);
+
+                return Result<IReadOnlyList<Star>>.Success(result);
+            }
+            finally
+            {
+                if (disposeEngine)
+                {
+                    engineToUse.Dispose();
+                }
             }
 
-            _logger.LogDebug("Computed {Count} visible stars (stratified={Stratified}) for {LatitudeDeg}, {LongitudeDeg} at {Utc}.",
-                result.Count, stratified, latitudeDeg, longitudeDeg, utc);
-
-            return Result<IReadOnlyList<Star>>.Success(result);
         }
         catch (Exception ex)
         {
@@ -315,7 +333,8 @@ var engine = new StarFieldEngine(
         double magnitudeLimit = 6.5,
         double minMaxAltitudeDeg = 10.0,
         int screenWidth = 1,
-        int screenHeight = 1)
+        int screenHeight = 1,
+        StarFieldEngine? engine = null)
     {
         try
         {
@@ -335,50 +354,66 @@ var engine = new StarFieldEngine(
                 .ToListAsync()
                 .ConfigureAwait(false);
 
-var engine = new StarFieldEngine(
-    width:           screenWidth,
-    height:          screenHeight,
-    latitudeDeg:     latitudeDeg,
-    longitudeDeg:    longitudeDeg,
-    utcUtc:          utc,
-    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,   // ✅ new name
-    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
-    flipHorizontal:  false,
-    fovDeg:          MockFisheyeCameraAdapter.DefaultFovDeg,
-    applyRefraction: true);
-
-
-            var visible = new List<(string Constellation, Star Star)>(pool.Count);
-            foreach (var row in pool)
+            var engineToUse = engine;
+            var disposeEngine = false;
+            if (engineToUse is null)
             {
-                if (MaxAltitudeDeg(latitudeDeg, row.DeclinationDegrees!.Value) < minMaxAltitudeDeg)
-                {
-                    continue;
-                }
-
-                var star = new Star(
-                    RightAscensionHours: row.RightAscensionHours!.Value,
-                    DeclinationDegrees: row.DeclinationDegrees!.Value,
-                    Magnitude: row.Magnitude!.Value,
-                    Color: StarColors.FromCatalog(row.SpectralType, row.ColorIndexBv));
-
-                if (engine.ProjectStar(star, out _, out _))
-                {
-                    visible.Add((row.Constellation!, star));
-                }
+                engineToUse = new StarFieldEngine(
+                    width: screenWidth,
+                    height: screenHeight,
+                    latitudeDeg: latitudeDeg,
+                    longitudeDeg: longitudeDeg,
+                    utcUtc: utc,
+                    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,
+                    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
+                    flipHorizontal: false,
+                    fovDeg: MockFisheyeCameraAdapter.DefaultFovDeg,
+                    applyRefraction: true);
+                disposeEngine = true;
             }
 
-            var grouped = visible
-                .GroupBy(x => x.Constellation)
-                .Select(group => new VisibleConstellation
-                {
-                    ConstellationCode = group.Key,
-                    Stars = group.Select(v => v.Star).OrderBy(s => s.Magnitude).ToList()
-                })
-                .OrderBy(vc => vc.ConstellationCode)
-                .ToList();
 
-            return Result<IReadOnlyList<VisibleConstellation>>.Success(grouped);
+            try
+            {
+                var visible = new List<(string Constellation, Star Star)>(pool.Count);
+                foreach (var row in pool)
+                {
+                    if (MaxAltitudeDeg(latitudeDeg, row.DeclinationDegrees!.Value) < minMaxAltitudeDeg)
+                    {
+                        continue;
+                    }
+
+                    var star = new Star(
+                        RightAscensionHours: row.RightAscensionHours!.Value,
+                        DeclinationDegrees: row.DeclinationDegrees!.Value,
+                        Magnitude: row.Magnitude!.Value,
+                        Color: StarColors.FromCatalog(row.SpectralType, row.ColorIndexBv));
+
+                    if (engineToUse.ProjectStar(star, out _, out _))
+                    {
+                        visible.Add((row.Constellation!, star));
+                    }
+                }
+
+                var grouped = visible
+                    .GroupBy(x => x.Constellation)
+                    .Select(group => new VisibleConstellation
+                    {
+                        ConstellationCode = group.Key,
+                        Stars = group.Select(v => v.Star).OrderBy(s => s.Magnitude).ToList()
+                    })
+                    .OrderBy(vc => vc.ConstellationCode)
+                    .ToList();
+
+                return Result<IReadOnlyList<VisibleConstellation>>.Success(grouped);
+            }
+            finally
+            {
+                if (disposeEngine)
+                {
+                    engineToUse.Dispose();
+                }
+            }
         }
         catch (Exception ex)
         {

@@ -22,19 +22,18 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
     /// </summary>
     public sealed class MockFisheyeCameraAdapter : ICameraAdapter
     {
-        private const int FrameWidth = 1280;
-        private const int FrameHeight = 960;
         private const int RandomFillerStars = 0;
 
         // Provide these constants so other components (e.g., HYG repo) can rely on them.
-    public const ProjectionModel DefaultProjectionModel = ProjectionModel.Equidistant;
+        public const ProjectionModel DefaultProjectionModel = ProjectionModel.Equidistant;
         public const double DefaultHorizonPadding = 0.98;
         public const double DefaultFovDeg = 185.0;
 
-        private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
+    private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
         private readonly IOptionsMonitor<StarCatalogOptions> _catalogOptions;
         private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IRigProvider _rigProvider;
         private readonly ILogger<MockFisheyeCameraAdapter> _logger;
         private readonly Random _random = new();
 
@@ -45,12 +44,14 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
             IOptionsMonitor<StarCatalogOptions> catalogOptions,
             IOptionsMonitor<CardinalDirectionsOptions> cardinalOptions,
             IServiceScopeFactory scopeFactory,
+            IRigProvider rigProvider,
             ILogger<MockFisheyeCameraAdapter>? logger = null)
         {
             _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
             _catalogOptions = catalogOptions ?? throw new ArgumentNullException(nameof(catalogOptions));
             _cardinalMonitor = cardinalOptions ?? throw new ArgumentNullException(nameof(cardinalOptions));
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+            _rigProvider = rigProvider ?? throw new ArgumentNullException(nameof(rigProvider));
             _logger = logger ?? NullLogger<MockFisheyeCameraAdapter>.Instance;
         }
 
@@ -82,13 +83,14 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
             return Task.FromResult(Result<bool>.Success(true));
         }
 
-        public async Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken)
+        public async Task<Result<CapturedImage>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken)
         {
             if (!_initialized)
             {
-                return Result<CameraFrame>.Failure(new InvalidOperationException("Camera adapter has not been initialized."));
+                return Result<CapturedImage>.Failure(new InvalidOperationException("Camera adapter has not been initialized."));
             }
 
+            SKBitmap? starfield = null;
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -96,6 +98,11 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
                 var nowUtc = DateTime.UtcNow;
                 var location = _locationMonitor.CurrentValue;
                 var catalogConfig = _catalogOptions.CurrentValue;
+                var rig = _rigProvider.Current;
+                var projector = RigFactory.CreateProjector(rig, horizonPadding: DefaultHorizonPadding);
+                var frameWidth = projector.WidthPx;
+                var frameHeight = projector.HeightPx;
+                var flipHorizontal = _cardinalMonitor.CurrentValue.SwapEastWest;
 
                 using var scope = _scopeFactory.CreateScope();
                 var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
@@ -110,12 +117,12 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
                         utc: nowUtc,
                         magnitudeLimit: catalogConfig.MagnitudeLimit,
                         minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
-                        screenWidth: FrameWidth,
-                        screenHeight: FrameHeight);
+                        screenWidth: frameWidth,
+                        screenHeight: frameHeight);
 
                     if (visibleConstellations.IsFailure)
                     {
-                        return Result<CameraFrame>.Failure(visibleConstellations.Error ?? new InvalidOperationException("Constellation query failed."));
+                        return Result<CapturedImage>.Failure(visibleConstellations.Error ?? new InvalidOperationException("Constellation query failed."));
                     }
 
                     var starsWithLabels = new List<Star>(catalogConfig.TopStarCount);
@@ -142,12 +149,12 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
                             stratified: catalogConfig.StratifiedSelection,
                             raBins: catalogConfig.RightAscensionBins,
                             decBands: catalogConfig.DeclinationBands,
-                            screenWidth: FrameWidth,
-                            screenHeight: FrameHeight);
+                            screenWidth: frameWidth,
+                            screenHeight: frameHeight);
 
                         if (fallback.IsFailure)
                         {
-                            return Result<CameraFrame>.Failure(fallback.Error ?? new InvalidOperationException("Star query failed."));
+                            return Result<CapturedImage>.Failure(fallback.Error ?? new InvalidOperationException("Star query failed."));
                         }
 
                         foreach (var star in fallback.Value)
@@ -171,12 +178,12 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
                         stratified: catalogConfig.StratifiedSelection,
                         raBins: catalogConfig.RightAscensionBins,
                         decBands: catalogConfig.DeclinationBands,
-                        screenWidth: FrameWidth,
-                        screenHeight: FrameHeight);
+                        screenWidth: frameWidth,
+                        screenHeight: frameHeight);
 
                     if (starsResult.IsFailure)
                     {
-                        return Result<CameraFrame>.Failure(starsResult.Error ?? new InvalidOperationException("Star query failed."));
+                        return Result<CapturedImage>.Failure(starsResult.Error ?? new InvalidOperationException("Star query failed."));
                     }
 
                     catalogStars = new List<Star>(starsResult.Value);
@@ -207,18 +214,14 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
                 }
 
                 var engine = new StarFieldEngine(
-                    width: FrameWidth,
-                    height: FrameHeight,
+                    projector,
                     latitudeDeg: location.LatitudeDegrees,
                     longitudeDeg: location.LongitudeDegrees,
                     utcUtc: nowUtc,
-                    projectionModel: DefaultProjectionModel,
-                    horizonPaddingPct: DefaultHorizonPadding,
-                    flipHorizontal: _cardinalMonitor.CurrentValue.SwapEastWest,
-                    fovDeg: DefaultFovDeg,
+                    flipHorizontal: flipHorizontal,
                     applyRefraction: true);
 
-                using var starfield = engine.Render(
+                starfield = engine.Render(
                     catalogStars,
                     planets: planetMarks,
                     randomFillerCount: RandomFillerStars,
@@ -230,18 +233,24 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
 
                 ApplySensorNoise(starfield, exposure);
 
-                var pixelBuffer = FramePixelBuffer.FromBitmap(starfield);
+                var frameTimestamp = new DateTimeOffset(nowUtc, TimeSpan.Zero);
+                var frameContext = new FrameContext(
+                    rig,
+                    projector,
+                    engine,
+                    frameTimestamp,
+                    location.LatitudeDegrees,
+                    location.LongitudeDegrees,
+                    flipHorizontal,
+                    DefaultHorizonPadding,
+                    ApplyRefraction: true);
 
-                using var image = SKImage.FromBitmap(starfield);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 90);
-                var bytes = data.ToArray();
-
-                var frame = new CameraFrame(
-                    DateTimeOffset.UtcNow,
+                var frame = new CapturedImage(
+                    starfield,
+                    frameTimestamp,
                     exposure,
-                    bytes,
-                    "image/png",
-                    pixelBuffer);
+                    frameContext);
+                starfield = null; // ownership transferred to CapturedImage
 
                 _logger.LogTrace(
                     "Mock fisheye camera captured frame at {TimestampUtc} with exposure {ExposureMs} ms, gain {Gain}, and {StarCount} catalog stars.",
@@ -250,17 +259,19 @@ namespace HVO.SkyMonitorV5.RPi.Cameras
                     exposure.Gain,
                     catalogStars.Count);
 
-                return Result<CameraFrame>.Success(frame);
+                return Result<CapturedImage>.Success(frame);
             }
             catch (OperationCanceledException ex)
             {
+                starfield?.Dispose();
                 _logger.LogDebug(ex, "Mock fisheye capture cancelled.");
-                return Result<CameraFrame>.Failure(ex);
+                return Result<CapturedImage>.Failure(ex);
             }
             catch (Exception ex)
             {
+                starfield?.Dispose();
                 _logger.LogError(ex, "Mock fisheye capture failed.");
-                return Result<CameraFrame>.Failure(ex);
+                return Result<CapturedImage>.Failure(ex);
             }
         }
 

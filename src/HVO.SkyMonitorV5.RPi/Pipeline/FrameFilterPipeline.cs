@@ -36,37 +36,58 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var frame = stackResult.Frame;
-            using var bitmap = DecodeBitmap(frame);
-
-            foreach (var filter in _filters)
+            var copy = stackResult.StackedImage.Copy();
+            if (copy is null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                throw new InvalidOperationException("Unable to copy raw frame image for filter processing.");
+            }
 
-                bool apply = false;
-                try
-                {
-                    apply = filter.ShouldApply(configuration);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Filter {Filter} ShouldApply() threw.", filter.Name);
-                }
+            using var bitmap = copy;
+            var renderContext = stackResult.Context is { } context ? new FrameRenderContext(context) : null;
 
-                if (!apply) continue;
+            try
+            {
+                foreach (var filter in _filters)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                try
-                {
-                    await filter.ApplyAsync(bitmap, stackResult, configuration, cancellationToken).ConfigureAwait(false);
+                    if (!IsFilterEnabled(configuration, filter.Name))
+                    {
+                        continue;
+                    }
+
+                    bool apply = false;
+                    try
+                    {
+                        apply = filter.ShouldApply(configuration);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Filter {Filter} ShouldApply() threw.", filter.Name);
+                    }
+
+                    if (!apply)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Filter {Filter} ApplyAsync() failed; continuing.", filter.Name);
+                    }
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Filter {Filter} ApplyAsync() failed; continuing.", filter.Name);
-                }
+            }
+            finally
+            {
+                renderContext?.FrameContext.Dispose();
             }
 
             // Encode the updated bitmap into the processed frame payload
@@ -75,35 +96,33 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
             var bytes = data.ToArray();
 
             return new ProcessedFrame(
-                frame.Timestamp,
-                frame.Exposure,
+                stackResult.Timestamp,
+                stackResult.Exposure,
                 bytes,
                 "image/png",
-                stackResult.FramesCombined,
+                stackResult.FramesStacked,
                 stackResult.IntegrationMilliseconds);
         }
 
-        private static SKBitmap DecodeBitmap(CameraFrame frame)
+        private static bool IsFilterEnabled(CameraConfiguration configuration, string filterName)
         {
-            // Prefer the raw pixel buffer if present for lossless overlays
-            if (frame.RawPixelBuffer is { } buf)
+            var filters = configuration.FrameFilters;
+            if (filters is null || filters.Count == 0)
             {
-                var bmp = new SKBitmap(new SKImageInfo(buf.Width, buf.Height, SKColorType.Bgra8888));
-                var span = bmp.GetPixelSpan();
-                var src = buf.PixelBytes;
-                if (src.Length == span.Length)
-                {
-                    src.CopyTo(span);
-                }
-                else
-                {
-                    // Fallback to decode if the buffer metadata mismatched (shouldn't happen)
-                    return SKBitmap.Decode(frame.ImageBytes) ?? new SKBitmap(1280, 960);
-                }
-                return bmp;
+                return true;
             }
 
-            return SKBitmap.Decode(frame.ImageBytes) ?? new SKBitmap(1280, 960);
+            for (var i = 0; i < filters.Count; i++)
+            {
+                if (string.Equals(filters[i], filterName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
+
+        // FrameStackResult exposes the raw stacked SKBitmap; filters operate on a copy to avoid mutating shared state.
     }
 }

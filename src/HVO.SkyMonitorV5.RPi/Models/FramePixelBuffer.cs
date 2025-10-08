@@ -14,4 +14,21 @@ public sealed record FramePixelBuffer(int Width, int Height, int RowBytes, int B
         span.CopyTo(buffer);
         return new FramePixelBuffer(bitmap.Width, bitmap.Height, bitmap.Info.RowBytes, bitmap.Info.BytesPerPixel, buffer);
     }
+
+    public SKBitmap ToBitmap()
+    {
+        var info = new SKImageInfo(Width, Height, SKColorType.Bgra8888);
+        var bitmap = new SKBitmap(info);
+        var destination = bitmap.GetPixelSpan();
+        PixelBytes.CopyTo(destination);
+        return bitmap;
+    }
+
+    public byte[] Encode(SKEncodedImageFormat format = SKEncodedImageFormat.Png, int quality = 100)
+    {
+        using var bitmap = ToBitmap();
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(format, quality);
+        return data.ToArray();
+    }
 }

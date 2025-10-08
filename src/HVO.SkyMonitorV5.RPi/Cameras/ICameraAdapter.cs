@@ -14,5 +14,5 @@ public interface ICameraAdapter : IAsyncDisposable
 
     Task<Result<bool>> ShutdownAsync(CancellationToken cancellationToken);
 
-    Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken);
+    Task<Result<CapturedImage>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken);
 }

@@ -13,7 +13,7 @@ public sealed record CameraConfiguration(
     bool EnableStacking,
     int StackingFrameCount,
     bool EnableImageOverlays,
-    bool EnableMaskOverlay,
+    bool EnableCircularApertureMask,
     int StackingBufferMinimumFrames,
     int StackingBufferIntegrationSeconds,
     IReadOnlyList<string> FrameFilters)
@@ -21,17 +21,18 @@ public sealed record CameraConfiguration(
     public static CameraConfiguration FromOptions(CameraPipelineOptions options)
     {
         var filters = BuildFilterList(options);
-        var overlaysEnabled = options.EnableImageOverlays || filters.Any(IsOverlayFilterName);
-        var maskEnabled = options.EnableMaskOverlay || filters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase));
+        var maskEnabled = filters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase));
+        var constrainedFilters = ApplyOverlayConstraints(filters, options.EnableImageOverlays, maskEnabled);
+        var finalMaskEnabled = constrainedFilters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase));
 
         return new CameraConfiguration(
             options.EnableStacking,
             options.StackingFrameCount,
-            overlaysEnabled,
-            maskEnabled,
+            options.EnableImageOverlays,
+            finalMaskEnabled,
             options.StackingBufferMinimumFrames,
             options.StackingBufferIntegrationSeconds,
-            filters);
+            constrainedFilters);
     }
 
     public CameraConfiguration WithUpdates(UpdateCameraConfigurationRequest request)
@@ -49,7 +50,7 @@ public sealed record CameraConfiguration(
         else
         {
             var overlaysEnabled = request.EnableImageOverlays ?? EnableImageOverlays;
-            var maskEnabled = request.EnableMaskOverlay ?? EnableMaskOverlay;
+            var maskEnabled = request.EnableCircularApertureMask ?? EnableCircularApertureMask;
 
             var mutableFilters = updatedFilters.ToList();
 
@@ -60,14 +61,14 @@ public sealed record CameraConfiguration(
 
             if (maskEnabled)
             {
-                if (!mutableFilters.Any(filter => string.Equals(filter, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase)))
+                if (!mutableFilters.Any(filter => string.Equals(filter, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase)))
                 {
-                    mutableFilters.Add(FrameFilterNames.CircularMask);
+                    mutableFilters.Add(FrameFilterNames.CircularApertureMask);
                 }
             }
             else
             {
-                mutableFilters.RemoveAll(filter => string.Equals(filter, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase));
+                mutableFilters.RemoveAll(filter => string.Equals(filter, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase));
             }
 
             if (overlaysEnabled && mutableFilters.Count == 0)
@@ -78,19 +79,24 @@ public sealed record CameraConfiguration(
 
                 if (maskEnabled)
                 {
-                    mutableFilters.Add(FrameFilterNames.CircularMask);
+                    mutableFilters.Add(FrameFilterNames.CircularApertureMask);
                 }
             }
 
             updatedFilters = mutableFilters.Count > 0 ? NormalizeFilterList(mutableFilters) : Array.Empty<string>();
         }
 
+    var overlaysEnabledResult = request.EnableImageOverlays ?? EnableImageOverlays;
+    var maskEnabledResult = request.EnableCircularApertureMask ?? EnableCircularApertureMask;
+
+        updatedFilters = ApplyOverlayConstraints(updatedFilters, overlaysEnabledResult, maskEnabledResult);
+
         return this with
         {
             EnableStacking = request.EnableStacking ?? EnableStacking,
             StackingFrameCount = request.StackingFrameCount ?? StackingFrameCount,
-            EnableImageOverlays = request.EnableImageOverlays ?? EnableImageOverlays,
-            EnableMaskOverlay = request.EnableMaskOverlay ?? EnableMaskOverlay,
+            EnableImageOverlays = overlaysEnabledResult,
+            EnableCircularApertureMask = maskEnabledResult,
             StackingBufferMinimumFrames = request.StackingBufferMinimumFrames ?? StackingBufferMinimumFrames,
             StackingBufferIntegrationSeconds = request.StackingBufferIntegrationSeconds ?? StackingBufferIntegrationSeconds,
             FrameFilters = updatedFilters
@@ -119,17 +125,34 @@ public sealed record CameraConfiguration(
             filters.Add(FrameFilterNames.OverlayText);
         }
 
-        if (options.EnableMaskOverlay)
-        {
-            filters.Add(FrameFilterNames.CircularMask);
-        }
-
         return filters.Count > 0 ? NormalizeFilterList(filters) : Array.Empty<string>();
     }
 
     private static bool IsOverlayFilterName(string filterName) => string.Equals(filterName, FrameFilterNames.CardinalDirections, StringComparison.OrdinalIgnoreCase)
         || string.Equals(filterName, FrameFilterNames.CelestialAnnotations, StringComparison.OrdinalIgnoreCase)
         || string.Equals(filterName, FrameFilterNames.OverlayText, StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<string> ApplyOverlayConstraints(IReadOnlyList<string>? filters, bool enableOverlays, bool enableMask)
+    {
+        if (filters is null || filters.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var mutable = filters.ToList();
+
+        if (!enableOverlays)
+        {
+            mutable.RemoveAll(IsOverlayFilterName);
+        }
+
+        if (!enableMask)
+        {
+            mutable.RemoveAll(static filter => string.Equals(filter, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return mutable.Count > 0 ? NormalizeFilterList(mutable) : Array.Empty<string>();
+    }
 
     private static IReadOnlyList<string> BuildFromFilterOptions(FrameFilterOption[]? filterOptions)
     {

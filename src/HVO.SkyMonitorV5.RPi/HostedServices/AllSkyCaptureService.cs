@@ -111,23 +111,50 @@ public sealed class AllSkyCaptureService : BackgroundService
             var stopwatch = Stopwatch.StartNew();
 
             var stackResult = _frameStacker.Accumulate(capturedFrame, configuration);
-            var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
+            var frameContext = stackResult.Context;
+            var frameStored = false;
 
-            stopwatch.Stop();
+            try
+            {
+                var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
+                stopwatch.Stop();
 
-            _frameStateStore.UpdateFrame(stackResult.Frame, processedFrame);
-            _frameStateStore.SetLastError(null);
+                _frameStateStore.UpdateFrame(
+                    new RawFrameSnapshot(stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),
+                    processedFrame);
+                _frameStateStore.SetLastError(null);
+                frameStored = true;
 
-            var captureInterval = _optionsMonitor.CurrentValue.CaptureIntervalMilliseconds;
-            var delay = Math.Max(MinimumFrameDelayMilliseconds, captureInterval - (int)stopwatch.ElapsedMilliseconds);
+                if (!ReferenceEquals(stackResult.StackedImage, stackResult.OriginalImage))
+                {
+                    stackResult.StackedImage.Dispose();
+                }
 
-            _logger.LogDebug(
-                "Captured frame at {Timestamp} (processing {Elapsed}ms). Next capture in {Delay}ms.",
-                processedFrame.Timestamp,
-                stopwatch.ElapsedMilliseconds,
-                delay);
+                var captureInterval = _optionsMonitor.CurrentValue.CaptureIntervalMilliseconds;
+                var delay = Math.Max(MinimumFrameDelayMilliseconds, captureInterval - (int)stopwatch.ElapsedMilliseconds);
 
-            await DelayWithCancellation(TimeSpan.FromMilliseconds(delay), stoppingToken);
+                _logger.LogDebug(
+                    "Captured frame at {Timestamp} (processing {Elapsed}ms). Next capture in {Delay}ms.",
+                    processedFrame.Timestamp,
+                    stopwatch.ElapsedMilliseconds,
+                    delay);
+
+                await DelayWithCancellation(TimeSpan.FromMilliseconds(delay), stoppingToken);
+            }
+            finally
+            {
+                if (stopwatch.IsRunning)
+                {
+                    stopwatch.Stop();
+                }
+
+                if (!frameStored)
+                {
+                    stackResult.OriginalImage.Dispose();
+                }
+
+                frameContext?.Dispose();
+            }
         }
     }
 

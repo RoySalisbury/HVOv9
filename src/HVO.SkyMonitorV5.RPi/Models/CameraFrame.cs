@@ -1,11 +1,9 @@
 namespace HVO.SkyMonitorV5.RPi.Models;
 
 /// <summary>
-/// Represents a raw frame captured from the camera adapter.
+/// Legacy alias retained for source compatibility. Use <see cref="CapturedImage"/> instead.
 /// </summary>
-public sealed record CameraFrame(
-    DateTimeOffset Timestamp,
-    ExposureSettings Exposure,
-    byte[] ImageBytes,
-    string ContentType,
-    FramePixelBuffer? RawPixelBuffer = null);
+[System.Obsolete("CameraFrame has been replaced by CapturedImage. This type will be removed in a future release.")]
+public sealed class CameraFrame
+{
+}

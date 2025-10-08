@@ -38,11 +38,10 @@ public sealed class OverlayTextFilter : IFrameFilter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var frame = stackResult.Frame;
         var options = _optionsMonitor.CurrentValue;
         var location = _locationMonitor.CurrentValue;
         var timeZone = GetTimeZoneForLocation(location);
-        var localTimestamp = TimeZoneInfo.ConvertTime(frame.Timestamp, timeZone.TimeZone);
+    var localTimestamp = TimeZoneInfo.ConvertTime(stackResult.Timestamp, timeZone.TimeZone);
 
         using var canvas = new SKCanvas(bitmap);
         using var boldTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
@@ -55,9 +54,9 @@ public sealed class OverlayTextFilter : IFrameFilter
 
         var locationText = $"Lat: {FormatLatitude(location.LatitudeDegrees)} | Lon: {FormatLongitude(location.LongitudeDegrees)}";
         var timestampText = $"Local Time ({timeZone.DisplayId}): {localTimestamp.ToString(options.OverlayTextFormat)}";
-        var exposureText = $"Exposure: {frame.Exposure.ExposureMilliseconds} ms | Gain: {frame.Exposure.Gain}";
-        var integrationText = stackResult.FramesCombined > 1
-            ? $"Integration: {stackResult.IntegrationMilliseconds} ms ({stackResult.FramesCombined} frames)"
+        var exposureText = $"Exposure: {stackResult.Exposure.ExposureMilliseconds} ms | Gain: {stackResult.Exposure.Gain}";
+        var integrationText = stackResult.FramesStacked > 1
+            ? $"Integration: {stackResult.IntegrationMilliseconds} ms ({stackResult.FramesStacked} frames)"
             : null;
 
         var titleMetrics = titleFont.Metrics;

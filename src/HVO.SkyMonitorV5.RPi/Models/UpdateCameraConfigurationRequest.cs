@@ -18,7 +18,7 @@ public sealed class UpdateCameraConfigurationRequest
 
     public bool? EnableImageOverlays { get; set; }
 
-    public bool? EnableMaskOverlay { get; set; }
+    public bool? EnableCircularApertureMask { get; set; }
 
     public List<string>? FrameFilters { get; set; }
 }

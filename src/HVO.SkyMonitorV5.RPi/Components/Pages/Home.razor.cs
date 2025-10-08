@@ -123,9 +123,9 @@ public sealed partial class Home : ComponentBase, IDisposable
                 return FormattableString.Invariant($"{overlayLabel} · awaiting frame");
             }
 
-            var frameText = processed.FramesCombined == 1
+            var frameText = processed.FramesStacked == 1
                 ? "1 frame"
-                : FormattableString.Invariant($"{processed.FramesCombined} frames");
+                : FormattableString.Invariant($"{processed.FramesStacked} frames");
 
             var integrationText = FormatIntegrationText(processed.IntegrationMilliseconds);
 
@@ -139,14 +139,14 @@ public sealed partial class Home : ComponentBase, IDisposable
             || configuration.FrameFilters.Any(IsOverlayFilterName);
 
     private static bool HasMaskEnabled(CameraConfiguration configuration)
-        => configuration.EnableMaskOverlay
-            || configuration.FrameFilters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase));
+        => configuration.EnableCircularApertureMask
+            || configuration.FrameFilters.Any(static filter => string.Equals(filter, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsOverlayFilterName(string filterName)
         => string.Equals(filterName, FrameFilterNames.CardinalDirections, StringComparison.OrdinalIgnoreCase)
             || string.Equals(filterName, FrameFilterNames.CelestialAnnotations, StringComparison.OrdinalIgnoreCase)
             || string.Equals(filterName, FrameFilterNames.OverlayText, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(filterName, FrameFilterNames.CircularMask, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(filterName, FrameFilterNames.CircularApertureMask, StringComparison.OrdinalIgnoreCase);
 
     private static string FormatIntegrationText(int integrationMilliseconds)
     {

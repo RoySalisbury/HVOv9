@@ -20,9 +20,9 @@ HVO SkyMonitor v5 is the Raspberry Pi service that captures synthetic or hardwar
 | Cardinal directions | `CardinalDirections` | Draws a dashed azimuth ring with north/east/south/west tick marks and labels, helping viewers orient the dome.
 | Celestial annotations | `CelestialAnnotations` | Projects configurable star, planet, and deep-sky object labels in their sidereal-corrected positions with color-coded markers.
 | Overlay text | `OverlayText` | Displays observatory coordinates, localised timestamp, exposure, gain, and rolling integration summary in the lower-left corner of the frame.
-| Circular mask | `CircularMask` | Darkens the corners outside a 95% diameter circle to mimic traditional all-sky fisheye vignetting or privacy masks.
+| Circular aperture mask | `CircularApertureMask` | Darkens the corners outside a 95% diameter circle to mimic traditional all-sky fisheye vignetting or privacy masks.
 
-Each filter implements `IFrameFilter`, receives the `SKBitmap` for the current frame, and may decide whether to run based on the live `CameraConfiguration` (for example, both overlay filters respect `EnableImageOverlays`, and the mask filter checks `EnableMaskOverlay`).
+Each filter implements `IFrameFilter`, receives the `SKBitmap` for the current frame, and may decide whether to run based on the live `CameraConfiguration` (for example, both overlay filters respect `EnableImageOverlays`, and the mask filter checks `EnableCircularApertureMask`).
 
 ## Rolling stacking buffer
 
@@ -50,12 +50,11 @@ The effective integration time reported in the overlay equals the sum of the exp
   "StackingBufferIntegrationSeconds": 120,
   "EnableStacking": true,
   "EnableImageOverlays": false,
-  "EnableMaskOverlay": false,
   "Filters": [
     { "Name": "CardinalDirections", "Order": 1, "Enabled": false },
     { "Name": "CelestialAnnotations", "Order": 2, "Enabled": false },
     { "Name": "OverlayText", "Order": 3, "Enabled": false },
-    { "Name": "CircularMask", "Order": 4, "Enabled": false }
+    { "Name": "CircularApertureMask", "Order": 4, "Enabled": false }
   ],
   "FrameFilters": [],
   "OverlayTextFormat": "yyyy-MM-dd HH:mm:ss zzz"
@@ -97,10 +96,10 @@ The effective integration time reported in the overlay equals the sum of the exp
 - `CircleLineStyle` accepts `Solid`, `LongDash`, `ShortDash`, `Dotted`, or `DashDot`.
 - Labels use the same colour and thickness as the circle; padding, corner radius, and fill opacity tune legibility.
 
-`CircularMask` mirrors the same coordinate system, letting you trim the live frame with a configurable vignette:
+`CircularApertureMask` mirrors the same coordinate system, letting you trim the live frame with a configurable vignette:
 
 ```json
-"CircularMask": {
+"CircularApertureMask": {
   "OffsetXPixels": 0,
   "OffsetYPixels": 0,
   "RadiusOffsetPixels": 0,
@@ -214,12 +213,12 @@ The `MockFisheyeCameraAdapter` now generates a more balanced all-sky scene so pr
 ```json
 {
   "enableImageOverlays": true,
-  "enableMaskOverlay": true,
+  "enableCircularApertureMask": true,
   "frameFilters": [
     "OverlayText",
     "CardinalDirections",
     "CelestialAnnotations",
-    "CircularMask"
+    "CircularApertureMask"
   ]
 }
 ```
@@ -276,6 +275,12 @@ flowchart LR
     K --> L[API / UI consumes frames]
 ```
 
+### Frame context ownership
+
+- Camera adapters supply a `FrameContext` with the active rig, projector, and `StarFieldEngine` instance for each capture.
+- The capture loop and filter pipeline both dispose the context once processing completes, guaranteeing the shared `StarFieldEngine` is released promptly even if an exception interrupts the workflow.
+- Filters must rely on the provided `FrameRenderContext`; avoid instantiating additional `StarFieldEngine` instances so overlays stay in sync with the original render geometry.
+
 ## Project layout highlights
 
 ```
@@ -317,7 +322,7 @@ curl "http://localhost:5136/api/v1.0/all-sky/frame/latest?raw=true" --output raw
 # Update configuration (toggle mask + reorder filters)
 curl -X POST http://localhost:5136/api/v1.0/all-sky/configuration \
   -H "Content-Type: application/json" \
-  -d '{"enableMaskOverlay":true,"frameFilters":["CardinalDirections","OverlayText","CircularMask"]}'
+  -d '{"enableCircularApertureMask":true,"frameFilters":["CardinalDirections","OverlayText","CircularApertureMask"]}'
 ```
 
 ## Further reading

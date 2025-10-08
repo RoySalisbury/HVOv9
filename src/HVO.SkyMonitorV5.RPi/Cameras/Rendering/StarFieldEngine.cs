@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using SkiaSharp;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
@@ -35,7 +36,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
     /// <summary>
     /// Lens-agnostic sky renderer. It relies on an <see cref="IImageProjector"/> to map camera-space rays to pixels.
     /// </summary>
-    public sealed class StarFieldEngine
+    public sealed class StarFieldEngine : IDisposable
     {
         private readonly IImageProjector _projector;
         private readonly double _latitudeDeg;
@@ -44,6 +45,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
         private readonly bool _flipHorizontal;
         private readonly bool _applyRefraction;
         private readonly StarSizeCurve _sizeCurve;
+        private bool _disposed;
 
         /// <summary>
         /// Preferred constructor: pass a ready projector (fisheye, rectilinear, etc).
@@ -391,6 +393,21 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                 _ => 175 - 10.0 * (mag - 5.0)
             };
             return (byte)Math.Clamp(a, 165, 255);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (_projector is IDisposable disposableProjector)
+            {
+                disposableProjector.Dispose();
+            }
+
+            _disposed = true;
         }
     }
 }

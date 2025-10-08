@@ -7,7 +7,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 
 /// <summary>
 /// Placeholder implementation for a ZWO ASI camera adapter. The concrete integration should wrap the
-/// HVO.ZWOOptical.ASISDK library and translate frames into the shared <see cref="CameraFrame"/> model.
+/// HVO.ZWOOptical.ASISDK library and translate frames into the shared <see cref="CapturedImage"/> model.
 /// </summary>
 public sealed class ZwoCameraAdapter : ICameraAdapter
 {
@@ -30,8 +30,8 @@ public sealed class ZwoCameraAdapter : ICameraAdapter
         return Task.FromResult(Result<bool>.Success(true));
     }
 
-    public Task<Result<CameraFrame>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken)
+    public Task<Result<CapturedImage>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result<CameraFrame>.Failure(new NotImplementedException("ZWO camera integration is not yet implemented.")));
+        return Task.FromResult(Result<CapturedImage>.Failure(new NotImplementedException("ZWO camera integration is not yet implemented.")));
     }
 }

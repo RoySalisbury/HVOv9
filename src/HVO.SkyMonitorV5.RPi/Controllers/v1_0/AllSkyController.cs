@@ -5,6 +5,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Storage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 
@@ -13,6 +14,8 @@ namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 [Route("api/v{version:apiVersion}/all-sky")]
 public sealed class AllSkyController : ControllerBase
 {
+    private const string RawImageContentType = "image/png";
+
     private readonly IFrameStateStore _frameStateStore;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private readonly ILogger<AllSkyController> _logger;
@@ -49,7 +52,9 @@ public sealed class AllSkyController : ControllerBase
                 return NotFound();
             }
 
-            return File(frame.ImageBytes, frame.ContentType);
+            using var image = SKImage.FromBitmap(frame.Image);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
+            return File(data.ToArray(), RawImageContentType);
         }
         else
         {
@@ -87,11 +92,11 @@ public sealed class AllSkyController : ControllerBase
         }
 
         _frameStateStore.UpdateConfiguration(updatedConfiguration);
-        _logger.LogInformation("Camera configuration updated via API. EnableStacking:{EnableStacking} StackingFrameCount:{StackCount} Overlays:{Overlays} Mask:{Mask} Filters:{Filters}",
+        _logger.LogInformation("Camera configuration updated via API. EnableStacking:{EnableStacking} StackingFrameCount:{StackCount} Overlays:{Overlays} CircularApertureMask:{Mask} Filters:{Filters}",
             updatedConfiguration.EnableStacking,
             updatedConfiguration.StackingFrameCount,
             updatedConfiguration.EnableImageOverlays,
-            updatedConfiguration.EnableMaskOverlay,
+            updatedConfiguration.EnableCircularApertureMask,
             string.Join(",", updatedConfiguration.FrameFilters));
 
         return Ok(updatedConfiguration);

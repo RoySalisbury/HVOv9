@@ -12,7 +12,7 @@ public interface IFrameStateStore
 
     ProcessedFrame? LatestProcessedFrame { get; }
 
-    CameraFrame? LatestRawFrame { get; }
+    RawFrameSnapshot? LatestRawFrame { get; }
 
     DateTimeOffset? LastFrameTimestamp { get; }
 
@@ -22,7 +22,7 @@ public interface IFrameStateStore
 
     void UpdateConfiguration(CameraConfiguration configuration);
 
-    void UpdateFrame(CameraFrame rawFrame, ProcessedFrame processedFrame);
+    void UpdateFrame(RawFrameSnapshot rawFrame, ProcessedFrame processedFrame);
 
     void UpdateRunningState(bool isRunning);
 

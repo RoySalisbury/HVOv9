@@ -45,7 +45,8 @@ public sealed class CachedStarRepository : IStarRepository
         int raBins = 24,
         int decBands = 8,
         int screenWidth = 1,
-        int screenHeight = 1)
+        int screenHeight = 1,
+        StarFieldEngine? engine = null)
     {
         var utcHour = new DateTime(utc.Year, utc.Month, utc.Day, utc.Hour, 0, 0, DateTimeKind.Utc);
         var key = new VisibleStarsCacheKey(latitudeDeg, longitudeDeg, utcHour, magnitudeLimit,
@@ -58,7 +59,7 @@ public sealed class CachedStarRepository : IStarRepository
         }
 
         var result = await _inner.GetVisibleStarsAsync(latitudeDeg, longitudeDeg, utc, magnitudeLimit, minMaxAltitudeDeg,
-            topN, stratified, raBins, decBands, screenWidth, screenHeight).ConfigureAwait(false);
+            topN, stratified, raBins, decBands, screenWidth, screenHeight, engine).ConfigureAwait(false);
 
         if (result.IsSuccessful)
         {
@@ -99,8 +100,9 @@ public sealed class CachedStarRepository : IStarRepository
         double magnitudeLimit = 6.5,
         double minMaxAltitudeDeg = 10.0,
         int screenWidth = 1,
-        int screenHeight = 1)
-        => _inner.GetVisibleByConstellationAsync(latitudeDeg, longitudeDeg, utc, magnitudeLimit, minMaxAltitudeDeg, screenWidth, screenHeight);
+        int screenHeight = 1,
+        StarFieldEngine? engine = null)
+        => _inner.GetVisibleByConstellationAsync(latitudeDeg, longitudeDeg, utc, magnitudeLimit, minMaxAltitudeDeg, screenWidth, screenHeight, engine);
 
     public void InvalidateVisibleCacheForLocation(double latitudeDeg, double longitudeDeg)
     {

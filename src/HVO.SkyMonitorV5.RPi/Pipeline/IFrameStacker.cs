@@ -4,7 +4,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 
 public interface IFrameStacker
 {
-    FrameStackResult Accumulate(CameraFrame frame, CameraConfiguration configuration);
+    FrameStackResult Accumulate(CapturedImage frame, CameraConfiguration configuration);
 
     void Reset();
 }

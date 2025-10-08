@@ -12,7 +12,7 @@ public sealed class FrameStateStore : IFrameStateStore
     private CameraConfiguration _configuration;
     private int _configurationVersion;
     private ProcessedFrame? _latestProcessedFrame;
-    private CameraFrame? _latestRawFrame;
+    private RawFrameSnapshot? _latestRawFrame;
     private DateTimeOffset? _lastFrameTimestamp;
     private bool _isRunning;
     private Exception? _lastError;
@@ -58,7 +58,7 @@ public sealed class FrameStateStore : IFrameStateStore
         }
     }
 
-    public CameraFrame? LatestRawFrame
+    public RawFrameSnapshot? LatestRawFrame
     {
         get
         {
@@ -111,10 +111,14 @@ public sealed class FrameStateStore : IFrameStateStore
         }
     }
 
-    public void UpdateFrame(CameraFrame rawFrame, ProcessedFrame processedFrame)
+    public void UpdateFrame(RawFrameSnapshot rawFrame, ProcessedFrame processedFrame)
     {
         lock (_sync)
         {
+            if (_latestRawFrame is not null && !ReferenceEquals(_latestRawFrame, rawFrame))
+            {
+                _latestRawFrame.Image.Dispose();
+            }
             _latestRawFrame = rawFrame;
             _latestProcessedFrame = processedFrame;
             _lastFrameTimestamp = processedFrame.Timestamp;
@@ -173,6 +177,6 @@ public sealed class FrameStateStore : IFrameStateStore
             return null;
         }
 
-        return new ProcessedFrameSummary(frame.FramesCombined, frame.IntegrationMilliseconds);
+        return new ProcessedFrameSummary(frame.FramesStacked, frame.IntegrationMilliseconds);
     }
 }

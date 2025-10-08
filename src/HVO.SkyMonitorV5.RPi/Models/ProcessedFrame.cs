@@ -8,5 +8,5 @@ public sealed record ProcessedFrame(
     ExposureSettings Exposure,
     byte[] ImageBytes,
     string ContentType,
-    int FramesCombined,
+    int FramesStacked,
     int IntegrationMilliseconds);

@@ -19,7 +19,8 @@ public interface IStarRepository
         int raBins = 24,
         int decBands = 8,
         int screenWidth = 1,
-        int screenHeight = 1);
+        int screenHeight = 1,
+        StarFieldEngine? engine = null);
 
     Task<Result<IReadOnlyList<Star>>> GetConstellationStarsAsync(string constellation3, double magnitudeLimit = 6.0);
 
@@ -42,5 +43,6 @@ public interface IStarRepository
         double magnitudeLimit = 6.5,
         double minMaxAltitudeDeg = 10.0,
         int screenWidth = 1,
-        int screenHeight = 1);
+        int screenHeight = 1,
+        StarFieldEngine? engine = null);
 }
