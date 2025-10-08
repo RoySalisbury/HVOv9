@@ -94,10 +94,10 @@ public sealed class HygStarRepository : IStarRepository
                     latitudeDeg: latitudeDeg,
                     longitudeDeg: longitudeDeg,
                     utcUtc: utc,
-                    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,
-                    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
+                    projectionModel: MockCameraAdapter.DefaultProjectionModel,
+                    horizonPaddingPct: MockCameraAdapter.DefaultHorizonPadding,
                     flipHorizontal: false,
-                    fovDeg: MockFisheyeCameraAdapter.DefaultFovDeg,
+                    fovDeg: MockCameraAdapter.DefaultFovDeg,
                     applyRefraction: true);
                 disposeEngine = true;
             }
@@ -364,10 +364,10 @@ public sealed class HygStarRepository : IStarRepository
                     latitudeDeg: latitudeDeg,
                     longitudeDeg: longitudeDeg,
                     utcUtc: utc,
-                    projectionModel: MockFisheyeCameraAdapter.DefaultProjectionModel,
-                    horizonPaddingPct: MockFisheyeCameraAdapter.DefaultHorizonPadding,
+                    projectionModel: MockCameraAdapter.DefaultProjectionModel,
+                    horizonPaddingPct: MockCameraAdapter.DefaultHorizonPadding,
                     flipHorizontal: false,
-                    fovDeg: MockFisheyeCameraAdapter.DefaultFovDeg,
+                    fovDeg: MockCameraAdapter.DefaultFovDeg,
                     applyRefraction: true);
                 disposeEngine = true;
             }

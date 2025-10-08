@@ -2,6 +2,16 @@
     position: relative;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(14, 116, 144, 0.35));
     border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+}
+
+.hero .display-4 {
+    font-size: clamp(1.9rem, 4.4vw, 2.5rem);
+}
+
+.hero .lead {
+    font-size: clamp(0.85rem, 2vw, 1rem);
 }
 
 .gradient-overlay {
@@ -173,18 +183,36 @@
 }
 
 .status-card__item dt {
-    font-size: 0.8rem;
+    font-size: 0.56rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: rgba(148, 163, 184, 0.85);
+    letter-spacing: 0.08em;
+    color: rgba(148, 163, 184, 0.82);
     margin-bottom: 0;
 }
 
 .status-card__item dd {
     margin: 0;
-    font-size: 1rem;
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: #e2e8f0;
+}
+
+.filter-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(96, 165, 250, 0.18);
+    color: #bfdbfe;
+    font-size: 0.7rem;
     font-weight: 600;
-    color: #f8fafc;
+    letter-spacing: 0.03em;
 }
 
 @media (max-width: 991.98px) {

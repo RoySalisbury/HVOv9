@@ -1,7 +1,7 @@
 #nullable enable
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
@@ -11,7 +11,8 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Projection;
 public sealed record RigSpec(
     string Name,
     SensorSpec Sensor,   // your existing SensorSpec type
-    LensSpec Lens       // your existing LensSpec (ProjectionModel, FocalLengthMm, FovXDeg, ...)
+    LensSpec Lens,       // your existing LensSpec (ProjectionModel, FocalLengthMm, FovXDeg, ...)
+    CameraDescriptor? Descriptor = null
 );
 
 /// <summary>
@@ -38,76 +39,13 @@ public static class RigPresets
             RollDeg: 0.0,
             Name: "Fujinon FE185C086HA-1",
             Kind: LensKind.Fisheye
+        ),
+        Descriptor: new CameraDescriptor(
+            Manufacturer: "HVO",
+            Model: "Mock Fisheye AllSky",
+            DriverVersion: "2.0.0",
+            AdapterName: "MockCameraAdapter",
+            Capabilities: new[] { "Synthetic", "StackingCompatible", "FisheyeProjection" }
         )
     );
-}
-
-/// <summary>Read-only access to the active rig selected at startup.</summary>
-public interface IRigProvider
-{
-    RigSpec Current { get; }
-}
-
-/// <summary>Internal implementation the hosted service populates at startup.</summary>
-internal sealed class RigProvider : IRigProvider
-{
-    private RigSpec? _current;
-    public RigSpec Current => _current ?? throw new InvalidOperationException("Rig not initialized.");
-
-    internal void Set(RigSpec rig) => _current = rig ?? throw new ArgumentNullException(nameof(rig));
-}
-
-/// <summary>
-/// Picks a RigSpec on startup and makes it available via IRigProvider.
-/// </summary>
-internal sealed class RigHostedService : IHostedService
-{
-    private readonly IRigProvider _provider;
-    private readonly RigSpec _rig;
-    private readonly ILogger<RigHostedService> _logger;
-
-    public RigHostedService(IRigProvider provider, RigSpec rig, ILogger<RigHostedService> logger)
-    {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _rig = rig ?? throw new ArgumentNullException(nameof(rig));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        (_provider as RigProvider)!.Set(_rig);
-
-        _logger.LogInformation(
-            "Rig initialized: {RigName} | Sensor {W}x{H} px @ {Pitch} µm | Lens {Lens} ({Model}, {FovX}×{FovY} deg, {Roll}° roll)",
-            _rig.Name,
-            _rig.Sensor.WidthPx, _rig.Sensor.HeightPx, _rig.Sensor.PixelSizeMicrons,
-            _rig.Lens.Name, _rig.Lens.Model, _rig.Lens.FovXDeg, _rig.Lens.FovYDeg ?? _rig.Lens.FovXDeg, _rig.Lens.RollDeg);
-
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
-
-public static class SkyRigServiceExtensions
-{
-    /// <summary>
-    /// Registers the rig system and selects a preset rig (e.g., <see cref="RigPresets.MockAsi174_Fujinon"/>).
-    /// </summary>
-    public static IServiceCollection AddSkyRigPreset(this IServiceCollection services, RigSpec rig)
-    {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (rig is null) throw new ArgumentNullException(nameof(rig));
-
-        // provider is a singleton container for the active rig
-        services.TryAddSingleton<IRigProvider, RigProvider>();
-
-        // store the chosen rig as a singleton value
-        services.AddSingleton(rig);
-
-        // hosted service applies the rig at startup and logs details
-        services.AddHostedService<RigHostedService>();
-
-        return services;
-    }
 }

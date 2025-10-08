@@ -1,6 +1,10 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -232,6 +236,104 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
     }
 
+    private string RigNameText => _status?.Rig?.Name ?? "Not reported";
+
+    private string SensorSummaryText
+    {
+        get
+        {
+            if (_status?.Rig?.Sensor is not { } sensor)
+            {
+                return "Not reported";
+            }
+
+            return FormattableString.Invariant(
+                $"{sensor.WidthPx} × {sensor.HeightPx} px · {sensor.PixelSizeMicrons:0.##} µm pixels");
+        }
+    }
+
+    private string LensSummaryText
+    {
+        get
+        {
+            if (_status?.Rig?.Lens is not { } lens)
+            {
+                return "Not reported";
+            }
+
+            var label = string.IsNullOrWhiteSpace(lens.Name) ? lens.Kind.ToString() : lens.Name;
+            var fovY = lens.FovYDeg is double fovYDeg
+                ? FormattableString.Invariant($"{lens.FovXDeg:0.#}° × {fovYDeg:0.#}°")
+                : FormattableString.Invariant($"{lens.FovXDeg:0.#}°");
+
+            return FormattableString.Invariant(
+                $"{label} · {lens.FocalLengthMm:0.0} mm · {lens.Model} · FOV {fovY}");
+        }
+    }
+
+    private IReadOnlyList<string> AppliedFilters => _status?.ProcessedFrame?.AppliedFilters ?? Array.Empty<string>();
+
+    private string PipelineFiltersSummary
+    {
+        get
+        {
+            var applied = AppliedFilters;
+            if (applied.Count > 0)
+            {
+                return string.Join(", ", applied);
+            }
+
+            var configured = _status?.Configuration?.FrameFilters;
+            if (configured is { Count: > 0 })
+            {
+                return string.Join(", ", configured);
+            }
+
+            return "No filters (raw frame)";
+        }
+    }
+
+    private string TotalIntegrationSummary
+    {
+        get
+        {
+            if (_status?.ProcessedFrame is not { } processed)
+            {
+                return "Awaiting capture";
+            }
+
+            return FormatIntegrationText(processed.IntegrationMilliseconds);
+        }
+    }
+
+    private string PipelineProcessingSummary
+    {
+        get
+        {
+            if (_status?.ProcessedFrame is not { } processed)
+            {
+                return "Awaiting capture";
+            }
+
+            return FormatDurationText(processed.ProcessingMilliseconds);
+        }
+    }
+
+    private string FramesStackedSummary
+    {
+        get
+        {
+            if (_status?.ProcessedFrame is not { } processed)
+            {
+                return "Awaiting capture";
+            }
+
+            return processed.FramesStacked == 1
+                ? "1 frame"
+                : FormattableString.Invariant($"{processed.FramesStacked} frames");
+        }
+    }
+
     private string ConfigurationVersion => _configurationVersion > 0 ? $"#{_configurationVersion}" : "—";
 
     private string? ProcessedImageUrl => BuildImageUrl(raw: false);
@@ -250,5 +352,32 @@ public sealed partial class Home : ComponentBase, IDisposable
             : _cacheBuster;
 
         return FormattableString.Invariant($"api/v1.0/all-sky/frame/latest?raw={(raw ? "true" : "false")}&cacheBust={cacheKey}");
+    }
+
+    private static string FormatDurationText(int milliseconds)
+    {
+        if (milliseconds <= 0)
+        {
+            return "0 ms";
+        }
+
+        if (milliseconds < 1_000)
+        {
+            return FormattableString.Invariant($"{milliseconds} ms");
+        }
+
+        var totalSeconds = milliseconds / 1_000d;
+
+        if (totalSeconds < 60)
+        {
+            return FormattableString.Invariant($"{totalSeconds:0.0} s");
+        }
+
+        var minutes = Math.Floor(totalSeconds / 60);
+        var seconds = totalSeconds % 60;
+
+        return seconds < 0.1
+            ? FormattableString.Invariant($"{minutes:0} min")
+            : FormattableString.Invariant($"{minutes:0} min {seconds:0.0} s");
     }
 }

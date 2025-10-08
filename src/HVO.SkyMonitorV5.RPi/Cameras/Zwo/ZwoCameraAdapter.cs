@@ -1,6 +1,7 @@
 #nullable enable
 
 using HVO;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Zwo;
@@ -11,12 +12,25 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 /// </summary>
 public sealed class ZwoCameraAdapter : ICameraAdapter
 {
-    public CameraDescriptor Descriptor { get; } = new(
-        Manufacturer: "ZWO",
-        Model: "ASI-Series",
-        DriverVersion: "TBD",
-        AdapterName: nameof(ZwoCameraAdapter),
-        Capabilities: new[] { "Native", "StackingCompatible", "HighSpeed" });
+    public ZwoCameraAdapter(RigSpec rig)
+    {
+        Rig = rig switch
+        {
+            null => throw new ArgumentNullException(nameof(rig)),
+            { Descriptor: null } => rig with
+            {
+                Descriptor = new CameraDescriptor(
+                    Manufacturer: "ZWO",
+                    Model: rig.Name,
+                    DriverVersion: "unversioned",
+                    AdapterName: nameof(ZwoCameraAdapter),
+                    Capabilities: new[] { "Native", "StackingCompatible", "HighSpeed", "Cooled" })
+            },
+            _ => rig
+        };
+    }
+
+    public RigSpec Rig { get; }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 

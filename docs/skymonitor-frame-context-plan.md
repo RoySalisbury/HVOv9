@@ -26,7 +26,7 @@ _Last updated: 2025-10-07_
 - [x] Update `FrameStackResult` to keep the latest non-null `FrameContext`.
 
 ### Phase 2 – Camera Adapter
-- [x] Inject `IRigProvider` into `MockFisheyeCameraAdapter` (and real adapters).
+- [x] Inject rig configuration directly into `MockCameraAdapter` (and future adapters) by resolving `RigSpec` from configuration.
 - [x] Use `RigFactory.CreateProjector` per frame and build the `StarFieldEngine` from rig + capture parameters.
 - [x] Populate the `FrameContext` when constructing the returned `CameraFrame`.
 - [x] Remove calls to `IRenderEngineProvider.Set` once filters are context-aware.

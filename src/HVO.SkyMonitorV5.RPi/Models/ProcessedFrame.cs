@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace HVO.SkyMonitorV5.RPi.Models;
 
 /// <summary>
@@ -9,4 +11,6 @@ public sealed record ProcessedFrame(
     byte[] ImageBytes,
     string ContentType,
     int FramesStacked,
-    int IntegrationMilliseconds);
+    int IntegrationMilliseconds,
+    IReadOnlyList<string> AppliedFilters,
+    int ProcessingMilliseconds);

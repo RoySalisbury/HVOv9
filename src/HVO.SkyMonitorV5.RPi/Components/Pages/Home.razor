@@ -114,6 +114,14 @@ else
                             <dd>@LastFrameTimestampText</dd>
                         </div>
                         <div class="status-card__item">
+                            <dt>Total Integration</dt>
+                            <dd>@TotalIntegrationSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Pipeline Time</dt>
+                            <dd>@PipelineProcessingSummary</dd>
+                        </div>
+                        <div class="status-card__item">
                             <dt>Configuration</dt>
                             <dd>Stacking: @StackingSummary</dd>
                         </div>
@@ -140,6 +148,18 @@ else
                             <dt>Adapter</dt>
                             <dd>@_status.Camera.AdapterName</dd>
                         </div>
+                        <div class="status-card__item">
+                            <dt>Rig</dt>
+                            <dd>@RigNameText</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Sensor</dt>
+                            <dd>@SensorSummaryText</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Optics</dt>
+                            <dd>@LensSummaryText</dd>
+                        </div>
                     </dl>
                 </div>
             </div>
@@ -158,6 +178,28 @@ else
                         <div class="status-card__item">
                             <dt>Capabilities</dt>
                             <dd>@CameraCapabilitiesText</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Stack</dt>
+                            <dd>@FramesStackedSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Filters</dt>
+                            <dd>
+                                @if (AppliedFilters.Count > 0)
+                                {
+                                    <div class="filter-chip-list">
+                                        @foreach (var filter in AppliedFilters)
+                                        {
+                                            <span class="filter-chip">@filter</span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    @PipelineFiltersSummary
+                                }
+                            </dd>
                         </div>
                     </dl>
                 </div>

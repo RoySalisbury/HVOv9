@@ -45,6 +45,8 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
             using var bitmap = copy;
             var renderContext = stackResult.Context is { } context ? new FrameRenderContext(context) : null;
 
+            var appliedFilters = new List<string>();
+
             try
             {
                 foreach (var filter in _filters)
@@ -73,6 +75,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
 
                     try
                     {
+                        appliedFilters.Add(filter.Name);
                         await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
@@ -101,7 +104,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 bytes,
                 "image/png",
                 stackResult.FramesStacked,
-                stackResult.IntegrationMilliseconds);
+                stackResult.IntegrationMilliseconds,
+                appliedFilters,
+                ProcessingMilliseconds: 0);
         }
 
         private static bool IsFilterEnabled(CameraConfiguration configuration, string filterName)

@@ -1,4 +1,5 @@
 using HVO;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras;
@@ -8,7 +9,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras;
 /// </summary>
 public interface ICameraAdapter : IAsyncDisposable
 {
-    CameraDescriptor Descriptor { get; }
+    RigSpec Rig { get; }
 
     Task<Result<bool>> InitializeAsync(CancellationToken cancellationToken);
 

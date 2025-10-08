@@ -1,3 +1,5 @@
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+
 namespace HVO.SkyMonitorV5.RPi.Models;
 
 /// <summary>
@@ -9,4 +11,5 @@ public sealed record AllSkyStatusResponse(
     ExposureSettings? LastExposure,
     CameraDescriptor Camera,
     CameraConfiguration Configuration,
-    ProcessedFrameSummary? ProcessedFrame);
+    ProcessedFrameSummary? ProcessedFrame,
+    RigSpec? Rig);

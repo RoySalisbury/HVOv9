@@ -11,7 +11,6 @@ namespace HVO.SkyMonitorV5.RPi.Models;
 /// </summary>
 public sealed record FrameContext(
     RigSpec Rig,
-    IImageProjector Projector,
     StarFieldEngine Engine,
     DateTimeOffset Timestamp,
     double LatitudeDeg,

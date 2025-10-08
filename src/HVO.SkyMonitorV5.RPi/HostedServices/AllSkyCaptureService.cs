@@ -1,3 +1,4 @@
+using System;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -44,8 +45,8 @@ public sealed class AllSkyCaptureService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("SkyMonitor capture service starting.");
-        _frameStateStore.UpdateCameraDescriptor(_cameraAdapter.Descriptor);
+    _logger.LogInformation("SkyMonitor capture service starting.");
+    _frameStateStore.UpdateRig(_cameraAdapter.Rig);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -118,6 +119,11 @@ public sealed class AllSkyCaptureService : BackgroundService
             {
                 var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
                 stopwatch.Stop();
+
+                processedFrame = processedFrame with
+                {
+                    ProcessingMilliseconds = (int)Math.Clamp(stopwatch.ElapsedMilliseconds, 0, int.MaxValue)
+                };
 
                 _frameStateStore.UpdateFrame(
                     new RawFrameSnapshot(stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),

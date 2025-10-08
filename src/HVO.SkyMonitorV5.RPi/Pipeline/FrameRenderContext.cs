@@ -13,7 +13,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 public sealed record FrameRenderContext(FrameContext FrameContext)
 {
     public RigSpec Rig => FrameContext.Rig;
-    public IImageProjector Projector => FrameContext.Projector;
+    public IImageProjector Projector => FrameContext.Engine.Projector;
     public StarFieldEngine Engine => FrameContext.Engine;
     public DateTimeOffset Timestamp => FrameContext.Timestamp;
     public double LatitudeDeg => FrameContext.LatitudeDeg;

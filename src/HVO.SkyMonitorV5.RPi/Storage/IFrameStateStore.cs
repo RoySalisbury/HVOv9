@@ -1,3 +1,4 @@
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Storage;
@@ -9,6 +10,8 @@ public interface IFrameStateStore
     int ConfigurationVersion { get; }
 
     CameraDescriptor? CameraDescriptor { get; }
+
+    RigSpec? Rig { get; }
 
     ProcessedFrame? LatestProcessedFrame { get; }
 
@@ -26,7 +29,7 @@ public interface IFrameStateStore
 
     void UpdateRunningState(bool isRunning);
 
-    void UpdateCameraDescriptor(CameraDescriptor descriptor);
+    void UpdateRig(RigSpec rig);
 
     void SetLastError(Exception? exception);
 

@@ -38,7 +38,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
     /// </summary>
     public sealed class StarFieldEngine : IDisposable
     {
-        private readonly IImageProjector _projector;
+    private readonly IImageProjector _projector;
         private readonly double _latitudeDeg;
         private readonly double _longitudeDeg;
         private readonly DateTime _utc;
@@ -68,6 +68,28 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
             _sizeCurve = sizeCurve ?? new StarSizeCurve();
         }
 
+        public StarFieldEngine(
+            RigSpec rig,
+            double latitudeDeg,
+            double longitudeDeg,
+            DateTime utcUtc,
+            bool flipHorizontal = false,
+            bool applyRefraction = false,
+            double horizonPadding = 0.98,
+            double? overrideCx = null,
+            double? overrideCy = null,
+            StarSizeCurve? sizeCurve = null)
+            : this(
+                RigFactory.CreateProjector(rig ?? throw new ArgumentNullException(nameof(rig)), horizonPadding, overrideCx, overrideCy),
+                latitudeDeg,
+                longitudeDeg,
+                utcUtc,
+                flipHorizontal,
+                applyRefraction,
+                sizeCurve)
+        {
+        }
+
         /// <summary>
         /// Compatibility constructor for legacy call sites that passed width/height/FOV/projection.
         /// Internally constructs a fisheye projector with the requested model/FOV.
@@ -89,8 +111,9 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
         {
         }
 
-        public int Width  => _projector.WidthPx;
-        public int Height => _projector.HeightPx;
+    public int Width  => _projector.WidthPx;
+    public int Height => _projector.HeightPx;
+    public IImageProjector Projector => _projector;
 
         public SKBitmap Render(
             IReadOnlyList<Star> stars,

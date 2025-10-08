@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.Options;
@@ -17,6 +19,7 @@ public sealed class FrameStateStore : IFrameStateStore
     private bool _isRunning;
     private Exception? _lastError;
     private CameraDescriptor? _cameraDescriptor;
+    private RigSpec? _rigSpec;
 
     public FrameStateStore(IOptions<CameraPipelineOptions> options)
     {
@@ -43,6 +46,17 @@ public sealed class FrameStateStore : IFrameStateStore
             lock (_sync)
             {
                 return _cameraDescriptor;
+            }
+        }
+    }
+
+    public RigSpec? Rig
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _rigSpec;
             }
         }
     }
@@ -133,11 +147,12 @@ public sealed class FrameStateStore : IFrameStateStore
         }
     }
 
-    public void UpdateCameraDescriptor(CameraDescriptor descriptor)
+    public void UpdateRig(RigSpec rig)
     {
         lock (_sync)
         {
-            _cameraDescriptor = descriptor;
+            _rigSpec = rig;
+            _cameraDescriptor = rig.Descriptor ?? _cameraDescriptor;
         }
     }
 
@@ -160,13 +175,16 @@ public sealed class FrameStateStore : IFrameStateStore
                 AdapterName: "Unknown",
                 Capabilities: Array.Empty<string>());
 
+            var rig = _rigSpec;
+
             return new AllSkyStatusResponse(
                 IsRunning: _isRunning,
                 LastFrameTimestamp: _lastFrameTimestamp,
                 LastExposure: _latestRawFrame?.Exposure,
                 Camera: descriptor,
                 Configuration: _configuration,
-                ProcessedFrame: CreateSummary(_latestProcessedFrame));
+                ProcessedFrame: CreateSummary(_latestProcessedFrame),
+                Rig: rig);
         }
     }
 
@@ -177,6 +195,10 @@ public sealed class FrameStateStore : IFrameStateStore
             return null;
         }
 
-        return new ProcessedFrameSummary(frame.FramesStacked, frame.IntegrationMilliseconds);
+        return new ProcessedFrameSummary(
+            frame.FramesStacked,
+            frame.IntegrationMilliseconds,
+            frame.AppliedFilters,
+            frame.ProcessingMilliseconds);
     }
 }

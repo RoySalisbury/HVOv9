@@ -1,4 +1,6 @@
 using Asp.Versioning;
+using System;
+using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Components;
 using HVO.SkyMonitorV5.RPi.Data;
@@ -17,12 +19,13 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using System.IO;
 using System.Text.Json.Serialization;
-using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 
 namespace HVO.SkyMonitorV5.RPi;
 
@@ -55,11 +58,8 @@ public static class Program
             options.SizeLimit = 256;
         });
 
-    // 1) Choose a rig preset (sensor + lens) and expose IRigProvider + RigSpec.
-        services.AddSkyRigPreset(RigPresets.MockAsi174_Fujinon);
-
-    services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
-    services.AddSingleton<ICelestialProjector, CelestialProjector>();
+        services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
+        services.AddSingleton<ICelestialProjector, CelestialProjector>();
 
         services.AddScoped<HygStarRepository>();
         services.AddScoped<PlanetRepository>();
@@ -187,21 +187,93 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-    services.AddSingleton<IFrameStateStore, FrameStateStore>();
+        services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
-    services.AddSingleton<IExposureController, AdaptiveExposureController>();
-    services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+        services.AddSingleton<IExposureController, AdaptiveExposureController>();
+        services.AddSingleton<IFrameStacker, RollingFrameStacker>();
 
-    services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
-    services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
-    services.AddSingleton<IFrameFilter, OverlayTextFilter>();
-    services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();
+        services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
+        services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
+        services.AddSingleton<IFrameFilter, OverlayTextFilter>();
+        services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();
 
-    services.AddSingleton<IFrameFilterPipeline, FrameFilterPipeline>();
+        services.AddSingleton<IFrameFilterPipeline, FrameFilterPipeline>();
 
-    services.AddSingleton<ICameraAdapter, MockFisheyeCameraAdapter>();
+        RegisterCameraAdapters(services, configuration);
 
         services.AddHostedService<AllSkyCaptureService>();
+    }
+
+    private static void RegisterCameraAdapters(IServiceCollection services, IConfiguration configuration)
+    {
+        var cameraConfigurations = configuration
+            .GetSection(CameraAdapterOptions.SectionName)
+            .Get<IReadOnlyList<CameraAdapterOptions>>() ?? Array.Empty<CameraAdapterOptions>();
+
+        if (cameraConfigurations.Count == 0)
+        {
+            throw new InvalidOperationException("No all-sky camera adapters are configured. Add at least one entry under 'AllSkyCameras'.");
+        }
+
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var camera in cameraConfigurations)
+        {
+            if (camera is null)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(camera.Name))
+            {
+                throw new InvalidOperationException("Each camera adapter must specify a non-empty Name.");
+            }
+
+            var cameraName = camera.Name.Trim();
+
+            if (!seenNames.Add(cameraName))
+            {
+                throw new InvalidOperationException($"Duplicate camera adapter name '{cameraName}' detected. Each adapter must have a unique name.");
+            }
+
+            var rigSpec = camera.Rig?.ToRigSpec() ?? throw new InvalidOperationException($"Camera '{cameraName}' is missing a rig configuration.");
+            var adapterKey = string.IsNullOrWhiteSpace(camera.Adapter)
+                ? CameraAdapterTypes.Mock
+                : camera.Adapter.Trim();
+
+            var normalizedAdapterKey = adapterKey;
+
+            services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
+            {
+                if (CameraAdapterTypes.IsMock(normalizedAdapterKey))
+                {
+                    return new MockCameraAdapter(
+                        sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
+                        sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
+                        sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
+                        sp.GetRequiredService<IServiceScopeFactory>(),
+                        rigSpec,
+                        sp.GetService<ILogger<MockCameraAdapter>>());
+                }
+
+                if (CameraAdapterTypes.IsZwo(normalizedAdapterKey))
+                {
+                    return new ZwoCameraAdapter(
+                        rigSpec,
+                        sp.GetService<ILogger<ZwoCameraAdapter>>());
+                }
+
+                throw new InvalidOperationException($"Unsupported camera adapter type '{normalizedAdapterKey}' for camera '{cameraName}'.");
+            });
+        }
+
+        var defaultCameraName = cameraConfigurations[0]?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(defaultCameraName))
+        {
+            throw new InvalidOperationException("The first camera adapter entry must specify a name so the capture pipeline can resolve the default adapter.");
+        }
+
+        services.AddSingleton<ICameraAdapter>(sp => sp.GetRequiredKeyedService<ICameraAdapter>(defaultCameraName));
     }
 
     private static string BuildSqliteConnectionString(string? connectionString)

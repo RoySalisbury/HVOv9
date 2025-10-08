@@ -5,7 +5,7 @@ HVO SkyMonitor v5 is the Raspberry Pi service that captures synthetic or hardwar
 ## System overview
 
 - **Capture loop** – `AllSkyCaptureService` orchestrates exposures, capture, stacking, filtering, and persistence.
-- **Camera adapters** – Implement `ICameraAdapter` to talk to real hardware or simulations (for development we ship the `MockFisheyeCameraAdapter`).
+- **Camera adapters** – Implement `ICameraAdapter` (or inherit from `CameraAdapterBase`) to talk to real hardware or simulations (for development we ship the `MockCameraAdapter`).
 - **Exposure controller** – `IExposureController` chooses day/night integration settings.
 - **Stacking engine** – `RollingFrameStacker` buffers frames and averages them once enough light has accumulated.
 - **Filter pipeline** – `FrameFilterPipeline` can execute a configured sequence of `IFrameFilter` instances (overlays are disabled by default so frames mirror the raw starfield output).
@@ -37,6 +37,40 @@ Each filter implements `IFrameFilter`, receives the `SKBitmap` for the current f
 The effective integration time reported in the overlay equals the sum of the exposure durations of the frames that actually participated in the stack.
 
 ## Configuring the pipeline
+
+### Camera adapters
+
+Camera adapters are declared in configuration under the `AllSkyCameras` array. Each entry supplies a unique `name`, the adapter identifier, and the rig (sensor + lens) to inject into that adapter. The first entry becomes the default adapter resolved by the capture host.
+
+```json
+"AllSkyCameras": [
+  {
+    "Name": "MockFisheye",
+  "Adapter": "Mock",
+    "Rig": {
+      "Name": "MockASI174MM + Fujinon 2.7mm",
+      "Sensor": { "WidthPx": 1936, "HeightPx": 1216, "PixelSizeMicrons": 5.86 },
+      "Lens": { "Model": "Equidistant", "FocalLengthMm": 2.7, "FovXDeg": 185.0, "FovYDeg": 185.0, "RollDeg": 0.0, "Kind": "Fisheye" },
+      "Descriptor": {
+        "Manufacturer": "HVO",
+        "Model": "Mock Fisheye AllSky",
+        "DriverVersion": "2.0.0",
+    "AdapterName": "MockCameraAdapter",
+        "Capabilities": [
+          "Synthetic",
+          "StackingCompatible",
+          "FisheyeProjection"
+        ]
+      }
+    }
+  }
+]
+```
+
+- Add additional adapters by appending entries with distinct `Name` values. Each adapter receives its own scoped `RigSpec`, so multiple cameras can run in the same process without sharing projector state.
+- Unsupported adapter identifiers will fail fast during startup, keeping misconfigurations obvious.
+- The first AllSkyCameras entry is treated as the default adapter today; if you need dynamic selection or concurrent use, we can extend the capture service to resolve keyed instances on demand.
+- Descriptor metadata travels with the rig, so the capture service and API can surface manufacturer/model details supplied in configuration without each adapter re-declaring them.
 
 ### AppSettings defaults
 
@@ -157,7 +191,7 @@ Every annotated target is surrounded by a dotted locator ring—deep-sky objects
 
 ## Synthetic starfield (mock camera)
 
-The `MockFisheyeCameraAdapter` now generates a more balanced all-sky scene so preview imagery better matches what the observatory’s optics see overnight.
+The `MockCameraAdapter` now generates a more balanced all-sky scene so preview imagery better matches what the observatory’s optics see overnight.
 
 - **Multi-band star selection** – Stars are pulled from the HYG catalog in three passes (bright, mid, faint). Bright anchors are capped, mid-range stars use the configured RA/Dec binning, and faint stars are over-sampled and thinned in screen space to keep uniform coverage.
 - **Ring quotas** – After projection the adapter fills concentric horizon rings to avoid crowding the zenith. The quotas bias toward the horizon so Milky Way density looks natural when the fisheye is level.
@@ -277,8 +311,8 @@ flowchart LR
 
 ### Frame context ownership
 
-- Camera adapters supply a `FrameContext` with the active rig, projector, and `StarFieldEngine` instance for each capture.
-- The capture loop and filter pipeline both dispose the context once processing completes, guaranteeing the shared `StarFieldEngine` is released promptly even if an exception interrupts the workflow.
+- Camera adapters supply a `FrameContext` with the active rig plus a freshly constructed `StarFieldEngine`. The engine now builds and owns the `IImageProjector` derived from that rig, exposing it via `FrameRenderContext.Projector` for filters that need optical metadata.
+- The capture loop and filter pipeline both dispose the context once processing completes, guaranteeing the shared `StarFieldEngine` (and its projector) are released promptly even if an exception interrupts the workflow.
 - Filters must rely on the provided `FrameRenderContext`; avoid instantiating additional `StarFieldEngine` instances so overlays stay in sync with the original render geometry.
 
 ## Project layout highlights
@@ -286,7 +320,9 @@ flowchart LR
 ```
 src/HVO.SkyMonitorV5.RPi/
 ├── Cameras/
-│   └── MockFisheyeCameraAdapter.cs # Synthetic fisheye all-sky generator
+│   ├── CameraAdapterBase.cs      # Shared lifecycle helpers for adapters
+│   ├── MockCameraAdapter.cs      # Synthetic fisheye all-sky generator
+│   └── ZwoCameraAdapter.cs       # Placeholder for physical ZWO cameras
 ├── HostedServices/
 │   └── AllSkyCaptureService.cs    # Background capture loop
 ├── Pipeline/
