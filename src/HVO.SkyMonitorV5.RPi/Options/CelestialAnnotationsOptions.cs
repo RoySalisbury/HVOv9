@@ -16,6 +16,23 @@ public sealed class CelestialAnnotationsOptions
     public IList<string> StarNames { get; set; } = new List<string>();
 
     /// <summary>
+    /// Gets or sets a value indicating whether the filter should automatically select bright, named stars when visible.
+    /// </summary>
+    public bool UseAutomaticStarSelection { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the number of bright stars to annotate automatically when automatic selection is enabled.
+    /// </summary>
+    [Range(0, 200)]
+    public int AutoStarCount { get; set; } = 12;
+
+    /// <summary>
+    /// Gets or sets the magnitude ceiling used when automatically selecting bright stars.
+    /// </summary>
+    [Range(-2.0, 15.0)]
+    public double AutoStarMagnitudeLimit { get; set; } = 3.0;
+
+    /// <summary>
     /// Gets the collection of planet names that should receive labels when visible.
     /// </summary>
     public IList<string> PlanetNames { get; set; } = new List<string>();

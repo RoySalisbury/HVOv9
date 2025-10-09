@@ -34,6 +34,17 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
     private static readonly TimeSpan ConstellationCatalogAbsoluteTtl = TimeSpan.FromHours(12);
     private static readonly TimeSpan ConstellationCatalogSlidingTtl = TimeSpan.FromHours(1);
 
+    private static readonly IReadOnlyDictionary<int, HarvardAlias> HarvardRevisedAliasMap = new Dictionary<int, HarvardAlias>
+    {
+        [596] = new HarvardAlias(595, 9487, "Alpha Psc components share HIP 9487; HYG keeps HR 595"),
+        [888] = new HarvardAlias(887, 13914, "Epsilon Ari components share HIP 13914; HYG keeps HR 887"),
+        [898] = new HarvardAlias(897, 13847, "Theta Eri pair; HYG keeps HR 897"),
+        [1190] = new HarvardAlias(1189, 17797, "f Eri pair is one Hipparcos source; HYG keeps HR 1189"),
+        [4058] = new HarvardAlias(4057, 50583, "Gamma Leo A/B; HYG keeps HR 4057"),
+        [5506] = new HarvardAlias(5505, 72105, "Epsilon Boo (Izar); HYG keeps HR 5505"),
+        [3206] = new HarvardAlias(3207, 39953, "Gamma Vel pair; HYG keeps HR 3207")
+    };
+
     private static readonly MemoryCacheEntryOptions VisibleStarsCacheOptions = CreateCacheEntryOptions(VisibleStarsAbsoluteTtl, VisibleStarsSlidingTtl);
     private static readonly MemoryCacheEntryOptions ConstellationStarsCacheOptions = CreateCacheEntryOptions(ConstellationStarsAbsoluteTtl, TimeSpan.FromMinutes(20));
     private static readonly MemoryCacheEntryOptions SearchCacheOptions = CreateCacheEntryOptions(SearchAbsoluteTtl, TimeSpan.FromMinutes(5));
@@ -185,7 +196,7 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
             }
 
             var stars = rows
-                .Select(MapToStar)
+                .Select(star => MapToStar(star))
                 .ToArray();
             var resultList = Array.AsReadOnly(stars);
 
@@ -266,7 +277,7 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
                 return Result<IReadOnlyList<Star>>.Success(EmptyStarList);
             }
 
-            var stars = rows.Select(MapToStar).ToArray();
+            var stars = rows.Select(star => MapToStar(star)).ToArray();
             var resultList = Array.AsReadOnly(stars);
 
             _cache.Set(key, resultList, WindowCacheOptions);
@@ -309,7 +320,7 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
                 return Result<IReadOnlyList<Star>>.Success(EmptyStarList);
             }
 
-            var stars = rows.Select(MapToStar).ToArray();
+            var stars = rows.Select(star => MapToStar(star)).ToArray();
             var resultList = Array.AsReadOnly(stars);
             _cache.Set(key, resultList, BrightestCacheOptions);
 
@@ -495,7 +506,11 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
                 s.DeclinationDegrees,
                 s.Magnitude,
                 s.SpectralType,
-                s.ColorIndexBv
+                s.ColorIndexBv,
+                s.ProperName,
+                s.BayerFlamsteed,
+                s.BayerDesignation,
+                s.HarvardRevisedId
             })
             .ToListAsync()
             .ConfigureAwait(false);
@@ -533,7 +548,10 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
                     row.RightAscensionHours!.Value,
                     row.DeclinationDegrees!.Value,
                     row.Magnitude!.Value,
-                    StarColors.FromCatalog(row.SpectralType, row.ColorIndexBv));
+                    StarColors.FromCatalog(row.SpectralType, row.ColorIndexBv),
+                    ResolveCommonName(row.ProperName),
+                    ResolveDesignationName(row.BayerFlamsteed, row.BayerDesignation, row.HarvardRevisedId),
+                    row.HarvardRevisedId);
 
                 if (MaxAltitudeDeg(latitudeDeg, star.DeclinationDegrees) < minMaxAltitudeDeg)
                 {
@@ -550,6 +568,12 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
 
             if (!visible.Any())
             {
+                _logger.LogInformation(
+                    "Visible star query returned 0 results after visibility filtering (lat {LatitudeDeg:F3}, lon {LongitudeDeg:F3}, utc {Utc:O}, mag ≤ {MagnitudeLimit:F1}).",
+                    latitudeDeg,
+                    longitudeDeg,
+                    utc,
+                    magnitudeLimit);
                 return Result<IReadOnlyList<Star>>.Success(EmptyStarList);
             }
 
@@ -609,13 +633,14 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
                 result = Array.AsReadOnly(selected.OrderBy(s => s.RightAscensionHours).ToArray());
             }
 
-            _logger.LogDebug(
-                "Computed {Count} visible stars (stratified={Stratified}) for {LatitudeDeg}, {LongitudeDeg} at {Utc}.",
+            _logger.LogInformation(
+                "Computed {Count} visible stars (stratified={Stratified}) for lat {LatitudeDeg:F3}, lon {LongitudeDeg:F3} at {Utc:O} (mag ≤ {MagnitudeLimit:F1}).",
                 result.Count,
                 stratified,
                 latitudeDeg,
                 longitudeDeg,
-                utc);
+                utc,
+                magnitudeLimit);
 
             return Result<IReadOnlyList<Star>>.Success(result);
         }
@@ -766,9 +791,20 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
             .Distinct()
             .ToArray();
 
+        var starIdSet = new HashSet<int>(starIds);
+        var aliasTargetIds = starIds
+            .Select(id => HarvardRevisedAliasMap.TryGetValue(id, out var alias) ? alias.SubstituteHarvardRevised : (int?)null)
+            .Where(id => id.HasValue && !starIdSet.Contains(id.Value))
+            .Select(id => id!.Value)
+            .ToArray();
+
+        var lookupHrIds = aliasTargetIds.Length == 0
+            ? starIds
+            : starIdSet.Concat(aliasTargetIds).ToArray();
+
         var hygStars = _hygContext.Stars
             .AsNoTracking()
-            .Where(star => star.HarvardRevisedId != null && starIds.Contains(star.HarvardRevisedId.Value))
+            .Where(star => star.HarvardRevisedId != null && lookupHrIds.Contains(star.HarvardRevisedId.Value))
             .ToList();
 
         if (hygStars.Count == 0)
@@ -777,13 +813,21 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
             return CatalogCache.Empty;
         }
 
-        var (starLookup, missing) = BuildStarLookup(starIds, hygStars);
+        var (starLookup, missing, substituted) = BuildStarLookup(starIds, hygStars);
         if (missing.Count > 0)
         {
-            _logger.LogWarning(
+            _logger.LogDebug(
                 "Constellation catalog: {MissingCount} star(s) could not be resolved in HYG (HR ids: {Ids}).",
                 missing.Count,
                 string.Join(", ", missing));
+        }
+
+        if (substituted.Count > 0)
+        {
+            _logger.LogDebug(
+                "Constellation catalog: {SubstitutedCount} star(s) substituted via HR alias mapping (pairs: {Pairs}).",
+                substituted.Count,
+                string.Join(", ", substituted.Select(pair => $"{pair.MissingHr}->{pair.SubstituteHr}")));
         }
 
         var figures = new List<ConstellationFigure>();
@@ -836,35 +880,38 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
             : new CatalogCache(Array.AsReadOnly(figures.ToArray()), new ReadOnlyDictionary<string, IReadOnlyList<Star>>(starLists));
     }
 
-    private static (IReadOnlyDictionary<int, Star> Lookup, List<int> Missing) BuildStarLookup(
+    private static (IReadOnlyDictionary<int, Star> Lookup, List<int> Missing, List<(int MissingHr, int SubstituteHr)> Substituted) BuildStarLookup(
         IReadOnlyCollection<int> starIds,
         IReadOnlyCollection<HygStar> hygStars)
     {
         var result = new Dictionary<int, Star>();
         var missing = new List<int>();
+        var substituted = new List<(int MissingHr, int SubstituteHr)>();
+
+        var hygByHr = hygStars
+            .Where(star => star.HarvardRevisedId.HasValue)
+            .GroupBy(star => star.HarvardRevisedId!.Value)
+            .ToDictionary(group => group.Key, group => group.First());
 
         foreach (var id in starIds)
         {
-            var starEntity = hygStars.FirstOrDefault(star => star.HarvardRevisedId == id);
-            if (starEntity is null)
+            if (!hygByHr.TryGetValue(id, out var starEntity))
             {
+                if (HarvardRevisedAliasMap.TryGetValue(id, out var alias) && hygByHr.TryGetValue(alias.SubstituteHarvardRevised, out var aliasEntity))
+                {
+                    result[id] = MapToStar(aliasEntity, id);
+                    substituted.Add((id, alias.SubstituteHarvardRevised));
+                    continue;
+                }
+
                 missing.Add(id);
                 continue;
             }
 
-            var star = new Star(
-                starEntity.RightAscensionHours ?? 0.0,
-                starEntity.DeclinationDegrees ?? 0.0,
-                starEntity.Magnitude ?? 99.0,
-                StarColors.FromCatalog(starEntity.SpectralType, starEntity.ColorIndexBv),
-                ResolveCommonName(starEntity),
-                ResolveDesignationName(starEntity),
-                starEntity.HarvardRevisedId);
-
-            result[id] = star;
+            result[id] = MapToStar(starEntity);
         }
 
-        return (result, missing);
+        return (result, missing, substituted);
     }
 
     private static string ResolveDisplayName(string abbreviation)
@@ -891,35 +938,44 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
     }
 
     private static string? ResolveDesignationName(HygStar star)
+        => ResolveDesignationName(star.BayerFlamsteed, star.BayerDesignation, star.HarvardRevisedId);
+
+    private static string? ResolveDesignationName(string? bayerFlamsteed, string? bayerDesignation, int? harvardRevisedId)
     {
-        if (!string.IsNullOrWhiteSpace(star.BayerFlamsteed))
+        if (!string.IsNullOrWhiteSpace(bayerFlamsteed))
         {
-            return star.BayerFlamsteed;
+            return bayerFlamsteed;
         }
 
-        if (!string.IsNullOrWhiteSpace(star.BayerDesignation))
+        if (!string.IsNullOrWhiteSpace(bayerDesignation))
         {
-            return star.BayerDesignation;
+            return bayerDesignation;
         }
 
-        return star.HarvardRevisedId is int hr ? $"HR {hr}" : null;
+        return harvardRevisedId is int hr ? $"HR {hr}" : null;
     }
 
     private static string? ResolveCommonName(HygStar star)
+        => ResolveCommonName(star.ProperName);
+
+    private static string? ResolveCommonName(string? properName)
     {
-        var proper = star.ProperName?.Trim();
+        var proper = properName?.Trim();
         return string.IsNullOrEmpty(proper) ? null : proper;
     }
 
     private static double MaxAltitudeDeg(double latDeg, double decDeg)
         => 90.0 - Math.Abs(latDeg - decDeg);
 
-    private static Star MapToStar(HygStar s)
+    private static Star MapToStar(HygStar s, int? overrideHarvardRevisedId = null)
         => new(
             RightAscensionHours: s.RightAscensionHours!.Value,
             DeclinationDegrees: s.DeclinationDegrees!.Value,
             Magnitude: s.Magnitude!.Value,
-            Color: StarColors.FromCatalog(s.SpectralType, s.ColorIndexBv));
+            Color: StarColors.FromCatalog(s.SpectralType, s.ColorIndexBv),
+            CommonName: ResolveCommonName(s),
+            Designation: ResolveDesignationName(s),
+            HarvardRevisedNumber: overrideHarvardRevisedId ?? s.HarvardRevisedId);
 
     private static bool IsVisibleNow(StarFieldEngine engine, in Star star)
         => engine.ProjectStar(star, out _, out _);
@@ -949,6 +1005,8 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
             Size = 1
         };
     }
+
+    private sealed record HarvardAlias(int SubstituteHarvardRevised, int HipparcosId, string Note);
 
     private sealed record CatalogCache(
         IReadOnlyList<ConstellationFigure> Figures,

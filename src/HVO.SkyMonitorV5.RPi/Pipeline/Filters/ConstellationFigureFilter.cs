@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
@@ -24,18 +26,24 @@ public sealed class ConstellationFigureFilter : IFrameFilter
     private static readonly float[] DashedPattern = { 8f, 6f };
 
     private readonly IOptionsMonitor<ConstellationFigureOptions> _optionsMonitor;
-    private readonly IConstellationCatalog _constellationCatalog;
+    private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
+    private readonly IOptionsMonitor<StarCatalogOptions> _catalogMonitor;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ConstellationFigureFilter> _logger;
 
     private ConstellationFigureCache _cache;
 
     public ConstellationFigureFilter(
-        IConstellationCatalog constellationCatalog,
+        IServiceScopeFactory scopeFactory,
         IOptionsMonitor<ConstellationFigureOptions> optionsMonitor,
+        IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
+        IOptionsMonitor<StarCatalogOptions> catalogMonitor,
         ILogger<ConstellationFigureFilter> logger)
     {
-        _constellationCatalog = constellationCatalog ?? throw new ArgumentNullException(nameof(constellationCatalog));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
+        _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
+        _catalogMonitor = catalogMonitor ?? throw new ArgumentNullException(nameof(catalogMonitor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _cache = BuildCache(_optionsMonitor.CurrentValue);
@@ -55,7 +63,7 @@ public sealed class ConstellationFigureFilter : IFrameFilter
     public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
         => ApplyAsync(bitmap, stackResult, configuration, renderContext: null, cancellationToken);
 
-    public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, FrameRenderContext? renderContext, CancellationToken cancellationToken)
+    public async ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, FrameRenderContext? renderContext, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -63,13 +71,40 @@ public sealed class ConstellationFigureFilter : IFrameFilter
         if (engine is null)
         {
             _logger.LogWarning("ConstellationFigures: no StarFieldEngine available; skipping overlay.");
-            return ValueTask.CompletedTask;
+            return;
         }
 
         var cache = Volatile.Read(ref _cache);
         if (!cache.HasSegments)
         {
-            return ValueTask.CompletedTask;
+            return;
+        }
+
+        var timestampUtc = renderContext?.Timestamp.UtcDateTime;
+        if (timestampUtc is null || timestampUtc == default)
+        {
+            timestampUtc = DateTime.UtcNow;
+        }
+
+        var latitude = renderContext?.LatitudeDeg ?? _locationMonitor.CurrentValue.LatitudeDegrees;
+        var longitude = renderContext?.LongitudeDeg ?? _locationMonitor.CurrentValue.LongitudeDegrees;
+
+        var catalogOptions = _catalogMonitor.CurrentValue;
+
+        var visibleFigures = await ResolveVisibleConstellationsAsync(
+            cache,
+            latitude,
+            longitude,
+            timestampUtc.Value,
+            catalogOptions,
+            engine,
+            bitmap.Width,
+            bitmap.Height,
+            cancellationToken).ConfigureAwait(false);
+
+        if (visibleFigures.Count == 0)
+        {
+            return;
         }
 
         using var canvas = new SKCanvas(bitmap);
@@ -87,7 +122,7 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             paint.PathEffect = pathEffect;
         }
 
-        foreach (var figure in cache.Figures)
+        foreach (var figure in visibleFigures)
         {
             foreach (var segment in figure.Segments)
             {
@@ -107,7 +142,7 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             }
         }
 
-        return ValueTask.CompletedTask;
+        return;
     }
 
     private ConstellationFigureCache BuildCache(ConstellationFigureOptions? options)
@@ -123,73 +158,70 @@ public sealed class ConstellationFigureFilter : IFrameFilter
         var lineColor = colour.WithAlpha(alpha);
         var thickness = Math.Clamp(options.LineThickness, 0.05f, 8.0f);
 
-        var requested = options.Constellations ?? Array.Empty<string>();
-        var figuresByName = _constellationCatalog
-            .GetFigures()
-            .ToDictionary(figure => figure.DisplayName, StringComparer.OrdinalIgnoreCase);
+        using var scope = _scopeFactory.CreateScope();
+        var catalog = scope.ServiceProvider.GetRequiredService<IConstellationCatalog>();
+        var figuresByCode = new Dictionary<string, ConstellationFigureSegments>(StringComparer.OrdinalIgnoreCase);
+        var displayToCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        IEnumerable<string> names;
-        if (requested.Count == 0)
+        foreach (var figure in catalog.GetFigures())
         {
-            names = figuresByName.Keys;
-        }
-        else
-        {
-            var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var normalized = new List<string>(requested.Count);
-            foreach (var entry in requested)
-            {
-                var trimmed = entry?.Trim();
-                if (string.IsNullOrEmpty(trimmed))
-                {
-                    continue;
-                }
-
-                if (unique.Add(trimmed))
-                {
-                    normalized.Add(trimmed);
-                }
-            }
-
-            names = normalized;
-        }
-
-        var figures = new List<ConstellationFigureSegments>();
-        var missing = new List<string>();
-
-        foreach (var name in names)
-        {
-            if (string.IsNullOrEmpty(name))
-            {
-                continue;
-            }
-
-            if (!figuresByName.TryGetValue(name, out var figure))
-            {
-                missing.Add(name);
-                continue;
-            }
-
             var segments = BuildSegments(figure);
             if (segments.Count == 0)
             {
                 continue;
             }
 
-            figures.Add(new ConstellationFigureSegments(name, segments));
+            var segmentsRecord = new ConstellationFigureSegments(figure.Abbreviation, figure.DisplayName, segments);
+            figuresByCode[figure.Abbreviation] = segmentsRecord;
+            displayToCode[figure.DisplayName] = figure.Abbreviation;
+        }
+
+        if (figuresByCode.Count == 0)
+        {
+            return ConstellationFigureCache.Empty;
+        }
+
+        var allowedFilters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var missing = new List<string>();
+
+        foreach (var entry in options.Constellations ?? Array.Empty<string>())
+        {
+            var trimmed = entry?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                continue;
+            }
+
+            if (figuresByCode.ContainsKey(trimmed))
+            {
+                allowedFilters.Add(trimmed);
+                allowedFilters.Add(figuresByCode[trimmed].DisplayName);
+            }
+            else if (displayToCode.TryGetValue(trimmed, out var code))
+            {
+                allowedFilters.Add(trimmed);
+                allowedFilters.Add(code);
+            }
+            else
+            {
+                missing.Add(trimmed);
+            }
         }
 
         if (missing.Count > 0)
         {
             _logger.LogWarning(
-                "Constellation figures: unable to resolve {Count} constellation(s): {Names}.",
+                "Constellation figures: ignoring {Count} unknown constellation filter(s): {Names}.",
                 missing.Count,
                 string.Join(", ", missing));
         }
 
-        return figures.Count == 0
-            ? ConstellationFigureCache.Empty
-            : new ConstellationFigureCache(figures, lineColor, thickness, options.UseDashedLine);
+        return new ConstellationFigureCache(
+            new ReadOnlyDictionary<string, ConstellationFigureSegments>(figuresByCode),
+            allowedFilters,
+            lineColor,
+            thickness,
+            options.UseDashedLine);
     }
 
     private static List<ConstellationSegment> BuildSegments(Data.ConstellationFigure figure)
@@ -220,32 +252,106 @@ public sealed class ConstellationFigureFilter : IFrameFilter
 
     private sealed record ConstellationSegment(Star Start, Star End);
 
-    private sealed record ConstellationFigureSegments(string Name, IReadOnlyList<ConstellationSegment> Segments);
+    private sealed record ConstellationFigureSegments(string Abbreviation, string DisplayName, IReadOnlyList<ConstellationSegment> Segments);
+
+    private async Task<IReadOnlyList<ConstellationFigureSegments>> ResolveVisibleConstellationsAsync(
+        ConstellationFigureCache cache,
+        double latitudeDeg,
+        double longitudeDeg,
+        DateTime timestampUtc,
+        StarCatalogOptions catalogOptions,
+        StarFieldEngine engine,
+        int screenWidth,
+        int screenHeight,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
+
+        var result = await repository.GetVisibleByConstellationAsync(
+            latitudeDeg,
+            longitudeDeg,
+            timestampUtc,
+            magnitudeLimit: catalogOptions.MagnitudeLimit,
+            minMaxAltitudeDeg: catalogOptions.MinMaxAltitudeDegrees,
+            screenWidth,
+            screenHeight,
+            engine).ConfigureAwait(false);
+
+        if (result.IsFailure)
+        {
+            if (result.Error is not OperationCanceledException)
+            {
+                _logger.LogError(result.Error, "Constellation figures: failed to resolve visible constellations.");
+            }
+            return Array.Empty<ConstellationFigureSegments>();
+        }
+
+        if (result.Value.Count == 0)
+        {
+            return Array.Empty<ConstellationFigureSegments>();
+        }
+
+        var visible = new List<ConstellationFigureSegments>(result.Value.Count);
+
+        foreach (var constellation in result.Value)
+        {
+            if (!cache.FiguresByCode.TryGetValue(constellation.ConstellationCode, out var figure))
+            {
+                continue;
+            }
+
+            if (!cache.IsAllowed(figure))
+            {
+                continue;
+            }
+
+            visible.Add(figure);
+        }
+
+        return visible.Count == 0 ? Array.Empty<ConstellationFigureSegments>() : visible;
+    }
 
     private sealed class ConstellationFigureCache
     {
         public static ConstellationFigureCache Empty { get; } = new(
-            Array.Empty<ConstellationFigureSegments>(),
+            new ReadOnlyDictionary<string, ConstellationFigureSegments>(new Dictionary<string, ConstellationFigureSegments>(StringComparer.OrdinalIgnoreCase)),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             DefaultLineColor,
             1.0f,
             useDashedLine: false);
 
         public ConstellationFigureCache(
-            IReadOnlyList<ConstellationFigureSegments> figures,
+            IReadOnlyDictionary<string, ConstellationFigureSegments> figuresByCode,
+            HashSet<string> allowedFilters,
             SKColor lineColor,
             float lineThickness,
             bool useDashedLine)
         {
-            Figures = figures;
+            FiguresByCode = figuresByCode;
+            AllowedFilters = allowedFilters ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             LineColor = lineColor;
             LineThickness = lineThickness;
             UseDashedLine = useDashedLine;
         }
 
-    public IReadOnlyList<ConstellationFigureSegments> Figures { get; }
+        public IReadOnlyDictionary<string, ConstellationFigureSegments> FiguresByCode { get; }
+        public HashSet<string> AllowedFilters { get; }
         public SKColor LineColor { get; }
         public float LineThickness { get; }
         public bool UseDashedLine { get; }
-        public bool HasSegments => Figures.Count > 0;
+        public bool HasSegments => FiguresByCode.Count > 0;
+
+        public bool IsAllowed(ConstellationFigureSegments figure)
+        {
+            if (AllowedFilters.Count == 0)
+            {
+                return true;
+            }
+
+            return AllowedFilters.Contains(figure.Abbreviation) || AllowedFilters.Contains(figure.DisplayName);
+        }
     }
 }
