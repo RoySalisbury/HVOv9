@@ -286,9 +286,12 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                     _projector.TryProjectRay(X, Y, Z, out var px, out var py);
                     if (px < 0 || px >= Width || py < 0 || py >= Height) continue;
 
-                    var radius = p.Body == PlanetBody.Moon
-                        ? planetOptions.MoonRadiusPx
-                        : CalculatePlanetRadius(p.Star.Magnitude, planetOptions);
+                    var radius = p.Body switch
+                    {
+                        PlanetBody.Moon => planetOptions.MoonRadiusPx,
+                        PlanetBody.Sun => planetOptions.MoonRadiusPx * Math.Clamp(planetOptions.SunRadiusScale, 1.0f, 4.0f),
+                        _ => CalculatePlanetRadius(p.Star.Magnitude, planetOptions)
+                    };
 
                     radius = Math.Max(radius, 2.0f);
                     DrawPlanetGlyph(canvas, px, py, radius, p, planetOptions.Shape, paint);

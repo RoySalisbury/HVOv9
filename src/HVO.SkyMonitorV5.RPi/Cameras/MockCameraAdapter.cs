@@ -98,89 +98,26 @@ public sealed class MockCameraAdapter : CameraAdapterBase
             var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
 
             // Build star list (Result<T> aware)
-            List<Star> catalogStars;
-            if (catalogConfig.IncludeConstellationHighlight)
+            var starsResult = await repository.GetVisibleStarsAsync(
+                latitudeDeg: location.LatitudeDegrees,
+                longitudeDeg: location.LongitudeDegrees,
+                utc: nowUtc,
+                magnitudeLimit: catalogConfig.MagnitudeLimit,
+                minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
+                topN: catalogConfig.TopStarCount,
+                stratified: catalogConfig.StratifiedSelection,
+                raBins: catalogConfig.RightAscensionBins,
+                decBands: catalogConfig.DeclinationBands,
+                screenWidth: frameWidth,
+                screenHeight: frameHeight,
+                engine: engine);
+
+            if (starsResult.IsFailure)
             {
-                var visibleConstellations = await repository.GetVisibleByConstellationAsync(
-                    latitudeDeg: location.LatitudeDegrees,
-                    longitudeDeg: location.LongitudeDegrees,
-                    utc: nowUtc,
-                    magnitudeLimit: catalogConfig.MagnitudeLimit,
-                    minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
-                    screenWidth: frameWidth,
-                    screenHeight: frameHeight,
-                    engine: engine);
-
-                if (visibleConstellations.IsFailure)
-                {
-                    return Result<AdapterFrame>.Failure(visibleConstellations.Error ?? new InvalidOperationException("Constellation query failed."));
-                }
-
-                var starsWithLabels = new List<Star>(catalogConfig.TopStarCount);
-                foreach (var group in visibleConstellations.Value)
-                {
-                    var count = 0;
-                    foreach (var star in group.Stars)
-                    {
-                        starsWithLabels.Add(star);
-                        count++;
-                        if (count >= catalogConfig.ConstellationStarCap) break;
-                    }
-                }
-
-                if (starsWithLabels.Count < catalogConfig.TopStarCount)
-                {
-                    var fallback = await repository.GetVisibleStarsAsync(
-                        latitudeDeg: location.LatitudeDegrees,
-                        longitudeDeg: location.LongitudeDegrees,
-                        utc: nowUtc,
-                        magnitudeLimit: catalogConfig.MagnitudeLimit,
-                        minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
-                        topN: catalogConfig.TopStarCount,
-                        stratified: catalogConfig.StratifiedSelection,
-                        raBins: catalogConfig.RightAscensionBins,
-                        decBands: catalogConfig.DeclinationBands,
-                        screenWidth: frameWidth,
-                        screenHeight: frameHeight,
-                        engine: engine);
-
-                    if (fallback.IsFailure)
-                    {
-                        return Result<AdapterFrame>.Failure(fallback.Error ?? new InvalidOperationException("Star query failed."));
-                    }
-
-                    foreach (var star in fallback.Value)
-                    {
-                        if (starsWithLabels.Count >= catalogConfig.TopStarCount) break;
-                        starsWithLabels.Add(star);
-                    }
-                }
-
-                catalogStars = starsWithLabels;
+                return Result<AdapterFrame>.Failure(starsResult.Error ?? new InvalidOperationException("Star query failed."));
             }
-            else
-            {
-                var starsResult = await repository.GetVisibleStarsAsync(
-                    latitudeDeg: location.LatitudeDegrees,
-                    longitudeDeg: location.LongitudeDegrees,
-                    utc: nowUtc,
-                    magnitudeLimit: catalogConfig.MagnitudeLimit,
-                    minMaxAltitudeDeg: catalogConfig.MinMaxAltitudeDegrees,
-                    topN: catalogConfig.TopStarCount,
-                    stratified: catalogConfig.StratifiedSelection,
-                    raBins: catalogConfig.RightAscensionBins,
-                    decBands: catalogConfig.DeclinationBands,
-                    screenWidth: frameWidth,
-                    screenHeight: frameHeight,
-                    engine: engine);
 
-                if (starsResult.IsFailure)
-                {
-                    return Result<AdapterFrame>.Failure(starsResult.Error ?? new InvalidOperationException("Star query failed."));
-                }
-
-                catalogStars = new List<Star>(starsResult.Value);
-            }
+            var catalogStars = new List<Star>(starsResult.Value);
 
             // Planets (cheap ephemeris from current code-path)
             IReadOnlyList<PlanetMark> planetMarks = Array.Empty<PlanetMark>();

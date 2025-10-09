@@ -34,11 +34,6 @@ public sealed class StarCatalogOptions
         = false;
 
     /// <summary>
-    /// Gets or sets a value indicating whether visible constellation groupings should be included when rendering.
-    /// </summary>
-    public bool IncludeConstellationHighlight { get; set; } = true;
-
-    /// <summary>
     /// Gets or sets a value indicating whether visible planets (Mercury through Saturn) should be rendered alongside catalog stars.
     /// </summary>
     public bool IncludePlanets { get; set; } = true;
@@ -57,17 +52,6 @@ public sealed class StarCatalogOptions
     /// Gets or sets a value indicating whether the Sun should be rendered in daytime simulation scenarios.
     /// </summary>
     public bool IncludeSun { get; set; } = false;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the overlay pipeline should annotate planets when projected onto the frame.
-    /// </summary>
-    public bool AnnotatePlanets { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the maximum number of stars to include per constellation when highlighting is enabled.
-    /// </summary>
-    [Range(1, 200)]
-    public int ConstellationStarCap { get; set; } = 12;
 
     /// <summary>
     /// Gets or sets the number of right ascension bins to use when stratified selection is enabled.

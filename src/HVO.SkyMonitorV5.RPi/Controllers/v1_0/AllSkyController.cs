@@ -92,12 +92,14 @@ public sealed class AllSkyController : ControllerBase
         }
 
         _frameStateStore.UpdateConfiguration(updatedConfiguration);
-        _logger.LogInformation("Camera configuration updated via API. EnableStacking:{EnableStacking} StackingFrameCount:{StackCount} Overlays:{Overlays} CircularApertureMask:{Mask} Filters:{Filters}",
+        _logger.LogInformation("Camera configuration updated via API. EnableStacking:{EnableStacking} StackingFrameCount:{StackCount} Overlays:{Overlays} CircularApertureMask:{Mask} Filters:{Filters} ProcessedFormat:{Format} ProcessedQuality:{Quality}",
             updatedConfiguration.EnableStacking,
             updatedConfiguration.StackingFrameCount,
             updatedConfiguration.EnableImageOverlays,
             updatedConfiguration.EnableCircularApertureMask,
-            string.Join(",", updatedConfiguration.FrameFilters));
+            string.Join(",", updatedConfiguration.FrameFilters),
+            updatedConfiguration.ProcessedImageEncoding.Format,
+            updatedConfiguration.ProcessedImageEncoding.Quality);
 
         return Ok(updatedConfiguration);
     }

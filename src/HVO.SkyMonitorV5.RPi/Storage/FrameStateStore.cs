@@ -1,15 +1,19 @@
+using System;
 using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.Options;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Storage;
 
-public sealed class FrameStateStore : IFrameStateStore
+public sealed class FrameStateStore : IFrameStateStore, IDisposable
 {
     private readonly object _sync = new();
+    private readonly ILogger<FrameStateStore>? _logger;
+    private readonly IDisposable? _optionsReloadSubscription;
 
     private CameraConfiguration _configuration;
     private int _configurationVersion;
@@ -21,9 +25,16 @@ public sealed class FrameStateStore : IFrameStateStore
     private CameraDescriptor? _cameraDescriptor;
     private RigSpec? _rigSpec;
 
-    public FrameStateStore(IOptions<CameraPipelineOptions> options)
+    public FrameStateStore(IOptionsMonitor<CameraPipelineOptions> optionsMonitor, ILogger<FrameStateStore>? logger = null)
     {
-        _configuration = CameraConfiguration.FromOptions(options.Value);
+        if (optionsMonitor is null)
+        {
+            throw new ArgumentNullException(nameof(optionsMonitor));
+        }
+
+        _logger = logger;
+        _configuration = CameraConfiguration.FromOptions(optionsMonitor.CurrentValue);
+    _optionsReloadSubscription = optionsMonitor.OnChange(OnPipelineOptionsChanged);
     }
 
     public CameraConfiguration Configuration
@@ -118,10 +129,16 @@ public sealed class FrameStateStore : IFrameStateStore
 
     public void UpdateConfiguration(CameraConfiguration configuration)
     {
-        lock (_sync)
+        if (configuration is null)
         {
-            _configuration = configuration;
-            _configurationVersion++;
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
+        if (TryUpdateConfiguration(configuration, force: true, out var newVersion))
+        {
+            _logger?.LogInformation(
+                "Camera configuration updated via API. Configuration version is now {ConfigurationVersion}.",
+                newVersion);
         }
     }
 
@@ -164,6 +181,11 @@ public sealed class FrameStateStore : IFrameStateStore
         }
     }
 
+    public void Dispose()
+    {
+    _optionsReloadSubscription?.Dispose();
+    }
+
     public AllSkyStatusResponse GetStatus()
     {
         lock (_sync)
@@ -185,6 +207,38 @@ public sealed class FrameStateStore : IFrameStateStore
                 Configuration: _configuration,
                 ProcessedFrame: CreateSummary(_latestProcessedFrame),
                 Rig: rig);
+        }
+    }
+
+    private void OnPipelineOptionsChanged(CameraPipelineOptions options)
+    {
+        if (options is null)
+        {
+            return;
+        }
+
+        var updatedConfiguration = CameraConfiguration.FromOptions(options);
+        if (TryUpdateConfiguration(updatedConfiguration, force: false, out var newVersion))
+        {
+            _logger?.LogInformation(
+                "Camera pipeline options reloaded from configuration; version advanced to {ConfigurationVersion}.",
+                newVersion);
+        }
+    }
+
+    private bool TryUpdateConfiguration(CameraConfiguration configuration, bool force, out int newVersion)
+    {
+        lock (_sync)
+        {
+            if (!force && _configuration.Equals(configuration))
+            {
+                newVersion = _configurationVersion;
+                return false;
+            }
+
+            _configuration = configuration;
+            newVersion = ++_configurationVersion;
+            return true;
         }
     }
 

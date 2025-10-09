@@ -19,7 +19,7 @@ This note documents the latest improvements to the mock fisheye camera so we hav
 - **Star sizing** – A `StarSizeCurve` logistic maps magnitude to radius using tunable min/max/transition parameters. Very bright stars gain a small linear boost so they retain presence without blowing out.
 - **Microdots** – Stars fainter than ~5.2 mag or with a radius under 1.05 px are drawn as 1×1 pixels; targets past 6 mag expand to 2×2 blocks. The change keeps faint stars visible after scaling or video encoding while preserving the anti-aliased look for brighter magnitudes.
 - **Colour handling** – When `dimFaintStars` is enabled the engine reduces alpha rather than clamping RGB values. Combined with the new sensor-noise routine (below), spectral hues survive simulated gain boosts.
-- **Planets** – Planet glyphs retain the previous behaviour (shape switch plus Moon radius clamp) but inherit the new projection, refraction, and flip settings.
+- **Planets** – Planet glyphs retain the previous behaviour (shape switch plus Moon radius clamp) but inherit the new projection, refraction, and flip settings; the Sun now scales to 1.5× the lunar radius so daytime simulations stand out without overpowering the frame.
 
 ## Sensor noise
 
@@ -29,7 +29,8 @@ This note documents the latest improvements to the mock fisheye camera so we hav
 
 - `StarCatalog.TopStarCount` is treated as a lower bound; the adapter guarantees at least 300 candidates even if the configuration requests fewer. Increase it if you want denser skies—the ring quotas adapt automatically.
 - `RightAscensionBins` and `DeclinationBands` directly affect the mid-tier stratification. Reduce them for looser clustering, or increase them when you want an evenly tiled dome.
-- Use `IncludeConstellationHighlight` sparingly; each enabled constellation contributes up to `ConstellationStarCap` of its brightest members on top of the normal quota.
+- Pair the star catalog with the `ConstellationFigures` pipeline filter when you want to emphasise specific asterisms—the highlight logic now lives entirely in the overlay layer instead of the synthetic catalog feed.
+- `CameraPipeline:CelestialAnnotations.AnnotatePlanets` controls whether the overlay places labels beside the simulated planet glyphs while still allowing the starfield itself to render the bodies.
 - To experiment with different star size behaviour, adjust the `StarSizeCurve` parameters when instantiating `StarFieldEngine`.
 
 ## Multi-adapter configuration

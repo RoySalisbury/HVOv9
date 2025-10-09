@@ -120,12 +120,15 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         IReadOnlyList<ResolvedAnnotation> starAnnotations = cache.StarTargets;
 
-        _logger.LogInformation(
-            "Celestial annotations: starting with {ManualCount} manual star target(s); auto-selection enabled: {AutoEnabled} (count {AutoCount}, mag ≤ {AutoLimit:F1}).",
-            starAnnotations.Count,
-            cache.AutoStarSelection.Enabled,
-            cache.AutoStarSelection.Count,
-            cache.AutoStarSelection.MagnitudeLimit);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Celestial annotations: starting with {ManualCount} manual star target(s); auto-selection enabled: {AutoEnabled} (count {AutoCount}, mag ≤ {AutoLimit:F1}).",
+                starAnnotations.Count,
+                cache.AutoStarSelection.Enabled,
+                cache.AutoStarSelection.Count,
+                cache.AutoStarSelection.MagnitudeLimit);
+        }
 
         if (cache.AutoStarSelection.Enabled)
         {
@@ -163,19 +166,22 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                         starAnnotations = merged;
                     }
 
-                    _logger.LogInformation(
-                        "Celestial annotations: merged {AutoCount} automatically-selected star(s) with manual targets; total now {Total}.",
-                        autoAnnotations.Count,
-                        starAnnotations.Count);
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug(
+                            "Celestial annotations: merged {AutoCount} automatically-selected star(s) with manual targets; total now {Total}.",
+                            autoAnnotations.Count,
+                            starAnnotations.Count);
+                    }
                 }
                 else
                 {
-                    _logger.LogInformation("Celestial annotations: automatic star selection returned 0 candidates after filtering.");
+                    _logger.LogDebug("Celestial annotations: automatic star selection returned 0 candidates after filtering.");
                 }
             }
         }
 
-        if (starAnnotations.Count > 0)
+        if (starAnnotations.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
         {
             var summaries = string.Join(
                 ", ",
@@ -186,7 +192,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                         annotation.Name,
                         annotation.Star.Magnitude)));
 
-            _logger.LogInformation(
+            _logger.LogDebug(
                 "Celestial annotations: labeling {StarCount} star(s): {Stars}.",
                 starAnnotations.Count,
                 summaries);
@@ -194,7 +200,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         if (starAnnotations.Count == 0 && cache.DeepSkyTargets.Count == 0 && !annotatePlanets)
         {
-            _logger.LogInformation(
+            _logger.LogDebug(
                 "Celestial annotations: skipping overlay; no stars, deep sky objects, or planets resolved (auto-enabled {AutoEnabled}).",
                 cache.AutoStarSelection.Enabled);
             return;
@@ -333,15 +339,26 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         var planetBodies = new HashSet<PlanetBody>();
         var invalidPlanets = new List<string>();
-        foreach (var entry in options.PlanetNames ?? Array.Empty<string>())
+        var configuredPlanets = options.PlanetNames;
+        if (configuredPlanets is null || configuredPlanets.Count == 0)
         {
-            var name = entry?.Trim();
-            if (string.IsNullOrEmpty(name)) continue;
-
-            if (Enum.TryParse<PlanetBody>(name, ignoreCase: true, out var body))
+            foreach (var body in Enum.GetValues<PlanetBody>())
+            {
                 planetBodies.Add(body);
-            else
-                invalidPlanets.Add(name);
+            }
+        }
+        else
+        {
+            foreach (var entry in configuredPlanets)
+            {
+                var name = entry?.Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+
+                if (Enum.TryParse<PlanetBody>(name, ignoreCase: true, out var body))
+                    planetBodies.Add(body);
+                else
+                    invalidPlanets.Add(name);
+            }
         }
 
         if (invalidPlanets.Count > 0)
@@ -361,6 +378,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             starTargets.Count > 0 ? starTargets : Array.Empty<ResolvedAnnotation>(),
             deepSkyTargets.Count > 0 ? deepSkyTargets : Array.Empty<ResolvedAnnotation>(),
             planetBodies,
+            options.AnnotatePlanets,
             labelFontSize,
             starLabelColor,
             planetLabelColor,
@@ -433,9 +451,9 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                 targetType,
                 targets.Count);
         }
-        else
+        else if (logger.IsEnabled(LogLevel.Debug))
         {
-            logger.LogInformation(
+            logger.LogDebug(
                 "Celestial annotations: projected {Projected}/{Total} {TargetType} annotation(s); skipped {Skipped} (sample: {Sample}).",
                 projectedCount,
                 targets.Count,
@@ -474,15 +492,18 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             timestampUtc = DateTime.UtcNow;
         }
 
-        _logger.LogInformation(
-            "Celestial annotations: requesting visible stars (lat {Lat:F3}, lon {Lon:F3}, mag ≤ {MagLimit:F1}, desired {Desired}, fetch {Fetch}, ra bins {RaBins}, dec bands {DecBands}).",
-            context.LatitudeDeg,
-            context.LongitudeDeg,
-            effectiveMagnitude,
-            desiredCount,
-            fetchCount,
-            catalogOptions.RightAscensionBins,
-            catalogOptions.DeclinationBands);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Celestial annotations: requesting visible stars (lat {Lat:F3}, lon {Lon:F3}, mag ≤ {MagLimit:F1}, desired {Desired}, fetch {Fetch}, ra bins {RaBins}, dec bands {DecBands}).",
+                context.LatitudeDeg,
+                context.LongitudeDeg,
+                effectiveMagnitude,
+                desiredCount,
+                fetchCount,
+                catalogOptions.RightAscensionBins,
+                catalogOptions.DeclinationBands);
+        }
 
         var result = await repository.GetVisibleStarsAsync(
             context.LatitudeDeg,
@@ -509,12 +530,15 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         var candidates = result.Value;
 
-        _logger.LogInformation(
-            "Celestial annotations: repository returned {CandidateCount} candidate star(s) (effective mag ≤ {MagLimit:F1}, desired {Desired}, fetch {Fetch}).",
-            candidates.Count,
-            effectiveMagnitude,
-            desiredCount,
-            fetchCount);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(
+                    "Celestial annotations: repository returned {CandidateCount} candidate star(s) (effective mag ≤ {MagLimit:F1}, desired {Desired}, fetch {Fetch}).",
+                    candidates.Count,
+                    effectiveMagnitude,
+                    desiredCount,
+                    fetchCount);
+            }
 
     static string? ResolveLabel(Star star)
         {
@@ -541,14 +565,17 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         if (labeled.Count == 0)
         {
-            _logger.LogInformation(
-                "Celestial annotations: no labeled stars after applying name filter; first candidate magnitudes: {Magnitudes}.",
-                string.Join(
-                    ", ",
-                    candidates
-                        .OrderBy(star => star.Magnitude)
-                        .Take(5)
-                        .Select(star => star.Magnitude.ToString("F1", CultureInfo.InvariantCulture))));
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(
+                    "Celestial annotations: no labeled stars after applying name filter; first candidate magnitudes: {Magnitudes}.",
+                    string.Join(
+                        ", ",
+                        candidates
+                            .OrderBy(star => star.Magnitude)
+                            .Take(5)
+                            .Select(star => star.Magnitude.ToString("F1", CultureInfo.InvariantCulture))));
+            }
             return Array.Empty<ResolvedAnnotation>();
         }
 
@@ -623,7 +650,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     }
 
     private static bool ShouldAnnotatePlanets(StarCatalogOptions options, AnnotationCache cache)
-        => cache.PlanetBodyLookup.Count > 0 && options.AnnotatePlanets &&
+        => cache.PlanetBodyLookup.Count > 0 && cache.AnnotatePlanets &&
            (options.IncludePlanets || options.IncludeMoon || options.IncludeOuterPlanets || options.IncludeSun);
 
     private static void DrawMarkerWithLabel(
@@ -744,6 +771,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             Array.Empty<ResolvedAnnotation>(),
             Array.Empty<ResolvedAnnotation>(),
             new HashSet<PlanetBody>(),
+            annotatePlanets: false,
             8.0f,
             DefaultStarLabelColor,
             DefaultPlanetLabelColor,
@@ -757,6 +785,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             IReadOnlyList<ResolvedAnnotation> starTargets,
             IReadOnlyList<ResolvedAnnotation> deepSkyTargets,
             HashSet<PlanetBody> planetBodies,
+            bool annotatePlanets,
             float labelFontSize,
             SKColor starLabelColor,
             SKColor planetLabelColor,
@@ -769,6 +798,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             StarTargets = starTargets;
             DeepSkyTargets = deepSkyTargets;
             PlanetBodyLookup = planetBodies;
+            AnnotatePlanets = annotatePlanets;
             LabelFontSize = labelFontSize;
             StarLabelColor = starLabelColor;
             PlanetLabelColor = planetLabelColor;
@@ -782,6 +812,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         public IReadOnlyList<ResolvedAnnotation> StarTargets { get; }
         public IReadOnlyList<ResolvedAnnotation> DeepSkyTargets { get; }
         public HashSet<PlanetBody> PlanetBodyLookup { get; }
+    public bool AnnotatePlanets { get; }
         public float LabelFontSize { get; }
         public SKColor StarLabelColor { get; }
         public SKColor PlanetLabelColor { get; }

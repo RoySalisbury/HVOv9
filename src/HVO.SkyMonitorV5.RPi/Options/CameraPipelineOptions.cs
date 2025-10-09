@@ -29,6 +29,8 @@ public sealed class CameraPipelineOptions
 
     public string[] FrameFilters { get; set; } = Array.Empty<string>();
 
+    public ImageEncodingOptions ProcessedImageEncoding { get; set; } = new();
+
     [Range(1, 60_000)]
     public int DayExposureMilliseconds { get; set; } = 1_000;
 

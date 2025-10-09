@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
 
@@ -21,4 +22,9 @@ public sealed class UpdateCameraConfigurationRequest
     public bool? EnableCircularApertureMask { get; set; }
 
     public List<string>? FrameFilters { get; set; }
+
+    public ImageEncodingFormat? ProcessedImageFormat { get; set; }
+
+    [Range(1, 100)]
+    public int? ProcessedImageQuality { get; set; }
 }

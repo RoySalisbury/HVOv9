@@ -84,6 +84,10 @@ Camera adapters are declared in configuration under the `AllSkyCameras` array. E
   "StackingBufferIntegrationSeconds": 120,
   "EnableStacking": true,
   "EnableImageOverlays": false,
+  "ProcessedImageEncoding": {
+    "Format": "Jpeg",
+    "Quality": 90
+  },
   "Filters": [
     { "Name": "CardinalDirections", "Order": 1, "Enabled": false },
     { "Name": "CelestialAnnotations", "Order": 2, "Enabled": false },
@@ -95,6 +99,7 @@ Camera adapters are declared in configuration under the `AllSkyCameras` array. E
 }
 ```
 
+- `ProcessedImageEncoding` selects the format (`Png` or `Jpeg`) and encoder quality (1–100) used when the filter pipeline emits processed frames to the API/UI. The default is JPEG at quality 90. Changing the format updates the `Content-Type` served by `/api/v1.0/all-sky/frame/latest` automatically.
 - The overlay now reports the configured latitude/longitude and converts timestamps to the appropriate local time zone for that location.
 `Filters` lets you toggle individual filters and control their default order without editing code. Only entries flagged `Enabled` are applied (sorted by `Order`). The legacy `FrameFilters` string array remains as a fallback for backward compatibility and is ignored when `Filters` contains at least one enabled entry. When both collections are empty the runtime keeps the live sequence supplied via runtime updates—when overlays are disabled (the default), the capture pipeline simply returns the raw starfield image from the camera adapter.
 
@@ -183,7 +188,6 @@ Camera adapters are declared in configuration under the `AllSkyCameras` array. E
 - `StarLabelColor`, `PlanetLabelColor`, and `DeepSkyLabelColor` control the text colour for each annotation type.
 - `StarRingRadius`, `PlanetRingRadius`, and `DeepSkyRingRadius` adjust the diameter of the dotted locator rings.
 - `StarNames` is case-insensitive and matches the curated constellation catalog bundled with the mock camera. Add any missing targets by supplying precise coordinates through `DeepSkyObjects`.
-- `PlanetNames` accepts values from the internal ephemeris (`Mercury`, `Venus`, `Mars`, `Jupiter`, `Saturn`, `Uranus`, `Neptune`, `Moon`, `Sun`). Labels only appear when the corresponding `StarCatalog` switches render those bodies.
 - `DeepSkyObjects` annotate arbitrary RA/Dec coordinates with optional magnitude and colour overrides.
 - The annotation projection honours the cardinal overlay’s `SwapEastWest` flag, so mirrored optics automatically flip both the labels and the marker positions in sync.
 
@@ -195,9 +199,10 @@ The `MockCameraAdapter` now generates a more balanced all-sky scene so preview i
 
 - **Multi-band star selection** – Stars are pulled from the HYG catalog in three passes (bright, mid, faint). Bright anchors are capped, mid-range stars use the configured RA/Dec binning, and faint stars are over-sampled and thinned in screen space to keep uniform coverage.
 - **Ring quotas** – After projection the adapter fills concentric horizon rings to avoid crowding the zenith. The quotas bias toward the horizon so Milky Way density looks natural when the fisheye is level.
-- **Constellation highlights** – When `IncludeConstellationHighlight` is enabled a small number of asterism members are layered into the candidate pool per constellation, making outreach-friendly shapes pop without overwhelming the frame.
+- **Constellation overlays** – Use the `ConstellationFigures` filter in the camera pipeline when you want outreach-friendly asterisms; the synthetic catalog feed now focuses purely on brightness-driven selection.
 - **Refraction-aware culling** – The selection engine and renderer both apply Bennett atmospheric refraction and the same fisheye FOV so a star that passes the candidate screen-space test cannot disappear in the final render.
 - **Adaptive star sizing** – Rendering uses the new `StarSizeCurve` logistic to give bright stars bloom without blowing out faint stars. Very dim targets automatically switch to 1×1 or 2×2 "microdot" pixels that hold up after video encoding.
+- **Solar emphasis** – When the Sun is included it renders at 1.5× the lunar radius so daytime scenes remain readable without dominating the fisheye.
 - **Colour-preserving noise** – Sensor noise now perturbs luminance while leaving RGB ratios mostly intact, so star colours survive simulated gain spikes.
 
 > Tip: `StarCatalog.TopStarCount` is treated as a minimum and the adapter will request at least 300 candidates so the final frame always fills the dome. Increase it if you want denser skies; the ring quotas will adapt automatically.
@@ -210,21 +215,18 @@ The `MockCameraAdapter` now generates a more balanced all-sky scene so preview i
   "MinMaxAltitudeDegrees": 10,
   "TopStarCount": 300,
   "StratifiedSelection": false,
-  "IncludeConstellationHighlight": true,
   "IncludePlanets": true,
   "IncludeMoon": true,
   "IncludeOuterPlanets": false,
   "IncludeSun": false,
-  "AnnotatePlanets": true,
   "RightAscensionBins": 24,
   "DeclinationBands": 8
 }
 ```
 
-- `IncludeConstellationHighlight` adds branded asterisms on top of the brightest catalog stars.
 - `IncludePlanets` renders Mercury through Saturn; toggle `IncludeOuterPlanets` to extend to Uranus and Neptune.
 - `IncludeMoon` controls whether the lunar disk is plotted, while `IncludeSun` can be enabled for daytime simulations.
-- `AnnotatePlanets` allows the `CelestialAnnotations` overlay to render labels for configured planet names when those bodies are included in the starfield output.
+- `CameraPipeline:CelestialAnnotations.AnnotatePlanets` controls whether the overlay renders labels for any planets present in the synthetic feed while leaving planet rendering itself controlled by the `StarCatalog` section. Leave `PlanetNames` unspecified to annotate every supported body automatically; provide a list only when you need to restrict the set.
 - `RightAscensionBins` and `DeclinationBands` influence the mid-tier stratification pass; lowering the values produces looser clustering while higher values aim for uniform coverage.
 
   ### Observatory location

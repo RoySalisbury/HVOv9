@@ -28,6 +28,7 @@ public sealed record PlanetRenderOptions(
     float MinRadiusPx = 3.5f,
     float MaxRadiusPx = 9.5f,
     float MoonRadiusPx = 12.0f,
+    float SunRadiusScale = 1.5f,
     PlanetMarkerShape Shape = PlanetMarkerShape.Circle)
 {
     public static PlanetRenderOptions Default { get; } = new();

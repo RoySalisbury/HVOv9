@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -36,7 +38,10 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var pipelineStopwatch = Stopwatch.StartNew();
+            var copyStopwatch = Stopwatch.StartNew();
             var copy = stackResult.StackedImage.Copy();
+            copyStopwatch.Stop();
             if (copy is null)
             {
                 throw new InvalidOperationException("Unable to copy raw frame image for filter processing.");
@@ -46,6 +51,11 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
             var renderContext = stackResult.Context is { } context ? new FrameRenderContext(context) : null;
 
             var appliedFilters = new List<string>();
+            List<FilterTiming>? filterTimings = null;
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                filterTimings = new List<FilterTiming>();
+            }
 
             try
             {
@@ -76,7 +86,20 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     try
                     {
                         appliedFilters.Add(filter.Name);
+
+                        Stopwatch? filterStopwatch = null;
+                        if (filterTimings is not null)
+                        {
+                            filterStopwatch = Stopwatch.StartNew();
+                        }
+
                         await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
+
+                        if (filterTimings is not null && filterStopwatch is not null)
+                        {
+                            filterStopwatch.Stop();
+                            filterTimings.Add(new FilterTiming(filter.Name, filterStopwatch.Elapsed.TotalMilliseconds));
+                        }
                     }
                     catch (OperationCanceledException)
                     {
@@ -93,16 +116,37 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 renderContext?.FrameContext.Dispose();
             }
 
+            var encodeStopwatch = Stopwatch.StartNew();
             // Encode the updated bitmap into the processed frame payload
             using var image = SKImage.FromBitmap(bitmap);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
+            var encodingSettings = configuration.ProcessedImageEncoding ?? new ImageEncodingSettings();
+            var skiaFormat = ToSkiaFormat(encodingSettings.Format);
+            var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
+            using var data = image.Encode(skiaFormat, quality);
             var bytes = data.ToArray();
+            encodeStopwatch.Stop();
+
+            pipelineStopwatch.Stop();
+
+            if (filterTimings is not null)
+            {
+                var filterBreakdown = filterTimings.Count == 0
+                    ? "none"
+                    : string.Join(", ", filterTimings.Select(t => $"{t.Filter}:{t.DurationMs:F1}ms"));
+
+                _logger.LogDebug(
+                    "Filter pipeline completed in {TotalMs}ms (copy {CopyMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
+                    pipelineStopwatch.Elapsed.TotalMilliseconds,
+                    copyStopwatch.Elapsed.TotalMilliseconds,
+                    encodeStopwatch.Elapsed.TotalMilliseconds,
+                    filterBreakdown);
+            }
 
             return new ProcessedFrame(
                 stackResult.Timestamp,
                 stackResult.Exposure,
                 bytes,
-                "image/png",
+                ToContentType(encodingSettings.Format),
                 stackResult.FramesStacked,
                 stackResult.IntegrationMilliseconds,
                 appliedFilters,
@@ -129,5 +173,21 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
         }
 
         // FrameStackResult exposes the raw stacked SKBitmap; filters operate on a copy to avoid mutating shared state.
+
+        private static SKEncodedImageFormat ToSkiaFormat(ImageEncodingFormat format) => format switch
+        {
+            ImageEncodingFormat.Jpeg => SKEncodedImageFormat.Jpeg,
+            ImageEncodingFormat.Png => SKEncodedImageFormat.Png,
+            _ => SKEncodedImageFormat.Png
+        };
+
+        private static string ToContentType(ImageEncodingFormat format) => format switch
+        {
+            ImageEncodingFormat.Jpeg => "image/jpeg",
+            ImageEncodingFormat.Png => "image/png",
+            _ => "application/octet-stream"
+        };
     }
+
+    internal readonly record struct FilterTiming(string Filter, double DurationMs);
 }

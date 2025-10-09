@@ -16,7 +16,8 @@ public sealed record CameraConfiguration(
     bool EnableCircularApertureMask,
     int StackingBufferMinimumFrames,
     int StackingBufferIntegrationSeconds,
-    IReadOnlyList<string> FrameFilters)
+    IReadOnlyList<string> FrameFilters,
+    ImageEncodingSettings ProcessedImageEncoding)
 {
     public static CameraConfiguration FromOptions(CameraPipelineOptions options)
     {
@@ -32,7 +33,8 @@ public sealed record CameraConfiguration(
             finalMaskEnabled,
             options.StackingBufferMinimumFrames,
             options.StackingBufferIntegrationSeconds,
-            constrainedFilters);
+            constrainedFilters,
+            options.ProcessedImageEncoding?.ToSettings() ?? new ImageEncodingSettings());
     }
 
     public CameraConfiguration WithUpdates(UpdateCameraConfigurationRequest request)
@@ -91,6 +93,18 @@ public sealed record CameraConfiguration(
 
         updatedFilters = ApplyOverlayConstraints(updatedFilters, overlaysEnabledResult, maskEnabledResult);
 
+        var updatedEncoding = ProcessedImageEncoding;
+
+        if (request.ProcessedImageFormat is not null)
+        {
+            updatedEncoding = updatedEncoding with { Format = request.ProcessedImageFormat.Value };
+        }
+
+        if (request.ProcessedImageQuality is not null)
+        {
+            updatedEncoding = updatedEncoding with { Quality = Math.Clamp(request.ProcessedImageQuality.Value, 1, 100) };
+        }
+
         return this with
         {
             EnableStacking = request.EnableStacking ?? EnableStacking,
@@ -99,7 +113,8 @@ public sealed record CameraConfiguration(
             EnableCircularApertureMask = maskEnabledResult,
             StackingBufferMinimumFrames = request.StackingBufferMinimumFrames ?? StackingBufferMinimumFrames,
             StackingBufferIntegrationSeconds = request.StackingBufferIntegrationSeconds ?? StackingBufferIntegrationSeconds,
-            FrameFilters = updatedFilters
+            FrameFilters = updatedFilters,
+            ProcessedImageEncoding = updatedEncoding
         };
     }
 

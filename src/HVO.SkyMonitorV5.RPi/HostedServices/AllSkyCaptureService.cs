@@ -18,6 +18,7 @@ public sealed class AllSkyCaptureService : BackgroundService
     private readonly ICameraAdapter _cameraAdapter;
     private readonly IExposureController _exposureController;
     private readonly IFrameStacker _frameStacker;
+    private readonly IFrameStackerConfigurationListener? _frameStackerConfigurationListener;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly IFrameStateStore _frameStateStore;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
@@ -38,6 +39,7 @@ public sealed class AllSkyCaptureService : BackgroundService
         _cameraAdapter = cameraAdapter;
         _exposureController = exposureController;
         _frameStacker = frameStacker;
+    _frameStackerConfigurationListener = frameStacker as IFrameStackerConfigurationListener;
         _frameFilterPipeline = frameFilterPipeline;
         _frameStateStore = frameStateStore;
         _optionsMonitor = optionsMonitor;
@@ -98,10 +100,18 @@ public sealed class AllSkyCaptureService : BackgroundService
         {
             configurationVersion = CheckForConfigurationUpdates(configurationVersion, ref configuration);
 
+            var frameStopwatch = Stopwatch.StartNew();
+            double captureMs = 0;
+            double stackMs = 0;
+            double filterMs = 0;
+
             var exposure = _exposureController.CreateNextExposure(configuration);
             _logger.LogTrace("Prepared exposure {ExposureMs}ms / Gain {Gain}", exposure.ExposureMilliseconds, exposure.Gain);
 
+            var captureStopwatch = Stopwatch.StartNew();
             var captureResult = await _cameraAdapter.CaptureAsync(exposure, stoppingToken);
+            captureStopwatch.Stop();
+            captureMs = captureStopwatch.Elapsed.TotalMilliseconds;
             if (captureResult.IsFailure)
             {
                 await HandleCaptureFailureAsync(captureResult.Error, stoppingToken);
@@ -109,20 +119,23 @@ public sealed class AllSkyCaptureService : BackgroundService
             }
 
             var capturedFrame = captureResult.Value;
-            var stopwatch = Stopwatch.StartNew();
-
+            var stackStopwatch = Stopwatch.StartNew();
             var stackResult = _frameStacker.Accumulate(capturedFrame, configuration);
+            stackStopwatch.Stop();
+            stackMs = stackStopwatch.Elapsed.TotalMilliseconds;
             var frameContext = stackResult.Context;
             var frameStored = false;
 
             try
             {
+                var filterStopwatch = Stopwatch.StartNew();
                 var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
-                stopwatch.Stop();
+                filterStopwatch.Stop();
+                filterMs = filterStopwatch.Elapsed.TotalMilliseconds;
 
                 processedFrame = processedFrame with
                 {
-                    ProcessingMilliseconds = (int)Math.Clamp(stopwatch.ElapsedMilliseconds, 0, int.MaxValue)
+                    ProcessingMilliseconds = (int)Math.Clamp(filterStopwatch.ElapsedMilliseconds, 0, int.MaxValue)
                 };
 
                 _frameStateStore.UpdateFrame(
@@ -136,24 +149,33 @@ public sealed class AllSkyCaptureService : BackgroundService
                     stackResult.StackedImage.Dispose();
                 }
 
+                frameStopwatch.Stop();
+                var totalMs = frameStopwatch.Elapsed.TotalMilliseconds;
+
                 var captureInterval = _optionsMonitor.CurrentValue.CaptureIntervalMilliseconds;
-                var delay = Math.Max(MinimumFrameDelayMilliseconds, captureInterval - (int)stopwatch.ElapsedMilliseconds);
+                var remainingMs = captureInterval - (int)Math.Round(totalMs);
+                var delayMs = Math.Max(remainingMs, 0);
+                if (delayMs < MinimumFrameDelayMilliseconds)
+                {
+                    delayMs = MinimumFrameDelayMilliseconds;
+                }
 
-                _logger.LogDebug(
-                    "Captured frame at {Timestamp} (processing {Elapsed}ms). Next capture in {Delay}ms.",
-                    processedFrame.Timestamp,
-                    stopwatch.ElapsedMilliseconds,
-                    delay);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(
+                        "Captured frame at {Timestamp} (capture {CaptureMs:F1}ms, stack {StackMs:F1}ms, filters {FilterMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
+                        processedFrame.Timestamp,
+                        captureMs,
+                        stackMs,
+                        filterMs,
+                        totalMs,
+            delayMs);
+                }
 
-                await DelayWithCancellation(TimeSpan.FromMilliseconds(delay), stoppingToken);
+        await DelayWithCancellation(TimeSpan.FromMilliseconds(delayMs), stoppingToken);
             }
             finally
             {
-                if (stopwatch.IsRunning)
-                {
-                    stopwatch.Stop();
-                }
-
                 if (!frameStored)
                 {
                     stackResult.OriginalImage.Dispose();
@@ -169,9 +191,19 @@ public sealed class AllSkyCaptureService : BackgroundService
         var latestVersion = _frameStateStore.ConfigurationVersion;
         if (latestVersion != currentVersion)
         {
+            var previousConfiguration = configuration;
             configuration = _frameStateStore.Configuration;
-            _frameStacker.Reset();
-            _logger.LogInformation("Camera configuration updated. Frame stacker has been reset.");
+
+            if (_frameStackerConfigurationListener is null)
+            {
+                _frameStacker.Reset();
+                _logger.LogInformation("Camera configuration updated. Frame stacker has been reset.");
+            }
+            else
+            {
+                _frameStackerConfigurationListener.OnConfigurationChanged(previousConfiguration, configuration);
+                _logger.LogInformation("Camera configuration updated. Frame stacker configuration listener invoked.");
+            }
             return latestVersion;
         }
 

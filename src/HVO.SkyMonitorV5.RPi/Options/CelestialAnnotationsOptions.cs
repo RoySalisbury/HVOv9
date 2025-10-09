@@ -38,6 +38,11 @@ public sealed class CelestialAnnotationsOptions
     public IList<string> PlanetNames { get; set; } = new List<string>();
 
     /// <summary>
+    /// Gets or sets a value indicating whether visible planets should receive annotation labels when present.
+    /// </summary>
+    public bool AnnotatePlanets { get; set; } = true;
+
+    /// <summary>
     /// Gets the collection of deep-sky objects to annotate.
     /// </summary>
     public IList<DeepSkyObjectOption> DeepSkyObjects { get; set; } = new List<DeepSkyObjectOption>();

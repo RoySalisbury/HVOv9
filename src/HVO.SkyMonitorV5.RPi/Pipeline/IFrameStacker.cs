@@ -8,3 +8,8 @@ public interface IFrameStacker
 
     void Reset();
 }
+
+public interface IFrameStackerConfigurationListener
+{
+    void OnConfigurationChanged(CameraConfiguration previousConfiguration, CameraConfiguration currentConfiguration);
+}

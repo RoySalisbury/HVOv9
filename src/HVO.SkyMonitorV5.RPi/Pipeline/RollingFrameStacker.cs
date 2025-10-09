@@ -1,7 +1,10 @@
 #nullable enable
 
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using HVO.SkyMonitorV5.RPi.Models;
+using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Pipeline;
@@ -10,12 +13,27 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 /// Maintains a rolling buffer of frames and combines them using a color-preserving,
 /// gamma-aware averaging strategy when stacking is enabled.
 /// </summary>
-public sealed class RollingFrameStacker : IFrameStacker
+public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurationListener
 {
     private sealed record BufferedFrame(SKBitmap Image, ExposureSettings Exposure);
 
+    private static readonly double[] SrgbToLinearLut = CreateSrgbToLinearLut();
+
     private readonly Queue<BufferedFrame> _buffer = new();
     private int _bufferedIntegrationMilliseconds;
+    private readonly ILogger<RollingFrameStacker>? _logger;
+
+    private double[] _accumulatorR = Array.Empty<double>();
+    private double[] _accumulatorG = Array.Empty<double>();
+    private double[] _accumulatorB = Array.Empty<double>();
+    private double[] _accumulatorA = Array.Empty<double>();
+    private int _accumulatorWidth;
+    private int _accumulatorHeight;
+
+    public RollingFrameStacker(ILogger<RollingFrameStacker>? logger = null)
+    {
+        _logger = logger;
+    }
 
     public FrameStackResult Accumulate(CapturedImage capture, CameraConfiguration configuration)
     {
@@ -55,7 +73,26 @@ public sealed class RollingFrameStacker : IFrameStacker
         try
         {
             var framesForStack = GetFramesForStack(configuration.StackingFrameCount);
-            return AverageFrames(framesForStack, capture, frameContext);
+            var stackStopwatch = Stopwatch.StartNew();
+            var result = AverageFrames(framesForStack, capture, frameContext);
+            stackStopwatch.Stop();
+
+            if (_logger?.IsEnabled(LogLevel.Trace) == true && result.FramesStacked > 1)
+            {
+                var width = framesForStack.Count > 0 ? framesForStack[0].Image.Width : capture.Image.Width;
+                var height = framesForStack.Count > 0 ? framesForStack[0].Image.Height : capture.Image.Height;
+                _logger.LogTrace(
+                    "Stacked {FramesStacked} frames (target {Target}, buffer {BufferCount}, integration {IntegrationMs}ms) in {DurationMs:F1}ms at {Width}x{Height}.",
+                    result.FramesStacked,
+                    configuration.StackingFrameCount,
+                    _buffer.Count,
+                    result.IntegrationMilliseconds,
+                    stackStopwatch.Elapsed.TotalMilliseconds,
+                    width,
+                    height);
+            }
+
+            return result;
         }
         catch
         {
@@ -72,7 +109,28 @@ public sealed class RollingFrameStacker : IFrameStacker
 
     public void Reset() => DrainBuffer();
 
-    private static FrameStackResult AverageFrames(IReadOnlyList<BufferedFrame> frames, CapturedImage latestFrame, FrameContext? context)
+    public void OnConfigurationChanged(CameraConfiguration previousConfiguration, CameraConfiguration currentConfiguration)
+    {
+        if (currentConfiguration is null)
+        {
+            return;
+        }
+
+        if (!currentConfiguration.EnableStacking)
+        {
+            DrainBuffer();
+            return;
+        }
+
+        if (!previousConfiguration?.EnableStacking ?? true)
+        {
+            return;
+        }
+
+        TrimBuffer(currentConfiguration);
+    }
+
+    private FrameStackResult AverageFrames(IReadOnlyList<BufferedFrame> frames, CapturedImage latestFrame, FrameContext? context)
     {
         if (frames.Count == 0)
         {
@@ -102,10 +160,18 @@ public sealed class RollingFrameStacker : IFrameStacker
                 latestFrame.Exposure.ExposureMilliseconds);
         }
 
-        var accR = new double[width * height];
-        var accG = new double[width * height];
-        var accB = new double[width * height];
-        var accA = new double[width * height];
+    EnsureAccumulatorCapacity(width, height);
+    int pixelCount = width * height;
+
+    var accR = _accumulatorR.AsSpan(0, pixelCount);
+    var accG = _accumulatorG.AsSpan(0, pixelCount);
+    var accB = _accumulatorB.AsSpan(0, pixelCount);
+    var accA = _accumulatorA.AsSpan(0, pixelCount);
+
+    accR.Clear();
+    accG.Clear();
+    accB.Clear();
+    accA.Clear();
 
         var framesIncluded = new List<BufferedFrame>(frames.Count);
 
@@ -132,9 +198,8 @@ public sealed class RollingFrameStacker : IFrameStacker
                 1,
                 latestFrame.Exposure.ExposureMilliseconds);
         }
-
-    var stackedImage = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
-    WriteAverageFromLinear(accR, accG, accB, accA, stackedImage);
+        var stackedImage = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
+        WriteAverageFromLinear(accR, accG, accB, accA, stackedImage);
 
         var integrationMilliseconds = CalculateIntegrationMilliseconds(framesIncluded);
 
@@ -148,7 +213,7 @@ public sealed class RollingFrameStacker : IFrameStacker
             integrationMilliseconds);
     }
 
-    private static void AccumulateLinear(double[] accR, double[] accG, double[] accB, double[] accA, SKBitmap bitmap)
+    private static void AccumulateLinear(Span<double> accR, Span<double> accG, Span<double> accB, Span<double> accA, SKBitmap bitmap)
     {
         var bytes = bitmap.GetPixelSpan();
         int width = bitmap.Width;
@@ -176,7 +241,7 @@ public sealed class RollingFrameStacker : IFrameStacker
         }
     }
 
-    private static void WriteAverageFromLinear(double[] accR, double[] accG, double[] accB, double[] accA, SKBitmap bitmap)
+    private static void WriteAverageFromLinear(Span<double> accR, Span<double> accG, Span<double> accB, Span<double> accA, SKBitmap bitmap)
     {
         var span = bitmap.GetPixelSpan();
         int pixelCount = bitmap.Width * bitmap.Height;
@@ -194,13 +259,40 @@ public sealed class RollingFrameStacker : IFrameStacker
         }
     }
 
+    private void EnsureAccumulatorCapacity(int width, int height)
+    {
+        if (width == _accumulatorWidth && height == _accumulatorHeight &&
+            _accumulatorR.Length >= width * height &&
+            _accumulatorG.Length >= width * height &&
+            _accumulatorB.Length >= width * height &&
+            _accumulatorA.Length >= width * height)
+        {
+            return;
+        }
+
+        int required = width * height;
+        _accumulatorR = new double[required];
+        _accumulatorG = new double[required];
+        _accumulatorB = new double[required];
+        _accumulatorA = new double[required];
+        _accumulatorWidth = width;
+        _accumulatorHeight = height;
+    }
+
     private void DrainBuffer()
     {
+        int drained = 0;
         while (_buffer.TryDequeue(out var frame))
         {
             frame.Image.Dispose();
+            drained++;
         }
         _bufferedIntegrationMilliseconds = 0;
+
+        if (drained > 0 && _logger?.IsEnabled(LogLevel.Debug) == true)
+        {
+            _logger.LogDebug("Frame stacker buffer drained; released {Frames} frames.", drained);
+        }
     }
 
     private static int CalculateIntegrationMilliseconds(IEnumerable<BufferedFrame> frames)
@@ -230,6 +322,16 @@ public sealed class RollingFrameStacker : IFrameStacker
                 var removed = _buffer.Dequeue();
                 removed.Image.Dispose();
                 _bufferedIntegrationMilliseconds = newIntegration;
+
+                if (_logger?.IsEnabled(LogLevel.Trace) == true)
+                {
+                    _logger.LogTrace(
+                        "Trimmed stacked frame buffer to {BufferCount} frames ({IntegrationMs}ms integration, minFrames {MinFrames}, minIntegration {MinIntegrationMs}ms).",
+                        _buffer.Count,
+                        _bufferedIntegrationMilliseconds,
+                        requiredFrames,
+                        requiredIntegration);
+                }
             }
             else
             {
@@ -252,16 +354,29 @@ public sealed class RollingFrameStacker : IFrameStacker
         return result;
     }
 
-    private static double SrgbToLinear(byte v)
-    {
-        double c = v / 255.0;
-        return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
-    }
+    private static double SrgbToLinear(byte v) => SrgbToLinearLut[v];
 
     private static byte LinearToSrgb(double l)
     {
         l = Math.Clamp(l, 0.0, 1.0);
         double c = l <= 0.0031308 ? 12.92 * l : 1.055 * Math.Pow(l, 1.0 / 2.4) - 0.055;
         return (byte)Math.Clamp(Math.Round(c * 255.0), 0, 255);
+    }
+
+    private static double[] CreateSrgbToLinearLut()
+    {
+        var lut = new double[256];
+        for (int i = 0; i < lut.Length; i++)
+        {
+            double c = i / 255.0;
+            lut[i] = c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        return lut;
+    }
+
+    public void Dispose()
+    {
+        DrainBuffer();
     }
 }
