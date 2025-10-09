@@ -29,6 +29,8 @@ public sealed class CameraPipelineOptions
 
     public string[] FrameFilters { get; set; } = Array.Empty<string>();
 
+    public BackgroundStackerOptions BackgroundStacker { get; set; } = new();
+
     public ImageEncodingOptions ProcessedImageEncoding { get; set; } = new();
 
     [Range(1, 60_000)]

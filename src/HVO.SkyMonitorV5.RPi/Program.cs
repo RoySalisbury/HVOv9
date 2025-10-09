@@ -177,6 +177,9 @@ public static class Program
 
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
         services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+        services.AddSingleton<BackgroundFrameStackerService>();
+        services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
+        services.AddHostedService(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
 
         services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
     services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
