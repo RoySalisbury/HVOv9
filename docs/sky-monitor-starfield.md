@@ -4,7 +4,7 @@ This note documents the latest improvements to the mock fisheye camera so we hav
 
 ## Candidate selection
 
-1. **Catalog query** – `HygStarRepository` collects all stars under the configured magnitude limit that can rise above `MinMaxAltitudeDegrees` for the observatory.
+1. **Catalog query** – `SkyMonitorRepository` collects all stars under the configured magnitude limit that can rise above `MinMaxAltitudeDegrees` for the observatory.
 2. **Bright / mid / faint bands** – The adapter requests three subsets:
    - *Bright* (≈4 % of the requested total, capped at magnitude ≤ 2).
    - *Mid* (≈20 %, stratified using the configured right-ascension bins and declination bands).
@@ -79,4 +79,4 @@ This note documents the latest improvements to the mock fisheye camera so we hav
 
 - Candidate assembly lives in `MockCameraAdapter.CaptureAsync`.
 - Projection, sizing, and rendering logic is in `Cameras/Rendering/StarFieldEngine.cs`.
-- The raw catalog queries are implemented in `Data/HygStarRepository.cs`.
+- The raw catalog queries are implemented in `Data/SkyMonitorRepository.cs`.

@@ -8,6 +8,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 public static class FrameFilterNames
 {
     public const string CardinalDirections = "CardinalDirections";
+    public const string ConstellationFigures = "ConstellationFigures";
     public const string CelestialAnnotations = "CelestialAnnotations";
     public const string OverlayText = "OverlayText";
     public const string CircularApertureMask = "CircularApertureMask";

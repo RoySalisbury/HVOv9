@@ -29,7 +29,14 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
         double BrightBoostPerMag = 0.18
     );
 
-    public sealed record Star(double RightAscensionHours, double DeclinationDegrees, double Magnitude, SKColor? Color = null);
+    public sealed record Star(
+        double RightAscensionHours,
+        double DeclinationDegrees,
+        double Magnitude,
+        SKColor? Color = null,
+        string? CommonName = null,
+        string? Designation = null,
+        int? HarvardRevisedNumber = null);
     public readonly record struct StarProjection(int Index, float X, float Y, double Magnitude);
     public readonly record struct PlanetProjection(string Name, float X, float Y, double Magnitude, SKColor Color);
 

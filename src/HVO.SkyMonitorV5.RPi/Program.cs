@@ -50,45 +50,26 @@ public static class Program
     private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
         var hygConnectionString = BuildSqliteConnectionString(configuration.GetConnectionString("HygDatabase"));
+        var constellationConnectionString = BuildSqliteConnectionString(configuration.GetConnectionString("ConstellationDatabase"));
 
         services.AddDbContext<HygContext>(opt => opt.UseSqlite(hygConnectionString));
+
+        services.AddDbContextFactory<ConstellationCatalogContext>(options =>
+        {
+            options.UseSqlite(constellationConnectionString);
+        });
 
         services.AddMemoryCache(options =>
         {
             options.SizeLimit = 256;
         });
 
-        services.AddSingleton<IConstellationCatalog, ConstellationCatalog>();
         services.AddSingleton<ICelestialProjector, CelestialProjector>();
 
-        services.AddScoped<HygStarRepository>();
-        services.AddScoped<PlanetRepository>();
-
-        services.AddScoped<IStarRepository>(sp =>
-        {
-            var inner = sp.GetRequiredService<HygStarRepository>();
-            var cache = sp.GetRequiredService<IMemoryCache>();
-            var logger = sp.GetRequiredService<ILogger<CachedStarRepository>>();
-            return new CachedStarRepository(
-                inner,
-                cache,
-                absoluteTtl: TimeSpan.FromMinutes(30),
-                slidingTtl: TimeSpan.FromMinutes(10),
-                logger: logger);
-        });
-
-        services.AddScoped<IPlanetRepository>(sp =>
-        {
-            var inner = sp.GetRequiredService<PlanetRepository>();
-            var cache = sp.GetRequiredService<IMemoryCache>();
-            var logger = sp.GetRequiredService<ILogger<CachedPlanetRepository>>();
-            return new CachedPlanetRepository(
-                inner,
-                cache,
-                absoluteTtl: TimeSpan.FromMinutes(15),
-                slidingTtl: TimeSpan.FromMinutes(5),
-                logger: logger);
-        });
+        services.AddScoped<SkyMonitorRepository>();
+        services.AddScoped<IStarRepository>(sp => sp.GetRequiredService<SkyMonitorRepository>());
+        services.AddScoped<IPlanetRepository>(sp => sp.GetRequiredService<SkyMonitorRepository>());
+        services.AddScoped<IConstellationCatalog>(sp => sp.GetRequiredService<SkyMonitorRepository>());
 
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
@@ -187,12 +168,18 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<ConstellationFigureOptions>()
+            .Bind(configuration.GetSection(ConstellationFigureOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
         services.AddSingleton<IFrameStacker, RollingFrameStacker>();
 
         services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
+    services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
         services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
         services.AddSingleton<IFrameFilter, OverlayTextFilter>();
         services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();

@@ -34,7 +34,7 @@ public interface IStarRepository
         int topN = 200,
         double magnitudeLimit = 6.5);
 
-    Task<Result<IReadOnlyDictionary<string, IReadOnlyList<ConstellationStar>>>> GetConstellationsAsync();
+    Task<Result<IReadOnlyDictionary<string, IReadOnlyList<Star>>>> GetConstellationsAsync();
 
     Task<Result<IReadOnlyList<VisibleConstellation>>> GetVisibleByConstellationAsync(
         double latitudeDeg,

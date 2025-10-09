@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
@@ -392,18 +393,32 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private static IReadOnlyDictionary<string, Star> BuildCatalogStarIndex(IConstellationCatalog catalog)
     {
         var index = new Dictionary<string, Star>(StringComparer.OrdinalIgnoreCase);
-        var constellations = catalog.GetAll();
+        var constellations = catalog.GetStarLookup();
 
         foreach (var constellation in constellations.Values)
         {
             foreach (var star in constellation)
             {
-                if (!index.ContainsKey(star.Name))
-                    index[star.Name] = star.Star;
+                AddIfMissing(star.Designation, star);
+                AddIfMissing(star.CommonName, star);
+
+                if (star.HarvardRevisedNumber is int hr)
+                {
+                    AddIfMissing($"HR {hr}", star);
+                    AddIfMissing(hr.ToString(CultureInfo.InvariantCulture), star);
+                }
             }
         }
 
         return index;
+
+        void AddIfMissing(string? key, Star starValue)
+        {
+            if (!string.IsNullOrWhiteSpace(key) && !index.ContainsKey(key))
+            {
+                index[key] = starValue;
+            }
+        }
     }
 
     private static void ClampRectToCanvas(ref SKRect rect, int width, int height)
