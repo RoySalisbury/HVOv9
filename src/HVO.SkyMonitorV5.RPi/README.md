@@ -280,7 +280,7 @@ sequenceDiagram
   Scheduler->>Exposure: CreateNextExposure(configuration)
   Exposure-->>Scheduler: ExposureSettings
   Scheduler->>Camera: CaptureAsync(exposure)
-  Camera-->>Scheduler: CameraFrame + FrameContext
+  Camera-->>Scheduler: CapturedImage + FrameContext
   Scheduler->>Stacker: Accumulate(frame, configuration)
   Stacker-->>Scheduler: FrameStackResult (stacked image + FrameContext)
   Scheduler->>Pipeline: ProcessAsync(stackResult, configuration)

@@ -66,11 +66,11 @@ _Last updated: 2025-10-07_
 - [x] Document benchmark setup and interpretation guidance in the repository. (`src/HVO.SkyMonitorV5.RPi.Benchmarks/README.md`)
 
 ### Phase 7 – Wrap-Up & Refactoring
-- [ ] Audit SkyMonitor v5 projects for redundant or unused classes and remove or consolidate them.
-- [ ] Trim unused assets (images, docs, sample data) related to the old context pipeline.
-- [ ] Refresh solution/solution-filter entries to ensure only active projects are tracked.
-- [ ] Update documentation (README, diagrams) to reflect post-cleanup architecture.
-- [ ] Run final build/test/benchmark smoke to confirm no regressions before closing the initiative.
+- [x] Audit SkyMonitor v5 projects for redundant or unused classes and remove or consolidate them. _Removed obsolete `MockFisheyeCameraAdapter`, unused `SkySimulationMath`, and legacy `CameraFrame` model; updated docs to reference `CapturedImage`._
+- [x] Trim unused assets (images, docs, sample data) related to the old context pipeline. _Reviewed SkyMonitor docs/assets; remaining diagrams still describe the active flow, no extra files required._
+- [x] Refresh solution/solution-filter entries to ensure only active projects are tracked. _Confirmed `HVOv9.slnf` indexes every active project except the iPad target per cloud-build constraints._
+- [x] Update documentation (README, diagrams) to reflect post-cleanup architecture.
+- [x] Run final build/test/benchmark smoke to confirm no regressions before closing the initiative. _`dotnet build` + benchmark smoke (`*EndToEndPipeline*`, 1 launch/warmup/iteration) both succeeded on 2025-10-09._
 
 ## Open Questions / Follow-Ups
 - How should disposal behave when a capture fails mid-pipeline (e.g., cancellation)? (Current implementation disposes in both the pipeline and capture loop finally blocks; confirm no regressions in long-running sessions.)
