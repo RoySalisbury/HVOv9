@@ -71,6 +71,7 @@ _Last updated: 2025-10-07_
 - [x] Refresh solution/solution-filter entries to ensure only active projects are tracked. _Confirmed `HVOv9.slnf` indexes every active project except the iPad target per cloud-build constraints._
 - [x] Update documentation (README, diagrams) to reflect post-cleanup architecture.
 - [x] Run final build/test/benchmark smoke to confirm no regressions before closing the initiative. _`dotnet build` + benchmark smoke (`*EndToEndPipeline*`, 1 launch/warmup/iteration) both succeeded on 2025-10-09._
+- [x] Capture a five-minute benchmark soak to observe sustained buffer/GC behavior. _`IterationCount=300`, `WarmupCount=3`, `LaunchCount=1`; mean stabilized at ~55–61 ms for stacking configurations with allocations steady at 126–206 KB per op._
 
 ## Open Questions / Follow-Ups
 - How should disposal behave when a capture fails mid-pipeline (e.g., cancellation)? (Current implementation disposes in both the pipeline and capture loop finally blocks; confirm no regressions in long-running sessions.)
@@ -79,7 +80,7 @@ _Last updated: 2025-10-07_
 - What telemetry should we log when the context is missing or partially populated?
 
 ## Post-Background-Stacker TODOs
-- Update the SkyMonitor UI footer so the displayed local time is computed from the observatory location instead of the UTC server time.
+- _Moved to solution-wide TODO tracking (see `docs/TODO.md`)._
 
 ## Success Criteria
 - Filters can rely exclusively on `FrameRenderContext` without DI lookups.
