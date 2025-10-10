@@ -9,6 +9,7 @@
   <Project Path="HVO.SkyMonitorV4.CLI/HVO.SkyMonitorV4.CLI.csproj" />
   <Project Path="HVO.SkyMonitorV4.RPi/HVO.SkyMonitorV4.RPi.csproj" />
   <Project Path="HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj" />
+  <Project Path="HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/_Hardware/">
     <Project Path="HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj" />

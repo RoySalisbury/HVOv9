@@ -54,16 +54,23 @@ _Last updated: 2025-10-07_
 - [x] Add unit coverage for the pipeline ensuring `FrameRenderContext` travels end-to-end.
   - [x] Create pipeline tests that process a stacked frame and assert `FrameRenderContext` disposal and filter telemetry. (`FrameFilterPipelineTests`, `RollingFrameStackerTests`)
 - [x] Add performance-focused tests that record stacking + filter timings for future regression tracking. (`BackgroundFrameStackerServicePerformanceTests` validates telemetry aggregation.)
-  - [x] Evaluate whether to keep timing tests in MSTest or split into a dedicated performance benchmark suite for cleaner separation. _Decision:_ keep lightweight telemetry assertions in MSTest for now; revisit if runtime measurements become flaky.
-- [ ] Refresh README/sequence diagrams to reflect the new context-oriented flow.
+  - [x] Evaluate whether to keep timing tests in MSTest or split into a dedicated performance benchmark suite for cleaner separation. _Decision:_ keep lightweight telemetry assertions in MSTest for now; revisit if runtime measurements become flaky._
+- [x] Refresh README/sequence diagrams to reflect the new context-oriented flow.
 - [x] Perform full `dotnet build` and targeted smoke tests.
 
 ### Phase 6 – Performance Benchmark Suite
-- [ ] Design a standalone performance benchmarking project (evaluate BenchmarkDotNet vs. custom harness).
-  - [ ] Identify critical pipeline hot paths (stacking, filter execution, capture loop) and define representative scenarios.
-  - [ ] Ensure benchmarks can run against synthetic data without hardware dependencies. (Syntehetic data can include the Mock camera since it is not tied to actual hardware).
-- [ ] Integrate benchmark outputs into CI or developer tooling (decide on cadence and thresholds).
-- [ ] Document benchmark setup and interpretation guidance in the repository.
+- [x] Design a standalone performance benchmarking project (evaluate BenchmarkDotNet vs. custom harness). _Decision:_ use BenchmarkDotNet in `HVO.SkyMonitorV5.RPi.Benchmarks` with configurable job profiles._
+  - [x] Identify critical pipeline hot paths (stacking, filter execution, capture loop) and define representative scenarios. _Current coverage: rolling stacker accumulation, filter pipeline rendering, mock capture, and end-to-end pipeline runs._
+  - [x] Ensure benchmarks can run against synthetic data without hardware dependencies. (Syntehetic data can include the Mock camera since it is not tied to actual hardware).
+- [x] Integrate benchmark outputs into CI or developer tooling (decide on cadence and thresholds). _CI now runs a nightly/pull-request smoke benchmark job with short iteration counts and uploads the summary artifacts._
+- [x] Document benchmark setup and interpretation guidance in the repository. (`src/HVO.SkyMonitorV5.RPi.Benchmarks/README.md`)
+
+### Phase 7 – Wrap-Up & Refactoring
+- [ ] Audit SkyMonitor v5 projects for redundant or unused classes and remove or consolidate them.
+- [ ] Trim unused assets (images, docs, sample data) related to the old context pipeline.
+- [ ] Refresh solution/solution-filter entries to ensure only active projects are tracked.
+- [ ] Update documentation (README, diagrams) to reflect post-cleanup architecture.
+- [ ] Run final build/test/benchmark smoke to confirm no regressions before closing the initiative.
 
 ## Open Questions / Follow-Ups
 - How should disposal behave when a capture fails mid-pipeline (e.g., cancellation)? (Current implementation disposes in both the pipeline and capture loop finally blocks; confirm no regressions in long-running sessions.)
