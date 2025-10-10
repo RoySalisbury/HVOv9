@@ -1,6 +1,8 @@
+using System;
+using System.Net;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using System.Net;
 
 namespace HVO.SkyMonitorV5.RPi.Middleware;
 
@@ -10,10 +12,14 @@ namespace HVO.SkyMonitorV5.RPi.Middleware;
 public sealed class HvoServiceExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<HvoServiceExceptionHandler> _logger;
+    private readonly IObservatoryClock _observatoryClock;
 
-    public HvoServiceExceptionHandler(ILogger<HvoServiceExceptionHandler> logger)
+    public HvoServiceExceptionHandler(
+        ILogger<HvoServiceExceptionHandler> logger,
+        IObservatoryClock observatoryClock)
     {
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _observatoryClock = observatoryClock ?? throw new ArgumentNullException(nameof(observatoryClock));
     }
 
     public async ValueTask<bool> TryHandleAsync(
@@ -34,7 +40,7 @@ public sealed class HvoServiceExceptionHandler : IExceptionHandler
         };
 
         problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
-        problemDetails.Extensions["timestamp"] = DateTime.UtcNow;
+    problemDetails.Extensions["timestamp"] = _observatoryClock.LocalNow;
 
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/json";

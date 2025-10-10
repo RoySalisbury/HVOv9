@@ -3,6 +3,7 @@ using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Data;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,7 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
         IOptionsMonitor<CardinalDirectionsOptions> cardinalOptions,
         IServiceScopeFactory scopeFactory,
         RigSpec rigSpec,
+        IObservatoryClock observatoryClock,
         ILoggerFactory? loggerFactory = null,
         ILogger<MockColorCameraAdapter>? logger = null)
         : base(
@@ -34,6 +36,7 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
             cardinalOptions,
             scopeFactory,
             rigSpec,
+            observatoryClock,
             loggerFactory?.CreateLogger<MockCameraAdapter>() ?? NullLogger<MockCameraAdapter>.Instance)
     {
         _logger = logger ?? loggerFactory?.CreateLogger<MockColorCameraAdapter>();

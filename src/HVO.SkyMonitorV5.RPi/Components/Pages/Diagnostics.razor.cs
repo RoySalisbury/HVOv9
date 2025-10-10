@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Components;
@@ -36,11 +37,14 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     [Inject]
     private ILogger<Diagnostics> Logger { get; set; } = default!;
 
+    [Inject]
+    private IObservatoryClock ObservatoryClock { get; set; } = default!;
+
     private bool IsLoading => _isLoading;
     private BackgroundStackerMetricsResponse? StackerMetrics => _stackerMetrics;
     private FilterMetricsSnapshot? FilterMetricsSnapshot => _filterMetrics;
     private string? ErrorMessage => _errorMessage;
-    private string? LastUpdatedDisplay => _lastUpdated?.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+    private string? LastUpdatedDisplay => _lastUpdated?.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
     private string QueueFillGaugeStyle => BuildGaugeStyle(_stackerMetrics?.QueueFillPercentage ?? 0);
     private string QueueFillPercentageDisplay => _stackerMetrics is { } metrics ? FormatPercent(metrics.QueueFillPercentage) : "—";
     private string QueueDepthSummary => _stackerMetrics is { } metrics ? FormatDepth(metrics.QueueDepth, metrics.QueueCapacity) : "—";
@@ -150,7 +154,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     var metrics = stackerResult.Value;
                     latestMetrics = metrics;
                     _stackerMetrics = metrics;
-                    _lastUpdated = DateTimeOffset.UtcNow;
+                    _lastUpdated = ObservatoryClock.LocalNow;
                 }
                 else
                 {

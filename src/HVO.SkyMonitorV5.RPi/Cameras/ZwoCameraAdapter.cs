@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,9 +16,10 @@ namespace HVO.SkyMonitorV5.RPi.Cameras;
 /// </summary>
 public sealed class ZwoCameraAdapter : CameraAdapterBase
 {
-    public ZwoCameraAdapter(RigSpec rigSpec, ILogger<ZwoCameraAdapter>? logger = null)
+    public ZwoCameraAdapter(RigSpec rigSpec, IObservatoryClock observatoryClock, ILogger<ZwoCameraAdapter>? logger = null)
         : base(
             EnsureRigDescriptor(rigSpec),
+            observatoryClock,
             logger ?? NullLogger<ZwoCameraAdapter>.Instance)
     {
     }

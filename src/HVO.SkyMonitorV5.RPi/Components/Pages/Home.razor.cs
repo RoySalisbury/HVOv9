@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -23,7 +24,7 @@ public sealed partial class Home : ComponentBase, IDisposable
     private PeriodicTimer? _refreshTimer;
     private CancellationTokenSource? _refreshCts;
     private Task? _refreshTask;
-    private string _cacheBuster = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
+    private string _cacheBuster = string.Empty;
     private int _configurationVersion;
 
     [Inject]
@@ -31,6 +32,9 @@ public sealed partial class Home : ComponentBase, IDisposable
 
     [Inject]
     public ILogger<Home> Logger { get; set; } = default!;
+
+    [Inject]
+    public IObservatoryClock ObservatoryClock { get; set; } = default!;
 
     protected override void OnInitialized()
     {
@@ -96,7 +100,7 @@ public sealed partial class Home : ComponentBase, IDisposable
 
         if (statusSnapshot.LastFrameTimestamp != previousTimestamp || string.IsNullOrEmpty(_cacheBuster))
         {
-            var cacheSource = statusSnapshot.LastFrameTimestamp ?? DateTimeOffset.UtcNow;
+            var cacheSource = statusSnapshot.LastFrameTimestamp ?? ObservatoryClock.LocalNow;
             _cacheBuster = cacheSource.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
         }
     }
@@ -200,7 +204,7 @@ public sealed partial class Home : ComponentBase, IDisposable
                 return "Awaiting capture";
             }
 
-            return timestamp.ToLocalTime().ToString("MMM d, yyyy • h:mm:ss tt", CultureInfo.CurrentCulture);
+            return ObservatoryClock.ToLocal(timestamp).ToString("MMM d, yyyy • h:mm:ss tt", CultureInfo.CurrentCulture);
         }
     }
 
@@ -441,7 +445,7 @@ public sealed partial class Home : ComponentBase, IDisposable
                 return "—";
             }
 
-            return timestamp.ToLocalTime().ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
+            return ObservatoryClock.ToLocal(timestamp).ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
         }
     }
 
@@ -474,7 +478,7 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
 
         var cacheKey = string.IsNullOrWhiteSpace(_cacheBuster)
-            ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)
+            ? ObservatoryClock.LocalNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)
             : _cacheBuster;
 
         return FormattableString.Invariant($"api/v1.0/all-sky/frame/latest?raw={(raw ? "true" : "false")}&cacheBust={cacheKey}");

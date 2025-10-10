@@ -19,4 +19,12 @@ public sealed class ObservatoryLocationOptions
     /// </summary>
     [Range(-180, 180)]
     public double LongitudeDegrees { get; set; } = -113.878;
+
+    /// <summary>
+    /// IANA or Windows time-zone identifier representing the observatory's local time.
+    /// Defaults to the Hualapai Valley Observatory time zone (America/Phoenix).
+    /// </summary>
+    [Required]
+    [StringLength(128, MinimumLength = 1)]
+    public string TimeZoneId { get; set; } = "America/Phoenix";
 }

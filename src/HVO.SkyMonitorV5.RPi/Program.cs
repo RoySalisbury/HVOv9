@@ -12,6 +12,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -92,7 +93,9 @@ public static class Program
         {
             context.ProblemDetails.Instance = $"{context.HttpContext.Request.Method} {context.HttpContext.Request.Path}";
             context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
-            context.ProblemDetails.Extensions["timestamp"] = DateTimeOffset.UtcNow;
+            var clock = context.HttpContext.RequestServices.GetService<IObservatoryClock>();
+            var timestamp = clock?.LocalNow ?? DateTimeOffset.Now;
+            context.ProblemDetails.Extensions["timestamp"] = timestamp;
 
             var activity = context.HttpContext.Features.Get<IHttpActivityFeature>()?.Activity;
             if (activity is not null)
@@ -193,7 +196,10 @@ public static class Program
         services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
         services.AddSingleton<IFrameFilter, OverlayTextFilter>();
         services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();
-    services.AddSingleton<IFrameFilter, DiagnosticsOverlayFilter>();
+        services.AddSingleton<IFrameFilter, DiagnosticsOverlayFilter>();
+
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IObservatoryClock, ObservatoryClock>();
 
         services.AddSingleton<FrameFilterPipeline>();
         services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
@@ -256,6 +262,7 @@ public static class Program
 
             services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
             {
+                var observatoryClock = sp.GetRequiredService<IObservatoryClock>();
                 if (CameraAdapterTypes.IsMockColor(normalizedAdapterKey))
                 {
                     return new MockColorCameraAdapter(
@@ -264,6 +271,7 @@ public static class Program
                         sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
                         sp.GetRequiredService<IServiceScopeFactory>(),
                         rigSpec,
+                        observatoryClock,
                         sp.GetService<ILoggerFactory>(),
                         sp.GetService<ILogger<MockColorCameraAdapter>>());
                 }
@@ -276,6 +284,7 @@ public static class Program
                         sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
                         sp.GetRequiredService<IServiceScopeFactory>(),
                         rigSpec,
+                        observatoryClock,
                         sp.GetService<ILogger<MockCameraAdapter>>());
                 }
 
@@ -283,6 +292,7 @@ public static class Program
                 {
                     return new ZwoCameraAdapter(
                         rigSpec,
+                        observatoryClock,
                         sp.GetService<ILogger<ZwoCameraAdapter>>());
                 }
 
@@ -362,6 +372,7 @@ public static class Program
             ResponseWriter = async (context, report) =>
             {
                 context.Response.ContentType = "application/json";
+                var clock = context.RequestServices.GetService<IObservatoryClock>();
                 var payload = new
                 {
                     status = report.Status.ToString(),
@@ -373,7 +384,7 @@ public static class Program
                         duration = entry.Value.Duration,
                         tags = entry.Value.Tags
                     }),
-                    timestamp = DateTimeOffset.UtcNow
+                    timestamp = clock?.LocalNow ?? DateTimeOffset.Now
                 };
 
                 await context.Response.WriteAsJsonAsync(payload);

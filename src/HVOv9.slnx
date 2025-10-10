@@ -21,6 +21,7 @@
   <Folder Name="/_misc/">
     <File Path="../.github/copilot-instructions.md" />
     <File Path="../.gitignore" />
+    <File Path="../docs/TODO.md" />
     <File Path="../README.md" />
     <File Path="HVOv9.slnf" />
   </Folder>

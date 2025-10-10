@@ -1,5 +1,6 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -23,6 +24,7 @@ public sealed class AllSkyCaptureService : BackgroundService
     private readonly IFrameStateStore _frameStateStore;
     private readonly IBackgroundFrameStacker _backgroundFrameStacker;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
+    private readonly IObservatoryClock _clock;
 
     private const int MinimumFrameDelayMilliseconds = 250;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(10);
@@ -36,7 +38,8 @@ public sealed class AllSkyCaptureService : BackgroundService
         IFrameFilterPipeline frameFilterPipeline,
         IFrameStateStore frameStateStore,
         IBackgroundFrameStacker backgroundFrameStacker,
-        IOptionsMonitor<CameraPipelineOptions> optionsMonitor)
+        IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
+        IObservatoryClock clock)
     {
         _logger = logger;
         _cameraAdapter = cameraAdapter;
@@ -47,6 +50,7 @@ public sealed class AllSkyCaptureService : BackgroundService
         _frameStateStore = frameStateStore;
         _backgroundFrameStacker = backgroundFrameStacker;
         _optionsMonitor = optionsMonitor;
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -127,6 +131,7 @@ public sealed class AllSkyCaptureService : BackgroundService
             var capturedFrame = captureResult.Value;
             var frameNumber = ++_frameNumber;
             var enqueued = false;
+            var capturedAtLocal = _clock.ToLocal(capturedFrame.Timestamp);
 
             if (usingBackgroundStacker)
             {
@@ -165,9 +170,9 @@ public sealed class AllSkyCaptureService : BackgroundService
             if (usingBackgroundStacker && enqueued)
             {
                 _logger.LogDebug(
-                    "Captured frame #{FrameNumber} at {Timestamp} (capture {CaptureMs:F1}ms, enqueue {EnqueueMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
+                    "Captured frame #{FrameNumber} at {TimestampLocal} (capture {CaptureMs:F1}ms, enqueue {EnqueueMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
                     frameNumber,
-                    capturedFrame.Timestamp,
+                    capturedAtLocal,
                     captureMs,
                     enqueueMs,
                     totalMs,
@@ -176,9 +181,9 @@ public sealed class AllSkyCaptureService : BackgroundService
             else
             {
                 _logger.LogDebug(
-                    "Captured frame #{FrameNumber} at {Timestamp} (capture {CaptureMs:F1}ms, stack {StackMs:F1}ms, filters {FilterMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
+                    "Captured frame #{FrameNumber} at {TimestampLocal} (capture {CaptureMs:F1}ms, stack {StackMs:F1}ms, filters {FilterMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
                     frameNumber,
-                    capturedFrame.Timestamp,
+                    capturedAtLocal,
                     captureMs,
                     stackMs,
                     filterMs,

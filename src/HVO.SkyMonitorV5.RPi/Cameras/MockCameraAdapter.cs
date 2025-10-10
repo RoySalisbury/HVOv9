@@ -7,6 +7,7 @@ using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Data;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,9 +44,11 @@ public class MockCameraAdapter : CameraAdapterBase
         IOptionsMonitor<CardinalDirectionsOptions> cardinalOptions,
         IServiceScopeFactory scopeFactory,
         RigSpec rigSpec,
+        IObservatoryClock observatoryClock,
         ILogger<MockCameraAdapter>? logger = null)
         : base(
             EnsureRigDescriptor(rigSpec),
+            observatoryClock,
             logger ?? NullLogger<MockCameraAdapter>.Instance)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -14,15 +15,18 @@ public sealed class DiagnosticsService : IDiagnosticsService
     private readonly IFrameStateStore _frameStateStore;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly ILogger<DiagnosticsService> _logger;
+    private readonly IObservatoryClock _clock;
 
     public DiagnosticsService(
         IFrameStateStore frameStateStore,
         IFrameFilterPipeline frameFilterPipeline,
-        ILogger<DiagnosticsService> logger)
+        ILogger<DiagnosticsService> logger,
+        IObservatoryClock clock)
     {
         _frameStateStore = frameStateStore ?? throw new ArgumentNullException(nameof(frameStateStore));
         _frameFilterPipeline = frameFilterPipeline ?? throw new ArgumentNullException(nameof(frameFilterPipeline));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     public Task<Result<BackgroundStackerMetricsResponse>> GetBackgroundStackerMetricsAsync(CancellationToken cancellationToken = default)
@@ -85,7 +89,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
             cancellationToken.ThrowIfCancellationRequested();
 
             var samples = _frameStateStore.GetBackgroundStackerHistory();
-            var history = new BackgroundStackerHistoryResponse(DateTimeOffset.UtcNow, samples);
+            var history = new BackgroundStackerHistoryResponse(_clock.LocalNow, samples);
 
             return Task.FromResult(Result<BackgroundStackerHistoryResponse>.Success(history));
         }
@@ -126,8 +130,15 @@ public sealed class DiagnosticsService : IDiagnosticsService
         SecondsSinceLastCompleted: null,
         LastFrameNumber: null);
 
-    private static BackgroundStackerMetricsResponse MapBackgroundStackerMetrics(BackgroundStackerStatus status)
+    private BackgroundStackerMetricsResponse MapBackgroundStackerMetrics(BackgroundStackerStatus status)
     {
+        DateTimeOffset? lastEnqueuedAt = status.LastEnqueuedAt is { } enqueued
+            ? _clock.ToLocal(enqueued)
+            : null;
+        DateTimeOffset? lastCompletedAt = status.LastCompletedAt is { } completed
+            ? _clock.ToLocal(completed)
+            : null;
+
         return new BackgroundStackerMetricsResponse(
             Enabled: status.Enabled,
             QueueDepth: status.QueueDepth,
@@ -149,8 +160,8 @@ public sealed class DiagnosticsService : IDiagnosticsService
             PeakQueueMemoryBytes: status.PeakQueueMemoryBytes,
             QueueMemoryMegabytes: status.QueueMemoryMegabytes,
             PeakQueueMemoryMegabytes: status.PeakQueueMemoryMegabytes,
-            LastEnqueuedAt: status.LastEnqueuedAt,
-            LastCompletedAt: status.LastCompletedAt,
+            LastEnqueuedAt: lastEnqueuedAt,
+            LastCompletedAt: lastCompletedAt,
             SecondsSinceLastCompleted: status.SecondsSinceLastCompleted,
             LastFrameNumber: status.LastFrameNumber);
     }

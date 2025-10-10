@@ -233,16 +233,18 @@ The `MockCameraAdapter` now generates a more balanced all-sky scene so preview i
 
   ### Observatory location
 
-  The synthetic all-sky generator and overlay filters read the observatory latitude/longitude from the `ObservatoryLocation` section. Update these values to align the simulated sky with your deployment:
+  The synthetic all-sky generator and overlay filters read the observatory latitude/longitude from the `ObservatoryLocation` section. Update these values to align the simulated sky with your deployment and ensure the UI reflects the correct local time:
 
   ```json
   "ObservatoryLocation": {
     "LatitudeDegrees": 35.347,
-    "LongitudeDegrees": -113.878
+    "LongitudeDegrees": -113.878,
+    "TimeZoneId": "America/Phoenix"
   }
   ```
 
   > **West longitudes are negative.** Restart the service (or reload configuration) after changing the location so the cached star field is rebuilt.
+  > Provide `TimeZoneId` as either an IANA or Windows identifier. If the specified identifier is unavailable on the host operating system, SkyMonitor falls back to UTC and logs a warning.
 
 ### Runtime updates
 

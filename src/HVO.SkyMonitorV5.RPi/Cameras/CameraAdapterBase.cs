@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,9 +20,11 @@ namespace HVO.SkyMonitorV5.RPi.Cameras;
 public abstract class CameraAdapterBase : ICameraAdapter
 {
     private bool _initialized;
+    private readonly IObservatoryClock? _observatoryClock;
 
     protected CameraAdapterBase(
         RigSpec rig,
+        IObservatoryClock? observatoryClock = null,
         ILogger? logger = null)
     {
         Rig = rig ?? throw new ArgumentNullException(nameof(rig));
@@ -29,6 +32,7 @@ public abstract class CameraAdapterBase : ICameraAdapter
         {
             throw new ArgumentException("Rig specification must include a camera descriptor.", nameof(rig));
         }
+        _observatoryClock = observatoryClock;
         Logger = logger ?? NullLogger.Instance;
     }
 
@@ -183,10 +187,11 @@ public abstract class CameraAdapterBase : ICameraAdapter
     {
         if (frame.StarCount is int stars && frame.PlanetCount is int planets)
         {
+            var timestampLocal = _observatoryClock?.ToLocal(capturedImage.Timestamp) ?? capturedImage.Timestamp.ToLocalTime();
             Logger.LogTrace(
-                "Adapter {Adapter} captured frame at {TimestampUtc} with exposure {ExposureMs} ms, gain {Gain}, stars {StarCount}, planets {PlanetCount}.",
+                "Adapter {Adapter} captured frame at {TimestampLocal} with exposure {ExposureMs} ms, gain {Gain}, stars {StarCount}, planets {PlanetCount}.",
                 GetType().Name,
-                capturedImage.Timestamp.UtcDateTime,
+                timestampLocal,
                 capturedImage.Exposure.ExposureMilliseconds,
                 capturedImage.Exposure.Gain,
                 stars,
@@ -194,10 +199,11 @@ public abstract class CameraAdapterBase : ICameraAdapter
             return;
         }
 
+        var fallbackTimestampLocal = _observatoryClock?.ToLocal(capturedImage.Timestamp) ?? capturedImage.Timestamp.ToLocalTime();
         Logger.LogTrace(
-            "Adapter {Adapter} captured frame at {TimestampUtc} with exposure {ExposureMs} ms, gain {Gain}.",
+            "Adapter {Adapter} captured frame at {TimestampLocal} with exposure {ExposureMs} ms, gain {Gain}.",
             GetType().Name,
-            capturedImage.Timestamp.UtcDateTime,
+            fallbackTimestampLocal,
             capturedImage.Exposure.ExposureMilliseconds,
             capturedImage.Exposure.Gain);
     }

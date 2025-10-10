@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Threading;
-using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Storage;
 
@@ -15,6 +16,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private readonly object _sync = new();
     private readonly ILogger<FrameStateStore>? _logger;
     private readonly IDisposable? _optionsReloadSubscription;
+    private readonly IObservatoryClock _clock;
 
     private CameraConfiguration _configuration;
     private int _configurationVersion;
@@ -29,7 +31,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private readonly Queue<BackgroundStackerHistorySample> _backgroundStackerHistory = new();
     private const int BackgroundStackerHistoryCapacity = 720;
 
-    public FrameStateStore(IOptionsMonitor<CameraPipelineOptions> optionsMonitor, ILogger<FrameStateStore>? logger = null)
+    public FrameStateStore(IOptionsMonitor<CameraPipelineOptions> optionsMonitor, IObservatoryClock clock, ILogger<FrameStateStore>? logger = null)
     {
         if (optionsMonitor is null)
         {
@@ -37,6 +39,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
 
         _logger = logger;
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _configuration = CameraConfiguration.FromOptions(optionsMonitor.CurrentValue);
     _optionsReloadSubscription = optionsMonitor.OnChange(OnPipelineOptionsChanged);
     }
@@ -165,9 +168,12 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             {
                 _latestRawFrame.Image.Dispose();
             }
-            _latestRawFrame = rawFrame;
-            _latestProcessedFrame = processedFrame;
-            _lastFrameTimestamp = processedFrame.Timestamp;
+            var localizedRaw = rawFrame with { Timestamp = _clock.ToLocal(rawFrame.Timestamp) };
+            var localizedProcessed = processedFrame with { Timestamp = _clock.ToLocal(processedFrame.Timestamp) };
+
+            _latestRawFrame = localizedRaw;
+            _latestProcessedFrame = localizedProcessed;
+            _lastFrameTimestamp = localizedProcessed.Timestamp;
         }
     }
 
@@ -205,8 +211,14 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
 
         lock (_sync)
         {
-            _backgroundStackerStatus = status;
-            EnqueueBackgroundStackerSample(status);
+            var localizedStatus = status with
+            {
+                LastEnqueuedAt = status.LastEnqueuedAt is { } enqueued ? _clock.ToLocal(enqueued) : null,
+                LastCompletedAt = status.LastCompletedAt is { } completed ? _clock.ToLocal(completed) : null
+            };
+
+            _backgroundStackerStatus = localizedStatus;
+            EnqueueBackgroundStackerSample(localizedStatus);
         }
     }
 
@@ -271,7 +283,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private void EnqueueBackgroundStackerSample(BackgroundStackerStatus status)
     {
         var sample = new BackgroundStackerHistorySample(
-            Timestamp: DateTimeOffset.UtcNow,
+            Timestamp: _clock.LocalNow,
             QueueFillPercentage: status.QueueFillPercentage,
             QueueDepth: status.QueueDepth,
             QueueCapacity: status.QueueCapacity,

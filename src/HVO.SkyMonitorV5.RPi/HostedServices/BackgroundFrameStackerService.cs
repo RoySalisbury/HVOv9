@@ -4,6 +4,7 @@ using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -26,6 +27,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
     private readonly IFrameStacker _frameStacker;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly IFrameStateStore _frameStateStore;
+    private readonly IObservatoryClock _clock;
     private readonly IFrameStackerConfigurationListener? _frameStackerConfigurationListener;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private IDisposable? _optionsReloadSubscription;
@@ -77,12 +79,14 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         IFrameStacker frameStacker,
         IFrameFilterPipeline frameFilterPipeline,
         IFrameStateStore frameStateStore,
+        IObservatoryClock clock,
         ILogger<BackgroundFrameStackerService> logger)
     {
         _optionsMonitor = optionsMonitor;
         _frameStacker = frameStacker;
         _frameFilterPipeline = frameFilterPipeline;
         _frameStateStore = frameStateStore;
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger;
         _frameStackerConfigurationListener = frameStacker as IFrameStackerConfigurationListener;
 
@@ -772,6 +776,8 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
             ? Math.Max(0d, (DateTimeOffset.UtcNow - completed).TotalSeconds)
             : null;
         var queuePressure = Math.Clamp(Volatile.Read(ref _queuePressureBucket), 0, 3);
+    DateTimeOffset? lastEnqueuedAt = _lastEnqueuedAt is { } enqueued ? _clock.ToLocal(enqueued) : null;
+    DateTimeOffset? lastCompletedAt = _lastCompletedAt is { } completedTimestamp ? _clock.ToLocal(completedTimestamp) : null;
 
         return new BackgroundStackerStatus(
             Enabled: IsEnabled,
@@ -781,8 +787,8 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
             ProcessedFrameCount: processed,
             DroppedFrameCount: dropped,
             LastFrameNumber: _lastProcessedFrameNumber,
-            LastEnqueuedAt: _lastEnqueuedAt,
-            LastCompletedAt: _lastCompletedAt,
+            LastEnqueuedAt: lastEnqueuedAt,
+            LastCompletedAt: lastCompletedAt,
             LastQueueLatencyMilliseconds: _lastQueueLatencyMs > 0 ? _lastQueueLatencyMs : null,
             AverageQueueLatencyMilliseconds: avgQueueLatency,
             MaxQueueLatencyMilliseconds: _maxQueueLatencyMs > 0 ? _maxQueueLatencyMs : null,
