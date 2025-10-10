@@ -26,6 +26,8 @@ using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using System.IO;
 using System.Text.Json.Serialization;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 namespace HVO.SkyMonitorV5.RPi;
 
@@ -182,16 +184,29 @@ public static class Program
         services.AddHostedService(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
 
         services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
-    services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
+        services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
         services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
         services.AddSingleton<IFrameFilter, OverlayTextFilter>();
         services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();
 
-        services.AddSingleton<IFrameFilterPipeline, FrameFilterPipeline>();
+        services.AddSingleton<FrameFilterPipeline>();
+        services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
+        services.AddSingleton<IDiagnosticsService, DiagnosticsService>();
 
         RegisterCameraAdapters(services, configuration);
 
         services.AddHostedService<AllSkyCaptureService>();
+        
+        services.AddOpenTelemetry()
+            .WithMetrics(builder =>
+            {
+                builder.ConfigureResource(resourceBuilder => resourceBuilder.AddService(
+                    serviceName: "HVO.SkyMonitorV5.RPi",
+                    serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0"));
+
+                builder.AddMeter("HVO.SkyMonitor.BackgroundStacker");
+                builder.AddPrometheusExporter();
+            });
     }
 
     private static void RegisterCameraAdapters(IServiceCollection services, IConfiguration configuration)
@@ -317,6 +332,7 @@ public static class Program
 
         app.MapStaticAssets();
         app.MapControllers();
+        app.MapPrometheusScrapingEndpoint("/metrics/prometheus");
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
@@ -353,6 +369,5 @@ public static class Program
         {
             Predicate = check => check.Tags.Contains("database")
         });
-
     }
 }

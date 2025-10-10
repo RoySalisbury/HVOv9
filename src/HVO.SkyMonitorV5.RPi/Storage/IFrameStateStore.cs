@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 
@@ -23,6 +24,8 @@ public interface IFrameStateStore
 
     Exception? LastError { get; }
 
+    BackgroundStackerStatus? BackgroundStackerStatus { get; }
+
     void UpdateConfiguration(CameraConfiguration configuration);
 
     void UpdateFrame(RawFrameSnapshot rawFrame, ProcessedFrame processedFrame);
@@ -32,6 +35,10 @@ public interface IFrameStateStore
     void UpdateRig(RigSpec rig);
 
     void SetLastError(Exception? exception);
+
+    void UpdateBackgroundStackerStatus(BackgroundStackerStatus status);
+
+    IReadOnlyList<BackgroundStackerHistorySample> GetBackgroundStackerHistory();
 
     AllSkyStatusResponse GetStatus();
 }

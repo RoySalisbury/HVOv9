@@ -24,6 +24,9 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private Exception? _lastError;
     private CameraDescriptor? _cameraDescriptor;
     private RigSpec? _rigSpec;
+    private BackgroundStackerStatus? _backgroundStackerStatus;
+    private readonly Queue<BackgroundStackerHistorySample> _backgroundStackerHistory = new();
+    private const int BackgroundStackerHistoryCapacity = 720;
 
     public FrameStateStore(IOptionsMonitor<CameraPipelineOptions> optionsMonitor, ILogger<FrameStateStore>? logger = null)
     {
@@ -127,6 +130,17 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
     }
 
+    public BackgroundStackerStatus? BackgroundStackerStatus
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _backgroundStackerStatus;
+            }
+        }
+    }
+
     public void UpdateConfiguration(CameraConfiguration configuration)
     {
         if (configuration is null)
@@ -181,6 +195,33 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
     }
 
+    public void UpdateBackgroundStackerStatus(BackgroundStackerStatus status)
+    {
+        if (status is null)
+        {
+            throw new ArgumentNullException(nameof(status));
+        }
+
+        lock (_sync)
+        {
+            _backgroundStackerStatus = status;
+            EnqueueBackgroundStackerSample(status);
+        }
+    }
+
+    public IReadOnlyList<BackgroundStackerHistorySample> GetBackgroundStackerHistory()
+    {
+        lock (_sync)
+        {
+            if (_backgroundStackerHistory.Count == 0)
+            {
+                return Array.Empty<BackgroundStackerHistorySample>();
+            }
+
+            return _backgroundStackerHistory.ToArray();
+        }
+    }
+
     public void Dispose()
     {
     _optionsReloadSubscription?.Dispose();
@@ -206,8 +247,31 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 Camera: descriptor,
                 Configuration: _configuration,
                 ProcessedFrame: CreateSummary(_latestProcessedFrame),
-                Rig: rig);
+                Rig: rig,
+                BackgroundStacker: _backgroundStackerStatus);
         }
+    }
+
+    private void EnqueueBackgroundStackerSample(BackgroundStackerStatus status)
+    {
+        var sample = new BackgroundStackerHistorySample(
+            Timestamp: DateTimeOffset.UtcNow,
+            QueueFillPercentage: status.QueueFillPercentage,
+            QueueDepth: status.QueueDepth,
+            QueueCapacity: status.QueueCapacity,
+            QueueLatencyMilliseconds: status.LastQueueLatencyMilliseconds,
+            StackDurationMilliseconds: status.LastStackMilliseconds,
+            FilterDurationMilliseconds: status.LastFilterMilliseconds,
+            QueuePressureLevel: status.QueuePressureLevel,
+            SecondsSinceLastCompleted: status.SecondsSinceLastCompleted,
+            QueueMemoryMegabytes: status.QueueMemoryMegabytes);
+
+        if (_backgroundStackerHistory.Count >= BackgroundStackerHistoryCapacity)
+        {
+            _backgroundStackerHistory.Dequeue();
+        }
+
+        _backgroundStackerHistory.Enqueue(sample);
     }
 
     private void OnPipelineOptionsChanged(CameraPipelineOptions options)

@@ -21,10 +21,12 @@ public sealed class AllSkyCaptureService : BackgroundService
     private readonly IFrameStackerConfigurationListener? _frameStackerConfigurationListener;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly IFrameStateStore _frameStateStore;
+    private readonly IBackgroundFrameStacker _backgroundFrameStacker;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
 
     private const int MinimumFrameDelayMilliseconds = 250;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(10);
+    private int _frameNumber;
 
     public AllSkyCaptureService(
         ILogger<AllSkyCaptureService> logger,
@@ -33,6 +35,7 @@ public sealed class AllSkyCaptureService : BackgroundService
         IFrameStacker frameStacker,
         IFrameFilterPipeline frameFilterPipeline,
         IFrameStateStore frameStateStore,
+        IBackgroundFrameStacker backgroundFrameStacker,
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor)
     {
         _logger = logger;
@@ -42,6 +45,7 @@ public sealed class AllSkyCaptureService : BackgroundService
     _frameStackerConfigurationListener = frameStacker as IFrameStackerConfigurationListener;
         _frameFilterPipeline = frameFilterPipeline;
         _frameStateStore = frameStateStore;
+        _backgroundFrameStacker = backgroundFrameStacker;
         _optionsMonitor = optionsMonitor;
     }
 
@@ -98,12 +102,14 @@ public sealed class AllSkyCaptureService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            configurationVersion = CheckForConfigurationUpdates(configurationVersion, ref configuration);
+            var usingBackgroundStacker = _backgroundFrameStacker.IsEnabled;
+            configurationVersion = CheckForConfigurationUpdates(configurationVersion, ref configuration, usingBackgroundStacker);
 
             var frameStopwatch = Stopwatch.StartNew();
             double captureMs = 0;
             double stackMs = 0;
             double filterMs = 0;
+            double enqueueMs = 0;
 
             var exposure = _exposureController.CreateNextExposure(configuration);
             _logger.LogTrace("Prepared exposure {ExposureMs}ms / Gain {Gain}", exposure.ExposureMilliseconds, exposure.Gain);
@@ -119,74 +125,146 @@ public sealed class AllSkyCaptureService : BackgroundService
             }
 
             var capturedFrame = captureResult.Value;
-            var stackStopwatch = Stopwatch.StartNew();
-            var stackResult = _frameStacker.Accumulate(capturedFrame, configuration);
-            stackStopwatch.Stop();
-            stackMs = stackStopwatch.Elapsed.TotalMilliseconds;
-            var frameContext = stackResult.Context;
-            var frameStored = false;
+            var frameNumber = ++_frameNumber;
+            var enqueued = false;
 
-            try
+            if (usingBackgroundStacker)
             {
-                var filterStopwatch = Stopwatch.StartNew();
-                var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
-                filterStopwatch.Stop();
-                filterMs = filterStopwatch.Elapsed.TotalMilliseconds;
+                var workItem = new StackingWorkItem(frameNumber, capturedFrame, configuration, configurationVersion, DateTimeOffset.UtcNow);
+                var enqueueStopwatch = Stopwatch.StartNew();
+                enqueued = await _backgroundFrameStacker.EnqueueAsync(workItem, stoppingToken);
+                enqueueStopwatch.Stop();
+                enqueueMs = enqueueStopwatch.Elapsed.TotalMilliseconds;
 
-                processedFrame = processedFrame with
+                if (!enqueued)
                 {
-                    ProcessingMilliseconds = (int)Math.Clamp(filterStopwatch.ElapsedMilliseconds, 0, int.MaxValue)
-                };
-
-                _frameStateStore.UpdateFrame(
-                    new RawFrameSnapshot(stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),
-                    processedFrame);
-                _frameStateStore.SetLastError(null);
-                frameStored = true;
-
-                if (!ReferenceEquals(stackResult.StackedImage, stackResult.OriginalImage))
-                {
-                    stackResult.StackedImage.Dispose();
+                    _logger.LogWarning(
+                        "Background stacker rejected frame #{FrameNumber}; falling back to synchronous processing.",
+                        frameNumber);
                 }
-
-                frameStopwatch.Stop();
-                var totalMs = frameStopwatch.Elapsed.TotalMilliseconds;
-
-                var captureInterval = _optionsMonitor.CurrentValue.CaptureIntervalMilliseconds;
-                var remainingMs = captureInterval - (int)Math.Round(totalMs);
-                var delayMs = Math.Max(remainingMs, 0);
-                if (delayMs < MinimumFrameDelayMilliseconds)
-                {
-                    delayMs = MinimumFrameDelayMilliseconds;
-                }
-
-                if (_logger.IsEnabled(LogLevel.Debug))
-                {
-                    _logger.LogDebug(
-                        "Captured frame at {Timestamp} (capture {CaptureMs:F1}ms, stack {StackMs:F1}ms, filters {FilterMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
-                        processedFrame.Timestamp,
-                        captureMs,
-                        stackMs,
-                        filterMs,
-                        totalMs,
-            delayMs);
-                }
-
-        await DelayWithCancellation(TimeSpan.FromMilliseconds(delayMs), stoppingToken);
             }
-            finally
+
+            if (!usingBackgroundStacker || !enqueued)
             {
-                if (!frameStored)
-                {
-                    stackResult.OriginalImage.Dispose();
-                }
-
-                frameContext?.Dispose();
+                var (stack, filter) = await ProcessFrameSynchronouslyAsync(capturedFrame, configuration, stoppingToken);
+                stackMs = stack;
+                filterMs = filter;
             }
+
+            frameStopwatch.Stop();
+            var totalMs = frameStopwatch.Elapsed.TotalMilliseconds;
+
+            var captureInterval = _optionsMonitor.CurrentValue.CaptureIntervalMilliseconds;
+            var remainingMs = captureInterval - (int)Math.Round(totalMs);
+            var delayMs = Math.Max(remainingMs, 0);
+            if (delayMs < MinimumFrameDelayMilliseconds)
+            {
+                delayMs = MinimumFrameDelayMilliseconds;
+            }
+
+            if (usingBackgroundStacker && enqueued)
+            {
+                _logger.LogDebug(
+                    "Captured frame #{FrameNumber} at {Timestamp} (capture {CaptureMs:F1}ms, enqueue {EnqueueMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
+                    frameNumber,
+                    capturedFrame.Timestamp,
+                    captureMs,
+                    enqueueMs,
+                    totalMs,
+                    delayMs);
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "Captured frame #{FrameNumber} at {Timestamp} (capture {CaptureMs:F1}ms, stack {StackMs:F1}ms, filters {FilterMs:F1}ms, total {TotalMs:F1}ms). Next capture in {Delay}ms.",
+                    frameNumber,
+                    capturedFrame.Timestamp,
+                    captureMs,
+                    stackMs,
+                    filterMs,
+                    totalMs,
+                    delayMs);
+            }
+
+            await DelayWithCancellation(TimeSpan.FromMilliseconds(delayMs), stoppingToken);
         }
     }
 
-    private int CheckForConfigurationUpdates(int currentVersion, ref CameraConfiguration configuration)
+    private async Task<(double StackMilliseconds, double FilterMilliseconds)> ProcessFrameSynchronouslyAsync(
+        CapturedImage capturedFrame,
+        CameraConfiguration configuration,
+        CancellationToken stoppingToken)
+    {
+        var stackStopwatch = Stopwatch.StartNew();
+        var stackResult = _frameStacker.Accumulate(capturedFrame, configuration);
+        stackStopwatch.Stop();
+        var stackMs = stackStopwatch.Elapsed.TotalMilliseconds;
+
+        var frameContext = stackResult.Context;
+        var frameStored = false;
+
+        try
+        {
+            var filterStopwatch = Stopwatch.StartNew();
+            var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
+            filterStopwatch.Stop();
+            var filterMs = filterStopwatch.Elapsed.TotalMilliseconds;
+
+            processedFrame = processedFrame with
+            {
+                ProcessingMilliseconds = (int)Math.Clamp(filterStopwatch.ElapsedMilliseconds, 0, int.MaxValue)
+            };
+
+            _frameStateStore.UpdateFrame(
+                new RawFrameSnapshot(stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),
+                processedFrame);
+            _frameStateStore.SetLastError(null);
+            frameStored = true;
+
+            if (!ReferenceEquals(stackResult.StackedImage, stackResult.OriginalImage))
+            {
+                stackResult.StackedImage.Dispose();
+            }
+
+            return (stackMs, filterMs);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            if (!ReferenceEquals(stackResult.StackedImage, stackResult.OriginalImage))
+            {
+                stackResult.StackedImage.Dispose();
+            }
+
+            if (!frameStored)
+            {
+                stackResult.OriginalImage.Dispose();
+            }
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process frame synchronously.");
+            _frameStateStore.SetLastError(ex);
+
+            if (!ReferenceEquals(stackResult.StackedImage, stackResult.OriginalImage))
+            {
+                stackResult.StackedImage.Dispose();
+            }
+
+            if (!frameStored)
+            {
+                stackResult.OriginalImage.Dispose();
+            }
+
+            return (stackMs, 0);
+        }
+        finally
+        {
+            frameContext?.Dispose();
+        }
+    }
+
+    private int CheckForConfigurationUpdates(int currentVersion, ref CameraConfiguration configuration, bool usingBackgroundStacker)
     {
         var latestVersion = _frameStateStore.ConfigurationVersion;
         if (latestVersion != currentVersion)
@@ -194,15 +272,22 @@ public sealed class AllSkyCaptureService : BackgroundService
             var previousConfiguration = configuration;
             configuration = _frameStateStore.Configuration;
 
-            if (_frameStackerConfigurationListener is null)
+            if (!usingBackgroundStacker)
             {
-                _frameStacker.Reset();
-                _logger.LogInformation("Camera configuration updated. Frame stacker has been reset.");
+                if (_frameStackerConfigurationListener is null)
+                {
+                    _frameStacker.Reset();
+                    _logger.LogInformation("Camera configuration updated. Frame stacker has been reset.");
+                }
+                else
+                {
+                    _frameStackerConfigurationListener.OnConfigurationChanged(previousConfiguration, configuration);
+                    _logger.LogInformation("Camera configuration updated. Frame stacker configuration listener invoked.");
+                }
             }
             else
             {
-                _frameStackerConfigurationListener.OnConfigurationChanged(previousConfiguration, configuration);
-                _logger.LogInformation("Camera configuration updated. Frame stacker configuration listener invoked.");
+                _logger.LogInformation("Camera configuration updated. Background stacker will apply the new settings on the next frame.");
             }
             return latestVersion;
         }

@@ -7,4 +7,5 @@ public sealed record StackingWorkItem(
     int FrameNumber,
     CapturedImage Capture,
     CameraConfiguration ConfigurationSnapshot,
+    int ConfigurationVersion,
     DateTimeOffset EnqueuedAt);

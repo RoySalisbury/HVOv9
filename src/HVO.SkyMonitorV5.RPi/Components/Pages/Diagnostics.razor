@@ -1,0 +1,268 @@
+@page "/diagnostics"
+@using Microsoft.AspNetCore.Components.Routing
+
+<PageTitle>Diagnostics Dashboard</PageTitle>
+
+<section class="diagnostics-page container py-5">
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="display-5 text-light mb-0">Diagnostics Dashboard</h1>
+            <p class="text-muted mb-0">Background stacker and filter telemetry updated every few seconds.</p>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-3 status-panel">
+            @if (LastUpdatedDisplay is not null)
+            {
+                <span class="text-muted small">Last updated: <strong class="text-light">@LastUpdatedDisplay</strong></span>
+            }
+            <button class="btn btn-outline-info btn-sm" @onclick="RefreshNowAsync" disabled="@IsLoading">
+                <span class="bi bi-arrow-clockwise me-1" aria-hidden="true"></span>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-warning border-warning-subtle text-warning-emphasis bg-warning-subtle">
+            <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+            @ErrorMessage
+        </div>
+    }
+
+    @if (IsLoading && StackerMetrics is null)
+    {
+        <div class="loading-state text-center py-5">
+            <div class="spinner-border text-info" role="status" aria-hidden="true"></div>
+            <p class="mt-3 text-muted">Loading diagnostics...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-xl-4 col-lg-6">
+                <div class="card bg-dark border-secondary h-100 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="section-title">Queue Utilization</h2>
+                        <div class="gauge-wrapper">
+                            <div class="gauge" style="@QueueFillGaugeStyle">
+                                <div class="gauge-inner">
+                                    <span class="gauge-value">@QueueFillPercentageDisplay</span>
+                                    <span class="gauge-label">current</span>
+                                </div>
+                            </div>
+                        </div>
+                        <dl class="metric-list">
+                            <div class="metric-row">
+                                <dt>Depth</dt>
+                                <dd>@QueueDepthSummary</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Peak depth</dt>
+                                <dd>@PeakQueueDepthSummary</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Peak fill</dt>
+                                <dd>@PeakQueueFillDisplay</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Queue pressure</dt>
+                                <dd>@QueuePressureDisplay</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Seconds since last frame</dt>
+                                <dd>@SecondsSinceLastCompletedDisplay</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6">
+                <div class="card bg-dark border-secondary h-100 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="section-title">Processing</h2>
+                        <dl class="metric-list">
+                            <div class="metric-row">
+                                <dt>Processed frames</dt>
+                                <dd>@ProcessedFrameCountDisplay</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Dropped frames</dt>
+                                <dd>@DroppedFrameCountDisplay</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Last stack</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.LastStackMilliseconds)</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Avg stack</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.AverageStackMilliseconds)</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Last filter run</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.LastFilterMilliseconds)</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Avg filter run</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.AverageFilterMilliseconds)</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card bg-dark border-secondary h-100 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="section-title">Memory &amp; Latency</h2>
+                        <dl class="metric-list">
+                            <div class="metric-row">
+                                <dt>Queue memory</dt>
+                                <dd>@QueueMemorySummary</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Peak memory</dt>
+                                <dd>@PeakQueueMemorySummary</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Last queue latency</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.LastQueueLatencyMilliseconds)</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Avg queue latency</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.AverageQueueLatencyMilliseconds)</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Max queue latency</dt>
+                                <dd>@FormatMilliseconds(StackerMetrics?.MaxQueueLatencyMilliseconds)</dd>
+                            </div>
+                            <div class="metric-row">
+                                <dt>Last frame number</dt>
+                                <dd>@LastFrameNumberDisplay</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-1">
+            <div class="col-xl-4 col-lg-6">
+                <div class="card bg-dark border-secondary h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="section-title mb-0">Queue fill trend</h2>
+                            <span class="badge bg-outline">@HistoryDurationDisplay</span>
+                        </div>
+                        <div class="chart-wrapper mt-3">
+                            @if (string.IsNullOrEmpty(QueueFillHistoryPoints))
+                            {
+                                <div class="chart-empty text-muted">History will appear here once metrics roll in.</div>
+                            }
+                            else
+                            {
+                                <svg class="history-chart" viewBox="0 0 100 40" preserveAspectRatio="none">
+                                    <polyline class="chart-background" points="0,40 100,40" />
+                                    <polyline class="chart-line" points="@QueueFillHistoryPoints" />
+                                </svg>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6">
+                <div class="card bg-dark border-secondary h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="section-title mb-0">Queue latency</h2>
+                            <span class="badge bg-outline">@LatencyMaxDisplay</span>
+                        </div>
+                        <div class="chart-wrapper mt-3">
+                            @if (string.IsNullOrEmpty(QueueLatencyHistoryPoints))
+                            {
+                                <div class="chart-empty text-muted">Latency history will appear after the first few samples.</div>
+                            }
+                            else
+                            {
+                                <svg class="history-chart" viewBox="0 0 100 40" preserveAspectRatio="none">
+                                    <polyline class="chart-line chart-line--accent" points="@QueueLatencyHistoryPoints" />
+                                </svg>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card bg-dark border-secondary h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="section-title mb-0">Stack duration</h2>
+                            <span class="badge bg-outline">@StackDurationMaxDisplay</span>
+                        </div>
+                        <div class="chart-wrapper mt-3">
+                            @if (string.IsNullOrEmpty(StackDurationHistoryPoints))
+                            {
+                                <div class="chart-empty text-muted">Stack duration history will appear after the first few samples.</div>
+                            }
+                            else
+                            {
+                                <svg class="history-chart" viewBox="0 0 100 40" preserveAspectRatio="none">
+                                    <polyline class="chart-line chart-line--success" points="@StackDurationHistoryPoints" />
+                                </svg>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-dark border-secondary mt-4 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h2 class="section-title mb-0">Filter telemetry</h2>
+                        <p class="text-muted small mb-0">Average durations are compared relative to the busiest filter.</p>
+                    </div>
+                    <span class="badge bg-outline">@FilterSummaryDisplay</span>
+                </div>
+
+                @if (FilterMetricsSnapshot?.Filters.Count > 0)
+                {
+                    <div class="filter-list mt-4">
+                        @foreach (var filter in FilterMetricsSnapshot.Filters)
+                        {
+                            <div class="filter-row">
+                                <div class="filter-name">@filter.FilterName</div>
+                                <div class="filter-bar">
+                                    <div class="filter-bar-fill" style="@GetFilterBarStyle(filter)"></div>
+                                </div>
+                                <div class="filter-stats">
+                                    <span class="stat">
+                                        <span class="label">avg</span>
+                                        <span class="value">@FormatMilliseconds(filter.AverageDurationMilliseconds)</span>
+                                    </span>
+                                    <span class="stat">
+                                        <span class="label">last</span>
+                                        <span class="value">@FormatMilliseconds(filter.LastDurationMilliseconds)</span>
+                                    </span>
+                                    <span class="stat">
+                                        <span class="label">applied</span>
+                                        <span class="value">@FormatCount(filter.AppliedCount)</span>
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="chart-empty text-muted mt-3">
+                        Filter metrics will appear once the pipeline processes frames.
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</section>

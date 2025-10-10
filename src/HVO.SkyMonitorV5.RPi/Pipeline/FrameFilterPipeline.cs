@@ -21,6 +21,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
     {
         private readonly IEnumerable<IFrameFilter> _filters;
         private readonly ILogger<FrameFilterPipeline> _logger;
+        private readonly FilterTelemetryStore _telemetryStore = new();
 
         public FrameFilterPipeline(IEnumerable<IFrameFilter> filters, ILogger<FrameFilterPipeline> logger)
         {
@@ -98,7 +99,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         if (filterTimings is not null && filterStopwatch is not null)
                         {
                             filterStopwatch.Stop();
-                            filterTimings.Add(new FilterTiming(filter.Name, filterStopwatch.Elapsed.TotalMilliseconds));
+                            var duration = filterStopwatch.Elapsed.TotalMilliseconds;
+                            filterTimings.Add(new FilterTiming(filter.Name, duration));
+                            _telemetryStore.Record(filter.Name, duration);
                         }
                     }
                     catch (OperationCanceledException)
@@ -153,7 +156,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 ProcessingMilliseconds: 0);
         }
 
-        private static bool IsFilterEnabled(CameraConfiguration configuration, string filterName)
+    public FilterMetricsSnapshot GetMetricsSnapshot() => _telemetryStore.Snapshot();
+
+    private static bool IsFilterEnabled(CameraConfiguration configuration, string filterName)
         {
             var filters = configuration.FrameFilters;
             if (filters is null || filters.Count == 0)

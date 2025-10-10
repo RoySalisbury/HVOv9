@@ -1,10 +1,15 @@
 # SkyMonitor Background Stacker Design
 
-_Last updated: 2025-10-08_
+_Last updated: 2025-10-09_
 
 ## Objective
 
 Move the RollingFrameStacker work off the capture loop thread so that capture cadence is governed by the configured interval rather than the per-frame stacking cost. The background worker must preserve current stacking semantics (sliding window of the most recent frames) while providing hooks for future consumers (disk writer, timelapse encoder/exporter, livestream encoder, meteor detection, AI inspection).
+
+## Working Agreements
+
+- Focus all implementation work within the `HVO.SkyMonitorV5.RPi` project, only touching other projects when they are direct dependencies required by SkyMonitor V5.
+- Defer adding or expanding test coverage until the end of the current phase unless a targeted test is necessary to validate an in-flight change.
 
 ## Success Criteria
 
@@ -98,6 +103,19 @@ Two options:
    - Add structured logs for queue depth, stack duration, and enqueued-to-processed latency.
    - Optionally wire counters into `FrameStateStore` for UI inspection.
    - Include memory usage estimates (bytes in queue, compression hit rate) to evaluate whether compression/queue sizing needs adjustment.
+
+   ✅ Queue depth, latency, and drop metrics are now tracked in `BackgroundFrameStackerService`, published through `FrameStateStore`, and surfaced on the SkyMonitor UI.
+   ✅ Queue memory consumption and peak queue depth are tracked, exposed via the status API, and rendered on the dashboard.
+   ✅ Diagnostics metrics endpoint (`/api/v1.0/diagnostics/background-stacker`) added for external tooling and future dashboard widgets.
+   ✅ Metrics are exported through `System.Diagnostics.Metrics` (counters, histograms, gauges) so Prometheus/OpenTelemetry collectors can scrape stacker performance.
+
+## Follow-Up Backlog
+
+- Resolve the frequent filter annotation warnings (`DestroyAllActors`, `DestroyLowStamp`) so the capture logs stay clear of false alarms.
+- Wire Prometheus/OpenTelemetry exporters to publish the existing meter instrumentation and then run sustained stress/backpressure sessions to validate queue behavior under load.
+- ✅ Expand the diagnostics dashboard with backend-provided historical windows once the exporter is available, so charts can show longer trendlines beyond the live in-memory samples.
+- Add camera capability metadata (Color/Monochrome, Cooled, etc.) to the SkyMonitor UI alongside the pipeline details.
+- Schedule longer live runs to compare UI telemetry with raw log output and confirm queue pressure thresholds behave as expected.
 
 7. **Testing**
    - Unit-test queue overflow policies with a fake stacker.

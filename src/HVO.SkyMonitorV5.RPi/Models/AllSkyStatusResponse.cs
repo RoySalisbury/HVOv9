@@ -12,4 +12,5 @@ public sealed record AllSkyStatusResponse(
     CameraDescriptor Camera,
     CameraConfiguration Configuration,
     ProcessedFrameSummary? ProcessedFrame,
-    RigSpec? Rig);
+    RigSpec? Rig,
+    BackgroundStackerStatus? BackgroundStacker);

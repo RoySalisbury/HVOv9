@@ -319,6 +319,131 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
     }
 
+    private BackgroundStackerStatus? BackgroundStackerStatus => _status?.BackgroundStacker;
+
+    private string BackgroundWorkerSummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            return status.Enabled
+                ? FormattableString.Invariant($"Enabled · {status.ProcessedFrameCount} frames processed")
+                : "Disabled";
+        }
+    }
+
+    private string BackgroundQueueDepthSummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            var capacity = Math.Max(1, status.QueueCapacity);
+            var fill = status.QueueDepth / (double)capacity;
+
+            return FormattableString.Invariant($"{status.QueueDepth}/{capacity} ({fill:P0})");
+        }
+    }
+
+    private string BackgroundQueuePeakSummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            var capacity = Math.Max(1, status.QueueCapacity);
+            var peak = Math.Clamp(status.PeakQueueDepth, 0, capacity);
+
+            return FormattableString.Invariant($"{peak}/{capacity}");
+        }
+    }
+
+    private string BackgroundQueueMemorySummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            var current = FormatBytes(status.QueueMemoryBytes);
+            var peak = FormatBytes(status.PeakQueueMemoryBytes);
+
+            return FormattableString.Invariant($"{current} (peak {peak})");
+        }
+    }
+
+    private string BackgroundQueueLatencySummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            var last = FormatLatency(status.LastQueueLatencyMilliseconds);
+            var average = FormatLatency(status.AverageQueueLatencyMilliseconds);
+
+            return FormattableString.Invariant($"Last {last} · Avg {average}");
+        }
+    }
+
+    private string BackgroundProcessingAverageSummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            var stack = FormatLatency(status.AverageStackMilliseconds);
+            var filter = FormatLatency(status.AverageFilterMilliseconds);
+
+            return FormattableString.Invariant($"Stack {stack} · Filter {filter}");
+        }
+    }
+
+    private string BackgroundDropSummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus is not { } status)
+            {
+                return "Not available";
+            }
+
+            return status.DroppedFrameCount > 0
+                ? FormattableString.Invariant($"{status.DroppedFrameCount} total")
+                : "None";
+        }
+    }
+
+    private string BackgroundLastCompletedSummary
+    {
+        get
+        {
+            if (BackgroundStackerStatus?.LastCompletedAt is not { } timestamp)
+            {
+                return "—";
+            }
+
+            return timestamp.ToLocalTime().ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
+        }
+    }
+
     private string FramesStackedSummary
     {
         get
@@ -379,5 +504,52 @@ public sealed partial class Home : ComponentBase, IDisposable
         return seconds < 0.1
             ? FormattableString.Invariant($"{minutes:0} min")
             : FormattableString.Invariant($"{minutes:0} min {seconds:0.0} s");
+    }
+
+    private static string FormatLatency(double? milliseconds)
+    {
+        if (milliseconds is null)
+        {
+            return "—";
+        }
+
+        if (milliseconds.Value <= 0)
+        {
+            return "0 ms";
+        }
+
+        if (milliseconds.Value < 1)
+        {
+            return FormattableString.Invariant($"{milliseconds.Value * 1_000:0.0} µs");
+        }
+
+        if (milliseconds.Value < 1_000)
+        {
+            return FormattableString.Invariant($"{milliseconds.Value:0.0} ms");
+        }
+
+        return FormattableString.Invariant($"{milliseconds.Value / 1_000:0.00} s");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 B";
+        }
+
+    string[] units = { "B", "KiB", "MiB", "GiB", "TiB" };
+        double value = bytes;
+        var unitIndex = 0;
+
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? FormattableString.Invariant($"{bytes} {units[unitIndex]}")
+            : FormattableString.Invariant($"{value:0.00} {units[unitIndex]}");
     }
 }
