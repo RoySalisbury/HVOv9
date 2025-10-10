@@ -35,6 +35,9 @@ _Last updated: 2025-10-07_
 - [x] Ensure `RollingFrameStacker` copies/merges `FrameContext` into the aggregated frame.
 - [x] Update `FrameFilterPipeline.ProcessAsync` to construct a `FrameRenderContext` from the stacked frame’s context and pass it to the new filter overload.
 - [x] Dispose of `FrameContext.Engine` after filters finish (or hand disposal back to the adapter via a callback).
+- _Considerations (addressed 2025-10-09):_
+  - The stacker now snapshots per-frame rig metadata and resets the buffer if a mismatch is detected, ensuring we never blend frames from divergent contexts.
+  - FrameContext disposal is centralized inside the filter pipeline, eliminating duplicate dispose paths in the capture and background services.
 
 ### Phase 4 – Filters & DI Cleanup
 - [x] Migrate filters (`CelestialAnnotationsFilter`, `CardinalDirectionsFilter`, etc.) to rely on the supplied `FrameRenderContext`.

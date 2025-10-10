@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
@@ -15,7 +16,15 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 /// </summary>
 public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurationListener
 {
-    private sealed record BufferedFrame(SKBitmap Image, ExposureSettings Exposure);
+    private sealed record BufferedFrame(SKBitmap Image, ExposureSettings Exposure, FrameMetadata? Metadata);
+
+    private sealed record FrameMetadata(
+        RigSpec Rig,
+        double LatitudeDeg,
+        double LongitudeDeg,
+        bool FlipHorizontal,
+        double? HorizonPadding,
+        bool ApplyRefraction);
 
     private static readonly double[] SrgbToLinearLut = CreateSrgbToLinearLut();
 
@@ -38,6 +47,9 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
     public FrameStackResult Accumulate(CapturedImage capture, CameraConfiguration configuration)
     {
         var frameContext = capture.Context;
+        var frameMetadata = frameContext is not null ? CreateMetadata(frameContext) : null;
+
+        EnsureBufferCompatibility(frameMetadata);
 
         if (!configuration.EnableStacking || configuration.StackingFrameCount <= 1)
         {
@@ -53,7 +65,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         }
 
         var bufferedBitmap = capture.Image.Copy() ?? throw new InvalidOperationException("Failed to copy captured bitmap for buffering.");
-        _buffer.Enqueue(new BufferedFrame(bufferedBitmap, capture.Exposure));
+        _buffer.Enqueue(new BufferedFrame(bufferedBitmap, capture.Exposure, frameMetadata));
         _bufferedIntegrationMilliseconds += capture.Exposure.ExposureMilliseconds;
 
         TrimBuffer(configuration);
@@ -338,6 +350,114 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 break;
             }
         }
+    }
+
+    private static FrameMetadata CreateMetadata(FrameContext context)
+        => new(
+            context.Rig,
+            context.LatitudeDeg,
+            context.LongitudeDeg,
+            context.FlipHorizontal,
+            context.HorizonPadding,
+            context.ApplyRefraction);
+
+    private void EnsureBufferCompatibility(FrameMetadata? metadata)
+    {
+        if (_buffer.Count == 0)
+        {
+            return;
+        }
+
+        var hasConflict = false;
+        string? bufferedRigName = null;
+
+        foreach (var buffered in _buffer)
+        {
+            if (IsFrameCompatible(metadata, buffered.Metadata))
+            {
+                continue;
+            }
+
+            hasConflict = true;
+            bufferedRigName = buffered.Metadata?.Rig.Name ?? "(none)";
+            break;
+        }
+
+        if (!hasConflict)
+        {
+            return;
+        }
+
+        if (_logger?.IsEnabled(LogLevel.Warning) == true)
+        {
+            _logger.LogWarning(
+                "Resetting frame stacker buffer due to mismatched frame metadata. Current rig: {CurrentRig}, Buffered rig: {BufferedRig}.",
+                metadata?.Rig.Name ?? "(none)",
+                bufferedRigName ?? "(none)");
+        }
+
+        DrainBuffer();
+    }
+
+    private static bool IsFrameCompatible(FrameMetadata? current, FrameMetadata? buffered)
+    {
+        if (current is null)
+        {
+            return buffered is null;
+        }
+
+        if (buffered is null)
+        {
+            return false;
+        }
+
+        return IsMetadataCompatible(current, buffered);
+    }
+
+    private static bool IsMetadataCompatible(FrameMetadata current, FrameMetadata buffered)
+    {
+        if (!Equals(current.Rig, buffered.Rig))
+        {
+            return false;
+        }
+
+        if (current.FlipHorizontal != buffered.FlipHorizontal || current.ApplyRefraction != buffered.ApplyRefraction)
+        {
+            return false;
+        }
+
+        if (!NullableDoubleEquals(current.HorizonPadding, buffered.HorizonPadding))
+        {
+            return false;
+        }
+
+        const double coordinateTolerance = 1e-6;
+        if (Math.Abs(current.LatitudeDeg - buffered.LatitudeDeg) > coordinateTolerance)
+        {
+            return false;
+        }
+
+        if (Math.Abs(current.LongitudeDeg - buffered.LongitudeDeg) > coordinateTolerance)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool NullableDoubleEquals(double? left, double? right)
+    {
+        if (left is null && right is null)
+        {
+            return true;
+        }
+
+        if (left is null || right is null)
+        {
+            return false;
+        }
+
+        return Math.Abs(left.Value - right.Value) <= 1e-6;
     }
 
     private IReadOnlyList<BufferedFrame> GetFramesForStack(int stackCount)

@@ -385,7 +385,6 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 return;
             }
 
-            var frameContext = stackResult.Context;
             var filterStopwatch = Stopwatch.StartNew();
             var frameStored = false;
             double filterMilliseconds = 0;
@@ -454,10 +453,6 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 }
 
                 RecordDroppedFrames(1, "filter pipeline failure");
-            }
-            finally
-            {
-                frameContext?.Dispose();
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

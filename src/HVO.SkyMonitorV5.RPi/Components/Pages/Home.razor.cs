@@ -227,7 +227,8 @@ public sealed partial class Home : ComponentBase, IDisposable
     {
         get
         {
-            if (_status?.Camera.Capabilities is { Count: > 0 } capabilities)
+            var camera = _status?.Summary?.Camera;
+            if (camera?.Capabilities is { Count: > 0 } capabilities)
             {
                 return string.Join(", ", capabilities);
             }
@@ -236,13 +237,13 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
     }
 
-    private string RigNameText => _status?.Rig?.Name ?? "Not reported";
+    private string RigNameText => _status?.Summary?.Rig?.Name ?? "Not reported";
 
     private string SensorSummaryText
     {
         get
         {
-            if (_status?.Rig?.Sensor is not { } sensor)
+            if (_status?.Summary?.Rig?.Sensor is not { } sensor)
             {
                 return "Not reported";
             }
@@ -256,7 +257,7 @@ public sealed partial class Home : ComponentBase, IDisposable
     {
         get
         {
-            if (_status?.Rig?.Lens is not { } lens)
+            if (_status?.Summary?.Rig?.Lens is not { } lens)
             {
                 return "Not reported";
             }

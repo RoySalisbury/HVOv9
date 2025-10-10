@@ -200,7 +200,6 @@ public sealed class AllSkyCaptureService : BackgroundService
         stackStopwatch.Stop();
         var stackMs = stackStopwatch.Elapsed.TotalMilliseconds;
 
-        var frameContext = stackResult.Context;
         var frameStored = false;
 
         try
@@ -257,10 +256,6 @@ public sealed class AllSkyCaptureService : BackgroundService
             }
 
             return (stackMs, 0);
-        }
-        finally
-        {
-            frameContext?.Dispose();
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -238,17 +239,32 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 AdapterName: "Unknown",
                 Capabilities: Array.Empty<string>());
 
-            var rig = _rigSpec;
+            var processedSummary = CreateProcessedSummary(_latestProcessedFrame);
+            var rawSummary = CreateRawSummary(_latestRawFrame);
+            var exposure = _latestRawFrame?.Exposure;
+            var rigSpec = _rigSpec;
+            var rig = CreateRigSummary(rigSpec);
+            var cameraSummary = CreateCameraSummary(descriptor, exposure, _isRunning, _lastError);
+
+            var summary = new AllSkyStatusSummary(
+                Camera: cameraSummary,
+                Rig: rig,
+                Configuration: _configuration,
+                ProcessedFrame: processedSummary,
+                RawFrame: rawSummary,
+                BackgroundStacker: _backgroundStackerStatus);
 
             return new AllSkyStatusResponse(
                 IsRunning: _isRunning,
                 LastFrameTimestamp: _lastFrameTimestamp,
-                LastExposure: _latestRawFrame?.Exposure,
-                Camera: descriptor,
+                LastExposure: exposure,
                 Configuration: _configuration,
-                ProcessedFrame: CreateSummary(_latestProcessedFrame),
-                Rig: rig,
-                BackgroundStacker: _backgroundStackerStatus);
+                ProcessedFrame: processedSummary,
+                RawFrame: rawSummary,
+                BackgroundStacker: _backgroundStackerStatus,
+                Camera: descriptor,
+                Rig: rigSpec,
+                Summary: summary);
         }
     }
 
@@ -306,7 +322,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
     }
 
-    private static ProcessedFrameSummary? CreateSummary(ProcessedFrame? frame)
+    private static ProcessedFrameSummary? CreateProcessedSummary(ProcessedFrame? frame)
     {
         if (frame is null)
         {
@@ -318,5 +334,81 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             frame.IntegrationMilliseconds,
             frame.AppliedFilters,
             frame.ProcessingMilliseconds);
+    }
+
+    private static RawFrameSummary? CreateRawSummary(RawFrameSnapshot? frame)
+    {
+        if (frame is null)
+        {
+            return null;
+        }
+
+        var width = frame.Image?.Width ?? 0;
+        var height = frame.Image?.Height ?? 0;
+        return new RawFrameSummary(
+            Timestamp: frame.Timestamp,
+            Width: width,
+            Height: height,
+            ExposureMilliseconds: frame.Exposure.ExposureMilliseconds,
+            Gain: frame.Exposure.Gain);
+    }
+
+    private static AllSkyCameraSummary CreateCameraSummary(
+        CameraDescriptor descriptor,
+        ExposureSettings? exposure,
+        bool isRunning,
+        Exception? lastError)
+    {
+        var name = string.IsNullOrWhiteSpace(descriptor.Model)
+            ? descriptor.Manufacturer
+            : FormattableString.Invariant($"{descriptor.Manufacturer} {descriptor.Model}").Trim();
+
+        var status = lastError is not null
+            ? "Error"
+            : isRunning
+                ? "Capturing"
+                : "Idle";
+
+        var capabilities = descriptor.Capabilities as IReadOnlyList<string>
+            ?? descriptor.Capabilities?.ToArray()
+            ?? Array.Empty<string>();
+
+        return new AllSkyCameraSummary(
+            Name: string.IsNullOrWhiteSpace(name) ? "Unknown" : name,
+            Capabilities: capabilities,
+            ExposureMilliseconds: exposure?.ExposureMilliseconds ?? 0,
+            Gain: exposure?.Gain ?? 0,
+            Status: status);
+    }
+
+    private static AllSkyRigSummary? CreateRigSummary(RigSpec? rig)
+    {
+        if (rig is null)
+        {
+            return null;
+        }
+
+        var sensor = new AllSkySensorSummary(
+            WidthPx: rig.Sensor.WidthPx,
+            HeightPx: rig.Sensor.HeightPx,
+            PixelSizeMicrons: rig.Sensor.PixelSizeMicrons,
+            Status: "Configured");
+
+        var lens = new AllSkyLensSummary(
+            Name: string.IsNullOrWhiteSpace(rig.Lens.Name) ? rig.Lens.Kind.ToString() : rig.Lens.Name,
+            Kind: rig.Lens.Kind.ToString(),
+            Model: rig.Lens.Model.ToString(),
+            FocalLengthMm: rig.Lens.FocalLengthMm,
+            FovXDeg: rig.Lens.FovXDeg,
+            FovYDeg: rig.Lens.FovYDeg,
+            Status: "Configured");
+
+        var status = "Configured";
+
+        return new AllSkyRigSummary(
+            Name: rig.Name,
+            Sensor: sensor,
+            Lens: lens,
+            Status: status);
     }
 }
