@@ -12,4 +12,5 @@ public static class FrameFilterNames
     public const string CelestialAnnotations = "CelestialAnnotations";
     public const string OverlayText = "OverlayText";
     public const string CircularApertureMask = "CircularApertureMask";
+    public const string DiagnosticsOverlay = "DiagnosticsOverlay";
 }

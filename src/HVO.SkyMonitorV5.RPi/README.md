@@ -46,7 +46,7 @@ Camera adapters are declared in configuration under the `AllSkyCameras` array. E
 "AllSkyCameras": [
   {
     "Name": "MockFisheye",
-  "Adapter": "Mock",
+    "Adapter": "Mock",
     "Rig": {
       "Name": "MockASI174MM + Fujinon 2.7mm",
       "Sensor": { "WidthPx": 1936, "HeightPx": 1216, "PixelSizeMicrons": 5.86 },
@@ -68,6 +68,7 @@ Camera adapters are declared in configuration under the `AllSkyCameras` array. E
 ```
 
 - Add additional adapters by appending entries with distinct `Name` values. Each adapter receives its own scoped `RigSpec`, so multiple cameras can run in the same process without sharing projector state.
+- The colour mock adapter is exposed via `"Adapter": "MockColor"` and pairs naturally with the `MockASI174MC + Fujinon 2.7mm` rig preset. It reuses the synthetic sky renderer but preserves per-channel noise so downstream filters experience the same workload as the ASI174MC sensor. If you need the colour variant to always run at the same resolution as the monochrome version, set `CameraPipeline.EnforcedDimensions` (see below).
 - Unsupported adapter identifiers will fail fast during startup, keeping misconfigurations obvious.
 - The first AllSkyCameras entry is treated as the default adapter today; if you need dynamic selection or concurrent use, we can extend the capture service to resolve keyed instances on demand.
 - Descriptor metadata travels with the rig, so the capture service and API can surface manufacturer/model details supplied in configuration without each adapter re-declaring them.
@@ -99,6 +100,7 @@ Camera adapters are declared in configuration under the `AllSkyCameras` array. E
 }
 ```
 
+- `EnforcedDimensions` optionally locks the capture and filter pipeline to a fixed width/height. When provided, the adapter’s raw frames are scaled to match before further processing—use this to keep synthetic colour runs aligned with monochrome baselines.
 - `ProcessedImageEncoding` selects the format (`Png` or `Jpeg`) and encoder quality (1–100) used when the filter pipeline emits processed frames to the API/UI. The default is JPEG at quality 90. Changing the format updates the `Content-Type` served by `/api/v1.0/all-sky/frame/latest` automatically.
 - The overlay now reports the configured latitude/longitude and converts timestamps to the appropriate local time zone for that location.
 `Filters` lets you toggle individual filters and control their default order without editing code. Only entries flagged `Enabled` are applied (sorted by `Order`). The legacy `FrameFilters` string array remains as a fallback for backward compatibility and is ignored when `Filters` contains at least one enabled entry. When both collections are empty the runtime keeps the live sequence supplied via runtime updates—when overlays are disabled (the default), the capture pipeline simply returns the raw starfield image from the camera adapter.
@@ -267,29 +269,32 @@ If you toggle overlay flags without supplying `frameFilters`, the system keeps t
 
 ```mermaid
 sequenceDiagram
-    participant Scheduler as AllSkyCaptureService
-    participant Exposure as IExposureController
-    participant Camera as ICameraAdapter
-    participant Stacker as RollingFrameStacker
-    participant Pipeline as FrameFilterPipeline
-    participant Filter as IFrameFilter (sequence)
-    participant Store as FrameStateStore
-    participant ApiUi as API / Blazor Client
+  participant Scheduler as AllSkyCaptureService
+  participant Exposure as IExposureController
+  participant Camera as ICameraAdapter
+  participant Stacker as RollingFrameStacker
+  participant Pipeline as FrameFilterPipeline
+  participant Context as FrameRenderContext
+  participant Filter as IFrameFilter (sequence)
+  participant Store as FrameStateStore
+  participant ApiUi as API / Blazor Client
 
-    Scheduler->>Exposure: CreateNextExposure(configuration)
-    Exposure-->>Scheduler: ExposureSettings
-    Scheduler->>Camera: CaptureAsync(exposure)
-    Camera-->>Scheduler: CameraFrame (raw JPEG + pixels)
-    Scheduler->>Stacker: Accumulate(frame, configuration)
-    Stacker-->>Scheduler: FrameStackResult (stacked frame + metadata)
-    Scheduler->>Pipeline: ProcessAsync(stackResult, configuration)
-    loop Filter sequence
-        Pipeline->>Filter: ApplyAsync(bitmap)
-        Filter-->>Pipeline: Modified bitmap
-    end
-    Pipeline-->>Scheduler: ProcessedFrame (JPEG + overlays)
-    Scheduler->>Store: UpdateFrame(raw, processed)
-    Store-->>ApiUi: Latest frame + status (on request)
+  Scheduler->>Exposure: CreateNextExposure(configuration)
+  Exposure-->>Scheduler: ExposureSettings
+  Scheduler->>Camera: CaptureAsync(exposure)
+  Camera-->>Scheduler: CapturedImage + FrameContext
+  Scheduler->>Stacker: Accumulate(frame, configuration)
+  Stacker-->>Scheduler: FrameStackResult (stacked image + FrameContext)
+  Scheduler->>Pipeline: ProcessAsync(stackResult, configuration)
+  Pipeline->>Context: Wrap FrameContext for filters
+  loop Filter sequence
+    Pipeline->>Filter: ApplyAsync(bitmap, Context)
+    Filter-->>Pipeline: Modified bitmap
+  end
+  Pipeline->>Context: Dispose()
+  Pipeline-->>Scheduler: ProcessedFrame (JPEG + overlays)
+  Scheduler->>Store: UpdateFrame(raw, processed)
+  Store-->>ApiUi: Latest frame + status (on request)
 ```
 
 ### Flow chart
@@ -299,14 +304,14 @@ flowchart LR
     A[Timer tick] --> B{Stacking enabled?}
     B -- No --> C[Capture frame]
     B -- Yes --> C
-    C --> D[RollingFrameStacker\nAccumulate]
+  C --> D[RollingFrameStacker\nAccumulate + retain FrameContext]
     D --> E{Enough frames/integration?}
     E -- No --> F[Return latest frame]
     E -- Yes --> G[Average frames]
     F --> H[FrameFilterPipeline]
     G --> H
-    H --> I[Apply configured filters in order]
-    I --> J[Encode JPEG]
+  H --> I[Apply configured filters with FrameRenderContext]
+  I --> J[Encode JPEG]
     J --> K[FrameStateStore]
     K --> L[API / UI consumes frames]
 ```
@@ -314,8 +319,14 @@ flowchart LR
 ### Frame context ownership
 
 - Camera adapters supply a `FrameContext` with the active rig plus a freshly constructed `StarFieldEngine`. The engine now builds and owns the `IImageProjector` derived from that rig, exposing it via `FrameRenderContext.Projector` for filters that need optical metadata.
-- The capture loop and filter pipeline both dispose the context once processing completes, guaranteeing the shared `StarFieldEngine` (and its projector) are released promptly even if an exception interrupts the workflow.
+- `RollingFrameStacker` preserves the most recent `FrameContext` across stacked frames and resets its buffer if a mismatched rig arrives, ensuring downstream filters never blend incompatible optics.
+- The filter pipeline wraps the incoming context in a `FrameRenderContext`, passes that same instance to each filter, and disposes it once processing completes so the shared `StarFieldEngine` is released even on exceptions.
 - Filters must rely on the provided `FrameRenderContext`; avoid instantiating additional `StarFieldEngine` instances so overlays stay in sync with the original render geometry.
+
+### Verification checkpoints
+
+- `FrameFilterPipelineTests` confirm render context propagation, disposal, and telemetry bookkeeping.
+- `RollingFrameStackerTests` ensure context reuse when stacking and guard against premature disposal when stacking is disabled.
 
 ## Project layout highlights
 

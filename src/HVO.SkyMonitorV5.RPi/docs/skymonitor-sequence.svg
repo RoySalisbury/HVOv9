@@ -78,7 +78,7 @@
 
     <line x1="470" y1="300" x2="150" y2="300" class="return"/>
     <polygon points="150,300 160,294 160,306" fill="#2f855a"/>
-    <text x="310" y="286" text-anchor="middle" class="label">CameraFrame</text>
+  <text x="310" y="286" text-anchor="middle" class="label">CapturedImage</text>
 
     <!-- Service -> Stacker -->
     <line x1="150" y1="350" x2="630" y2="350" class="arrow"/>

@@ -20,7 +20,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras;
 /// <summary>
 /// Synthetic fisheye camera adapter that renders a realistic all-sky projection using the starfield engine.
 /// </summary>
-public sealed class MockCameraAdapter : CameraAdapterBase
+public class MockCameraAdapter : CameraAdapterBase
 {
     private const int RandomFillerStars = 0;
 
@@ -34,6 +34,8 @@ public sealed class MockCameraAdapter : CameraAdapterBase
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly Random _random = new();
+
+    protected Random Random => _random;
 
     public MockCameraAdapter(
         IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
@@ -194,7 +196,7 @@ public sealed class MockCameraAdapter : CameraAdapterBase
         }
     }
 
-    private void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
+    protected virtual void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
     {
         var noiseLevel = Math.Clamp(exposure.Gain / 480d, 0.012d, 0.09d);
         var twinkleProbability = 0.0015d + exposure.Gain * 0.000012d;

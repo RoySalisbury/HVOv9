@@ -26,6 +26,8 @@ using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using System.IO;
 using System.Text.Json.Serialization;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 namespace HVO.SkyMonitorV5.RPi;
 
@@ -173,22 +175,44 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<DiagnosticsOverlayOptions>()
+            .Bind(configuration.GetSection(DiagnosticsOverlayOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
         services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+        services.AddSingleton<BackgroundFrameStackerService>();
+        services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
+        services.AddHostedService(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
 
         services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
-    services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
+        services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
         services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
         services.AddSingleton<IFrameFilter, OverlayTextFilter>();
         services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();
+    services.AddSingleton<IFrameFilter, DiagnosticsOverlayFilter>();
 
-        services.AddSingleton<IFrameFilterPipeline, FrameFilterPipeline>();
+        services.AddSingleton<FrameFilterPipeline>();
+        services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
+        services.AddSingleton<IDiagnosticsService, DiagnosticsService>();
 
         RegisterCameraAdapters(services, configuration);
 
         services.AddHostedService<AllSkyCaptureService>();
+        
+        services.AddOpenTelemetry()
+            .WithMetrics(builder =>
+            {
+                builder.ConfigureResource(resourceBuilder => resourceBuilder.AddService(
+                    serviceName: "HVO.SkyMonitorV5.RPi",
+                    serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0"));
+
+                builder.AddMeter("HVO.SkyMonitor.BackgroundStacker");
+                builder.AddPrometheusExporter();
+            });
     }
 
     private static void RegisterCameraAdapters(IServiceCollection services, IConfiguration configuration)
@@ -232,6 +256,18 @@ public static class Program
 
             services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
             {
+                if (CameraAdapterTypes.IsMockColor(normalizedAdapterKey))
+                {
+                    return new MockColorCameraAdapter(
+                        sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
+                        sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
+                        sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
+                        sp.GetRequiredService<IServiceScopeFactory>(),
+                        rigSpec,
+                        sp.GetService<ILoggerFactory>(),
+                        sp.GetService<ILogger<MockColorCameraAdapter>>());
+                }
+
                 if (CameraAdapterTypes.IsMock(normalizedAdapterKey))
                 {
                     return new MockCameraAdapter(
@@ -283,6 +319,8 @@ public static class Program
     private static void ConfigureLogging(ILoggingBuilder logging)
     {
         logging.AddConsole();
+        logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+        logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Warning);
     }
 
     private static void Configure(WebApplication app)
@@ -314,6 +352,7 @@ public static class Program
 
         app.MapStaticAssets();
         app.MapControllers();
+        app.MapPrometheusScrapingEndpoint("/metrics/prometheus");
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
@@ -350,6 +389,5 @@ public static class Program
         {
             Predicate = check => check.Tags.Contains("database")
         });
-
     }
 }

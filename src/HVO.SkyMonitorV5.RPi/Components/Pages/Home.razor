@@ -184,6 +184,38 @@ else
                             <dd>@FramesStackedSummary</dd>
                         </div>
                         <div class="status-card__item">
+                            <dt>Background Worker</dt>
+                            <dd>@BackgroundWorkerSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Queue Depth</dt>
+                            <dd>@BackgroundQueueDepthSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Peak Depth</dt>
+                            <dd>@BackgroundQueuePeakSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Queue Memory</dt>
+                            <dd>@BackgroundQueueMemorySummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Queue Latency</dt>
+                            <dd>@BackgroundQueueLatencySummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Avg Processing</dt>
+                            <dd>@BackgroundProcessingAverageSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Drops</dt>
+                            <dd>@BackgroundDropSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Last Completed</dt>
+                            <dd>@BackgroundLastCompletedSummary</dd>
+                        </div>
+                        <div class="status-card__item">
                             <dt>Filters</dt>
                             <dd>
                                 @if (AppliedFilters.Count > 0)

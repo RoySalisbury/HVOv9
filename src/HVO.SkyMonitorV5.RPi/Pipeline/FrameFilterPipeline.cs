@@ -1,4 +1,5 @@
 #nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -21,6 +22,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
     {
         private readonly IEnumerable<IFrameFilter> _filters;
         private readonly ILogger<FrameFilterPipeline> _logger;
+        private readonly FilterTelemetryStore _telemetryStore = new();
 
         public FrameFilterPipeline(IEnumerable<IFrameFilter> filters, ILogger<FrameFilterPipeline> logger)
         {
@@ -38,27 +40,29 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var pipelineStopwatch = Stopwatch.StartNew();
-            var copyStopwatch = Stopwatch.StartNew();
-            var copy = stackResult.StackedImage.Copy();
-            copyStopwatch.Stop();
-            if (copy is null)
-            {
-                throw new InvalidOperationException("Unable to copy raw frame image for filter processing.");
-            }
-
-            using var bitmap = copy;
-            var renderContext = stackResult.Context is { } context ? new FrameRenderContext(context) : null;
-
-            var appliedFilters = new List<string>();
-            List<FilterTiming>? filterTimings = null;
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                filterTimings = new List<FilterTiming>();
-            }
+            var frameContext = stackResult.Context;
 
             try
             {
+                var pipelineStopwatch = Stopwatch.StartNew();
+                var copyStopwatch = Stopwatch.StartNew();
+                var copy = stackResult.StackedImage.Copy();
+                copyStopwatch.Stop();
+                if (copy is null)
+                {
+                    throw new InvalidOperationException("Unable to copy raw frame image for filter processing.");
+                }
+
+                using var bitmap = copy;
+                var renderContext = frameContext is not null ? new FrameRenderContext(frameContext) : null;
+
+                var appliedFilters = new List<string>();
+                List<FilterTiming>? filterTimings = null;
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    filterTimings = new List<FilterTiming>();
+                }
+
                 foreach (var filter in _filters)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -68,7 +72,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         continue;
                     }
 
-                    bool apply = false;
+                    bool apply;
                     try
                     {
                         apply = filter.ShouldApply(configuration);
@@ -76,6 +80,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Filter {Filter} ShouldApply() threw.", filter.Name);
+                        continue;
                     }
 
                     if (!apply)
@@ -83,23 +88,22 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         continue;
                     }
 
+                    var filterStopwatch = Stopwatch.StartNew();
+
                     try
                     {
                         appliedFilters.Add(filter.Name);
-
-                        Stopwatch? filterStopwatch = null;
-                        if (filterTimings is not null)
-                        {
-                            filterStopwatch = Stopwatch.StartNew();
-                        }
-
                         await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
 
-                        if (filterTimings is not null && filterStopwatch is not null)
+                        filterStopwatch.Stop();
+                        var duration = filterStopwatch.Elapsed.TotalMilliseconds;
+
+                        if (filterTimings is not null)
                         {
-                            filterStopwatch.Stop();
-                            filterTimings.Add(new FilterTiming(filter.Name, filterStopwatch.Elapsed.TotalMilliseconds));
+                            filterTimings.Add(new FilterTiming(filter.Name, duration));
                         }
+
+                        _telemetryStore.Record(filter.Name, duration);
                     }
                     catch (OperationCanceledException)
                     {
@@ -110,48 +114,50 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         _logger.LogError(ex, "Filter {Filter} ApplyAsync() failed; continuing.", filter.Name);
                     }
                 }
+
+                var encodeStopwatch = Stopwatch.StartNew();
+                // Encode the updated bitmap into the processed frame payload
+                using var image = SKImage.FromBitmap(bitmap);
+                var encodingSettings = configuration.ProcessedImageEncoding ?? new ImageEncodingSettings();
+                var skiaFormat = ToSkiaFormat(encodingSettings.Format);
+                var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
+                using var data = image.Encode(skiaFormat, quality);
+                var bytes = data.ToArray();
+                encodeStopwatch.Stop();
+
+                pipelineStopwatch.Stop();
+
+                if (filterTimings is not null)
+                {
+                    var filterBreakdown = filterTimings.Count == 0
+                        ? "none"
+                        : string.Join(", ", filterTimings.Select(t => $"{t.Filter}:{t.DurationMs:F1}ms"));
+
+                    _logger.LogDebug(
+                        "Filter pipeline completed in {TotalMs}ms (copy {CopyMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
+                        pipelineStopwatch.Elapsed.TotalMilliseconds,
+                        copyStopwatch.Elapsed.TotalMilliseconds,
+                        encodeStopwatch.Elapsed.TotalMilliseconds,
+                        filterBreakdown);
+                }
+
+                return new ProcessedFrame(
+                    stackResult.Timestamp,
+                    stackResult.Exposure,
+                    bytes,
+                    ToContentType(encodingSettings.Format),
+                    stackResult.FramesStacked,
+                    stackResult.IntegrationMilliseconds,
+                    appliedFilters,
+                    ProcessingMilliseconds: 0);
             }
             finally
             {
-                renderContext?.FrameContext.Dispose();
+                frameContext?.Dispose();
             }
-
-            var encodeStopwatch = Stopwatch.StartNew();
-            // Encode the updated bitmap into the processed frame payload
-            using var image = SKImage.FromBitmap(bitmap);
-            var encodingSettings = configuration.ProcessedImageEncoding ?? new ImageEncodingSettings();
-            var skiaFormat = ToSkiaFormat(encodingSettings.Format);
-            var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
-            using var data = image.Encode(skiaFormat, quality);
-            var bytes = data.ToArray();
-            encodeStopwatch.Stop();
-
-            pipelineStopwatch.Stop();
-
-            if (filterTimings is not null)
-            {
-                var filterBreakdown = filterTimings.Count == 0
-                    ? "none"
-                    : string.Join(", ", filterTimings.Select(t => $"{t.Filter}:{t.DurationMs:F1}ms"));
-
-                _logger.LogDebug(
-                    "Filter pipeline completed in {TotalMs}ms (copy {CopyMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
-                    pipelineStopwatch.Elapsed.TotalMilliseconds,
-                    copyStopwatch.Elapsed.TotalMilliseconds,
-                    encodeStopwatch.Elapsed.TotalMilliseconds,
-                    filterBreakdown);
-            }
-
-            return new ProcessedFrame(
-                stackResult.Timestamp,
-                stackResult.Exposure,
-                bytes,
-                ToContentType(encodingSettings.Format),
-                stackResult.FramesStacked,
-                stackResult.IntegrationMilliseconds,
-                appliedFilters,
-                ProcessingMilliseconds: 0);
         }
+
+        public FilterMetricsSnapshot GetMetricsSnapshot() => _telemetryStore.Snapshot();
 
         private static bool IsFilterEnabled(CameraConfiguration configuration, string filterName)
         {

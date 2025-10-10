@@ -240,3 +240,56 @@ jobs:
           path: src/TestResults/${{ matrix.test-project }}
           if-no-files-found: warn
           retention-days: 7
+
+  benchmark-smoke:
+    needs: build-non-maui
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      DOTNET_ENVIRONMENT: Benchmark
+      HVO_BENCH_WARMUP_COUNT: 1
+      HVO_BENCH_ITERATION_COUNT: 1
+      HVO_BENCH_LAUNCH_COUNT: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            **/*.sln*
+            global.json
+            NuGet.config
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-non-maui
+          path: src
+
+      - name: Run benchmark smoke suite
+        working-directory: src
+        run: |
+          dotnet run --project HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj -c Release --no-build -- --filter '*EndToEndPipeline*'
+
+      - name: Upload benchmark summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            src/HVO.SkyMonitorV5.RPi.Benchmarks/BenchmarkDotNet.Artifacts/results/*EndToEndPipeline*.md
+            src/HVO.SkyMonitorV5.RPi.Benchmarks/BenchmarkDotNet.Artifacts/results/*EndToEndPipeline*.csv
+          if-no-files-found: warn
+          retention-days: 7

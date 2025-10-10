@@ -138,6 +138,7 @@ public sealed record CameraConfiguration(
             filters.Add(FrameFilterNames.CardinalDirections);
             filters.Add(FrameFilterNames.CelestialAnnotations);
             filters.Add(FrameFilterNames.OverlayText);
+            filters.Add(FrameFilterNames.DiagnosticsOverlay);
         }
 
         return filters.Count > 0 ? NormalizeFilterList(filters) : Array.Empty<string>();

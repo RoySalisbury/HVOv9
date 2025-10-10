@@ -32,11 +32,17 @@ public static class CameraAdapterTypes
 {
     public const string Mock = "Mock";
     public const string MockFisheye = "MockFisheye"; // legacy alias
+    public const string MockColor = "MockColor";
+    public const string MockColorFisheye = "MockColorFisheye";
     public const string Zwo = "Zwo";
 
     public static bool IsMock(string adapter)
         => adapter.Equals(Mock, StringComparison.OrdinalIgnoreCase)
             || adapter.Equals(MockFisheye, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsMockColor(string adapter)
+        => adapter.Equals(MockColor, StringComparison.OrdinalIgnoreCase)
+            || adapter.Equals(MockColorFisheye, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsZwo(string adapter)
         => adapter.Equals(Zwo, StringComparison.OrdinalIgnoreCase);
