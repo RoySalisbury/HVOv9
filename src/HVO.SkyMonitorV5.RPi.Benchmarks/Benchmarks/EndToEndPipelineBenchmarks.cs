@@ -39,13 +39,15 @@ public class EndToEndPipelineBenchmarks
 
         _pipeline = new FrameFilterPipeline(filters, NullLogger<FrameFilterPipeline>.Instance);
 
+        var bufferMinimum = Math.Max(24, StackingFrameCount);
+
         _configuration = new CameraConfiguration(
             EnableStacking: true,
             StackingFrameCount: StackingFrameCount,
             EnableImageOverlays: true,
             EnableCircularApertureMask: false,
-            StackingBufferMinimumFrames: StackingFrameCount,
-            StackingBufferIntegrationSeconds: Math.Max(10, StackingFrameCount * 10),
+            StackingBufferMinimumFrames: bufferMinimum,
+            StackingBufferIntegrationSeconds: 120,
             FrameFilters: filters.Select(filter => filter.Name).ToArray(),
             ProcessedImageEncoding: new ImageEncodingSettings());
     }

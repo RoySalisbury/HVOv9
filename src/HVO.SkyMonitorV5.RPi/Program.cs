@@ -256,6 +256,18 @@ public static class Program
 
             services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
             {
+                if (CameraAdapterTypes.IsMockColor(normalizedAdapterKey))
+                {
+                    return new MockColorCameraAdapter(
+                        sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
+                        sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
+                        sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
+                        sp.GetRequiredService<IServiceScopeFactory>(),
+                        rigSpec,
+                        sp.GetService<ILoggerFactory>(),
+                        sp.GetService<ILogger<MockColorCameraAdapter>>());
+                }
+
                 if (CameraAdapterTypes.IsMock(normalizedAdapterKey))
                 {
                     return new MockCameraAdapter(
@@ -307,6 +319,8 @@ public static class Program
     private static void ConfigureLogging(ILoggingBuilder logging)
     {
         logging.AddConsole();
+        logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+        logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Warning);
     }
 
     private static void Configure(WebApplication app)

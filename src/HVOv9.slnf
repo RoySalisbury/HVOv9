@@ -9,6 +9,7 @@
       "HVO.SkyMonitorV4.RPi/HVO.SkyMonitorV4.RPi.csproj",
       "HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj",
   "HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj",
+    "HVO.SkyMonitorV5.RPi.Stress/HVO.SkyMonitorV5.RPi.Stress.csproj",
       "HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj",
       "HVO.Iot.Devices/HVO.Iot.Devices.csproj",
       "HVO.GpioTestApp/HVO.GpioTestApp.csproj",

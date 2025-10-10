@@ -568,12 +568,15 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
 
             if (!visible.Any())
             {
-                _logger.LogInformation(
-                    "Visible star query returned 0 results after visibility filtering (lat {LatitudeDeg:F3}, lon {LongitudeDeg:F3}, utc {Utc:O}, mag ≤ {MagnitudeLimit:F1}).",
-                    latitudeDeg,
-                    longitudeDeg,
-                    utc,
-                    magnitudeLimit);
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace(
+                        "Visible star query returned 0 results after visibility filtering (lat {LatitudeDeg:F3}, lon {LongitudeDeg:F3}, utc {Utc:O}, mag ≤ {MagnitudeLimit:F1}).",
+                        latitudeDeg,
+                        longitudeDeg,
+                        utc,
+                        magnitudeLimit);
+                }
                 return Result<IReadOnlyList<Star>>.Success(EmptyStarList);
             }
 
@@ -633,14 +636,17 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
                 result = Array.AsReadOnly(selected.OrderBy(s => s.RightAscensionHours).ToArray());
             }
 
-            _logger.LogInformation(
-                "Computed {Count} visible stars (stratified={Stratified}) for lat {LatitudeDeg:F3}, lon {LongitudeDeg:F3} at {Utc:O} (mag ≤ {MagnitudeLimit:F1}).",
-                result.Count,
-                stratified,
-                latitudeDeg,
-                longitudeDeg,
-                utc,
-                magnitudeLimit);
+            if (_logger.IsEnabled(LogLevel.Trace))
+            {
+                _logger.LogTrace(
+                    "Computed {Count} visible stars (stratified={Stratified}) for lat {LatitudeDeg:F3}, lon {LongitudeDeg:F3} at {Utc:O} (mag ≤ {MagnitudeLimit:F1}).",
+                    result.Count,
+                    stratified,
+                    latitudeDeg,
+                    longitudeDeg,
+                    utc,
+                    magnitudeLimit);
+            }
 
             return Result<IReadOnlyList<Star>>.Success(result);
         }

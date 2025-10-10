@@ -58,6 +58,30 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
             )
         );
 
+        /// <summary>
+        /// ZWO ASI174MC (colour) – identical geometry but a Bayer CFA.
+        /// </summary>
+        public static readonly CameraSpec ASI174MC = new(
+            Name: "ZWO ASI174MC",
+            Sensor: new SensorSpec(
+                WidthPx: 1936,
+                HeightPx: 1216,
+                PixelSizeMicrons: 5.86
+            )
+        );
+
+        /// <summary>
+        /// Mock ASI174MC – colour variant for the synthetic camera.
+        /// </summary>
+        public static readonly CameraSpec MockASI174MC = new(
+            Name: "Mock ASI174MC",
+            Sensor: new SensorSpec(
+                WidthPx: 1936,
+                HeightPx: 1216,
+                PixelSizeMicrons: 5.86
+            )
+        );
+
         // ---------------- Lenses / Telescopes ----------------
 
         /// <summary>

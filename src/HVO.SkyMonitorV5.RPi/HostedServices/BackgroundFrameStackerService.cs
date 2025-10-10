@@ -66,6 +66,11 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
     private readonly ObservableGauge<double> _queueFillGauge;
     private readonly ObservableGauge<int> _queuePressureGauge;
     private readonly ObservableGauge<double> _secondsSinceLastFrameGauge;
+    private double _adaptiveHighPressureSeconds;
+    private double _adaptiveLowPressureSeconds;
+    private DateTimeOffset _lastAdaptiveSampleTimestamp = DateTimeOffset.UtcNow;
+    private DateTimeOffset _adaptiveNextAdjustmentAllowed = DateTimeOffset.UtcNow;
+    private int _adaptiveAdjustmentInProgress;
 
     public BackgroundFrameStackerService(
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
@@ -143,8 +148,9 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
             unit: "s",
             description: "Seconds elapsed since the most recent frame completed processing.");
 
-        _currentOptions = optionsMonitor.CurrentValue.BackgroundStacker ?? new BackgroundStackerOptions();
-        _channel = CreateChannel(_currentOptions);
+    _currentOptions = CloneBackgroundOptions(optionsMonitor.CurrentValue.BackgroundStacker ?? new BackgroundStackerOptions());
+    ResetAdaptiveState();
+    _channel = CreateChannel(_currentOptions);
         _optionsReloadSubscription = optionsMonitor.OnChange(OnOptionsChanged);
         _lastConfigurationVersion = frameStateStore.ConfigurationVersion;
         _lastConfiguration = frameStateStore.Configuration;
@@ -254,9 +260,10 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
 
     private void OnOptionsChanged(CameraPipelineOptions options)
     {
-        var newOptions = options.BackgroundStacker ?? new BackgroundStackerOptions();
+        var newOptions = CloneBackgroundOptions(options.BackgroundStacker ?? new BackgroundStackerOptions());
         var previousOptions = _currentOptions;
         _currentOptions = newOptions;
+        ResetAdaptiveState();
 
         if (previousOptions.Enabled != newOptions.Enabled || previousOptions.QueueCapacity != newOptions.QueueCapacity || previousOptions.OverflowPolicy != newOptions.OverflowPolicy)
         {
@@ -829,6 +836,155 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         return seconds < 0 ? 0d : seconds;
     }
 
+    private static BackgroundStackerOptions CloneBackgroundOptions(BackgroundStackerOptions source)
+    {
+        var clone = new BackgroundStackerOptions
+        {
+            Enabled = source.Enabled,
+            QueueCapacity = source.QueueCapacity,
+            OverflowPolicy = source.OverflowPolicy,
+            CompressionMode = source.CompressionMode,
+            RestartDelaySeconds = source.RestartDelaySeconds,
+            AdaptiveQueue = source.AdaptiveQueue?.Clone() ?? new AdaptiveQueueOptions()
+        };
+
+        clone.AdaptiveQueue.Normalize();
+        clone.QueueCapacity = Math.Clamp(clone.QueueCapacity, 1, 1_000);
+
+        if (clone.AdaptiveQueue.Enabled)
+        {
+            clone.QueueCapacity = Math.Clamp(clone.QueueCapacity, clone.AdaptiveQueue.MinCapacity, clone.AdaptiveQueue.MaxCapacity);
+        }
+
+        return clone;
+    }
+
+    private void ResetAdaptiveState()
+    {
+        _adaptiveHighPressureSeconds = 0;
+        _adaptiveLowPressureSeconds = 0;
+        _lastAdaptiveSampleTimestamp = DateTimeOffset.UtcNow;
+        _adaptiveNextAdjustmentAllowed = DateTimeOffset.UtcNow;
+    }
+
+    private void MaybeAdjustQueueCapacity(int queueDepth, int capacity)
+    {
+        var adaptive = _currentOptions.AdaptiveQueue;
+        if (adaptive is null || !adaptive.Enabled || capacity <= 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var deltaSeconds = (now - _lastAdaptiveSampleTimestamp).TotalSeconds;
+        if (double.IsNaN(deltaSeconds) || double.IsInfinity(deltaSeconds))
+        {
+            deltaSeconds = 0;
+        }
+
+        deltaSeconds = Math.Clamp(deltaSeconds, 0d, adaptive.EvaluationWindowSeconds * 2d);
+        _lastAdaptiveSampleTimestamp = now;
+
+        var fillPercent = capacity == 0 ? 0d : (double)queueDepth / capacity * 100d;
+
+        if (fillPercent >= adaptive.ScaleUpThresholdPercent)
+        {
+            _adaptiveHighPressureSeconds = Math.Min(adaptive.EvaluationWindowSeconds * 2d, _adaptiveHighPressureSeconds + deltaSeconds);
+            _adaptiveLowPressureSeconds = Math.Max(0d, _adaptiveLowPressureSeconds - deltaSeconds);
+        }
+        else if (fillPercent <= adaptive.ScaleDownThresholdPercent)
+        {
+            _adaptiveLowPressureSeconds = Math.Min(adaptive.EvaluationWindowSeconds * 2d, _adaptiveLowPressureSeconds + deltaSeconds);
+            _adaptiveHighPressureSeconds = Math.Max(0d, _adaptiveHighPressureSeconds - deltaSeconds);
+        }
+        else
+        {
+            _adaptiveHighPressureSeconds = Math.Max(0d, _adaptiveHighPressureSeconds - deltaSeconds);
+            _adaptiveLowPressureSeconds = Math.Max(0d, _adaptiveLowPressureSeconds - deltaSeconds);
+        }
+
+        if (now < _adaptiveNextAdjustmentAllowed)
+        {
+            return;
+        }
+
+        if (_adaptiveHighPressureSeconds >= adaptive.EvaluationWindowSeconds)
+        {
+            if (capacity < adaptive.MaxCapacity)
+            {
+                var newCapacity = Math.Min(adaptive.MaxCapacity, capacity + adaptive.IncreaseStep);
+                ApplyAdaptiveQueueCapacity(newCapacity, "sustained high pressure");
+                return;
+            }
+
+            _adaptiveHighPressureSeconds = 0;
+        }
+
+        if (_adaptiveLowPressureSeconds >= adaptive.EvaluationWindowSeconds)
+        {
+            if (capacity > adaptive.MinCapacity)
+            {
+                var newCapacity = Math.Max(adaptive.MinCapacity, capacity - adaptive.DecreaseStep);
+                ApplyAdaptiveQueueCapacity(newCapacity, "sustained low pressure");
+                return;
+            }
+
+            _adaptiveLowPressureSeconds = 0;
+        }
+    }
+
+    private void ApplyAdaptiveQueueCapacity(int requestedCapacity, string reason)
+    {
+        var adaptive = _currentOptions.AdaptiveQueue;
+        if (adaptive is null)
+        {
+            return;
+        }
+        var normalizedCapacity = Math.Clamp(requestedCapacity, 1, 1_000);
+
+        if (adaptive.Enabled)
+        {
+            normalizedCapacity = Math.Clamp(normalizedCapacity, adaptive.MinCapacity, adaptive.MaxCapacity);
+        }
+
+        var currentCapacity = _currentOptions.QueueCapacity;
+        if (normalizedCapacity == currentCapacity)
+        {
+            _adaptiveHighPressureSeconds = 0;
+            _adaptiveLowPressureSeconds = 0;
+            _adaptiveNextAdjustmentAllowed = DateTimeOffset.UtcNow.AddSeconds(adaptive.CooldownSeconds);
+            return;
+        }
+
+        var updatedOptions = CloneBackgroundOptions(_currentOptions);
+        updatedOptions.QueueCapacity = normalizedCapacity;
+        _currentOptions = updatedOptions;
+
+        Interlocked.Exchange(ref _adaptiveAdjustmentInProgress, 1);
+        try
+        {
+            var newChannel = CreateChannel(updatedOptions);
+            var oldChannel = Interlocked.Exchange(ref _channel, newChannel);
+            oldChannel.Writer.TryComplete();
+
+            Interlocked.Exchange(ref _queuePressureBucket, -1);
+            PublishStatus();
+
+            _logger.LogInformation(
+                "Adaptive queue capacity adjustment applied: {Previous} -> {Current} (reason: {Reason}).",
+                currentCapacity,
+                normalizedCapacity,
+                reason);
+
+            ResetAdaptiveState();
+            _adaptiveNextAdjustmentAllowed = DateTimeOffset.UtcNow.AddSeconds(adaptive.CooldownSeconds);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _adaptiveAdjustmentInProgress, 0);
+        }
+    }
+
     private void UpdateQueuePressure(int queueDepth)
     {
         var capacity = Math.Max(1, _currentOptions.QueueCapacity);
@@ -836,6 +992,11 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
 
         var bucket = CalculateQueuePressureBucket(queueDepth, capacity);
         var previous = Interlocked.Exchange(ref _queuePressureBucket, bucket);
+
+        if (Volatile.Read(ref _adaptiveAdjustmentInProgress) == 0)
+        {
+            MaybeAdjustQueueCapacity(queueDepth, capacity);
+        }
 
         if (previous == bucket)
         {

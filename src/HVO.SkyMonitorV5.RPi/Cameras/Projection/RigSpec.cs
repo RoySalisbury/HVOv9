@@ -48,4 +48,32 @@ public static class RigPresets
             Capabilities: new[] { "Synthetic", "StackingCompatible", "FisheyeProjection" }
         )
     );
+
+    /// <summary>
+    /// ZWO ASI174MC (colour) + Fujinon FE185C086HA-1.
+    /// </summary>
+    public static readonly RigSpec MockAsi174MC_Fujinon = new(
+        Name: "MockASI174MC + Fujinon 2.7mm",
+        Sensor: new SensorSpec(
+            WidthPx: 1936,
+            HeightPx: 1216,
+            PixelSizeMicrons: 5.86
+        ),
+        Lens: new LensSpec(
+            Model: ProjectionModel.Equidistant,
+            FocalLengthMm: 2.7,
+            FovXDeg: 185.0,
+            FovYDeg: 185.0,
+            RollDeg: 0.0,
+            Name: "Fujinon FE185C086HA-1",
+            Kind: LensKind.Fisheye
+        ),
+        Descriptor: new CameraDescriptor(
+            Manufacturer: "HVO",
+            Model: "Mock Colour Fisheye AllSky",
+            DriverVersion: "2.0.0",
+            AdapterName: "MockColorCameraAdapter",
+            Capabilities: new[] { "Synthetic", "StackingCompatible", "FisheyeProjection", "Colour" }
+        )
+    );
 }

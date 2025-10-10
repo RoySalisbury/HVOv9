@@ -104,4 +104,84 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
     Assert.IsTrue(latest.AverageFilterMilliseconds.HasValue, "Average filter duration should be tracked.");
     Assert.AreEqual(47.5, latest.AverageFilterMilliseconds.Value, 1e-3, "Average filter duration should reflect all samples.");
     }
+
+    [TestMethod]
+    public void AdaptiveQueue_AdjustsCapacityForSustainedPressureChanges()
+    {
+        var options = new CameraPipelineOptions
+        {
+            EnableStacking = true,
+            EnableImageOverlays = false,
+            BackgroundStacker = new BackgroundStackerOptions
+            {
+                Enabled = true,
+                QueueCapacity = 24,
+                AdaptiveQueue = new AdaptiveQueueOptions
+                {
+                    Enabled = true,
+                    MinCapacity = 16,
+                    MaxCapacity = 40,
+                    IncreaseStep = 4,
+                    DecreaseStep = 4,
+                    ScaleUpThresholdPercent = 70,
+                    ScaleDownThresholdPercent = 30,
+                    EvaluationWindowSeconds = 1,
+                    CooldownSeconds = 1
+                }
+            }
+        };
+
+        var configuration = CameraConfiguration.FromOptions(options);
+
+        var optionsMonitor = new Mock<IOptionsMonitor<CameraPipelineOptions>>();
+        optionsMonitor.SetupGet(monitor => monitor.CurrentValue).Returns(options);
+        optionsMonitor.Setup(monitor => monitor.OnChange(It.IsAny<Action<CameraPipelineOptions, string?>>()))
+            .Returns(Mock.Of<IDisposable>());
+
+        var frameStacker = new Mock<IFrameStacker>(MockBehavior.Strict);
+        var pipeline = new Mock<IFrameFilterPipeline>(MockBehavior.Strict);
+
+        var frameStateStore = new Mock<IFrameStateStore>(MockBehavior.Strict);
+        frameStateStore.SetupGet(store => store.ConfigurationVersion).Returns(1);
+        frameStateStore.SetupGet(store => store.Configuration).Returns(configuration);
+        frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
+
+        using var service = new BackgroundFrameStackerService(
+            optionsMonitor.Object,
+            frameStacker.Object,
+            pipeline.Object,
+            frameStateStore.Object,
+            NullLogger<BackgroundFrameStackerService>.Instance);
+
+        var serviceType = typeof(BackgroundFrameStackerService);
+        var updateQueuePressure = serviceType.GetMethod("UpdateQueuePressure", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(updateQueuePressure, "Expected UpdateQueuePressure method via reflection.");
+
+        static void SetField<T>(BackgroundFrameStackerService target, string fieldName, T value)
+        {
+            var field = typeof(BackgroundFrameStackerService).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, $"Expected field '{fieldName}'");
+            field.SetValue(target, value);
+        }
+
+        void ForceAdaptiveWindow()
+        {
+            SetField(service, "_lastAdaptiveSampleTimestamp", DateTimeOffset.UtcNow - TimeSpan.FromSeconds(2));
+            SetField(service, "_adaptiveNextAdjustmentAllowed", DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1));
+        }
+
+        ForceAdaptiveWindow();
+        updateQueuePressure.Invoke(service, new object[] { 28 });
+
+        var currentOptionsField = serviceType.GetField("_currentOptions", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(currentOptionsField, "Expected _currentOptions field via reflection.");
+        var currentOptions = (BackgroundStackerOptions)currentOptionsField.GetValue(service)!;
+        Assert.AreEqual(28, currentOptions.QueueCapacity, "Sustained high pressure should increase queue capacity within bounds.");
+
+        ForceAdaptiveWindow();
+        updateQueuePressure.Invoke(service, new object[] { 4 });
+
+        currentOptions = (BackgroundStackerOptions)currentOptionsField.GetValue(service)!;
+        Assert.AreEqual(24, currentOptions.QueueCapacity, "Sustained low pressure should decrease queue capacity within bounds.");
+    }
 }
