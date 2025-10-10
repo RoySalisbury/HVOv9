@@ -267,29 +267,32 @@ If you toggle overlay flags without supplying `frameFilters`, the system keeps t
 
 ```mermaid
 sequenceDiagram
-    participant Scheduler as AllSkyCaptureService
-    participant Exposure as IExposureController
-    participant Camera as ICameraAdapter
-    participant Stacker as RollingFrameStacker
-    participant Pipeline as FrameFilterPipeline
-    participant Filter as IFrameFilter (sequence)
-    participant Store as FrameStateStore
-    participant ApiUi as API / Blazor Client
+  participant Scheduler as AllSkyCaptureService
+  participant Exposure as IExposureController
+  participant Camera as ICameraAdapter
+  participant Stacker as RollingFrameStacker
+  participant Pipeline as FrameFilterPipeline
+  participant Context as FrameRenderContext
+  participant Filter as IFrameFilter (sequence)
+  participant Store as FrameStateStore
+  participant ApiUi as API / Blazor Client
 
-    Scheduler->>Exposure: CreateNextExposure(configuration)
-    Exposure-->>Scheduler: ExposureSettings
-    Scheduler->>Camera: CaptureAsync(exposure)
-    Camera-->>Scheduler: CameraFrame (raw JPEG + pixels)
-    Scheduler->>Stacker: Accumulate(frame, configuration)
-    Stacker-->>Scheduler: FrameStackResult (stacked frame + metadata)
-    Scheduler->>Pipeline: ProcessAsync(stackResult, configuration)
-    loop Filter sequence
-        Pipeline->>Filter: ApplyAsync(bitmap)
-        Filter-->>Pipeline: Modified bitmap
-    end
-    Pipeline-->>Scheduler: ProcessedFrame (JPEG + overlays)
-    Scheduler->>Store: UpdateFrame(raw, processed)
-    Store-->>ApiUi: Latest frame + status (on request)
+  Scheduler->>Exposure: CreateNextExposure(configuration)
+  Exposure-->>Scheduler: ExposureSettings
+  Scheduler->>Camera: CaptureAsync(exposure)
+  Camera-->>Scheduler: CameraFrame + FrameContext
+  Scheduler->>Stacker: Accumulate(frame, configuration)
+  Stacker-->>Scheduler: FrameStackResult (stacked image + FrameContext)
+  Scheduler->>Pipeline: ProcessAsync(stackResult, configuration)
+  Pipeline->>Context: Wrap FrameContext for filters
+  loop Filter sequence
+    Pipeline->>Filter: ApplyAsync(bitmap, Context)
+    Filter-->>Pipeline: Modified bitmap
+  end
+  Pipeline->>Context: Dispose()
+  Pipeline-->>Scheduler: ProcessedFrame (JPEG + overlays)
+  Scheduler->>Store: UpdateFrame(raw, processed)
+  Store-->>ApiUi: Latest frame + status (on request)
 ```
 
 ### Flow chart
@@ -299,14 +302,14 @@ flowchart LR
     A[Timer tick] --> B{Stacking enabled?}
     B -- No --> C[Capture frame]
     B -- Yes --> C
-    C --> D[RollingFrameStacker\nAccumulate]
+  C --> D[RollingFrameStacker\nAccumulate + retain FrameContext]
     D --> E{Enough frames/integration?}
     E -- No --> F[Return latest frame]
     E -- Yes --> G[Average frames]
     F --> H[FrameFilterPipeline]
     G --> H
-    H --> I[Apply configured filters in order]
-    I --> J[Encode JPEG]
+  H --> I[Apply configured filters with FrameRenderContext]
+  I --> J[Encode JPEG]
     J --> K[FrameStateStore]
     K --> L[API / UI consumes frames]
 ```
@@ -314,8 +317,14 @@ flowchart LR
 ### Frame context ownership
 
 - Camera adapters supply a `FrameContext` with the active rig plus a freshly constructed `StarFieldEngine`. The engine now builds and owns the `IImageProjector` derived from that rig, exposing it via `FrameRenderContext.Projector` for filters that need optical metadata.
-- The capture loop and filter pipeline both dispose the context once processing completes, guaranteeing the shared `StarFieldEngine` (and its projector) are released promptly even if an exception interrupts the workflow.
+- `RollingFrameStacker` preserves the most recent `FrameContext` across stacked frames and resets its buffer if a mismatched rig arrives, ensuring downstream filters never blend incompatible optics.
+- The filter pipeline wraps the incoming context in a `FrameRenderContext`, passes that same instance to each filter, and disposes it once processing completes so the shared `StarFieldEngine` is released even on exceptions.
 - Filters must rely on the provided `FrameRenderContext`; avoid instantiating additional `StarFieldEngine` instances so overlays stay in sync with the original render geometry.
+
+### Verification checkpoints
+
+- `FrameFilterPipelineTests` confirm render context propagation, disposal, and telemetry bookkeeping.
+- `RollingFrameStackerTests` ensure context reuse when stacking and guard against premature disposal when stacking is disabled.
 
 ## Project layout highlights
 

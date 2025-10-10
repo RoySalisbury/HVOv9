@@ -51,9 +51,19 @@ _Last updated: 2025-10-07_
 - [x] Audit DI registrations in `Program.cs` and strip any now-unused singletons.
 
 ### Phase 5 – Verification & Docs
-- [ ] Add unit coverage for the pipeline ensuring `FrameRenderContext` travels end-to-end.
+- [x] Add unit coverage for the pipeline ensuring `FrameRenderContext` travels end-to-end.
+  - [x] Create pipeline tests that process a stacked frame and assert `FrameRenderContext` disposal and filter telemetry. (`FrameFilterPipelineTests`, `RollingFrameStackerTests`)
+- [x] Add performance-focused tests that record stacking + filter timings for future regression tracking. (`BackgroundFrameStackerServicePerformanceTests` validates telemetry aggregation.)
+  - [x] Evaluate whether to keep timing tests in MSTest or split into a dedicated performance benchmark suite for cleaner separation. _Decision:_ keep lightweight telemetry assertions in MSTest for now; revisit if runtime measurements become flaky.
 - [ ] Refresh README/sequence diagrams to reflect the new context-oriented flow.
 - [x] Perform full `dotnet build` and targeted smoke tests.
+
+### Phase 6 – Performance Benchmark Suite
+- [ ] Design a standalone performance benchmarking project (evaluate BenchmarkDotNet vs. custom harness).
+  - [ ] Identify critical pipeline hot paths (stacking, filter execution, capture loop) and define representative scenarios.
+  - [ ] Ensure benchmarks can run against synthetic data without hardware dependencies. (Syntehetic data can include the Mock camera since it is not tied to actual hardware).
+- [ ] Integrate benchmark outputs into CI or developer tooling (decide on cadence and thresholds).
+- [ ] Document benchmark setup and interpretation guidance in the repository.
 
 ## Open Questions / Follow-Ups
 - How should disposal behave when a capture fails mid-pipeline (e.g., cancellation)? (Current implementation disposes in both the pipeline and capture loop finally blocks; confirm no regressions in long-running sessions.)

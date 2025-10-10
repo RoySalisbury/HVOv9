@@ -88,24 +88,22 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         continue;
                     }
 
-                    Stopwatch? filterStopwatch = null;
-                    if (filterTimings is not null)
-                    {
-                        filterStopwatch = Stopwatch.StartNew();
-                    }
+                    var filterStopwatch = Stopwatch.StartNew();
 
                     try
                     {
                         appliedFilters.Add(filter.Name);
                         await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
 
-                        if (filterTimings is not null && filterStopwatch is not null)
+                        filterStopwatch.Stop();
+                        var duration = filterStopwatch.Elapsed.TotalMilliseconds;
+
+                        if (filterTimings is not null)
                         {
-                            filterStopwatch.Stop();
-                            var duration = filterStopwatch.Elapsed.TotalMilliseconds;
                             filterTimings.Add(new FilterTiming(filter.Name, duration));
-                            _telemetryStore.Record(filter.Name, duration);
                         }
+
+                        _telemetryStore.Record(filter.Name, duration);
                     }
                     catch (OperationCanceledException)
                     {
