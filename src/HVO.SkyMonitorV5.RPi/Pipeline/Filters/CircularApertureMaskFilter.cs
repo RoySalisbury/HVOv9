@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 
@@ -25,18 +26,35 @@ public sealed class CircularApertureMaskFilter : IFrameFilter
 	public bool ShouldApply(CameraConfiguration configuration) => configuration.EnableCircularApertureMask;
 
 	public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
+		=> ApplyAsync(bitmap, stackResult, configuration, renderContext: null, cancellationToken);
+
+	public ValueTask ApplyAsync(
+		SKBitmap bitmap,
+		FrameStackResult stackResult,
+		CameraConfiguration configuration,
+		FrameRenderContext? renderContext,
+		CancellationToken cancellationToken)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 
 		var options = _optionsMonitor.CurrentValue;
 
 		using var canvas = new SKCanvas(bitmap);
-		var baseRadius = Math.Min(bitmap.Width, bitmap.Height) * 0.95f / 2f;
+
+		var projector = renderContext?.Projector;
+		var referenceWidth = projector?.WidthPx ?? bitmap.Width;
+		var referenceHeight = projector?.HeightPx ?? bitmap.Height;
+		var horizonPadding = (float)(renderContext?.HorizonPadding ?? 0.95);
+		horizonPadding = Math.Clamp(horizonPadding, 0.1f, 1.2f);
+
+		var baseRadius = Math.Min(referenceWidth, referenceHeight) * horizonPadding * 0.5f;
 		var radius = Math.Max(8f, baseRadius + options.RadiusOffsetPixels);
 
-		var center = new SKPoint(
-			bitmap.Width / 2f + options.OffsetXPixels,
-			bitmap.Height / 2f + options.OffsetYPixels);
+		var center = projector is not null
+			? new SKPoint((float)projector.Cx, (float)projector.Cy)
+			: new SKPoint(bitmap.Width / 2f, bitmap.Height / 2f);
+
+		center.Offset(options.OffsetXPixels, options.OffsetYPixels);
 
 		var circleRect = new SKRect(
 			center.X - radius,

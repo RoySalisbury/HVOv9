@@ -40,7 +40,13 @@ _Last updated: 2025-10-07_
   - FrameContext disposal is centralized inside the filter pipeline, eliminating duplicate dispose paths in the capture and background services.
 
 ### Phase 4 – Filters & DI Cleanup
-- [x] Migrate filters (`CelestialAnnotationsFilter`, `CardinalDirectionsFilter`, etc.) to rely on the supplied `FrameRenderContext`.
+- [x] Migrate filters to rely on the supplied `FrameRenderContext`.
+  - [x] CardinalDirectionsFilter uses projector metadata for centering and rotation.
+  - [x] OverlayTextFilter pulls rig/location/timezone from the render context.
+  - [x] CircularApertureMaskFilter bases radius/centroid on projector + horizon padding.
+  - [x] CelestialAnnotationsFilter resolves star catalog and projector coordinates via context.
+  - [x] ConstellationFigureFilter moves to context-aware geometry calculations.
+  - [x] Diagnostics overlay shares context for sensor telemetry.
 - [x] Remove the legacy `IRenderEngineProvider` singleton and corresponding constructor parameters.
 - [x] Audit DI registrations in `Program.cs` and strip any now-unused singletons.
 
@@ -54,6 +60,9 @@ _Last updated: 2025-10-07_
 - Do we need to pool projector instances for performance, or is per-frame allocation acceptable?
 - Should filters be allowed to mutate the `FrameContext` (e.g., adding computed lookup tables), or keep it immutable?
 - What telemetry should we log when the context is missing or partially populated?
+
+## Post-Background-Stacker TODOs
+- Update the SkyMonitor UI footer so the displayed local time is computed from the observatory location instead of the UTC server time.
 
 ## Success Criteria
 - Filters can rely exclusively on `FrameRenderContext` without DI lookups.

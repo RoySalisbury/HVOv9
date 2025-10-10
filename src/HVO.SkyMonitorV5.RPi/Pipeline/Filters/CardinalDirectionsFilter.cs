@@ -46,17 +46,36 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
             FrameRenderContext? renderContext,
             CancellationToken cancellationToken)
         {
-            _ = renderContext;
             cancellationToken.ThrowIfCancellationRequested();
 
             var options = _opts.CurrentValue;
 
+            var projector = renderContext?.Projector;
+            var center = projector is not null
+                ? new SKPoint((float)projector.Cx, (float)projector.Cy)
+                : new SKPoint(bitmap.Width / 2f, bitmap.Height / 2f);
+
+            var swapEastWest = options.SwapEastWest;
+            var rotationDegrees = options.RotationDegrees;
+
+            if (renderContext is not null)
+            {
+                if (renderContext.FlipHorizontal)
+                {
+                    swapEastWest = !swapEastWest;
+                }
+
+                var rigRoll = renderContext.Rig.Lens.RollDeg;
+                if (Math.Abs(rigRoll) > double.Epsilon)
+                {
+                    rotationDegrees += (float)rigRoll;
+                }
+            }
+
             using var canvas = new SKCanvas(bitmap);
             canvas.Save();
 
-            var center = new SKPoint(
-                bitmap.Width / 2f + options.OffsetXPixels,
-                bitmap.Height / 2f + options.OffsetYPixels);
+            center.Offset(options.OffsetXPixels, options.OffsetYPixels);
 
             var radiusBase = Math.Min(bitmap.Width, bitmap.Height) / 2f;
             var radius = Math.Max(8f, radiusBase + options.RadiusOffsetPixels);
@@ -100,12 +119,12 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
                 StrokeWidth = Math.Max(0.5f, options.CircleThickness)
             };
 
-            var labels = BuildLabelMap(options);
+            var labels = BuildLabelMap(options, swapEastWest);
 
             var metrics = font.Metrics;
             var textHeight = metrics.Descent - metrics.Ascent;
             var labelRadius = Math.Max(0f, radius - options.LabelPadding - textHeight * 0.5f - circlePaint.StrokeWidth);
-            var rotationOffset = DegreesToRadians(options.RotationDegrees);
+            var rotationOffset = DegreesToRadians(rotationDegrees);
 
             foreach (var entry in labels)
             {
@@ -170,10 +189,10 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
                 _ => null
             };
 
-        private static IReadOnlyList<(string Label, float AngleDegrees)> BuildLabelMap(CardinalDirectionsOptions options)
+        private static IReadOnlyList<(string Label, float AngleDegrees)> BuildLabelMap(CardinalDirectionsOptions options, bool swapEastWest)
         {
-            var eastLabel = options.SwapEastWest ? options.LabelWest : options.LabelEast;
-            var westLabel = options.SwapEastWest ? options.LabelEast : options.LabelWest;
+            var eastLabel = swapEastWest ? options.LabelWest : options.LabelEast;
+            var westLabel = swapEastWest ? options.LabelEast : options.LabelWest;
 
             return new[]
             {

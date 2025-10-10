@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GeoTimeZone;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 using TimeZoneConverter;
@@ -35,13 +36,26 @@ public sealed class OverlayTextFilter : IFrameFilter
     public bool ShouldApply(CameraConfiguration configuration) => configuration.EnableImageOverlays;
 
     public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
+        => ApplyAsync(bitmap, stackResult, configuration, renderContext: null, cancellationToken);
+
+    public ValueTask ApplyAsync(
+        SKBitmap bitmap,
+        FrameStackResult stackResult,
+        CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var options = _optionsMonitor.CurrentValue;
         var location = _locationMonitor.CurrentValue;
-        var timeZone = GetTimeZoneForLocation(location);
-    var localTimestamp = TimeZoneInfo.ConvertTime(stackResult.Timestamp, timeZone.TimeZone);
+
+        var latitude = renderContext?.LatitudeDeg ?? location.LatitudeDegrees;
+        var longitude = renderContext?.LongitudeDeg ?? location.LongitudeDegrees;
+        var timeZone = GetTimeZoneForLocation(latitude, longitude);
+
+        var timestamp = renderContext?.Timestamp ?? stackResult.Timestamp;
+        var localTimestamp = TimeZoneInfo.ConvertTime(timestamp, timeZone.TimeZone);
 
         using var canvas = new SKCanvas(bitmap);
         using var boldTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
@@ -52,12 +66,21 @@ public sealed class OverlayTextFilter : IFrameFilter
         using var subtitlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(211, 211, 211, 230) };
         using var backgroundPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 160) };
 
-        var locationText = $"Lat: {FormatLatitude(location.LatitudeDegrees)} | Lon: {FormatLongitude(location.LongitudeDegrees)}";
+        var locationText = $"Lat: {FormatLatitude(latitude)} | Lon: {FormatLongitude(longitude)}";
         var timestampText = $"Local Time ({timeZone.DisplayId}): {localTimestamp.ToString(options.OverlayTextFormat)}";
         var exposureText = $"Exposure: {stackResult.Exposure.ExposureMilliseconds} ms | Gain: {stackResult.Exposure.Gain}";
         var integrationText = stackResult.FramesStacked > 1
             ? $"Integration: {stackResult.IntegrationMilliseconds} ms ({stackResult.FramesStacked} frames)"
             : null;
+
+        string? rigText = null;
+        if (renderContext is not null)
+        {
+            var rig = renderContext.Rig;
+            var lens = rig.Lens;
+            var lensLabel = string.IsNullOrWhiteSpace(lens.Name) ? lens.Model.ToString() : lens.Name;
+            rigText = $"Rig: {rig.Name} | Lens: {lensLabel} ({lens.FocalLengthMm:0.0} mm)";
+        }
 
         var titleMetrics = titleFont.Metrics;
         var subtitleMetrics = subtitleFont.Metrics;
@@ -68,6 +91,11 @@ public sealed class OverlayTextFilter : IFrameFilter
             (timestampText, subtitleFont, subtitlePaint, subtitleMetrics),
             (exposureText, subtitleFont, subtitlePaint, subtitleMetrics)
         };
+
+        if (!string.IsNullOrWhiteSpace(rigText))
+        {
+            lines.Add((rigText!, subtitleFont, subtitlePaint, subtitleMetrics));
+        }
 
         if (!string.IsNullOrWhiteSpace(integrationText))
         {
@@ -130,11 +158,11 @@ public sealed class OverlayTextFilter : IFrameFilter
         }
     }
 
-    private CachedTimeZone GetTimeZoneForLocation(ObservatoryLocationOptions location)
+    private CachedTimeZone GetTimeZoneForLocation(double latitude, double longitude)
     {
         lock (_timeZoneSync)
         {
-            if (_cachedTimeZone is { } cache && CoordinatesMatch(cache.Latitude, location.LatitudeDegrees) && CoordinatesMatch(cache.Longitude, location.LongitudeDegrees))
+            if (_cachedTimeZone is { } cache && CoordinatesMatch(cache.Latitude, latitude) && CoordinatesMatch(cache.Longitude, longitude))
             {
                 return cache;
             }
@@ -143,7 +171,7 @@ public sealed class OverlayTextFilter : IFrameFilter
 
             try
             {
-                var lookup = TimeZoneLookup.GetTimeZone(location.LatitudeDegrees, location.LongitudeDegrees);
+                var lookup = TimeZoneLookup.GetTimeZone(latitude, longitude);
                 timeZoneId = string.IsNullOrWhiteSpace(lookup.Result) ? "UTC" : lookup.Result;
             }
             catch
@@ -152,7 +180,7 @@ public sealed class OverlayTextFilter : IFrameFilter
             }
 
             var timeZoneInfo = ResolveTimeZoneInfo(timeZoneId);
-            var updated = new CachedTimeZone(location.LatitudeDegrees, location.LongitudeDegrees, timeZoneId, timeZoneInfo);
+            var updated = new CachedTimeZone(latitude, longitude, timeZoneId, timeZoneInfo);
             _cachedTimeZone = updated;
             return updated;
         }

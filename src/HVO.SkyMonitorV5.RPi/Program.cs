@@ -175,6 +175,11 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<DiagnosticsOverlayOptions>()
+            .Bind(configuration.GetSection(DiagnosticsOverlayOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
@@ -188,6 +193,7 @@ public static class Program
         services.AddSingleton<IFrameFilter, CelestialAnnotationsFilter>();
         services.AddSingleton<IFrameFilter, OverlayTextFilter>();
         services.AddSingleton<IFrameFilter, CircularApertureMaskFilter>();
+    services.AddSingleton<IFrameFilter, DiagnosticsOverlayFilter>();
 
         services.AddSingleton<FrameFilterPipeline>();
         services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());

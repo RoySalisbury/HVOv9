@@ -26,7 +26,6 @@ public sealed class ConstellationFigureFilter : IFrameFilter
     private static readonly float[] DashedPattern = { 8f, 6f };
 
     private readonly IOptionsMonitor<ConstellationFigureOptions> _optionsMonitor;
-    private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
     private readonly IOptionsMonitor<StarCatalogOptions> _catalogMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ConstellationFigureFilter> _logger;
@@ -36,13 +35,11 @@ public sealed class ConstellationFigureFilter : IFrameFilter
     public ConstellationFigureFilter(
         IServiceScopeFactory scopeFactory,
         IOptionsMonitor<ConstellationFigureOptions> optionsMonitor,
-        IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
         IOptionsMonitor<StarCatalogOptions> catalogMonitor,
         ILogger<ConstellationFigureFilter> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
-        _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogMonitor = catalogMonitor ?? throw new ArgumentNullException(nameof(catalogMonitor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -80,22 +77,30 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             return;
         }
 
-        var timestampUtc = renderContext?.Timestamp.UtcDateTime;
-        if (timestampUtc is null || timestampUtc == default)
+        var context = renderContext!;
+
+        if (!double.IsFinite(context.LatitudeDeg) || !double.IsFinite(context.LongitudeDeg))
+        {
+            _logger.LogWarning(
+                "Constellation figures: frame context missing valid coordinates (lat {Latitude}, lon {Longitude}); skipping overlay.",
+                context.LatitudeDeg,
+                context.LongitudeDeg);
+            return;
+        }
+
+        var timestampUtc = context.Timestamp.UtcDateTime;
+        if (timestampUtc == default)
         {
             timestampUtc = DateTime.UtcNow;
         }
-
-        var latitude = renderContext?.LatitudeDeg ?? _locationMonitor.CurrentValue.LatitudeDegrees;
-        var longitude = renderContext?.LongitudeDeg ?? _locationMonitor.CurrentValue.LongitudeDegrees;
 
         var catalogOptions = _catalogMonitor.CurrentValue;
 
         var visibleFigures = await ResolveVisibleConstellationsAsync(
             cache,
-            latitude,
-            longitude,
-            timestampUtc.Value,
+            context.LatitudeDeg,
+            context.LongitudeDeg,
+            timestampUtc,
             catalogOptions,
             engine,
             bitmap.Width,

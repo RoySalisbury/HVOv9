@@ -37,7 +37,6 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private static readonly SKColor DefaultPlanetLabelColor = new(255, 226, 194, 240);
     private static readonly SKColor DefaultDeepSkyLabelColor = new(240, 228, 255, 240);
 
-    private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
     private readonly IOptionsMonitor<StarCatalogOptions> _catalogMonitor;
     private readonly IOptionsMonitor<CelestialAnnotationsOptions> _annotationMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -50,13 +49,11 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private AnnotationCache _cache;
 
     public CelestialAnnotationsFilter(
-        IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
         IOptionsMonitor<StarCatalogOptions> catalogMonitor,
         IOptionsMonitor<CelestialAnnotationsOptions> annotationMonitor,
         IServiceScopeFactory scopeFactory,
         ILogger<CelestialAnnotationsFilter> logger)
     {
-        _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogMonitor = catalogMonitor ?? throw new ArgumentNullException(nameof(catalogMonitor));
         _annotationMonitor = annotationMonitor ?? throw new ArgumentNullException(nameof(annotationMonitor));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -113,6 +110,15 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         }
 
         var context = renderContext!;
+
+        if (!double.IsFinite(context.LatitudeDeg) || !double.IsFinite(context.LongitudeDeg))
+        {
+            _logger.LogWarning(
+                "Celestial annotations: frame context missing valid coordinates (lat {Latitude}, lon {Longitude}); skipping overlay.",
+                context.LatitudeDeg,
+                context.LongitudeDeg);
+            return;
+        }
 
         var cache = Volatile.Read(ref _cache);
         var catalogOptions = _catalogMonitor.CurrentValue;
@@ -206,8 +212,6 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             return;
         }
 
-        var location = _locationMonitor.CurrentValue;
-
         var frameTimestampUtc = context.Timestamp.UtcDateTime;
         if (frameTimestampUtc == default)
         {
@@ -268,7 +272,13 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         if (annotatePlanets)
         {
-            var planetMarks = await ComputePlanetMarks(location, catalogOptions, frameTimestampUtc, cache.PlanetBodyLookup, cancellationToken)
+            var planetMarks = await ComputePlanetMarks(
+                    context.LatitudeDeg,
+                    context.LongitudeDeg,
+                    catalogOptions,
+                    frameTimestampUtc,
+                    cache.PlanetBodyLookup,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             foreach (var planet in planetMarks)
@@ -479,6 +489,15 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (!double.IsFinite(context.LatitudeDeg) || !double.IsFinite(context.LongitudeDeg))
+        {
+            _logger.LogWarning(
+                "Celestial annotations: automatic star selection requires valid coordinates; skipping (lat {Latitude}, lon {Longitude}).",
+                context.LatitudeDeg,
+                context.LongitudeDeg);
+            return Array.Empty<ResolvedAnnotation>();
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IStarRepository>();
 
@@ -597,7 +616,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     }
 
     private async Task<IReadOnlyList<PlanetMark>> ComputePlanetMarks(
-        ObservatoryLocationOptions location,
+        double latitudeDeg,
+        double longitudeDeg,
         StarCatalogOptions options,
         DateTime timestampUtc,
         HashSet<PlanetBody> requestedBodies,
@@ -617,8 +637,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         var repository = scope.ServiceProvider.GetRequiredService<IPlanetRepository>();
 
         var result = await repository.GetVisiblePlanetsAsync(
-            latitudeDeg: location.LatitudeDegrees,
-            longitudeDeg: location.LongitudeDegrees,
+            latitudeDeg: latitudeDeg,
+            longitudeDeg: longitudeDeg,
             utc: timestampUtc,
             criteria: criteria,
             cancellationToken).ConfigureAwait(false);
