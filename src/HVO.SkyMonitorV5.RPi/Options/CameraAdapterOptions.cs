@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
@@ -12,7 +13,7 @@ namespace HVO.SkyMonitorV5.RPi.Options;
 /// <summary>
 /// Configuration for each camera adapter instance registered in the host.
 /// </summary>
-public sealed class CameraAdapterOptions
+public sealed class CameraAdapterOptions : IValidatableObject
 {
     public const string SectionName = "AllSkyCameras";
 
@@ -24,8 +25,63 @@ public sealed class CameraAdapterOptions
     [MaxLength(128)]
     public string Adapter { get; set; } = CameraAdapterTypes.Mock;
 
-    [Required]
-    public RigSpecOptions Rig { get; set; } = new();
+    [MaxLength(128)]
+    public string? RigCatalog { get; set; }
+
+    public RigSpecOptions? Rig { get; set; }
+
+    public RigSpec ResolveRig(IRigCatalog rigCatalog)
+    {
+        if (rigCatalog is null)
+        {
+            throw new ArgumentNullException(nameof(rigCatalog));
+        }
+
+        if (!string.IsNullOrWhiteSpace(RigCatalog))
+        {
+            var reference = RigCatalog!.Trim();
+            var result = rigCatalog.Resolve(reference);
+            if (result.IsSuccessful)
+            {
+                return result.Value;
+            }
+
+            var error = result.Error ?? new InvalidOperationException($"Rig catalog entry '{reference}' could not be resolved.");
+            throw new InvalidOperationException($"Rig catalog entry '{reference}' could not be resolved for camera '{Name}'.", error);
+        }
+
+        if (Rig is not null)
+        {
+            return Rig.ToRigSpec();
+        }
+
+        throw new InvalidOperationException($"Camera '{Name}' must specify either '{nameof(RigCatalog)}' or inline '{nameof(Rig)}' configuration.");
+    }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(RigCatalog) && Rig is null)
+        {
+            yield return new ValidationResult(
+                $"Camera '{Name}' must specify either a rig catalog reference or inline rig configuration.",
+                new[] { nameof(RigCatalog), nameof(Rig) });
+        }
+
+        if (!string.IsNullOrWhiteSpace(RigCatalog) && Rig is not null)
+        {
+            yield return new ValidationResult(
+                "Specify either a rig catalog reference or inline rig configuration, not both.",
+                new[] { nameof(RigCatalog), nameof(Rig) });
+        }
+
+        if (Rig is not null && string.IsNullOrWhiteSpace(RigCatalog))
+        {
+            foreach (var result in Rig.Validate(new ValidationContext(Rig)))
+            {
+                yield return result;
+            }
+        }
+    }
 }
 
 public static class CameraAdapterTypes

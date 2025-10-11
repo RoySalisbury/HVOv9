@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Components;
 using HVO.SkyMonitorV5.RPi.Data;
@@ -9,6 +10,7 @@ using HVO.SkyMonitorV5.RPi.Middleware;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -201,6 +203,16 @@ public static class Program
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IObservatoryClock, ObservatoryClock>();
 
+        services.AddOptions<AllSkyCatalogOptions>()
+            .Bind(configuration.GetSection(AllSkyCatalogOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<AllSkyCatalogRegistry>();
+        services.AddSingleton<ICameraCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
+        services.AddSingleton<ILensCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
+        services.AddSingleton<IRigCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
+
         services.AddSingleton<FrameFilterPipeline>();
         services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
         services.AddSingleton<IDiagnosticsService, DiagnosticsService>();
@@ -241,6 +253,8 @@ public static class Program
                 continue;
             }
 
+            Validator.ValidateObject(camera, new ValidationContext(camera), validateAllProperties: true);
+
             if (string.IsNullOrWhiteSpace(camera.Name))
             {
                 throw new InvalidOperationException("Each camera adapter must specify a non-empty Name.");
@@ -252,8 +266,6 @@ public static class Program
             {
                 throw new InvalidOperationException($"Duplicate camera adapter name '{cameraName}' detected. Each adapter must have a unique name.");
             }
-
-            var rigSpec = camera.Rig?.ToRigSpec() ?? throw new InvalidOperationException($"Camera '{cameraName}' is missing a rig configuration.");
             var adapterKey = string.IsNullOrWhiteSpace(camera.Adapter)
                 ? CameraAdapterTypes.Mock
                 : camera.Adapter.Trim();
@@ -262,6 +274,8 @@ public static class Program
 
             services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
             {
+                var rigCatalog = sp.GetRequiredService<IRigCatalog>();
+                var rigSpec = camera.ResolveRig(rigCatalog);
                 var observatoryClock = sp.GetRequiredService<IObservatoryClock>();
                 if (CameraAdapterTypes.IsMockColor(normalizedAdapterKey))
                 {

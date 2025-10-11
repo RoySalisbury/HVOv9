@@ -8,18 +8,22 @@
 - Prepare the capture pipeline for a unified `CameraAdapter` while enforcing that only one adapter runs at a time.
 
 ## Phase plan overview
-1. **Phase 1 – Domain Model Prep**
-   - Extend `RigSpec` with `BoresightAltDeg` / `BoresightAzDeg` fields.
-   - Relocate `CameraDescriptor` to `CameraSpec` and expose descriptor/capability helpers.
-   - Introduce catalog option POCOs (`CameraCatalogOptions`, `LensCatalogOptions`, `RigCatalogOptions`) and service interfaces to resolve specs.
-   - Update `RigFactory` and projector wiring to honor boresight data.
-   - Add validation helpers for the new option types.
+1. **Phase 1 – Domain Model Prep** — ✅ *Completed 2025-10-10*
+  - Extend `RigSpec` with `BoresightAltDeg` / `BoresightAzDeg` fields.
+  - Relocate `CameraDescriptor` to `CameraSpec` and expose descriptor/capability helpers.
+  - Introduce catalog option POCOs (`CameraCatalogOptions`, `LensCatalogOptions`, `RigCatalogOptions`) and service interfaces to resolve specs.
+  - Update `RigFactory` and projector wiring to honor boresight data.
+  - Add validation helpers for the new option types.
 
-2. **Phase 2 – Configuration & Migration**
+2. **Phase 2 – Configuration & Migration** — 🚧 *In progress*
    - Rework `appsettings.json` to use catalog-based configuration.
    - Provide migration guidance and temporary shims for legacy settings.
    - Enforce validation on startup (missing references, duplicate names, invalid boresight ranges).
    - Improve logging to surface configuration load status.
+  - ✅ *Kickoff:* Added `AllSkyCatalogOptions` scaffolding with camera/lens/rig catalog entries and catalog service interfaces.
+  - ✅ *Latest:* Registered catalog services in DI and created the in-memory catalog registry for option-backed resolution.
+  - ✅ *Config migrated:* `appsettings.json` now seeds camera, lens, and rig catalogs with adapters referencing catalog rigs rather than inline definitions.
+  - ✅ *Validation on start:* `AllSkyCatalogOptions` now uses `ValidateOnStart`/DataAnnotations at DI registration to fail fast when catalog entries are invalid.
 
 3. **Phase 3 – Adapter Unification Groundwork**
    - Switch adapters to consume catalog output and camera descriptors from `CameraSpec`.
@@ -99,6 +103,7 @@
 - Decide on sensible defaults for boresight when migrating legacy rigs (likely zenith `90°/0°`).
 - Catalog growth may require lazy loading if future rigs include large calibration payloads (distortion maps, flats).
 - Keep descriptors free of sensitive data (serial numbers, IPs) or sanitize logs if those fields are introduced.
+- **Phase 2 groundwork (2025-10-10):** Introduced catalog option POCOs and catalog service interfaces to begin migrating configuration off adapter-specific rigs.
 - **Phase 1 implementation notes (2025-10-10):**
   - `RigSpec` now includes `BoresightAltDeg`/`BoresightAzDeg` with zenith defaults and exposes `Camera.Descriptor` directly.
   - `CameraSpec` owns descriptor metadata; presets and adapter options were updated to supply descriptors centrally.
