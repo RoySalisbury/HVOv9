@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -256,7 +257,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             var exposure = _latestRawFrame?.Exposure;
             var rigSpec = _rigSpec;
             var rig = CreateRigSummary(rigSpec);
-            var cameraSummary = CreateCameraSummary(descriptor, exposure, _isRunning, _lastError);
+            var cameraSummary = CreateCameraSummary(descriptor, rigSpec, exposure, _isRunning, _lastError);
 
             var summary = new AllSkyStatusSummary(
                 Camera: cameraSummary,
@@ -367,6 +368,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
 
     private static AllSkyCameraSummary CreateCameraSummary(
         CameraDescriptor descriptor,
+        RigSpec? rig,
         ExposureSettings? exposure,
         bool isRunning,
         Exception? lastError)
@@ -381,13 +383,16 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 ? "Capturing"
                 : "Idle";
 
-        var capabilities = descriptor.Capabilities as IReadOnlyList<string>
+        var pipelineCapabilities = descriptor.Capabilities as IReadOnlyList<string>
             ?? descriptor.Capabilities?.ToArray()
             ?? Array.Empty<string>();
 
+        var hardwareCapabilities = rig?.Capabilities.ToDisplayTags() ?? Array.Empty<string>();
+
         return new AllSkyCameraSummary(
             Name: string.IsNullOrWhiteSpace(name) ? "Unknown" : name,
-            Capabilities: capabilities,
+            Capabilities: pipelineCapabilities,
+            HardwareCapabilities: hardwareCapabilities,
             ExposureMilliseconds: exposure?.ExposureMilliseconds ?? 0,
             Gain: exposure?.Gain ?? 0,
             Status: status);

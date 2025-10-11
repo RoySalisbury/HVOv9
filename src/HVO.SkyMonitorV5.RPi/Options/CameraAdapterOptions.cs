@@ -62,11 +62,32 @@ public sealed class RigSpecOptions : IValidatableObject
 
     public CameraDescriptorOptions? Descriptor { get; set; }
 
-    public RigSpec ToRigSpec() => new(
-        Name,
-        Sensor.ToSensorSpec(),
-        Lens.ToLensSpec(),
-        Descriptor?.ToCameraDescriptor());
+    public CameraSpecOptions? Camera { get; set; }
+
+    public RigSpec ToRigSpec()
+    {
+        var sensorSpec = Sensor.ToSensorSpec();
+        var cameraOptions = Camera;
+        var descriptor = Descriptor?.ToCameraDescriptor();
+
+        var resolvedCameraName = !string.IsNullOrWhiteSpace(cameraOptions?.Name)
+            ? cameraOptions!.Name!.Trim()
+            : !string.IsNullOrWhiteSpace(descriptor?.Model)
+                ? descriptor!.Model!
+                : Name;
+
+        var capabilities = cameraOptions?.Capabilities?.ToCameraCapabilities() ?? CameraCapabilities.Empty;
+        var cameraSpec = new CameraSpec(
+            resolvedCameraName,
+            sensorSpec,
+            capabilities);
+
+        return new RigSpec(
+            Name,
+            cameraSpec,
+            Lens.ToLensSpec(),
+            descriptor);
+    }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -88,6 +109,14 @@ public sealed class RigSpecOptions : IValidatableObject
         if (Descriptor is not null)
         {
             foreach (var result in Descriptor.Validate(nameof(Descriptor)))
+            {
+                yield return result;
+            }
+        }
+
+        if (Camera is not null)
+        {
+            foreach (var result in Camera.Validate(nameof(Camera)))
             {
                 yield return result;
             }
@@ -123,6 +152,82 @@ public sealed class SensorSpecOptions
         }
 
         return new SensorSpec(WidthPx, HeightPx, PixelSizeMicrons, CxPx, CyPx);
+    }
+}
+
+public sealed class CameraSpecOptions
+{
+    [MaxLength(128)]
+    public string? Name { get; set; }
+
+    public CameraCapabilitiesOptions Capabilities { get; set; } = new();
+
+    public IEnumerable<ValidationResult> Validate(string memberName)
+    {
+        if (Capabilities is null)
+        {
+            yield return new ValidationResult(
+                "Camera capabilities configuration is required when specifying a camera.",
+                new[] { memberName });
+            yield break;
+        }
+
+        foreach (var result in Capabilities.Validate($"{memberName}.{nameof(Capabilities)}"))
+        {
+            yield return result;
+        }
+    }
+}
+
+public sealed class CameraCapabilitiesOptions
+{
+    [EnumDataType(typeof(CameraColorMode))]
+    public CameraColorMode ColorMode { get; set; } = CameraColorMode.Unknown;
+
+    [EnumDataType(typeof(CameraSensorTechnology))]
+    public CameraSensorTechnology SensorTechnology { get; set; } = CameraSensorTechnology.Unknown;
+
+    [EnumDataType(typeof(CameraBodyType))]
+    public CameraBodyType BodyType { get; set; } = CameraBodyType.Unknown;
+
+    [EnumDataType(typeof(CameraCoolingType))]
+    public CameraCoolingType Cooling { get; set; } = CameraCoolingType.None;
+
+    public bool SupportsGainControl { get; set; } = true;
+
+    public bool SupportsExposureControl { get; set; } = true;
+
+    public bool SupportsTemperatureTelemetry { get; set; }
+
+    public bool SupportsSoftwareBinning { get; set; } = true;
+
+    public string[] AdditionalTags { get; set; } = Array.Empty<string>();
+
+    public CameraCapabilities ToCameraCapabilities() => new(
+        ColorMode,
+        SensorTechnology,
+        BodyType,
+        Cooling,
+        SupportsGainControl,
+        SupportsExposureControl,
+        SupportsTemperatureTelemetry,
+        SupportsSoftwareBinning,
+        AdditionalTags);
+
+    public IEnumerable<ValidationResult> Validate(string memberName)
+    {
+        if (AdditionalTags is { Length: > 0 })
+        {
+            for (var i = 0; i < AdditionalTags.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(AdditionalTags[i]))
+                {
+                    yield return new ValidationResult(
+                        "Additional capability tags cannot be blank.",
+                        new[] { $"{memberName}.{nameof(AdditionalTags)}[{i}]" });
+                }
+            }
+        }
     }
 }
 

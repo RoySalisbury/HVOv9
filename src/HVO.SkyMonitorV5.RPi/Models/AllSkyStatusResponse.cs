@@ -31,6 +31,7 @@ public sealed record AllSkyStatusSummary(
 public sealed record AllSkyCameraSummary(
     string Name,
     IReadOnlyList<string> Capabilities,
+    IReadOnlyList<string> HardwareCapabilities,
     int ExposureMilliseconds,
     int Gain,
     string Status

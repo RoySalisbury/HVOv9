@@ -10,10 +10,15 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Projection;
 /// </summary>
 public sealed record RigSpec(
     string Name,
-    SensorSpec Sensor,   // your existing SensorSpec type
-    LensSpec Lens,       // your existing LensSpec (ProjectionModel, FocalLengthMm, FovXDeg, ...)
+    CameraSpec Camera,
+    LensSpec Lens,
     CameraDescriptor? Descriptor = null
-);
+)
+{
+    public SensorSpec Sensor => Camera.Sensor;
+
+    public CameraCapabilities Capabilities => Camera.Capabilities;
+}
 
 /// <summary>
 /// Handy ready-made rigs. Add more as you acquire lenses/cameras.
@@ -26,11 +31,7 @@ public static class RigPresets
     /// </summary>
     public static readonly RigSpec MockAsi174_Fujinon = new(
         Name: "MockASI174MM + Fujinon 2.7mm",
-        Sensor: new SensorSpec(
-            WidthPx: 1936,
-            HeightPx: 1216,
-            PixelSizeMicrons: 5.86
-        ),
+        Camera: OpticsPresets.MockASI174MM,
         Lens: new LensSpec(
             Model: ProjectionModel.Equidistant, // common for security fisheyes; adjust if calibration says otherwise
             FocalLengthMm: 2.7,
@@ -54,11 +55,7 @@ public static class RigPresets
     /// </summary>
     public static readonly RigSpec MockAsi174MC_Fujinon = new(
         Name: "MockASI174MC + Fujinon 2.7mm",
-        Sensor: new SensorSpec(
-            WidthPx: 1936,
-            HeightPx: 1216,
-            PixelSizeMicrons: 5.86
-        ),
+        Camera: OpticsPresets.MockASI174MC,
         Lens: new LensSpec(
             Model: ProjectionModel.Equidistant,
             FocalLengthMm: 2.7,

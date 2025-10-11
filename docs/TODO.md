@@ -18,8 +18,8 @@
 - [ ] Capture diagnostics snapshots to disk for offline analysis (JSON export triggered from the diagnostics page).
 
 ### Camera
-- [ ] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD, etc.) and mirror those attributes in the dashboard camera section alongside pipeline capabilities to guide setup decisions.
-- [ ] Evaluate unifying synthetic and physical camera adapters behind a single implementation controlled by a `Synthetic` flag, sourcing frames from either live hardware or the starfield engine, with hooks for exposure/contrast/gain adjustments pre-pipeline. Explore whether this can converge further into one `CameraAdapter` class that relies on `RigSpec` for behaviour and delegates device-specific calls to `ICamera` implementations.
+- [x] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD, etc.) and mirror those attributes in the dashboard camera section alongside pipeline capabilities to guide setup decisions.
+- [ ] Evaluate unifying synthetic and physical camera adapters behind a single implementation controlled by a `Synthetic` flag, sourcing frames from either live hardware or the starfield engine, with hooks for exposure/contrast/gain adjustments pre-pipeline. Explore whether this can converge further into one `CameraAdapter` class that relies on `RigSpec` for behaviour and delegates device-specific calls to `ICamera` implementations. Would also need to be able to access the running CameraAdaptor from things like the UI and API.  We can confine the applicaiotn to a single running adaptor at a time, but multiple configuraitons available.
 
 ## HVO.SkyMonitorV5.RPi.Stress
 

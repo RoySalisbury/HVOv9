@@ -9,8 +9,14 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
     /// </summary>
     public sealed record CameraSpec(
         string Name,
-        SensorSpec Sensor
-    );
+        SensorSpec Sensor,
+        CameraCapabilities Capabilities)
+    {
+        public CameraSpec(string name, SensorSpec sensor)
+            : this(name, sensor, CameraCapabilities.Empty)
+        {
+        }
+    }
 
 
     /// <summary>
@@ -43,7 +49,16 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 WidthPx: 1936,
                 HeightPx: 1216,
                 PixelSizeMicrons: 5.86
-            )
+            ),
+            Capabilities: new CameraCapabilities(
+                colorMode: CameraColorMode.Monochrome,
+                sensorTechnology: CameraSensorTechnology.Cmos,
+                bodyType: CameraBodyType.DedicatedAstronomy,
+                cooling: CameraCoolingType.None,
+                supportsGainControl: true,
+                supportsExposureControl: true,
+                supportsTemperatureTelemetry: false,
+                supportsSoftwareBinning: true)
         );
 
         /// <summary>
@@ -55,7 +70,16 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 WidthPx: 1936,
                 HeightPx: 1216,
                 PixelSizeMicrons: 5.86
-            )
+            ),
+            Capabilities: new CameraCapabilities(
+                colorMode: CameraColorMode.Monochrome,
+                sensorTechnology: CameraSensorTechnology.Cmos,
+                bodyType: CameraBodyType.Synthetic,
+                cooling: CameraCoolingType.None,
+                supportsGainControl: true,
+                supportsExposureControl: true,
+                supportsTemperatureTelemetry: false,
+                supportsSoftwareBinning: true)
         );
 
         /// <summary>
@@ -67,7 +91,16 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 WidthPx: 1936,
                 HeightPx: 1216,
                 PixelSizeMicrons: 5.86
-            )
+            ),
+            Capabilities: new CameraCapabilities(
+                colorMode: CameraColorMode.Color,
+                sensorTechnology: CameraSensorTechnology.Cmos,
+                bodyType: CameraBodyType.DedicatedAstronomy,
+                cooling: CameraCoolingType.None,
+                supportsGainControl: true,
+                supportsExposureControl: true,
+                supportsTemperatureTelemetry: false,
+                supportsSoftwareBinning: true)
         );
 
         /// <summary>
@@ -79,7 +112,16 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 WidthPx: 1936,
                 HeightPx: 1216,
                 PixelSizeMicrons: 5.86
-            )
+            ),
+            Capabilities: new CameraCapabilities(
+                colorMode: CameraColorMode.Color,
+                sensorTechnology: CameraSensorTechnology.Cmos,
+                bodyType: CameraBodyType.Synthetic,
+                cooling: CameraCoolingType.None,
+                supportsGainControl: true,
+                supportsExposureControl: true,
+                supportsTemperatureTelemetry: false,
+                supportsSoftwareBinning: true)
         );
 
         // ---------------- Lenses / Telescopes ----------------

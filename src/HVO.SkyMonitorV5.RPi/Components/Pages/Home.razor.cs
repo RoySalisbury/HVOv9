@@ -227,14 +227,28 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
     }
 
-    private string CameraCapabilitiesText
+    private string PipelineCapabilitiesText
     {
         get
         {
-            var camera = _status?.Summary?.Camera;
-            if (camera?.Capabilities is { Count: > 0 } capabilities)
+            var pipeline = _status?.Summary?.Camera?.Capabilities;
+            if (pipeline is { Count: > 0 })
             {
-                return string.Join(", ", capabilities);
+                return string.Join(", ", pipeline);
+            }
+
+            return "Not reported";
+        }
+    }
+
+    private string CameraHardwareCapabilitiesText
+    {
+        get
+        {
+            var hardware = _status?.Summary?.Camera?.HardwareCapabilities;
+            if (hardware is { Count: > 0 })
+            {
+                return string.Join(", ", hardware);
             }
 
             return "Not reported";
