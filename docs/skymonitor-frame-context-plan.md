@@ -88,6 +88,11 @@ _Last updated: 2025-10-11_
 ## Post-Background-Stacker TODOs
 - _Moved to solution-wide TODO tracking (see `docs/TODO.md`)._
 
+## Data Store Project Scope Updates
+- Adopt the forthcoming shared database as the authoritative store for all customizable observatory configuration: rigs, cameras, optics, filters (global and per-rig), image encoding choices, pipeline/stacker options, capture pacing parameters, and site metadata (latitude, longitude, timezone, etc.). Embedded defaults will remain so a newly created database can bootstrap the system automatically.
+- Expand telemetry retention goals to include configuration versioning or audit metadata so operators can track when settings change.
+- Maintain a dedicated Deep Sky object catalog within our infrastructure until an upstream replacement is selected; plan import/export tooling alongside schema design so future data sources can migrate without disrupting capture operations.
+
 ## Success Criteria
 - Filters can rely exclusively on `FrameRenderContext` without DI lookups.
 - Removing `IRenderEngineProvider` does not regress existing overlay behavior.
