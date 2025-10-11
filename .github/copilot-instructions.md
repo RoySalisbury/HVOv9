@@ -14,6 +14,14 @@ HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a 
 - MSTest for unit and integration testing
 - Moq (optional) for service mocking and test isolation
 - GitHub + VS Code Dev Containers for development
+- Bootstrap 5.3 (via CDN) and Font Awesome/Bootstrap Icons for UI primitives
+
+## Design System & UI Preferences
+- Default to the **HVO Dark theme** defined in `wwwroot/css/themes/hvo-dark.css`; all new pages should load this stylesheet and ensure the `<html>` and `<body>` elements include `data-theme="hvo-dark"`.
+- Reuse the CSS custom properties declared in the theme (e.g., `--hvo-body-bg`, `--hvo-accent`) instead of hard-coding colors. Add new tokens at the top of the theme file when additional palette values are needed.
+- Use the existing scoped CSS placeholders sparingly—centralize styling in the theme whenever styles apply across multiple components.
+- Prefer our **HistoryLineChart** component in `Components/Shared/HistoryLineChart` for telemetry visualizations; avoid reintroducing Radzen or other heavy UI libraries unless absolutely necessary.
+- Keep text legible on dark backgrounds by using theme utilities like `.text-muted` (already overridden) and ensure new utility classes remain consistent with the palette.
 
 ## HVOv9 Coding Standards
 
@@ -95,6 +103,7 @@ namespace HVO.ProjectName
   ComponentName.razor.css  # Scoped styles (automatically scoped by Blazor)
   ComponentName.razor.js   # Scoped JavaScript (optional, for client interop)
   ```
+- All layout and root components must ensure the `<html>` element renders with `data-theme="hvo-dark"` so theme variables apply correctly.
 - Implement API versioning with URL segments (`/api/v1.0/endpoint`)
 - Use `IHttpClientFactory` for HTTP client management
 - Follow REST conventions for API endpoints

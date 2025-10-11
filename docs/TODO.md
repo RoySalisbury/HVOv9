@@ -5,6 +5,7 @@
 - _No open items tracked. Reserve for NuGet updates, global cleanup, or cross-project initiatives._
 
 ## HVO.SkyMonitorV5.RPi
+- [ ] Add a light-mode variant of the theme and expose a runtime toggle.
 
 ### Dashboard
 - [x] Display observatory-local time in the SkyMonitor footer instead of UTC.
@@ -12,8 +13,9 @@
 - [ ] Surface end-to-end frame processing time (capture to pipeline completion) plus inter-frame delay alongside the existing pipeline duration metric.
 
 ### Diagnostics
-- [ ] Add navigation affordance (tabs or sidebar) so queue diagnostics, filter diagnostics, and system diagnostics sub-views fit without cluttering the layout. The current theme is fine, but may need to slight modifactions in font size (smaller, like the dashbaord).
-- [ ] Enable auto-refresh with per-tab throttling to ensure only the visible diagnostics pane polls for data, reducing CPU load.
+- [x] Add navigation affordance (tabs or sidebar) so queue diagnostics, filter diagnostics, and system diagnostics sub-views fit without cluttering the layout. The current theme is fine, but may need to slight modifactions in font size (smaller, like the dashbaord).
+- [x] Enable auto-refresh with per-tab throttling to ensure only the visible diagnostics pane polls for data, reducing CPU load.
+- [ ] Capture diagnostics snapshots to disk for offline analysis (JSON export triggered from the diagnostics page).
 
 ### Camera
 - [ ] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD, etc.) and mirror those attributes in the dashboard camera section alongside pipeline capabilities to guide setup decisions.
