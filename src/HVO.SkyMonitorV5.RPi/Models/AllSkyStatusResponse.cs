@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
@@ -14,9 +15,14 @@ public sealed record AllSkyStatusResponse(
     ProcessedFrameSummary? ProcessedFrame,
     RawFrameSummary? RawFrame,
     BackgroundStackerStatus? BackgroundStacker,
+    CapturePacingStatus? CapturePacing,
+    ProcessingQueueStatus? ProcessingQueue,
     CameraDescriptor Camera,
     RigSpec? Rig,
-    AllSkyStatusSummary Summary
+    AllSkyStatusSummary Summary,
+    ExposureAnalysisSummary? ExposureAnalysis,
+    ExposureOverrideSummary? ExposureOverrides,
+    RemoteDispatchStatus? RemoteDispatch
 );
 
 public sealed record AllSkyStatusSummary(
@@ -25,7 +31,12 @@ public sealed record AllSkyStatusSummary(
     CameraConfiguration? Configuration,
     ProcessedFrameSummary? ProcessedFrame,
     RawFrameSummary? RawFrame,
-    BackgroundStackerStatus? BackgroundStacker
+    BackgroundStackerStatus? BackgroundStacker,
+    CapturePacingStatus? CapturePacing,
+    ProcessingQueueStatus? ProcessingQueue,
+    ExposureAnalysisSummary? ExposureAnalysis,
+    ExposureOverrideSummary? ExposureOverrides,
+    RemoteDispatchStatus? RemoteDispatch
 );
 
 public sealed record AllSkyCameraSummary(
@@ -67,4 +78,33 @@ public sealed record RawFrameSummary(
     int Height,
     int ExposureMilliseconds,
     int Gain
+);
+
+public sealed record ExposureAnalysisSummary(
+    DateTimeOffset? Timestamp,
+    ExposureLightingCondition LightingCondition,
+    double AverageLuminance,
+    double MinimumLuminance,
+    double MaximumLuminance,
+    int SampleCount,
+    int? SuggestedExposureMilliseconds,
+    int? SuggestedGain,
+    string? Notes
+);
+
+public sealed record ExposureOverrideSummary(
+    ExposureOverrideSnapshot? Day,
+    ExposureOverrideSnapshot? Night
+);
+
+public sealed record ExposureOverrideSnapshot(
+    ExposureOverrideBucket Bucket,
+    DateTimeOffset? LastUpdated,
+    DateTimeOffset? ExpiresAt,
+    int BaselineExposureMilliseconds,
+    int BaselineGain,
+    int TargetExposureMilliseconds,
+    int TargetGain,
+    int AppliedExposureMilliseconds,
+    int AppliedGain
 );

@@ -195,6 +195,119 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
     }
 
+    private ExposureAnalysisSummary? ExposureAnalysis => _status?.ExposureAnalysis ?? _status?.Summary?.ExposureAnalysis;
+
+    private ExposureOverrideSnapshot? DayExposureOverride => _status?.ExposureOverrides?.Day;
+
+    private ExposureOverrideSnapshot? NightExposureOverride => _status?.ExposureOverrides?.Night;
+
+    private string ExposureAnalysisTimestampText
+    {
+        get
+        {
+            if (ExposureAnalysis?.Timestamp is not { } timestamp)
+            {
+                return "—";
+            }
+
+            return ObservatoryClock.ToLocal(timestamp).ToString("MMM d, yyyy • h:mm:ss tt", CultureInfo.CurrentCulture);
+        }
+    }
+
+    private string ExposureLightingDescription
+    {
+        get
+        {
+            if (ExposureAnalysis is not { } analysis)
+            {
+                return "Awaiting analysis";
+            }
+
+            return analysis.LightingCondition switch
+            {
+                ExposureLightingCondition.Daylight => "Daylight scene",
+                ExposureLightingCondition.Twilight => "Twilight scene",
+                ExposureLightingCondition.Night => "Night scene",
+                _ => "Unknown scene"
+            };
+        }
+    }
+
+    private string ExposureLuminanceSummary
+    {
+        get
+        {
+            if (ExposureAnalysis is not { } analysis)
+            {
+                return "Awaiting analysis";
+            }
+
+            var metrics = (Average: analysis.AverageLuminance, Minimum: analysis.MinimumLuminance, Maximum: analysis.MaximumLuminance);
+            var culture = CultureInfo.CurrentCulture;
+            var sampleText = analysis.SampleCount > 0
+                ? analysis.SampleCount.ToString("N0", culture)
+                : "0";
+
+            return string.Format(
+                culture,
+                "Avg {0:0.0} · Min {1:0.0} · Max {2:0.0} ({3} samples)",
+                metrics.Average,
+                metrics.Minimum,
+                metrics.Maximum,
+                sampleText);
+        }
+    }
+
+    private string ExposureRecommendationSummary
+    {
+        get
+        {
+            if (ExposureAnalysis is not { } analysis)
+            {
+                return "Awaiting analysis";
+            }
+
+            var exposureMs = analysis.SuggestedExposureMilliseconds;
+            var gain = analysis.SuggestedGain;
+            var hasExposure = exposureMs.HasValue;
+            var hasGain = gain.HasValue;
+
+            if (!hasExposure && !hasGain)
+            {
+                return "Maintain current settings";
+            }
+
+            return hasExposure && hasGain
+                ? string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Adjust to {0} ms · Gain {1}",
+                    exposureMs!.Value,
+                    gain!.Value)
+                : hasExposure
+                    ? string.Format(
+                        CultureInfo.CurrentCulture,
+                        "Adjust exposure to {0} ms",
+                        exposureMs!.Value)
+                    : string.Format(
+                        CultureInfo.CurrentCulture,
+                        "Adjust gain to {0}",
+                        gain!.Value);
+        }
+    }
+
+    private string? ExposureAnalysisNotes
+    {
+        get
+        {
+            var notes = ExposureAnalysis?.Notes;
+            return string.IsNullOrWhiteSpace(notes) ? null : notes;
+        }
+    }
+
+    private string DayExposureOverrideSummary => FormatOverrideSummary(DayExposureOverride, "Day");
+
+    private string NightExposureOverrideSummary => FormatOverrideSummary(NightExposureOverride, "Night");
+
     private string LastFrameTimestampText
     {
         get
@@ -463,6 +576,337 @@ public sealed partial class Home : ComponentBase, IDisposable
         }
     }
 
+    private CapturePacingStatus? CapturePacing => _status?.CapturePacing ?? _status?.Summary?.CapturePacing;
+
+    private ProcessingQueueStatus? ProcessingQueue => _status?.ProcessingQueue ?? _status?.Summary?.ProcessingQueue;
+
+    private string CapturePacingSummary
+    {
+        get
+        {
+            if (CapturePacing is not { } pacing)
+            {
+                return "Telemetry unavailable";
+            }
+
+            if (!pacing.Enabled)
+            {
+                return "Disabled";
+            }
+
+            if (!pacing.UsingBackgroundStacker)
+            {
+                return "Bypassed (background stacker off)";
+            }
+
+            var penaltyText = pacing.PenaltyAdditionalDelayMilliseconds > 0
+                ? FormattableString.Invariant($", penalty +{pacing.PenaltyAdditionalDelayMilliseconds} ms")
+                : string.Empty;
+
+            return FormattableString.Invariant(
+                $"{pacing.AdjustedDelayMilliseconds} ms (base {pacing.BaseDelayMilliseconds} ms, pressure +{pacing.PressureAdditionalDelayMilliseconds} ms{penaltyText})");
+        }
+    }
+
+    private string CapturePacingPressureSummary
+    {
+        get
+        {
+            if (CapturePacing is not { } pacing || !pacing.Enabled || !pacing.UsingBackgroundStacker)
+            {
+                return "—";
+            }
+
+            var descriptor = pacing.QueuePressureLevel switch
+            {
+                3 => "Critical",
+                2 => "High",
+                1 => "Elevated",
+                _ => "Normal"
+            };
+
+            return FormattableString.Invariant($"{descriptor} ({pacing.QueuePressureLevel}/3)");
+        }
+    }
+
+    private string CapturePacingPenaltySummary
+    {
+        get
+        {
+            if (CapturePacing is not { } pacing || !pacing.Enabled || !pacing.UsingBackgroundStacker)
+            {
+                return "Penalty inactive";
+            }
+
+            if (pacing.PenaltyActive)
+            {
+                if (pacing.PenaltyExpiresAt is { } expires)
+                {
+                    var expiresText = expires.ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
+                    return FormattableString.Invariant(
+                        $"Active (+{pacing.PenaltyAdditionalDelayMilliseconds} ms) until {expiresText}");
+                }
+
+                return FormattableString.Invariant(
+                    $"Active (+{pacing.PenaltyAdditionalDelayMilliseconds} ms)");
+            }
+
+            return pacing.PenaltyAdditionalDelayMilliseconds > 0
+                ? FormattableString.Invariant($"Cooling (+{pacing.PenaltyAdditionalDelayMilliseconds} ms)")
+                : "Penalty inactive";
+        }
+    }
+
+    private string CapturePacingUpdatedSummary
+    {
+        get
+        {
+            if (CapturePacing?.Timestamp is not { } timestamp)
+            {
+                return "—";
+            }
+
+            return timestamp.ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
+        }
+    }
+
+    private string ProcessingQueueSummary
+    {
+        get
+        {
+            if (ProcessingQueue is not { } queue)
+            {
+                return "Telemetry unavailable";
+            }
+
+            if (!queue.Enabled)
+            {
+                return "Disabled";
+            }
+
+            var capacity = Math.Max(1, queue.Capacity);
+            var depth = Math.Clamp(queue.Depth, 0, capacity);
+            var fillPercentage = capacity > 0 ? depth / (double)capacity : 0;
+
+            return FormattableString.Invariant($"{depth}/{capacity} ({fillPercentage:P0})");
+        }
+    }
+
+    private string ProcessingQueueBackpressureSummary
+    {
+        get
+        {
+            if (ProcessingQueue is not { } queue || !queue.Enabled)
+            {
+                return "—";
+            }
+
+            var last = FormatLatency(queue.LastEnqueueWaitMilliseconds);
+            var peak = FormatLatency(queue.PeakEnqueueWaitMilliseconds);
+
+            return queue.BackpressureEvents > 0
+                ? FormattableString.Invariant($"{queue.BackpressureEvents} events · last {last} · peak {peak}")
+                : FormattableString.Invariant($"None · last {last}");
+        }
+    }
+
+    private string ProcessingQueueProcessingSummary
+    {
+        get
+        {
+            if (ProcessingQueue is not { } queue || !queue.Enabled)
+            {
+                return "—";
+            }
+
+            var last = FormatLatency(queue.LastProcessingMilliseconds);
+            var average = FormatLatency(queue.AverageProcessingMilliseconds);
+            var peak = FormatLatency(queue.PeakProcessingMilliseconds);
+
+            return FormattableString.Invariant($"Last {last} · Avg {average} · Peak {peak}");
+        }
+    }
+
+    private string ProcessingQueueUpdatedSummary
+    {
+        get
+        {
+            if (ProcessingQueue?.Timestamp is not { } timestamp)
+            {
+                return "—";
+            }
+
+            return timestamp.ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
+        }
+    }
+
+    private RemoteDispatchStatus? RemoteDispatchStatusData
+        => _status?.RemoteDispatch ?? _status?.Summary?.RemoteDispatch;
+
+    private string RemoteDispatchModeSummary
+        => RemoteDispatchStatusData is { } status
+            ? status.Mode
+            : "Disabled";
+
+    private string RemoteDispatchOutcomeSummary
+    {
+        get
+        {
+            if (RemoteDispatchStatusData is not { } status)
+            {
+                return "Dispatch inactive";
+            }
+
+            return status.Outcome switch
+            {
+                RemoteDispatchOutcome.Succeeded => "Published",
+                RemoteDispatchOutcome.Skipped => "Queued",
+                RemoteDispatchOutcome.Disabled => "Disabled",
+                RemoteDispatchOutcome.Failed => "Failed",
+                _ => status.Outcome.ToString()
+            };
+        }
+    }
+
+    private string RemoteDispatchCapturedSummary
+    {
+        get
+        {
+            if (RemoteDispatchStatusData?.CapturedAtLocal is not { } timestamp)
+            {
+                return "—";
+            }
+
+            return FormatTimestamp(timestamp);
+        }
+    }
+
+    private string? RemoteDispatchMessage => RemoteDispatchStatusData?.Message;
+
+    private string? RemoteDispatchError => RemoteDispatchStatusData?.ErrorMessage;
+
+    private RemoteDispatchMetricsSnapshot? RemoteDispatchMetrics
+    {
+        get
+        {
+            if (RemoteDispatchStatusData?.Metrics is { } statusMetrics)
+            {
+                return statusMetrics;
+            }
+
+            return FrameStateStore.RemoteDispatchMetrics;
+        }
+    }
+
+    private bool HasRemoteDispatchTelemetry => RemoteDispatchMetrics is { SampleCount: > 0 };
+
+    private string RemoteDispatchSuccessRateSummary
+        => HasRemoteDispatchTelemetry
+            ? FormatPercent(RemoteDispatchMetrics!.SuccessRatePercent)
+            : "—";
+
+    private string RemoteDispatchAttemptsSummary
+    {
+        get
+        {
+            if (!HasRemoteDispatchTelemetry)
+            {
+                return "No attempts recorded";
+            }
+
+            var metrics = RemoteDispatchMetrics!;
+
+            return FormattableString.Invariant(
+                $"{FormatCount(metrics.SampleCount)} attempts · {FormatCount(metrics.SuccessCount)} ok · {FormatCount(metrics.FailureCount)} failed · {FormatCount(metrics.SkippedCount)} skipped");
+        }
+    }
+
+    private string RemoteDispatchLatencySummary
+    {
+        get
+        {
+            if (!HasRemoteDispatchTelemetry)
+            {
+                return "—";
+            }
+
+            var metrics = RemoteDispatchMetrics!;
+            var average = FormatLatency(metrics.AverageLatencyMilliseconds);
+            var peak = FormatLatency(metrics.PeakLatencyMilliseconds);
+
+            return FormattableString.Invariant($"Avg {average} · Peak {peak}");
+        }
+    }
+
+    private string RemoteDispatchLastLatencySummary => FormatLatency(RemoteDispatchMetrics?.LastLatencyMilliseconds);
+
+    private string RemoteDispatchLastPayloadSummary
+    {
+        get
+        {
+            if (!HasRemoteDispatchTelemetry)
+            {
+                return "—";
+            }
+
+            var metrics = RemoteDispatchMetrics!;
+
+            if (metrics.LastPayloadBytes is not { } bytes || bytes <= 0)
+            {
+                return "—";
+            }
+
+            var descriptor = FormatBytes(bytes);
+
+            if (!string.IsNullOrWhiteSpace(metrics.LastPayloadExtension))
+            {
+                descriptor = FormattableString.Invariant($"{descriptor} · .{metrics.LastPayloadExtension}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(metrics.LastPayloadContentType))
+            {
+                descriptor = FormattableString.Invariant($"{descriptor} · {metrics.LastPayloadContentType}");
+            }
+
+            return descriptor;
+        }
+    }
+
+    private IReadOnlyList<RemoteDispatchFormatSummary> RemoteDispatchFormatSummaries
+        => RemoteDispatchMetrics?.FormatCounts ?? Array.Empty<RemoteDispatchFormatSummary>();
+
+    private string RemoteDispatchFormatsSummary
+    {
+        get
+        {
+            if (!HasRemoteDispatchTelemetry || RemoteDispatchFormatSummaries.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var topFormats = RemoteDispatchFormatSummaries
+                .OrderByDescending(static f => f.Count)
+                .ThenBy(static f => f.FormatKey, StringComparer.OrdinalIgnoreCase)
+                .Take(3)
+                .Select(static f => FormattableString.Invariant($"{f.FormatKey} {FormatCount(f.Count)}"));
+
+            return string.Join(" · ", topFormats);
+        }
+    }
+
+    private string RemoteDispatchTelemetryUpdatedSummary
+    {
+        get
+        {
+            if (RemoteDispatchMetrics is not { GeneratedAt: var timestamp })
+            {
+                return "—";
+            }
+
+            return ObservatoryClock.ToLocal(timestamp).ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
+        }
+    }
+
     private string FramesStackedSummary
     {
         get
@@ -557,7 +1001,7 @@ public sealed partial class Home : ComponentBase, IDisposable
             return "0 B";
         }
 
-    string[] units = { "B", "KiB", "MiB", "GiB", "TiB" };
+        string[] units = { "B", "KiB", "MiB", "GiB", "TiB" };
         double value = bytes;
         var unitIndex = 0;
 
@@ -571,4 +1015,57 @@ public sealed partial class Home : ComponentBase, IDisposable
             ? FormattableString.Invariant($"{bytes} {units[unitIndex]}")
             : FormattableString.Invariant($"{value:0.00} {units[unitIndex]}");
     }
+
+    private static string FormatPercent(double value)
+        => string.Format(CultureInfo.CurrentCulture, "{0:0.0}%", value);
+
+    private static string FormatPercent(double? value)
+        => value.HasValue ? FormatPercent(value.Value) : "—";
+
+    private static string FormatCount(int value)
+        => value.ToString("N0", CultureInfo.CurrentCulture);
+
+    private static string FormatCount(long value)
+        => value.ToString("N0", CultureInfo.CurrentCulture);
+
+    private string FormatOverrideSummary(ExposureOverrideSnapshot? snapshot, string label)
+    {
+        if (snapshot is null)
+        {
+            return FormattableString.Invariant($"{label}: Inactive");
+        }
+
+        var applied = FormattableString.Invariant($"{snapshot.AppliedExposureMilliseconds} ms · Gain {snapshot.AppliedGain}");
+        var target = FormattableString.Invariant($"{snapshot.TargetExposureMilliseconds} ms · Gain {snapshot.TargetGain}");
+        var baseline = FormattableString.Invariant($"{snapshot.BaselineExposureMilliseconds} ms · Gain {snapshot.BaselineGain}");
+        var expiresText = snapshot.ExpiresAt is { } expires ? FormatTimeRemaining(expires) : "—";
+        var updatedText = snapshot.LastUpdated is { } updated ? FormatTimestamp(updated) : "—";
+
+        return FormattableString.Invariant($"{label}: {applied} (target {target}, baseline {baseline}) · set {updatedText} · expires {expiresText}");
+    }
+
+    private string FormatTimeRemaining(DateTimeOffset expiresAt)
+    {
+        var now = ObservatoryClock.LocalNow;
+        var remaining = expiresAt - now;
+
+        if (remaining <= TimeSpan.Zero)
+        {
+            return "now";
+        }
+
+        if (remaining.TotalMinutes >= 1)
+        {
+            var minutes = (int)remaining.TotalMinutes;
+            var seconds = Math.Max(0, remaining.Seconds);
+            return seconds == 0
+                ? FormattableString.Invariant($"in {minutes} min")
+                : FormattableString.Invariant($"in {minutes} min {seconds} s");
+        }
+
+        return FormattableString.Invariant($"in {remaining.TotalSeconds:0}s");
+    }
+
+    private string FormatTimestamp(DateTimeOffset timestamp)
+        => timestamp.ToString("h:mm:ss tt", CultureInfo.CurrentCulture);
 }

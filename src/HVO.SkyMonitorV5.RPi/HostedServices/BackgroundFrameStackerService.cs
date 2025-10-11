@@ -240,6 +240,14 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 continue;
             }
 
+            // WaitToWriteAsync returned false because the channel was closed. If the
+            // writer was swapped while we were waiting, retry with the new channel
+            // instead of propagating a transient failure back to the caller.
+            if (!cancellationToken.IsCancellationRequested && !ReferenceEquals(channel, Volatile.Read(ref _channel)))
+            {
+                continue;
+            }
+
             break;
         }
 
@@ -535,7 +543,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
     {
         if (disposeImage)
         {
-            workItem.Capture.Image.Dispose();
+            workItem.Capture.Image?.Dispose();
         }
 
         workItem.Capture.Context?.Dispose();
@@ -640,14 +648,9 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
 
     private static long GetWorkItemSizeInBytes(StackingWorkItem workItem)
     {
-        try
-        {
-            return workItem.Capture.Image?.Info.BytesSize ?? 0;
-        }
-        catch (ObjectDisposedException)
-        {
-            return 0;
-        }
+        return workItem.CaptureSizeBytes > 0
+            ? workItem.CaptureSizeBytes
+            : 0L;
     }
 
     private int ObserveQueueDepth()

@@ -8,4 +8,5 @@ public sealed record StackingWorkItem(
     CapturedImage Capture,
     CameraConfiguration ConfigurationSnapshot,
     int ConfigurationVersion,
-    DateTimeOffset EnqueuedAt);
+    DateTimeOffset EnqueuedAt,
+    long CaptureSizeBytes = 0);

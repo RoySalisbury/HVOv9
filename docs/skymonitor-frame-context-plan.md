@@ -1,6 +1,6 @@
 # SkyMonitor Frame Context & Rig Integration Plan
 
-_Last updated: 2025-10-07_
+_Last updated: 2025-10-11_
 
 ## Goals
 - Preserve full rig metadata (sensor, lens, orientation) alongside every captured frame.
@@ -38,6 +38,11 @@ _Last updated: 2025-10-07_
 - _Considerations (addressed 2025-10-09):_
   - The stacker now snapshots per-frame rig metadata and resets the buffer if a mismatch is detected, ensuring we never blend frames from divergent contexts.
   - FrameContext disposal is centralized inside the filter pipeline, eliminating duplicate dispose paths in the capture and background services.
+  - Capture pacing (2025-10-11) now reacts to queue pressure with smoothed delay adjustments, reducing background stacker overflow on sustained bursts.
+  - Capture pacing telemetry (2025-10-11) is exposed via the status API and dashboard so operators can observe throttling in real time.
+  - Queue rejection penalties (2025-10-11) temporarily throttle capture when the stacker drops frames, preventing repeated synchronous fallbacks while the queue recovers.
+  - Adaptive queue scaling (2025-10-11) is now active with resilient enqueue retries so background stacker channel swaps no longer bubble back as synchronous fallbacks during bursts.
+  - Longer-duration stress tests are deferred to the physical Raspberry Pi hardware; the development machine will continue short validation runs only.
 
 ### Phase 4 – Filters & DI Cleanup
 - [x] Migrate filters to rely on the supplied `FrameRenderContext`.
@@ -78,6 +83,7 @@ _Last updated: 2025-10-07_
 - Do we need to pool projector instances for performance, or is per-frame allocation acceptable?
 - Should filters be allowed to mutate the `FrameContext` (e.g., adding computed lookup tables), or keep it immutable?
 - What telemetry should we log when the context is missing or partially populated?
+- (Resolved 2025-10-11) Rejection penalty state now surfaces in UI telemetry so operators can see when capture throttling is active.
 
 ## Post-Background-Stacker TODOs
 - _Moved to solution-wide TODO tracking (see `docs/TODO.md`)._

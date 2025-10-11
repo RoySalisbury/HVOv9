@@ -166,13 +166,36 @@ public sealed class AllSkyCatalogRegistry : ICameraCatalog, ILensCatalog, IRigCa
                 }
             }
 
-            if (activeRig is null && !string.IsNullOrWhiteSpace(options.Rigs.ActiveRig))
+            if (activeRig is null)
             {
-                _logger?.LogWarning("Configured active rig {Rig} was not found in the catalog entries.", options.Rigs.ActiveRig);
+                if (!string.IsNullOrWhiteSpace(options.Rigs.ActiveRig))
+                {
+                    _logger?.LogWarning("Configured active rig {Rig} was not found in the catalog entries.", options.Rigs.ActiveRig);
+                }
+
+                if (rigList.Count > 0)
+                {
+                    activeRig = rigList[0];
+                    _logger?.LogInformation("Defaulting active rig to catalog entry {Rig}.", activeRig.Name);
+                }
             }
+        }
+        else if (!string.IsNullOrWhiteSpace(options.Rigs?.ActiveRig))
+        {
+            _logger?.LogWarning("Active rig {Rig} configured without any catalog entries.", options.Rigs.ActiveRig);
         }
 
         return new CatalogSnapshot(cameraMap, cameraList, lensMap, lensList, rigMap, rigList, activeRig);
+    }
+
+    public CatalogStatistics GetStatistics()
+    {
+        var snapshot = CreateSnapshot();
+        return new CatalogStatistics(
+            snapshot.CameraList.Count,
+            snapshot.LensList.Count,
+            snapshot.RigList.Count,
+            snapshot.ActiveRig?.Name);
     }
 
     private bool TryBuildCamera(CameraCatalogEntryOptions entry, [NotNullWhen(true)] out CameraSpec? spec)
@@ -262,4 +285,6 @@ public sealed class AllSkyCatalogRegistry : ICameraCatalog, ILensCatalog, IRigCa
         IReadOnlyDictionary<string, RigSpec> Rigs,
         IReadOnlyList<RigSpec> RigList,
         RigSpec? ActiveRig);
+
+    public sealed record CatalogStatistics(int CameraCount, int LensCount, int RigCount, string? ActiveRigName);
 }

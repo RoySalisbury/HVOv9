@@ -5,4 +5,6 @@ namespace HVO.SkyMonitorV5.RPi.Services;
 public interface IExposureController
 {
     ExposureSettings CreateNextExposure(CameraConfiguration configuration);
+
+    void ApplyAnalysis(ExposureAnalysisResult analysis);
 }

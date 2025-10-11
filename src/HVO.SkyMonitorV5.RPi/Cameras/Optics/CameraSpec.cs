@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Optics;
@@ -11,7 +12,10 @@ public sealed record CameraSpec(
     string Name,
     SensorSpec Sensor,
     CameraCapabilities Capabilities,
-    CameraDescriptor Descriptor)
+    CameraDescriptor Descriptor,
+    CameraDriverId DriverId = CameraDriverId.Unknown,
+    bool IsSynthetic = false,
+    string? SyntheticProfile = null)
 {
     public CameraSpec(string name, SensorSpec sensor)
         : this(name, sensor, CameraCapabilities.Empty, CreateDefaultDescriptor(name))
@@ -22,6 +26,8 @@ public sealed record CameraSpec(
         : this(name, sensor, capabilities, CreateDefaultDescriptor(name))
     {
     }
+
+    public bool RequiresDriverRegistration => DriverId != CameraDriverId.Unknown;
 
     private static CameraDescriptor CreateDefaultDescriptor(string name)
     {

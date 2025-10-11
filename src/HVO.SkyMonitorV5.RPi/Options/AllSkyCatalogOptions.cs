@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -96,13 +97,34 @@ public sealed class CameraCatalogEntryOptions : IValidatableObject
     [Required]
     public CameraDescriptorOptions Descriptor { get; set; } = new();
 
+    [EnumDataType(typeof(CameraDriverId))]
+    public CameraDriverId DriverId { get; set; } = CameraDriverId.Unknown;
+
+    public bool? IsSynthetic { get; set; }
+
+    [MaxLength(128)]
+    public string? SyntheticProfile { get; set; }
+
     public CameraSpec ToCameraSpec()
     {
         var sensor = Sensor?.ToSensorSpec() ?? throw new InvalidOperationException($"Camera '{Name}' is missing sensor configuration.");
         var capabilities = Capabilities?.ToCameraCapabilities() ?? CameraCapabilities.Empty;
         var descriptor = Descriptor?.ToCameraDescriptor() ?? throw new InvalidOperationException($"Camera '{Name}' is missing descriptor metadata.");
+        var driverId = DriverId;
+        var synthetic = IsSynthetic ?? driverId == CameraDriverId.Synthetic;
+        var profile = string.IsNullOrWhiteSpace(SyntheticProfile) ? null : SyntheticProfile.Trim();
 
-        return new CameraSpec(Name.Trim(), sensor, capabilities, descriptor);
+        if (synthetic && driverId != CameraDriverId.Synthetic)
+        {
+            driverId = CameraDriverId.Synthetic;
+        }
+
+        if (!synthetic)
+        {
+            profile = null;
+        }
+
+        return new CameraSpec(Name.Trim(), sensor, capabilities, descriptor, driverId, synthetic, profile);
     }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -152,6 +174,20 @@ public sealed class CameraCatalogEntryOptions : IValidatableObject
                 yield return validation;
             }
         }
+
+        if (DriverId == CameraDriverId.Unknown)
+        {
+            yield return new ValidationResult(
+                "Camera catalog entries must specify a driver identifier.",
+                new[] { nameof(DriverId) });
+        }
+
+        if (((IsSynthetic ?? false) || DriverId == CameraDriverId.Synthetic) && string.IsNullOrWhiteSpace(SyntheticProfile))
+        {
+            yield return new ValidationResult(
+                "Synthetic cameras must provide a synthetic profile identifier.",
+                new[] { nameof(SyntheticProfile) });
+        }
     }
 }
 
@@ -200,20 +236,27 @@ public sealed class RigCatalogOptions : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (Entries is null || Entries.Count == 0)
+        if (Entries is null)
         {
-            yield return new ValidationResult("At least one rig entry must be defined.", new[] { nameof(Entries) });
+            yield return new ValidationResult("Rig catalog entries collection cannot be null.", new[] { nameof(Entries) });
             yield break;
         }
 
-        foreach (var validation in AllSkyCatalogOptions.ValidateUniqueNames(Entries, static e => e.Name, nameof(Entries)))
+        if (Entries.Count > 0)
         {
-            yield return validation;
-        }
+            foreach (var validation in AllSkyCatalogOptions.ValidateUniqueNames(Entries, static e => e.Name, nameof(Entries)))
+            {
+                yield return validation;
+            }
 
-        if (!string.IsNullOrWhiteSpace(ActiveRig) && Entries.All(e => !string.Equals(e.Name, ActiveRig, StringComparison.OrdinalIgnoreCase)))
+            if (!string.IsNullOrWhiteSpace(ActiveRig) && Entries.All(e => !string.Equals(e.Name, ActiveRig, StringComparison.OrdinalIgnoreCase)))
+            {
+                yield return new ValidationResult($"Active rig '{ActiveRig}' was not found in the catalog entries.", new[] { nameof(ActiveRig) });
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(ActiveRig))
         {
-            yield return new ValidationResult($"Active rig '{ActiveRig}' was not found in the catalog entries.", new[] { nameof(ActiveRig) });
+            yield return new ValidationResult($"Active rig '{ActiveRig}' was specified but no rig catalog entries were provided.", new[] { nameof(ActiveRig) });
         }
     }
 }

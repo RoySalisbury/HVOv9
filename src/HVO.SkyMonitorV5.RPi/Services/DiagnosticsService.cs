@@ -114,6 +114,54 @@ public sealed class DiagnosticsService : IDiagnosticsService
         }
     }
 
+    public Task<Result<RemoteDispatchMetricsSnapshot>> GetRemoteDispatchMetricsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var metrics = _frameStateStore.RemoteDispatchMetrics;
+            if (metrics is null)
+            {
+                var generatedAt = _clock.LocalNow;
+                return Task.FromResult(Result<RemoteDispatchMetricsSnapshot>.Success(CreateEmptyRemoteDispatchMetrics(generatedAt)));
+            }
+
+            return Task.FromResult(Result<RemoteDispatchMetricsSnapshot>.Success(metrics));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while gathering remote dispatch metrics snapshot.");
+            return Task.FromResult<Result<RemoteDispatchMetricsSnapshot>>(ex);
+        }
+    }
+
+    public Task<Result<RemoteDispatchHistoryResponse>> GetRemoteDispatchHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var samples = _frameStateStore.GetRemoteDispatchHistory();
+            var history = new RemoteDispatchHistoryResponse(_clock.LocalNow, samples);
+
+            return Task.FromResult(Result<RemoteDispatchHistoryResponse>.Success(history));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while gathering remote dispatch history snapshot.");
+            return Task.FromResult<Result<RemoteDispatchHistoryResponse>>(ex);
+        }
+    }
+
     public Task<Result<SystemDiagnosticsSnapshot>> GetSystemDiagnosticsAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -204,6 +252,21 @@ public sealed class DiagnosticsService : IDiagnosticsService
         LastCompletedAt: null,
         SecondsSinceLastCompleted: null,
         LastFrameNumber: null);
+
+    private static RemoteDispatchMetricsSnapshot CreateEmptyRemoteDispatchMetrics(DateTimeOffset generatedAt) => new(
+        GeneratedAt: generatedAt,
+        SampleCount: 0,
+        SuccessCount: 0,
+        FailureCount: 0,
+        SkippedCount: 0,
+        SuccessRatePercent: 0,
+        AverageLatencyMilliseconds: null,
+        PeakLatencyMilliseconds: null,
+        LastLatencyMilliseconds: null,
+        LastPayloadBytes: null,
+        LastPayloadContentType: null,
+        LastPayloadExtension: null,
+        FormatCounts: Array.Empty<RemoteDispatchFormatSummary>());
 
     private BackgroundStackerMetricsResponse MapBackgroundStackerMetrics(
         BackgroundStackerStatus status,

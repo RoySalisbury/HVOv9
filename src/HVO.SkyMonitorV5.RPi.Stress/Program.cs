@@ -459,6 +459,7 @@ internal static class Program
                 overrides[$"CameraPipeline:Filters:{i}:Order"] = (i + 1).ToString(CultureInfo.InvariantCulture);
             }
 
+            overrides["AllSkyCameras:0:RigCatalog"] = string.Empty;
             overrides["AllSkyCameras:0:Name"] = scenario.Name;
             overrides["AllSkyCameras:0:Adapter"] = scenario.AdapterKey;
             overrides["AllSkyCameras:0:Rig:Name"] = scenario.Rig.Name;
@@ -534,6 +535,11 @@ internal static class Program
                 Gain: gain,
                 AutoExposure: false,
                 AutoGain: false);
+        }
+
+        public void ApplyAnalysis(ExposureAnalysisResult analysis)
+        {
+            // Stress scenarios intentionally ignore analyzer feedback.
         }
 
         private static double SampleDouble(double min, double max)

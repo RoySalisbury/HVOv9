@@ -25,11 +25,20 @@ public sealed class CameraPipelineOptions
 
     public bool EnableImageOverlays { get; set; } = false;
 
+    /// <summary>
+    /// When enabled, capture runs on a producer queue and pipeline processing is executed by a background consumer task.
+    /// </summary>
+    public bool EnableAsyncProcessing { get; set; }
+
     public FrameFilterOption[] Filters { get; set; } = Array.Empty<FrameFilterOption>();
 
     public string[] FrameFilters { get; set; } = Array.Empty<string>();
 
     public BackgroundStackerOptions BackgroundStacker { get; set; } = new();
+
+    public CapturePacingOptions CapturePacing { get; set; } = new();
+
+    public RemoteDispatchOptions RemoteDispatch { get; set; } = new();
 
     public ImageEncodingOptions ProcessedImageEncoding { get; set; } = new();
 

@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -47,6 +50,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         frameStateStore.SetupGet(store => store.ConfigurationVersion).Returns(1);
         frameStateStore.SetupGet(store => store.Configuration).Returns(configuration);
         frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
+    frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
+    frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
 
         var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
@@ -71,23 +76,25 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
             .Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()))
             .Callback<BackgroundStackerStatus>(status => capturedStatuses.Add(status));
 
-        using var bitmap = new SKBitmap(width: 4, height: 4);
         var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
-    var capture = new CapturedImage(bitmap, DateTimeOffset.UtcNow, exposure, null);
+        var capture = new CapturedImage(null!, DateTimeOffset.UtcNow, exposure, null);
+        const long captureSizeBytes = 0;
 
         var workItem1 = new StackingWorkItem(
             FrameNumber: 41,
             Capture: capture,
             ConfigurationSnapshot: configuration,
             ConfigurationVersion: 1,
-            EnqueuedAt: DateTimeOffset.UtcNow.AddMilliseconds(-25));
+            EnqueuedAt: DateTimeOffset.UtcNow.AddMilliseconds(-25),
+            CaptureSizeBytes: captureSizeBytes);
 
         var workItem2 = new StackingWorkItem(
             FrameNumber: 42,
             Capture: capture,
             ConfigurationSnapshot: configuration,
             ConfigurationVersion: 1,
-            EnqueuedAt: DateTimeOffset.UtcNow);
+            EnqueuedAt: DateTimeOffset.UtcNow,
+            CaptureSizeBytes: captureSizeBytes);
 
         var method = typeof(BackgroundFrameStackerService)
             .GetMethod("RecordProcessingTelemetry", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -202,5 +209,133 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
 
         currentOptions = (BackgroundStackerOptions)currentOptionsField.GetValue(service)!;
         Assert.AreEqual(24, currentOptions.QueueCapacity, "Sustained low pressure should decrease queue capacity within bounds.");
+    }
+
+    [TestMethod]
+    public async Task EnqueueAsync_RetriesAfterChannelSwapDuringWait()
+    {
+        var options = new CameraPipelineOptions
+        {
+            EnableStacking = true,
+            EnableImageOverlays = false,
+            BackgroundStacker = new BackgroundStackerOptions
+            {
+                Enabled = true,
+                QueueCapacity = 2,
+                OverflowPolicy = BackgroundStackerOverflowPolicy.Block,
+                AdaptiveQueue = new AdaptiveQueueOptions
+                {
+                    Enabled = true,
+                    MinCapacity = 2,
+                    MaxCapacity = 6,
+                    IncreaseStep = 2,
+                    DecreaseStep = 1,
+                    ScaleUpThresholdPercent = 70,
+                    ScaleDownThresholdPercent = 30,
+                    EvaluationWindowSeconds = 1,
+                    CooldownSeconds = 1
+                }
+            }
+        };
+
+        var configuration = CameraConfiguration.FromOptions(options);
+
+        var optionsMonitor = new Mock<IOptionsMonitor<CameraPipelineOptions>>();
+        optionsMonitor.SetupGet(monitor => monitor.CurrentValue).Returns(options);
+        optionsMonitor.Setup(monitor => monitor.OnChange(It.IsAny<Action<CameraPipelineOptions, string?>>()))
+            .Returns(Mock.Of<IDisposable>());
+
+        var frameStacker = new Mock<IFrameStacker>(MockBehavior.Strict);
+        var pipeline = new Mock<IFrameFilterPipeline>(MockBehavior.Strict);
+
+        var frameStateStore = new Mock<IFrameStateStore>(MockBehavior.Strict);
+        frameStateStore.SetupGet(store => store.ConfigurationVersion).Returns(1);
+        frameStateStore.SetupGet(store => store.Configuration).Returns(configuration);
+        frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
+        frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
+
+        var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
+        clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
+        clock.SetupGet(c => c.LocalNow).Returns(() => DateTimeOffset.Now);
+        clock.SetupGet(c => c.TimeZone).Returns(TimeZoneInfo.Utc);
+        clock.SetupGet(c => c.TimeZoneDisplayName).Returns("UTC");
+        clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
+        clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
+
+        using var service = new BackgroundFrameStackerService(
+            optionsMonitor.Object,
+            frameStacker.Object,
+            pipeline.Object,
+            frameStateStore.Object,
+            clock.Object,
+            NullLogger<BackgroundFrameStackerService>.Instance);
+
+        var serviceType = typeof(BackgroundFrameStackerService);
+        var channelField = serviceType.GetField("_channel", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(channelField, "Expected _channel field via reflection.");
+
+        var onEnqueued = serviceType.GetMethod("OnWorkItemEnqueued", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(onEnqueued, "Expected OnWorkItemEnqueued method via reflection.");
+
+        var exposure = new ExposureSettings(ExposureMilliseconds: 500, Gain: 150, AutoExposure: false, AutoGain: false);
+        var configurationSnapshot = configuration;
+
+        var frameCounter = 100;
+
+        StackingWorkItem CreateWorkItem()
+        {
+            var frameNumber = ++frameCounter;
+            return new StackingWorkItem(
+                FrameNumber: frameNumber,
+                Capture: new CapturedImage(null!, DateTimeOffset.UtcNow, exposure, null),
+                ConfigurationSnapshot: configurationSnapshot,
+                ConfigurationVersion: 1,
+                EnqueuedAt: DateTimeOffset.UtcNow,
+                CaptureSizeBytes: 0);
+        }
+
+        var channel = (Channel<StackingWorkItem>)channelField.GetValue(service)!;
+        for (var i = 0; i < options.BackgroundStacker.QueueCapacity; i++)
+        {
+            var seedItem = CreateWorkItem();
+            Assert.IsTrue(channel.Writer.TryWrite(seedItem), "Expected initial channel to accept seeded items.");
+            onEnqueued.Invoke(service, new object[] { seedItem });
+        }
+
+        var pendingItem = CreateWorkItem();
+        var enqueueTask = Task.Run(async () => await service.EnqueueAsync(pendingItem, CancellationToken.None));
+
+        await Task.Delay(50);
+
+        var applyCapacity = serviceType.GetMethod("ApplyAdaptiveQueueCapacity", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(applyCapacity, "Expected ApplyAdaptiveQueueCapacity method via reflection.");
+        applyCapacity.Invoke(service, new object[] { 4, "test" });
+
+        var completed = await Task.WhenAny(enqueueTask, Task.Delay(1000));
+        Assert.AreSame(enqueueTask, completed, "Enqueue should resume after channel swap.");
+
+        var result = await enqueueTask;
+        Assert.IsTrue(result, "Enqueue should succeed after adaptive channel replacement.");
+
+        static void DrainChannel(Channel<StackingWorkItem>? target)
+        {
+            if (target is null)
+            {
+                return;
+            }
+
+            while (target.Reader.TryRead(out var item))
+            {
+                item.Capture.Image?.Dispose();
+                item.Capture.Context?.Dispose();
+            }
+        }
+
+        DrainChannel(channel);
+        var currentChannel = (Channel<StackingWorkItem>)channelField.GetValue(service)!;
+        if (!ReferenceEquals(channel, currentChannel))
+        {
+            DrainChannel(currentChannel);
+        }
     }
 }

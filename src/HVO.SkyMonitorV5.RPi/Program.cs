@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using HVO.SkyMonitorV5.RPi.Cameras;
+using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Components;
 using HVO.SkyMonitorV5.RPi.Data;
 using HVO.SkyMonitorV5.RPi.HostedServices;
@@ -13,6 +15,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -187,11 +190,17 @@ public static class Program
 
         services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
+        services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
         services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+        services.AddSingleton<IMinioClientProvider, MinioClientProvider>();
+        services.AddSingleton<IRemoteFrameEncoder, SkiaRemoteFrameEncoder>();
+        services.AddSingleton<IRemoteFramePublisher, RemoteFramePublisher>();
         services.AddSingleton<BackgroundFrameStackerService>();
         services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
         services.AddHostedService(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
+    services.AddSingleton<RemoteDispatchMetricsObserver>();
+    services.AddHostedService(sp => sp.GetRequiredService<RemoteDispatchMetricsObserver>());
 
         services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
         services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
@@ -212,6 +221,10 @@ public static class Program
         services.AddSingleton<ICameraCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
         services.AddSingleton<ILensCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
         services.AddSingleton<IRigCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
+        services.AddHostedService<CatalogConfigurationReporter>();
+
+        services.AddSingleton<ICameraDriverFactory, CameraDriverFactory>();
+        services.AddSingleton<IRigAcquisitionAdapter, RigAcquisitionAdapter>();
 
         services.AddSingleton<FrameFilterPipeline>();
         services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
@@ -219,7 +232,7 @@ public static class Program
 
         RegisterCameraAdapters(services, configuration);
 
-        services.AddHostedService<AllSkyCaptureService>();
+    services.AddHostedService<AllSkyCaptureService>();
         
         services.AddOpenTelemetry()
             .WithMetrics(builder =>
@@ -229,6 +242,7 @@ public static class Program
                     serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0"));
 
                 builder.AddMeter("HVO.SkyMonitor.BackgroundStacker");
+                builder.AddMeter("HVO.SkyMonitor.RemoteDispatch");
                 builder.AddPrometheusExporter();
             });
     }
@@ -275,7 +289,9 @@ public static class Program
             services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
             {
                 var rigCatalog = sp.GetRequiredService<IRigCatalog>();
-                var rigSpec = camera.ResolveRig(rigCatalog);
+                var loggerFactory = sp.GetService<ILoggerFactory>();
+                var configLogger = loggerFactory?.CreateLogger("HVO.SkyMonitor.CameraAdapters");
+                var rigSpec = camera.ResolveRig(rigCatalog, configLogger);
                 var observatoryClock = sp.GetRequiredService<IObservatoryClock>();
                 if (CameraAdapterTypes.IsMockColor(normalizedAdapterKey))
                 {

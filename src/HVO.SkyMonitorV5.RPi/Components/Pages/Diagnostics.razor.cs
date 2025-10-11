@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HVO.SkyMonitorV5.RPi.Components.Pages;
 
@@ -18,11 +20,13 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private static readonly TimeSpan SystemRefreshInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan QueueRefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan FilterRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan RemoteDispatchRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BackgroundRefreshInterval = TimeSpan.FromSeconds(3);
 
     private readonly List<double> _queueFillHistory = new();
     private readonly List<double> _queueLatencyHistory = new();
     private readonly List<double> _stackDurationHistory = new();
+    private readonly List<double> _remoteDispatchLatencyHistory = new();
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     private CancellationTokenSource? _refreshCts;
@@ -30,6 +34,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private BackgroundStackerMetricsResponse? _stackerMetrics;
     private FilterMetricsSnapshot? _filterMetrics;
     private SystemDiagnosticsSnapshot? _systemDiagnostics;
+    private RemoteDispatchMetricsSnapshot? _remoteDispatchMetrics;
+    private RemoteDispatchHistorySample? _lastRemoteDispatchSample;
     private DateTimeOffset? _lastUpdated;
     private string? _errorMessage;
     private bool _isLoading = true;
@@ -37,6 +43,9 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private DateTimeOffset _lastSystemRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastQueueRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFilterRefreshUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
+    private RemoteDispatchConfigSnapshot _remoteDispatchConfig = RemoteDispatchConfigSnapshot.Disabled;
+    private IDisposable? _optionsChangeSubscription;
 
     [Inject]
     private IDiagnosticsService DiagnosticsService { get; set; } = default!;
@@ -46,6 +55,9 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
 
     [Inject]
     private IObservatoryClock ObservatoryClock { get; set; } = default!;
+
+    [Inject]
+    private IOptionsMonitor<CameraPipelineOptions> CameraPipelineOptionsMonitor { get; set; } = default!;
 
     private bool IsLoading => _isLoading;
     private BackgroundStackerMetricsResponse? StackerMetrics => _stackerMetrics;
@@ -73,12 +85,65 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private string QueueMemorySummary => _stackerMetrics is { } metrics ? FormatMemory(metrics.QueueMemoryMegabytes) : "—";
     private string PeakQueueMemorySummary => _stackerMetrics is { } metrics ? FormatMemory(metrics.PeakQueueMemoryMegabytes) : "—";
     private string LastFrameNumberDisplay => _stackerMetrics?.LastFrameNumber?.ToString("N0", CultureInfo.CurrentCulture) ?? "—";
-    private string HistoryDurationDisplay => BuildHistoryDurationLabel(_queueFillHistory.Count);
+    private string HistoryDurationDisplay => BuildHistoryDurationLabel(_queueFillHistory.Count, QueueRefreshInterval);
     private string LatencyMaxDisplay => BuildMaxLabel(_queueLatencyHistory, "ms");
     private string StackDurationMaxDisplay => BuildMaxLabel(_stackDurationHistory, "ms");
     private string FilterSummaryDisplay => _filterMetrics is { Filters.Count: > 0 }
         ? $"{_filterMetrics.Filters.Count} active filters"
         : "No filter telemetry yet";
+
+    private RemoteDispatchMetricsSnapshot? RemoteDispatchMetrics => _remoteDispatchMetrics;
+    private IReadOnlyList<RemoteDispatchFormatSummary> RemoteDispatchFormatSummaries => RemoteDispatchMetrics?.FormatCounts ?? Array.Empty<RemoteDispatchFormatSummary>();
+    private bool HasRemoteDispatchTelemetry => RemoteDispatchMetrics is { SampleCount: > 0 };
+    private string RemoteDispatchSampleCountDisplay => HasRemoteDispatchTelemetry ? FormatCount(RemoteDispatchMetrics!.SampleCount) : "0";
+    private string RemoteDispatchSuccessRateDisplay => HasRemoteDispatchTelemetry ? FormatPercent(RemoteDispatchMetrics!.SuccessRatePercent) : "—";
+    private string RemoteDispatchOutcomeSummary => HasRemoteDispatchTelemetry
+        ? $"{FormatCount(RemoteDispatchMetrics!.SuccessCount)} ok · {FormatCount(RemoteDispatchMetrics.FailureCount)} failed · {FormatCount(RemoteDispatchMetrics.SkippedCount)} skipped"
+        : "No attempts yet";
+    private string RemoteDispatchAverageLatencyDisplay => FormatMilliseconds(RemoteDispatchMetrics?.AverageLatencyMilliseconds);
+    private string RemoteDispatchPeakLatencyDisplay => FormatMilliseconds(RemoteDispatchMetrics?.PeakLatencyMilliseconds);
+    private string RemoteDispatchLastLatencyDisplay => FormatMilliseconds(RemoteDispatchMetrics?.LastLatencyMilliseconds);
+    private string RemoteDispatchLastPayloadDisplay => BuildRemoteDispatchPayloadDescriptor();
+    private string RemoteDispatchLastOutcomeDisplay => _lastRemoteDispatchSample is { } sample
+        ? $"{FormatRemoteDispatchOutcome(sample.Outcome)} ({sample.Mode})"
+        : "No attempts yet";
+    private string RemoteDispatchLastAttemptDisplay => _lastRemoteDispatchSample is { Timestamp: var ts }
+        ? ts.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+        : "—";
+    private string RemoteDispatchLastMessageDisplay => _lastRemoteDispatchSample switch
+    {
+        { ErrorMessage: { Length: > 0 } error } => error,
+        { Message: { Length: > 0 } message } => message,
+        _ => "—"
+    };
+    private string RemoteDispatchHistoryDurationDisplay => BuildHistoryDurationLabel(_remoteDispatchLatencyHistory.Count, RemoteDispatchRefreshInterval);
+    private string RemoteDispatchLatencyMaxDisplay => BuildMaxLabel(_remoteDispatchLatencyHistory, "ms");
+    private string RemoteDispatchConfigSummary => _remoteDispatchConfig.Summary;
+    private string RemoteDispatchConfigBadgeText => _remoteDispatchConfig.Status switch
+    {
+        RemoteDispatchConfigurationStatus.Enabled => "Enabled",
+        RemoteDispatchConfigurationStatus.Warning => "Needs setup",
+        _ => "Disabled"
+    };
+    private string RemoteDispatchConfigBadgeCss => _remoteDispatchConfig.Status switch
+    {
+        RemoteDispatchConfigurationStatus.Enabled => "badge badge-status badge-status--enabled",
+        RemoteDispatchConfigurationStatus.Warning => "badge badge-status badge-status--warning",
+        _ => "badge badge-status badge-status--disabled"
+    };
+    private string RemoteDispatchModeDisplay => _remoteDispatchConfig.Mode switch
+    {
+        RemoteDispatchMode.S3 => "S3 / MinIO",
+        RemoteDispatchMode.None => "Disabled",
+        _ => _remoteDispatchConfig.Mode.ToString()
+    };
+    private bool ShouldShowRemoteDispatchConnection => _remoteDispatchConfig.Mode is RemoteDispatchMode.S3;
+    private string RemoteDispatchBucketDisplay => string.IsNullOrWhiteSpace(_remoteDispatchConfig.Bucket) ? "—" : _remoteDispatchConfig.Bucket!;
+    private string RemoteDispatchEndpointDisplay => string.IsNullOrWhiteSpace(_remoteDispatchConfig.Endpoint) ? "—" : _remoteDispatchConfig.Endpoint!;
+    private string RemoteDispatchProtocolDisplay => _remoteDispatchConfig.UseSsl ? "HTTPS" : "HTTP";
+    private string RemoteDispatchFormatDisplay => _remoteDispatchConfig.ImageFormat.ToString().ToUpperInvariant();
+    private bool HasRemoteDispatchConfigIssues => _remoteDispatchConfig.Issues.Count > 0;
+    private IReadOnlyList<string> RemoteDispatchConfigIssues => _remoteDispatchConfig.Issues;
 
     private SystemDiagnosticsSnapshot? SystemDiagnostics => _systemDiagnostics;
     private IReadOnlyList<CoreCpuLoad> CoreCpuLoads => _systemDiagnostics?.CoreCpuLoads ?? Array.Empty<CoreCpuLoad>();
@@ -96,57 +161,50 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         { } metrics => FormatPercent(metrics.ProcessCpuPercent),
         _ => "—"
     };
-    private string TotalCpuGaugeLabel => _systemDiagnostics is { TotalCpuPercent: { } } ? "system" : "process";
+    private string TotalCpuGaugeLabel => _systemDiagnostics?.TotalCpuPercent.HasValue == true ? "overall" : "process";
     private string ProcessCpuDisplay => _systemDiagnostics is { } metrics ? FormatPercent(metrics.ProcessCpuPercent) : "—";
-    private string ProcessThreadsDisplay => _systemDiagnostics is { } metrics ? metrics.ThreadCount.ToString("N0", CultureInfo.CurrentCulture) : "—";
+    private string ProcessThreadsDisplay => _systemDiagnostics is { ThreadCount: var threads } ? threads.ToString("N0", CultureInfo.CurrentCulture) : "—";
     private string ProcessUptimeDisplay => FormatDuration(_systemDiagnostics?.UptimeSeconds);
-    private double MemoryGaugeValue => _systemDiagnostics is { } metrics
-        ? metrics.Memory.UsagePercent ?? CalculateMemoryUsagePercent(metrics.Memory) ?? 0d
-        : 0d;
-    private string MemoryUsageGaugeStyle => BuildGaugeStyle(MemoryGaugeValue);
-    private string MemoryUsageDisplay => _systemDiagnostics is { } metrics
-        ? FormatPercent(metrics.Memory.UsagePercent ?? CalculateMemoryUsagePercent(metrics.Memory))
-        : "—";
+    private string MemoryUsageDisplay => _systemDiagnostics is { Memory.UsagePercent: { } percent } ? FormatPercent(percent) : "—";
+    private string MemoryUsageGaugeStyle => BuildGaugeStyle(_systemDiagnostics?.Memory.UsagePercent ?? 0d);
     private string SystemMemoryTotalDisplay => FormatMegabytes(_systemDiagnostics?.Memory.TotalMegabytes);
     private string SystemMemoryUsedDisplay => FormatMegabytes(_systemDiagnostics?.Memory.UsedMegabytes);
-    private string SystemMemoryAvailableDisplay => FormatMegabytes(_systemDiagnostics?.Memory.AvailableMegabytes);
     private string SystemMemoryFreeDisplay => FormatMegabytes(_systemDiagnostics?.Memory.FreeMegabytes);
+    private string SystemMemoryAvailableDisplay => FormatMegabytes(_systemDiagnostics?.Memory.AvailableMegabytes);
     private string SystemMemoryCachedDisplay => FormatMegabytes(_systemDiagnostics?.Memory.CachedMegabytes);
     private string SystemMemoryBuffersDisplay => FormatMegabytes(_systemDiagnostics?.Memory.BuffersMegabytes);
-    private string ProcessWorkingSetDisplay => _systemDiagnostics is { } metrics ? FormatMegabytes(metrics.ProcessWorkingSetMegabytes) : "—";
-    private string ProcessPrivateDisplay => _systemDiagnostics is { } metrics ? FormatMegabytes(metrics.ProcessPrivateMegabytes) : "—";
-    private string ManagedMemoryDisplay => _systemDiagnostics is { } metrics ? FormatMegabytes(metrics.ManagedMemoryMegabytes) : "—";
-
-    private string? GetAriaCurrent(DiagnosticsTab tab) => _activeTab == tab ? "page" : null;
-    private string GetTabCss(DiagnosticsTab tab) => _activeTab == tab ? "active" : string.Empty;
-
-    private TimeSpan GetCurrentLoopInterval() => _activeTab switch
-    {
-        DiagnosticsTab.System => SystemRefreshInterval,
-        DiagnosticsTab.Queue => QueueRefreshInterval,
-        DiagnosticsTab.Filters => FilterRefreshInterval,
-        _ => BackgroundRefreshInterval
-    };
+    private string ProcessWorkingSetDisplay => FormatMemory(_systemDiagnostics?.ProcessWorkingSetMegabytes ?? double.NaN);
+    private string ProcessPrivateDisplay => FormatMemory(_systemDiagnostics?.ProcessPrivateMegabytes ?? double.NaN);
+    private string ManagedMemoryDisplay => FormatMemory(_systemDiagnostics?.ManagedMemoryMegabytes ?? double.NaN);
 
     protected override async Task OnInitializedAsync()
     {
-        _refreshCts = new CancellationTokenSource();
-        await RefreshAsync(_refreshCts.Token);
+        await base.OnInitializedAsync();
 
-        if (!_refreshCts.IsCancellationRequested)
+        _refreshCts = new CancellationTokenSource();
+        ForceRefreshForTab(_activeTab);
+
+        UpdateRemoteDispatchConfig(CameraPipelineOptionsMonitor.CurrentValue);
+        _optionsChangeSubscription = CameraPipelineOptionsMonitor.OnChange(options =>
         {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1), _refreshCts.Token);
-                await RefreshAsync(_refreshCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // Component disposed before initial warm-up completed.
-            }
+            UpdateRemoteDispatchConfig(options);
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        var token = _refreshCts.Token;
+        await RefreshAsync(token).ConfigureAwait(false);
+        _refreshTask = RunRefreshLoopAsync(token);
+    }
+
+    private async Task RefreshNowAsync()
+    {
+        if (_refreshCts is null)
+        {
+            return;
         }
 
-        _refreshTask = RunRefreshLoopAsync(_refreshCts.Token);
+        ForceRefreshForTab(_activeTab);
+        await RefreshAsync(_refreshCts.Token).ConfigureAwait(false);
     }
 
     private void SetActiveTab(DiagnosticsTab tab)
@@ -157,40 +215,75 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         }
 
         _activeTab = tab;
-        if (tab is DiagnosticsTab.System)
+        ForceRefreshForTab(tab);
+        _ = InvokeAsync(StateHasChanged);
+
+        if (_refreshCts is { } cts)
         {
-            _ = InvokeAsync(async () =>
-            {
-                try
-                {
-                    await RefreshAsync(CancellationToken.None).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Switching tabs while shutting down refresh loop.
-                }
-            });
+            var token = cts.Token;
+            _ = InvokeAsync(async () => await RefreshAsync(token).ConfigureAwait(false));
         }
-        StateHasChanged();
     }
 
-    private async Task RefreshNowAsync()
+    private string GetTabCss(DiagnosticsTab tab) => _activeTab == tab ? "active" : string.Empty;
+
+    private string? GetAriaCurrent(DiagnosticsTab tab) => _activeTab == tab ? "page" : null;
+
+    private void ForceRefreshForTab(DiagnosticsTab tab)
     {
-        if (_refreshCts?.IsCancellationRequested == true)
+        if (tab is DiagnosticsTab.System)
         {
+            _lastSystemRefreshUtc = DateTimeOffset.MinValue;
+            _lastQueueRefreshUtc = DateTimeOffset.MinValue;
+            _lastFilterRefreshUtc = DateTimeOffset.MinValue;
+            _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
             return;
         }
 
-        await RefreshAsync(CancellationToken.None);
+        if (tab is DiagnosticsTab.Queue)
+        {
+            _lastQueueRefreshUtc = DateTimeOffset.MinValue;
+            _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
+            return;
+        }
+
+        if (tab is DiagnosticsTab.Filters)
+        {
+            _lastFilterRefreshUtc = DateTimeOffset.MinValue;
+        }
+    }
+
+    private TimeSpan GetCurrentLoopInterval() => _activeTab switch
+    {
+        DiagnosticsTab.System => MinInterval(SystemRefreshInterval, RemoteDispatchRefreshInterval, FilterRefreshInterval, BackgroundRefreshInterval),
+        DiagnosticsTab.Queue => MinInterval(QueueRefreshInterval, RemoteDispatchRefreshInterval, BackgroundRefreshInterval),
+        DiagnosticsTab.Filters => MinInterval(FilterRefreshInterval, BackgroundRefreshInterval),
+        _ => BackgroundRefreshInterval
+    };
+
+    private static TimeSpan MinInterval(params TimeSpan[] intervals)
+    {
+        if (intervals.Length == 0)
+        {
+            return BackgroundRefreshInterval;
+        }
+
+        var minTicks = intervals.Min(static interval => interval.Ticks);
+        return TimeSpan.FromTicks(minTicks);
     }
 
     public async ValueTask DisposeAsync()
     {
-        GC.SuppressFinalize(this);
-
         if (_refreshCts is not null)
         {
-            _refreshCts.Cancel();
+            try
+            {
+                _refreshCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already disposed.
+            }
         }
 
         if (_refreshTask is not null)
@@ -210,6 +303,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         }
 
         _refreshCts?.Dispose();
+        _optionsChangeSubscription?.Dispose();
 
         _refreshLock.Dispose();
     }
@@ -237,6 +331,84 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         }
     }
 
+    private void UpdateRemoteDispatchConfig(CameraPipelineOptions? pipelineOptions)
+    {
+        if (pipelineOptions is null)
+        {
+            _remoteDispatchConfig = RemoteDispatchConfigSnapshot.Disabled;
+            return;
+        }
+
+        var options = pipelineOptions.RemoteDispatch ?? new RemoteDispatchOptions();
+
+        if (!options.Enabled || options.Mode is RemoteDispatchMode.None)
+        {
+            _remoteDispatchConfig = RemoteDispatchConfigSnapshot.Disabled with
+            {
+                ImageFormat = options.ImageFormat
+            };
+            return;
+        }
+
+        if (options.Mode is not RemoteDispatchMode.S3)
+        {
+            _remoteDispatchConfig = new RemoteDispatchConfigSnapshot(
+                RemoteDispatchConfigurationStatus.Warning,
+                options.Mode,
+                "Remote dispatch is enabled but uses an unsupported mode.",
+                null,
+                null,
+                options.ImageFormat,
+                options.UseSsl,
+                new[] { $"Mode '{options.Mode}' is not implemented. Disable remote dispatch or switch to S3." });
+            return;
+        }
+
+        var issues = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(options.S3Bucket))
+        {
+            issues.Add("Bucket name is required when remote dispatch is enabled.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Endpoint))
+        {
+            issues.Add("Endpoint must be specified (for example, https://minio:9000).");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.AccessKey) || string.IsNullOrWhiteSpace(options.SecretKey))
+        {
+            issues.Add("Access key and secret key must be provided.");
+        }
+
+        if (issues.Count > 0)
+        {
+            _remoteDispatchConfig = new RemoteDispatchConfigSnapshot(
+                RemoteDispatchConfigurationStatus.Warning,
+                options.Mode,
+                "Remote dispatch is enabled but configuration needs attention.",
+                options.S3Bucket,
+                options.Endpoint,
+                options.ImageFormat,
+                options.UseSsl,
+                issues);
+            return;
+        }
+
+        var protocol = options.UseSsl ? "HTTPS" : "HTTP";
+        var summary = $"Publishing enabled via {protocol} S3.";
+
+        _remoteDispatchConfig = new RemoteDispatchConfigSnapshot(
+            RemoteDispatchConfigurationStatus.Enabled,
+            options.Mode,
+            summary,
+            options.S3Bucket,
+            options.Endpoint,
+            options.ImageFormat,
+            options.UseSsl,
+            Array.Empty<string>());
+    }
+
     private async Task RefreshAsync(CancellationToken cancellationToken)
     {
         await _refreshLock.WaitAsync(cancellationToken);
@@ -244,11 +416,13 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         try
         {
             var errorMessages = new List<string>();
-            BackgroundStackerMetricsResponse? latestMetrics = null;
-            var historyApplied = false;
-                var nowUtc = ObservatoryClock.UtcNow;
+            BackgroundStackerMetricsResponse? latestQueueMetrics = null;
+            var queueHistoryApplied = false;
+            RemoteDispatchMetricsSnapshot? latestRemoteDispatchMetrics = null;
+            var remoteHistoryApplied = false;
+            var nowUtc = ObservatoryClock.UtcNow;
 
-                if (ShouldRefreshQueueMetrics() && nowUtc - _lastQueueRefreshUtc >= QueueRefreshInterval)
+            if (ShouldRefreshQueueMetrics() && nowUtc - _lastQueueRefreshUtc >= QueueRefreshInterval)
             {
                 try
                 {
@@ -256,7 +430,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     if (stackerResult.IsSuccessful)
                     {
                         var metrics = stackerResult.Value;
-                        latestMetrics = metrics;
+                        latestQueueMetrics = metrics;
                         _stackerMetrics = metrics;
                         _lastUpdated = ObservatoryClock.LocalNow;
                     }
@@ -283,7 +457,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     if (historyResult.IsSuccessful)
                     {
                         ApplyHistory(historyResult.Value.Samples);
-                        historyApplied = true;
+                        queueHistoryApplied = true;
                     }
                     else
                     {
@@ -302,16 +476,77 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     errorMessages.Add("Unexpected error while retrieving background stacker history.");
                 }
 
-                if (!historyApplied && latestMetrics is not null)
+                if (!queueHistoryApplied && latestQueueMetrics is not null)
                 {
-                    UpdateHistory(_queueFillHistory, latestMetrics.QueueFillPercentage);
-                    UpdateHistory(_queueLatencyHistory, latestMetrics.LastQueueLatencyMilliseconds ?? 0d);
-                    UpdateHistory(_stackDurationHistory, latestMetrics.LastStackMilliseconds ?? 0d);
+                    UpdateHistory(_queueFillHistory, latestQueueMetrics.QueueFillPercentage);
+                    UpdateHistory(_queueLatencyHistory, latestQueueMetrics.LastQueueLatencyMilliseconds ?? 0d);
+                    UpdateHistory(_stackDurationHistory, latestQueueMetrics.LastStackMilliseconds ?? 0d);
                 }
-                    _lastQueueRefreshUtc = nowUtc;
+
+                _lastQueueRefreshUtc = nowUtc;
             }
 
-                if (ShouldRefreshFilterMetrics() && nowUtc - _lastFilterRefreshUtc >= FilterRefreshInterval)
+            if (ShouldRefreshRemoteDispatchMetrics() && nowUtc - _lastRemoteDispatchRefreshUtc >= RemoteDispatchRefreshInterval)
+            {
+                try
+                {
+                    var remoteResult = await DiagnosticsService.GetRemoteDispatchMetricsAsync(cancellationToken).ConfigureAwait(false);
+                    if (remoteResult.IsSuccessful)
+                    {
+                        latestRemoteDispatchMetrics = remoteResult.Value;
+                        _remoteDispatchMetrics = remoteResult.Value;
+                    }
+                    else
+                    {
+                        var error = remoteResult.Error ?? new InvalidOperationException("Unknown remote dispatch diagnostics error");
+                        Logger.LogWarning(error, "Failed to refresh remote dispatch metrics snapshot.");
+                        errorMessages.Add("Unable to retrieve remote dispatch metrics.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Unexpected error refreshing remote dispatch metrics snapshot.");
+                    errorMessages.Add("Unexpected error while retrieving remote dispatch metrics.");
+                }
+
+                try
+                {
+                    var remoteHistoryResult = await DiagnosticsService.GetRemoteDispatchHistoryAsync(cancellationToken).ConfigureAwait(false);
+                    if (remoteHistoryResult.IsSuccessful)
+                    {
+                        ApplyRemoteDispatchHistory(remoteHistoryResult.Value.Samples);
+                        remoteHistoryApplied = true;
+                    }
+                    else
+                    {
+                        var error = remoteHistoryResult.Error ?? new InvalidOperationException("Unknown remote dispatch history error");
+                        Logger.LogWarning(error, "Failed to refresh remote dispatch history samples.");
+                        errorMessages.Add("Unable to retrieve remote dispatch history.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Unexpected error refreshing remote dispatch history.");
+                    errorMessages.Add("Unexpected error while retrieving remote dispatch history.");
+                }
+
+                if (!remoteHistoryApplied && latestRemoteDispatchMetrics is { LastLatencyMilliseconds: { } lastLatency })
+                {
+                    UpdateHistory(_remoteDispatchLatencyHistory, lastLatency);
+                }
+
+                _lastRemoteDispatchRefreshUtc = nowUtc;
+            }
+
+            if (ShouldRefreshFilterMetrics() && nowUtc - _lastFilterRefreshUtc >= FilterRefreshInterval)
             {
                 try
                 {
@@ -336,10 +571,11 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     Logger.LogError(ex, "Unexpected error refreshing filter metrics.");
                     errorMessages.Add("Unexpected error while retrieving filter telemetry.");
                 }
-                    _lastFilterRefreshUtc = nowUtc;
+
+                _lastFilterRefreshUtc = nowUtc;
             }
 
-                if (ShouldRefreshSystemMetrics() && nowUtc - _lastSystemRefreshUtc >= SystemRefreshInterval)
+            if (ShouldRefreshSystemMetrics() && nowUtc - _lastSystemRefreshUtc >= SystemRefreshInterval)
             {
                 try
                 {
@@ -364,7 +600,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     Logger.LogError(ex, "Unexpected error refreshing system diagnostics snapshot.");
                     errorMessages.Add("Unexpected error while retrieving system diagnostics.");
                 }
-                    _lastSystemRefreshUtc = nowUtc;
+
+                _lastSystemRefreshUtc = nowUtc;
             }
 
             _errorMessage = errorMessages.Count > 0 ? string.Join(" ", errorMessages) : null;
@@ -398,6 +635,24 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
             UpdateHistory(_queueLatencyHistory, sample.QueueLatencyMilliseconds ?? 0d);
             UpdateHistory(_stackDurationHistory, sample.StackDurationMilliseconds ?? 0d);
         }
+    }
+
+    private void ApplyRemoteDispatchHistory(IReadOnlyList<RemoteDispatchHistorySample> samples)
+    {
+        _remoteDispatchLatencyHistory.Clear();
+
+        if (samples.Count == 0)
+        {
+            _lastRemoteDispatchSample = null;
+            return;
+        }
+
+        foreach (var sample in samples)
+        {
+            UpdateHistory(_remoteDispatchLatencyHistory, sample.LatencyMilliseconds ?? 0d);
+        }
+
+        _lastRemoteDispatchSample = samples[^1];
     }
 
     private static void UpdateHistory(List<double> history, double value)
@@ -504,6 +759,36 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         return FormatMemory(value.Value);
     }
 
+    private static string FormatBytes(long? bytes)
+    {
+        if (!bytes.HasValue || bytes.Value <= 0)
+        {
+            return "—";
+        }
+
+        var value = (double)bytes.Value;
+        const double kilo = 1024d;
+        const double mega = kilo * 1024d;
+        const double giga = mega * 1024d;
+
+        if (value >= giga)
+        {
+            return string.Create(CultureInfo.CurrentCulture, $"{value / giga:F2} GB");
+        }
+
+        if (value >= mega)
+        {
+            return string.Create(CultureInfo.CurrentCulture, $"{value / mega:F2} MB");
+        }
+
+        if (value >= kilo)
+        {
+            return string.Create(CultureInfo.CurrentCulture, $"{value / kilo:F1} KB");
+        }
+
+        return string.Create(CultureInfo.CurrentCulture, $"{value:F0} B");
+    }
+
     private static string FormatDuration(double? seconds)
     {
         if (!seconds.HasValue)
@@ -526,15 +811,62 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         return string.Create(CultureInfo.CurrentCulture, $"{duration.Seconds:D2}s");
     }
 
-    private static string BuildHistoryDurationLabel(int sampleCount)
+    private string BuildRemoteDispatchPayloadDescriptor()
     {
-        if (sampleCount <= 1)
+        if (_remoteDispatchMetrics is not { } metrics)
         {
-            return "Rolling window < 10 s";
+            return "—";
         }
 
-    var cadenceSeconds = QueueRefreshInterval.TotalSeconds;
-    var totalSeconds = sampleCount * cadenceSeconds;
+        var parts = new List<string>();
+
+        var size = FormatBytes(metrics.LastPayloadBytes);
+        if (size != "—")
+        {
+            parts.Add(size);
+        }
+
+        var extension = NormalizeExtension(metrics.LastPayloadExtension);
+        if (!string.IsNullOrWhiteSpace(extension))
+        {
+            parts.Add(extension);
+        }
+
+        if (!string.IsNullOrWhiteSpace(metrics.LastPayloadContentType))
+        {
+            parts.Add(metrics.LastPayloadContentType);
+        }
+
+        return parts.Count > 0 ? string.Join(" • ", parts) : "—";
+    }
+
+    private static string? NormalizeExtension(string? extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            return null;
+        }
+
+        var trimmed = extension.Trim();
+    if (!trimmed.StartsWith(".", StringComparison.Ordinal))
+        {
+            trimmed = $".{trimmed}";
+        }
+
+        return trimmed;
+    }
+
+    private static string BuildHistoryDurationLabel(int sampleCount, TimeSpan cadence)
+    {
+        var cadenceSeconds = Math.Max(cadence.TotalSeconds, 0.1d);
+
+        if (sampleCount <= 1)
+        {
+            var baselineSeconds = Math.Max(cadenceSeconds * 5, cadenceSeconds);
+            return string.Create(CultureInfo.CurrentCulture, $"Rolling window < {baselineSeconds:F0} s");
+        }
+
+        var totalSeconds = sampleCount * cadenceSeconds;
         if (totalSeconds >= 90)
         {
             var minutes = totalSeconds / 60d;
@@ -561,6 +893,15 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         1 => "Rising",
         2 => "Elevated",
         _ => "High"
+    };
+
+    private static string FormatRemoteDispatchOutcome(RemoteDispatchOutcome outcome) => outcome switch
+    {
+        RemoteDispatchOutcome.Disabled => "Disabled",
+        RemoteDispatchOutcome.Succeeded => "Succeeded",
+        RemoteDispatchOutcome.Skipped => "Skipped",
+        RemoteDispatchOutcome.Failed => "Failed",
+        _ => outcome.ToString()
     };
 
     private string GetFilterBarStyle(FilterMetrics metric)
@@ -595,9 +936,39 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         Queue
     }
 
+    private bool ShouldRefreshRemoteDispatchMetrics() => ActiveTab is DiagnosticsTab.System or DiagnosticsTab.Queue;
+
     private bool ShouldRefreshQueueMetrics() => ActiveTab is DiagnosticsTab.Queue or DiagnosticsTab.System;
 
     private bool ShouldRefreshFilterMetrics() => ActiveTab is DiagnosticsTab.Filters or DiagnosticsTab.System;
 
     private bool ShouldRefreshSystemMetrics() => ActiveTab is DiagnosticsTab.System;
-}
+    }
+
+    internal enum RemoteDispatchConfigurationStatus
+    {
+        Disabled,
+        Enabled,
+        Warning
+    }
+
+    internal sealed record RemoteDispatchConfigSnapshot(
+        RemoteDispatchConfigurationStatus Status,
+        RemoteDispatchMode Mode,
+        string Summary,
+        string? Bucket,
+        string? Endpoint,
+        RemoteDispatchImageFormat ImageFormat,
+        bool UseSsl,
+        IReadOnlyList<string> Issues)
+    {
+        public static RemoteDispatchConfigSnapshot Disabled { get; } = new(
+            RemoteDispatchConfigurationStatus.Disabled,
+            RemoteDispatchMode.None,
+            "Remote dispatch is disabled in configuration.",
+            null,
+            null,
+            RemoteDispatchImageFormat.Png,
+            false,
+            Array.Empty<string>());
+    }

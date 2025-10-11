@@ -16,6 +16,7 @@
 - [x] Add navigation affordance (tabs or sidebar) so queue diagnostics, filter diagnostics, and system diagnostics sub-views fit without cluttering the layout. The current theme is fine, but may need to slight modifactions in font size (smaller, like the dashbaord).
 - [x] Enable auto-refresh with per-tab throttling to ensure only the visible diagnostics pane polls for data, reducing CPU load.
 - [ ] Capture diagnostics snapshots to disk for offline analysis (JSON export triggered from the diagnostics page).
+- [ ] Factor the remote dispatch configuration editor into a reusable component consumed by SkyMonitor, Roof Controller, and future observatory apps.
 
 ### Camera
 - [x] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD, etc.) and mirror those attributes in the dashboard camera section alongside pipeline capabilities to guide setup decisions.
@@ -44,3 +45,7 @@
 ## HVO.Iot.Devices
 
 - _No open items tracked._
+
+## Future Projects
+
+- [ ] Revisit FITS/TIFF encoder support for remote dispatch once the SkyMonitorV5 data store project is underway.

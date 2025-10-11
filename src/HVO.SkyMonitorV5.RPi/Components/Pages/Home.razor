@@ -102,7 +102,7 @@ else
         </div>
 
         <div class="row g-4 mt-1 status-grid">
-            <div class="col-12 col-lg-4">
+            <div class="col-12 col-lg-6 col-xl-3">
                 <div class="status-card">
                     <header class="status-card__header">
                         <i class="bi bi-clock-history"></i>
@@ -129,7 +129,7 @@ else
                 </div>
             </div>
 
-            <div class="col-12 col-lg-4">
+            <div class="col-12 col-lg-6 col-xl-3">
                 <div class="status-card">
                     <header class="status-card__header">
                         <i class="bi bi-gear-wide-connected"></i>
@@ -168,7 +168,7 @@ else
                 </div>
             </div>
 
-            <div class="col-12 col-lg-4">
+            <div class="col-12 col-lg-6 col-xl-3">
                 <div class="status-card">
                     <header class="status-card__header">
                         <i class="bi bi-info-circle"></i>
@@ -220,6 +220,38 @@ else
                             <dd>@BackgroundLastCompletedSummary</dd>
                         </div>
                         <div class="status-card__item">
+                            <dt>Capture Pacing</dt>
+                            <dd>@CapturePacingSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Pacing Pressure</dt>
+                            <dd>@CapturePacingPressureSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Penalty</dt>
+                            <dd>@CapturePacingPenaltySummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Pacing Updated</dt>
+                            <dd>@CapturePacingUpdatedSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Async Queue</dt>
+                            <dd>@ProcessingQueueSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Queue Backpressure</dt>
+                            <dd>@ProcessingQueueBackpressureSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Processing Times</dt>
+                            <dd>@ProcessingQueueProcessingSummary</dd>
+                        </div>
+                        <div class="status-card__item">
+                            <dt>Queue Updated</dt>
+                            <dd>@ProcessingQueueUpdatedSummary</dd>
+                        </div>
+                        <div class="status-card__item">
                             <dt>Filters</dt>
                             <dd>
                                 @if (AppliedFilters.Count > 0)
@@ -238,6 +270,135 @@ else
                             </dd>
                         </div>
                     </dl>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-6 col-xl-3">
+                <div class="status-card">
+                    <header class="status-card__header">
+                        <i class="bi bi-sunrise"></i>
+                        <span>Exposure Analysis</span>
+                    </header>
+                    @if (ExposureAnalysis is null)
+                    {
+                        <div class="status-card__empty">
+                            <i class="bi bi-activity"></i>
+                            <span>Awaiting first analysis result.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <dl class="status-card__list">
+                            <div class="status-card__item">
+                                <dt>Last Analysis</dt>
+                                <dd>@ExposureAnalysisTimestampText</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Lighting</dt>
+                                <dd>@ExposureLightingDescription</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Luminance</dt>
+                                <dd>@ExposureLuminanceSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Recommendation</dt>
+                                <dd>@ExposureRecommendationSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Overrides</dt>
+                                <dd>
+                                    <div class="status-card__subline">@DayExposureOverrideSummary</div>
+                                    <div class="status-card__subline">@NightExposureOverrideSummary</div>
+                                </dd>
+                            </div>
+                        </dl>
+                        @if (!string.IsNullOrWhiteSpace(ExposureAnalysisNotes))
+                        {
+                            <div class="status-card__note">
+                                <i class="bi bi-journal-text"></i>
+                                <span>@ExposureAnalysisNotes</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-6 col-xl-3">
+                <div class="status-card">
+                    <header class="status-card__header">
+                        <i class="bi bi-cloud-upload"></i>
+                        <span>Remote Dispatch</span>
+                    </header>
+                    @if (RemoteDispatchStatusData is null)
+                    {
+                        <div class="status-card__empty">
+                            <i class="bi bi-dash-circle"></i>
+                            <span>Remote publishing disabled.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <dl class="status-card__list">
+                            <div class="status-card__item">
+                                <dt>Mode</dt>
+                                <dd>@RemoteDispatchModeSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Outcome</dt>
+                                <dd>@RemoteDispatchOutcomeSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Success Rate</dt>
+                                <dd>@RemoteDispatchSuccessRateSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Attempts</dt>
+                                <dd>@RemoteDispatchAttemptsSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Latency</dt>
+                                <dd>@RemoteDispatchLatencySummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Last Latency</dt>
+                                <dd>@RemoteDispatchLastLatencySummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Last Frame</dt>
+                                <dd>@RemoteDispatchCapturedSummary</dd>
+                            </div>
+                            <div class="status-card__item">
+                                <dt>Last Payload</dt>
+                                <dd>@RemoteDispatchLastPayloadSummary</dd>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(RemoteDispatchFormatsSummary))
+                            {
+                                <div class="status-card__item">
+                                    <dt>Formats</dt>
+                                    <dd>@RemoteDispatchFormatsSummary</dd>
+                                </div>
+                            }
+                            <div class="status-card__item">
+                                <dt>Telemetry Updated</dt>
+                                <dd>@RemoteDispatchTelemetryUpdatedSummary</dd>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(RemoteDispatchMessage))
+                            {
+                                <div class="status-card__item">
+                                    <dt>Details</dt>
+                                    <dd>@RemoteDispatchMessage</dd>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(RemoteDispatchError))
+                            {
+                                <div class="status-card__item">
+                                    <dt>Error</dt>
+                                    <dd class="text-danger">@RemoteDispatchError</dd>
+                                </div>
+                            }
+                        </dl>
+                    }
                 </div>
             </div>
         </div>

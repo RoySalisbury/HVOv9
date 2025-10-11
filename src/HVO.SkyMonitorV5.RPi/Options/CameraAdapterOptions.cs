@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Options;
 
@@ -30,7 +32,7 @@ public sealed class CameraAdapterOptions : IValidatableObject
 
     public RigSpecOptions? Rig { get; set; }
 
-    public RigSpec ResolveRig(IRigCatalog rigCatalog)
+    public RigSpec ResolveRig(IRigCatalog rigCatalog, ILogger? logger = null)
     {
         if (rigCatalog is null)
         {
@@ -43,7 +45,9 @@ public sealed class CameraAdapterOptions : IValidatableObject
             var result = rigCatalog.Resolve(reference);
             if (result.IsSuccessful)
             {
-                return result.Value;
+                var spec = result.Value;
+                logger?.LogDebug("Camera {CameraName} resolved catalog rig {RigName} (entry: {CatalogEntry}).", Name, spec.Name, reference);
+                return spec;
             }
 
             var error = result.Error ?? new InvalidOperationException($"Rig catalog entry '{reference}' could not be resolved.");
@@ -52,7 +56,14 @@ public sealed class CameraAdapterOptions : IValidatableObject
 
         if (Rig is not null)
         {
-            return Rig.ToRigSpec();
+            logger?.LogWarning("Camera {CameraName} is using legacy inline rig configuration. Migrate to catalog entry when feasible.", Name);
+            var driverHint = ResolveAdapterDriverId();
+            if (driverHint == CameraDriverId.Unknown)
+            {
+                logger?.LogWarning("Camera {CameraName} adapter {Adapter} does not map to a known driver identifier.", Name, Adapter);
+            }
+
+            return Rig.ToRigSpec(driverHint);
         }
 
         throw new InvalidOperationException($"Camera '{Name}' must specify either '{nameof(RigCatalog)}' or inline '{nameof(Rig)}' configuration.");
@@ -81,6 +92,21 @@ public sealed class CameraAdapterOptions : IValidatableObject
                 yield return result;
             }
         }
+    }
+
+    private CameraDriverId ResolveAdapterDriverId()
+    {
+        if (CameraAdapterTypes.IsMock(Adapter) || CameraAdapterTypes.IsMockColor(Adapter))
+        {
+            return CameraDriverId.Synthetic;
+        }
+
+        if (CameraAdapterTypes.IsZwo(Adapter))
+        {
+            return CameraDriverId.Zwo;
+        }
+
+        return CameraDriverId.Unknown;
     }
 }
 
@@ -126,7 +152,7 @@ public sealed class RigSpecOptions : IValidatableObject
     [Range(0.0, 360.0)]
     public double? BoresightAzDeg { get; set; }
 
-    public RigSpec ToRigSpec()
+    public RigSpec ToRigSpec(CameraDriverId driverHint = CameraDriverId.Unknown)
     {
         var sensorSpec = Sensor.ToSensorSpec();
         var cameraOptions = Camera;
@@ -139,9 +165,34 @@ public sealed class RigSpecOptions : IValidatableObject
                 : Name;
 
         var capabilities = cameraOptions?.Capabilities?.ToCameraCapabilities() ?? CameraCapabilities.Empty;
+        var driverId = cameraOptions?.DriverId ?? driverHint;
+        var synthetic = cameraOptions?.IsSynthetic ?? driverId == CameraDriverId.Synthetic;
+        var syntheticProfile = string.IsNullOrWhiteSpace(cameraOptions?.SyntheticProfile)
+            ? null
+            : cameraOptions!.SyntheticProfile!.Trim();
+
+        if (!synthetic)
+        {
+            syntheticProfile = null;
+        }
+        else if (driverId != CameraDriverId.Synthetic)
+        {
+            driverId = CameraDriverId.Synthetic;
+        }
+
+        if (synthetic && string.IsNullOrWhiteSpace(syntheticProfile))
+        {
+            throw new InvalidOperationException($"Rig '{Name}' synthetic configuration requires a synthetic profile identifier.");
+        }
+
         var cameraSpec = descriptor is not null
-            ? new CameraSpec(resolvedCameraName, sensorSpec, capabilities, descriptor)
-            : new CameraSpec(resolvedCameraName, sensorSpec, capabilities);
+            ? new CameraSpec(resolvedCameraName, sensorSpec, capabilities, descriptor, driverId, synthetic, syntheticProfile)
+            : new CameraSpec(resolvedCameraName, sensorSpec, capabilities) with
+            {
+                DriverId = driverId,
+                IsSynthetic = synthetic,
+                SyntheticProfile = syntheticProfile
+            };
 
         return new RigSpec(
             Name,
@@ -224,6 +275,14 @@ public sealed class CameraSpecOptions
 
     public CameraCapabilitiesOptions Capabilities { get; set; } = new();
 
+    [EnumDataType(typeof(CameraDriverId))]
+    public CameraDriverId DriverId { get; set; } = CameraDriverId.Unknown;
+
+    public bool? IsSynthetic { get; set; }
+
+    [MaxLength(128)]
+    public string? SyntheticProfile { get; set; }
+
     public IEnumerable<ValidationResult> Validate(string memberName)
     {
         if (Capabilities is null)
@@ -237,6 +296,20 @@ public sealed class CameraSpecOptions
         foreach (var result in Capabilities.Validate($"{memberName}.{nameof(Capabilities)}"))
         {
             yield return result;
+        }
+
+        if (DriverId == CameraDriverId.Unknown)
+        {
+            yield return new ValidationResult(
+                "Inline camera configuration must specify a driver identifier.",
+                new[] { memberName + "." + nameof(DriverId) });
+        }
+
+        if (((IsSynthetic ?? false) || DriverId == CameraDriverId.Synthetic) && string.IsNullOrWhiteSpace(SyntheticProfile))
+        {
+            yield return new ValidationResult(
+                "Synthetic cameras must provide a synthetic profile identifier.",
+                new[] { memberName + "." + nameof(SyntheticProfile) });
         }
     }
 }

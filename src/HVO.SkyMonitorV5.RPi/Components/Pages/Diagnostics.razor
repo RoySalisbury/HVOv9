@@ -302,6 +302,140 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="row g-4 mt-1">
+                            <div class="col-xl-6 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <div>
+                                                <h2 class="section-title mb-0">Remote dispatch</h2>
+                                                <p class="text-muted small mb-2">@RemoteDispatchConfigSummary</p>
+                                                <div class="remote-config-details">
+                                                    <div class="remote-config-row">
+                                                        <span class="remote-config-label">Mode</span>
+                                                        <span>@RemoteDispatchModeDisplay</span>
+                                                    </div>
+                                                    @if (ShouldShowRemoteDispatchConnection)
+                                                    {
+                                                        <div class="remote-config-row">
+                                                            <span class="remote-config-label">Bucket</span>
+                                                            <span>@RemoteDispatchBucketDisplay</span>
+                                                        </div>
+                                                        <div class="remote-config-row">
+                                                            <span class="remote-config-label">Endpoint</span>
+                                                            <span>@RemoteDispatchEndpointDisplay</span>
+                                                        </div>
+                                                        <div class="remote-config-row">
+                                                            <span class="remote-config-label">Protocol</span>
+                                                            <span>@RemoteDispatchProtocolDisplay</span>
+                                                        </div>
+                                                    }
+                                                    <div class="remote-config-row">
+                                                        <span class="remote-config-label">Format</span>
+                                                        <span>@RemoteDispatchFormatDisplay</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="@RemoteDispatchConfigBadgeCss">@RemoteDispatchConfigBadgeText</span>
+                                        </div>
+
+                                        @if (HasRemoteDispatchConfigIssues)
+                                        {
+                                            <div class="alert alert-warning mt-3 mb-0 small" role="alert">
+                                                <p class="fw-semibold text-uppercase small mb-2">Configuration issues</p>
+                                                <ul class="mb-0 ps-3">
+                                                    @foreach (var issue in RemoteDispatchConfigIssues)
+                                                    {
+                                                        <li>@issue</li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+
+                                        <dl class="metric-list mt-4">
+                                            <div class="metric-row">
+                                                <dt>Samples</dt>
+                                                <dd>@RemoteDispatchSampleCountDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Success rate</dt>
+                                                <dd>@RemoteDispatchSuccessRateDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Outcome mix</dt>
+                                                <dd>@RemoteDispatchOutcomeSummary</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Avg latency</dt>
+                                                <dd>@RemoteDispatchAverageLatencyDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Peak latency</dt>
+                                                <dd>@RemoteDispatchPeakLatencyDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last outcome</dt>
+                                                <dd>@RemoteDispatchLastOutcomeDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last attempt</dt>
+                                                <dd>@RemoteDispatchLastAttemptDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last latency</dt>
+                                                <dd>@RemoteDispatchLastLatencyDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last payload</dt>
+                                                <dd>@RemoteDispatchLastPayloadDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last message</dt>
+                                                <dd>@RemoteDispatchLastMessageDisplay</dd>
+                                            </div>
+                                        </dl>
+
+                                        @if (RemoteDispatchFormatSummaries.Count > 0)
+                                        {
+                                            <div class="mt-3">
+                                                <p class="text-muted text-uppercase small fw-semibold mb-2">Payload mix</p>
+                                                <dl class="metric-list">
+                                                    @foreach (var format in RemoteDispatchFormatSummaries)
+                                                    {
+                                                        <div class="metric-row">
+                                                            <dt>@format.FormatKey</dt>
+                                                            <dd>@FormatCount(format.Count)</dd>
+                                                        </div>
+                                                    }
+                                                </dl>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-6 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Dispatch latency</h2>
+                                            <span class="badge bg-outline">@RemoteDispatchHistoryDurationDisplay</span>
+                                        </div>
+                                        <div class="chart-wrapper mt-3">
+                                            <HistoryLineChart Values="@_remoteDispatchLatencyHistory"
+                                                              DatasetLabel="Dispatch Latency"
+                                                              Color="#f97316"
+                                                              YAxisLabel="Milliseconds"
+                                                              ValueSuffix=" ms"
+                                                              XAxisLabel="Samples"
+                                                              EmptyMessage="Remote dispatch telemetry will appear here once attempts are recorded." />
+                                        </div>
+                                        <p class="text-muted small mt-3 mb-0">@RemoteDispatchLatencyMaxDisplay</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     break;
                 }
@@ -433,7 +567,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="row g-4 mt-1">
                             <div class="col-xl-4 col-lg-6">
                                 <div class="card diagnostics-card h-100">
