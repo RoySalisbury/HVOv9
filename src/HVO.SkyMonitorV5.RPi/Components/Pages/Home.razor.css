@@ -1,17 +1,21 @@
+/* Home styles moved to the shared HVO Dark theme. Retained here for reference.
 .hero {
     position: relative;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(14, 116, 144, 0.35));
     border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-    padding-top: 1.5rem !important;
-    padding-bottom: 1.5rem !important;
+    padding: 1.5rem 0 !important;
 }
 
 .hero .display-4 {
     font-size: clamp(1.9rem, 4.4vw, 2.5rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 
 .hero .lead {
     font-size: clamp(0.85rem, 2vw, 1rem);
+    letter-spacing: 0.04em;
+    color: rgba(226, 232, 240, 0.82);
 }
 
 .gradient-overlay {
@@ -25,8 +29,9 @@
     border-radius: 999px;
     font-weight: 600;
     padding: 0.35rem 0.9rem;
-    font-size: 0.95rem;
-    letter-spacing: 0.01em;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .status-badge--running {
@@ -42,6 +47,7 @@
 .refresh-hint {
     font-size: 0.85rem;
     color: rgba(226, 232, 240, 0.75);
+    letter-spacing: 0.04em;
 }
 
 .content-section {
@@ -65,11 +71,13 @@
     align-items: center;
     gap: 0.7rem;
     padding: 1rem 1.25rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: #e2e8f0;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
-    background: rgba(30, 41, 59, 0.55);
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(226, 232, 240, 0.85);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(30, 41, 59, 0.6);
 }
 
 .frame-card__image-link {
@@ -103,6 +111,7 @@
     font-weight: 600;
     text-decoration: none;
     font-size: 0.9rem;
+    letter-spacing: 0.02em;
 }
 
 .frame-card__action-link:hover {
@@ -119,6 +128,8 @@
     gap: 0.75rem;
     color: rgba(226, 232, 240, 0.7);
     padding: 2.5rem 1.25rem;
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
 }
 
 .frame-card__placeholder i {
@@ -131,19 +142,23 @@
     align-items: center;
     padding: 0.9rem 1.25rem;
     background: rgba(30, 41, 59, 0.6);
-    border-top: 1px solid rgba(148, 163, 184, 0.15);
-    font-size: 0.9rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
 }
 
 .frame-card__meta-label {
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(148, 163, 184, 0.9);
+    letter-spacing: 0.1em;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: rgba(148, 163, 184, 0.82);
 }
 
 .frame-card__meta-value {
     font-weight: 600;
     color: #f8fafc;
+    letter-spacing: 0.015em;
 }
 
 .status-grid .status-card {
@@ -159,42 +174,18 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    color: #e2e8f0;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(226, 232, 240, 0.85);
     margin-bottom: 1rem;
 }
 
 .status-card__list {
-    margin: 0;
-    padding: 0;
-}
-
-.status-card__item {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.35rem;
-    padding: 0.6rem 0;
-    border-top: 1px solid rgba(148, 163, 184, 0.12);
-}
-
-.status-card__item:first-child {
-    border-top: none;
-}
-
-.status-card__item dt {
-    font-size: 0.56rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(148, 163, 184, 0.82);
-    margin-bottom: 0;
-}
-
-.status-card__item dd {
-    margin: 0;
-    font-size: 0.7rem;
-    font-weight: 400;
-    color: #e2e8f0;
+    /* Home page relies on the shared HVO Dark theme. Add page-specific overrides here if required. */
+    color: #f8fafc;
+    letter-spacing: 0.015em;
 }
 
 .filter-chip-list {
@@ -210,9 +201,10 @@
     border-radius: 999px;
     background: rgba(96, 165, 250, 0.18);
     color: #bfdbfe;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
 }
 
 @media (max-width: 991.98px) {
@@ -229,3 +221,6 @@
         max-width: 85%;
     }
 }
+*/
+
+/* Home overrides can be added below when necessary. */

@@ -13,12 +13,13 @@
     <PackageReference Include="GeoTimeZone" Version="5.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.6" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.6" />
+  <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.6" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.5.3" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />
     <PackageReference Include="TimeZoneConverter" Version="6.1.0" />
   <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.13.1" />
   <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.13.0-beta.1" />
+  <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.6" />
   </ItemGroup>
 
   <ItemGroup>

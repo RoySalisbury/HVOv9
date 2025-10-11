@@ -1,0 +1,85 @@
+/* History chart styles are defined by the shared HVO Dark theme.
+.history-chart-container {
+    width: 100%;
+    height: 100%;
+    color: #f8f9fa;
+}
+
+.history-chart {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.history-chart-svg {
+    width: 100%;
+    height: 240px;
+}
+
+.history-chart-svg .axis-line {
+    stroke: rgba(248, 249, 250, 0.55);
+    stroke-width: 1.2;
+}
+
+.history-chart-svg .grid-line {
+    stroke: rgba(248, 249, 250, 0.15);
+    stroke-width: 1;
+}
+
+.history-chart-svg .tick-line {
+    stroke: rgba(248, 249, 250, 0.4);
+    stroke-width: 1;
+}
+
+.history-chart-svg .tick-text {
+    fill: #f8f9fa;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    opacity: 0.9;
+}
+
+.history-chart-svg .axis-title {
+    fill: #f8f9fa;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-anchor: middle;
+}
+
+.history-chart-svg .chart-line-path {
+    fill: none;
+    stroke: var(--history-chart-color, #0d6efd);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.history-chart-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #f8f9fa;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+}
+
+.history-chart-legend .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.history-chart-legend .legend-label {
+    opacity: 0.95;
+}
+
+.chart-empty {
+    padding: 1.5rem 0;
+    text-align: center;
+}
+*/
+
+/* Chart-specific overrides can be added below when needed. */

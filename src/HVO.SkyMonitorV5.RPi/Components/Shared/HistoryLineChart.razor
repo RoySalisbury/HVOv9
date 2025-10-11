@@ -1,0 +1,62 @@
+<div class="history-chart-container">
+    @if (HasData)
+    {
+        <figure class="history-chart" role="group" aria-labelledby="@ChartTitleId" style="--history-chart-color: @ChartColor;">
+            <svg class="history-chart-svg"
+                 viewBox="0 0 @SvgWidth @SvgHeight"
+                 preserveAspectRatio="none"
+                 role="img"
+                 aria-labelledby="@ChartTitleId"
+                 aria-describedby="@ChartDescriptionId">
+                <title id="@ChartTitleId">@DatasetLabel trend</title>
+                <desc id="@ChartDescriptionId">Line chart showing @DatasetLabel over the most recent samples.</desc>
+
+                <g class="chart-axes">
+                    <line x1="@PlotLeft" y1="@PlotTop" x2="@PlotLeft" y2="@PlotBottom" class="axis-line" />
+                    <line x1="@PlotLeft" y1="@PlotBottom" x2="@PlotRight" y2="@PlotBottom" class="axis-line" />
+                </g>
+
+                <g class="chart-y-axis">
+                    @foreach (var tick in YTicks)
+                    {
+                        <line x1="@PlotLeft" y1="@tick.Coordinate" x2="@PlotRight" y2="@tick.Coordinate" class="grid-line" />
+                        <line x1="@PlotLeft" y1="@tick.Coordinate" x2="@(PlotLeft - 6)" y2="@tick.Coordinate" class="tick-line" />
+                        @BuildSvgText(PlotLeft - 9, tick.Coordinate, ".35em", "tick-text", "end", tick.Label)
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(YAxisLabel))
+                    {
+                        @BuildSvgText(YAxisTitleX, YAxisTitleY, null, "axis-title", "middle", YAxisLabel, YAxisTransform)
+                    }
+                </g>
+
+                <g class="chart-x-axis">
+                    @foreach (var tick in XTicks)
+                    {
+                        <line x1="@tick.Coordinate" y1="@PlotBottom" x2="@tick.Coordinate" y2="@(PlotBottom + 6)" class="tick-line" />
+                        @BuildSvgText(tick.Coordinate, PlotBottom + 18, ".35em", "tick-text", "middle", tick.Label)
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(XAxisLabel))
+                    {
+                        @BuildSvgText(XAxisTitleX, PlotBottom + 48, null, "axis-title", "middle", XAxisLabel)
+                    }
+                </g>
+
+                <g class="chart-line">
+                    <path d="@LinePath" class="chart-line-path" />
+                </g>
+            </svg>
+
+            <figcaption class="history-chart-legend">
+                <span class="legend-swatch" style="background-color: @ChartColor;"></span>
+                <span class="legend-label">@DatasetLabel</span>
+            </figcaption>
+        </figure>
+    }
+    else
+    {
+        <div class="chart-empty text-muted">@EmptyMessage</div>
+    }
+</div>
+

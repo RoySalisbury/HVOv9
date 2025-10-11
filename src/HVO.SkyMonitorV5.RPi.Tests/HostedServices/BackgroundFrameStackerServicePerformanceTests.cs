@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.HostedServices;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -47,11 +48,20 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         frameStateStore.SetupGet(store => store.Configuration).Returns(configuration);
         frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
 
+        var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
+        clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
+        clock.SetupGet(c => c.LocalNow).Returns(() => DateTimeOffset.Now);
+        clock.SetupGet(c => c.TimeZone).Returns(TimeZoneInfo.Utc);
+        clock.SetupGet(c => c.TimeZoneDisplayName).Returns("UTC");
+        clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
+        clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
+
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
             frameStacker.Object,
             pipeline.Object,
             frameStateStore.Object,
+            clock.Object,
             NullLogger<BackgroundFrameStackerService>.Instance);
 
         frameStateStore.Invocations.Clear();
@@ -146,11 +156,20 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         frameStateStore.SetupGet(store => store.Configuration).Returns(configuration);
         frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
 
+        var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
+        clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
+        clock.SetupGet(c => c.LocalNow).Returns(() => DateTimeOffset.Now);
+        clock.SetupGet(c => c.TimeZone).Returns(TimeZoneInfo.Utc);
+        clock.SetupGet(c => c.TimeZoneDisplayName).Returns("UTC");
+        clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
+        clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
+
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
             frameStacker.Object,
             pipeline.Object,
             frameStateStore.Object,
+            clock.Object,
             NullLogger<BackgroundFrameStackerService>.Instance);
 
         var serviceType = typeof(BackgroundFrameStackerService);
