@@ -28,10 +28,6 @@ public abstract class CameraAdapterBase : ICameraAdapter
         ILogger? logger = null)
     {
         Rig = rig ?? throw new ArgumentNullException(nameof(rig));
-        if (Rig.Descriptor is null)
-        {
-            throw new ArgumentException("Rig specification must include a camera descriptor.", nameof(rig));
-        }
         _observatoryClock = observatoryClock;
         Logger = logger ?? NullLogger.Instance;
     }

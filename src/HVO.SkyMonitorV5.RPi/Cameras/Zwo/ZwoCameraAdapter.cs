@@ -1,5 +1,8 @@
 #nullable enable
 
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -14,20 +17,12 @@ public sealed class ZwoCameraAdapter : ICameraAdapter
 {
     public ZwoCameraAdapter(RigSpec rig)
     {
-        Rig = rig switch
+        if (rig is null)
         {
-            null => throw new ArgumentNullException(nameof(rig)),
-            { Descriptor: null } => rig with
-            {
-                Descriptor = new CameraDescriptor(
-                    Manufacturer: "ZWO",
-                    Model: rig.Name,
-                    DriverVersion: "unversioned",
-                    AdapterName: nameof(ZwoCameraAdapter),
-                    Capabilities: new[] { "Native", "StackingCompatible", "HighSpeed", "Cooled" })
-            },
-            _ => rig
-        };
+            throw new ArgumentNullException(nameof(rig));
+        }
+
+        Rig = EnsureRigDescriptor(rig);
     }
 
     public RigSpec Rig { get; }
@@ -47,5 +42,25 @@ public sealed class ZwoCameraAdapter : ICameraAdapter
     public Task<Result<CapturedImage>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken)
     {
         return Task.FromResult(Result<CapturedImage>.Failure(new NotImplementedException("ZWO camera integration is not yet implemented.")));
+    }
+
+    private static RigSpec EnsureRigDescriptor(RigSpec rig)
+    {
+        if (!string.Equals(rig.Camera.Descriptor.Manufacturer, "Unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return rig;
+        }
+
+        var descriptor = new CameraDescriptor(
+            Manufacturer: "ZWO",
+            Model: rig.Name,
+            DriverVersion: "unversioned",
+            AdapterName: nameof(ZwoCameraAdapter),
+            Capabilities: new[] { "Native", "StackingCompatible", "HighSpeed", "Cooled" });
+
+        return rig with
+        {
+            Camera = rig.Camera with { Descriptor = descriptor }
+        };
     }
 }

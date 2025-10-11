@@ -1,24 +1,9 @@
 #nullable enable
-using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
+using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
 {
-    /// <summary>
-    /// Camera body specification (sensor characteristics). Use with <see cref="LensSpec"/> to form a "rig".
-    /// </summary>
-    public sealed record CameraSpec(
-        string Name,
-        SensorSpec Sensor,
-        CameraCapabilities Capabilities)
-    {
-        public CameraSpec(string name, SensorSpec sensor)
-            : this(name, sensor, CameraCapabilities.Empty)
-        {
-        }
-    }
-
-
     /// <summary>
     /// Handy presets for common cameras and lenses used in this project.
     /// <para>
@@ -58,7 +43,13 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 supportsGainControl: true,
                 supportsExposureControl: true,
                 supportsTemperatureTelemetry: false,
-                supportsSoftwareBinning: true)
+                supportsSoftwareBinning: true),
+            Descriptor: new CameraDescriptor(
+                Manufacturer: "ZWO",
+                Model: "ASI174MM",
+                DriverVersion: string.Empty,
+                AdapterName: "ZwoCameraAdapter",
+                Capabilities: new[] { "NativeHardware", "StackingCompatible" })
         );
 
         /// <summary>
@@ -79,7 +70,13 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 supportsGainControl: true,
                 supportsExposureControl: true,
                 supportsTemperatureTelemetry: false,
-                supportsSoftwareBinning: true)
+                supportsSoftwareBinning: true),
+            Descriptor: new CameraDescriptor(
+                Manufacturer: "HVO",
+                Model: "Mock ASI174MM",
+                DriverVersion: "2.0.0",
+                AdapterName: "MockCameraAdapter",
+                Capabilities: new[] { "Synthetic", "StackingCompatible" })
         );
 
         /// <summary>
@@ -100,7 +97,13 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 supportsGainControl: true,
                 supportsExposureControl: true,
                 supportsTemperatureTelemetry: false,
-                supportsSoftwareBinning: true)
+                supportsSoftwareBinning: true),
+            Descriptor: new CameraDescriptor(
+                Manufacturer: "ZWO",
+                Model: "ASI174MC",
+                DriverVersion: string.Empty,
+                AdapterName: "ZwoCameraAdapter",
+                Capabilities: new[] { "NativeHardware", "StackingCompatible", "Colour" })
         );
 
         /// <summary>
@@ -121,7 +124,13 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Optics
                 supportsGainControl: true,
                 supportsExposureControl: true,
                 supportsTemperatureTelemetry: false,
-                supportsSoftwareBinning: true)
+                supportsSoftwareBinning: true),
+            Descriptor: new CameraDescriptor(
+                Manufacturer: "HVO",
+                Model: "Mock ASI174MC",
+                DriverVersion: "2.0.0",
+                AdapterName: "MockColorCameraAdapter",
+                Capabilities: new[] { "Synthetic", "StackingCompatible", "Colour" })
         );
 
         // ---------------- Lenses / Telescopes ----------------

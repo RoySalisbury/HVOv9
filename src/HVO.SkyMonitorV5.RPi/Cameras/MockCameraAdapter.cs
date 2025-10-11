@@ -243,9 +243,15 @@ public class MockCameraAdapter : CameraAdapterBase
             throw new ArgumentNullException(nameof(rig));
         }
 
-        return rig.Descriptor is not null
-            ? rig
-            : rig with { Descriptor = CreateDefaultDescriptor() };
+        if (!string.Equals(rig.Camera.Descriptor.Manufacturer, "Unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return rig;
+        }
+
+        return rig with
+        {
+            Camera = rig.Camera with { Descriptor = CreateDefaultDescriptor() }
+        };
     }
 
     private static CameraDescriptor CreateDefaultDescriptor() => new(

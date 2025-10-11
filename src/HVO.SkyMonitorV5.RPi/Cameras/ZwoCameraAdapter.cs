@@ -41,13 +41,6 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         return Task.FromResult(Result<AdapterFrame>.Failure(new NotImplementedException("ZWO capture pipeline has not been implemented.")));
     }
 
-    private static CameraDescriptor CreateDefaultDescriptor(RigSpec rig) => new(
-        Manufacturer: "ZWO",
-        Model: rig?.Name ?? "Unknown ZWO Camera",
-        DriverVersion: "unversioned",
-        AdapterName: nameof(ZwoCameraAdapter),
-        Capabilities: new[] { "NativeHardware", "RequiresImplementation" });
-
     private static RigSpec EnsureRigDescriptor(RigSpec? rig)
     {
         if (rig is null)
@@ -55,8 +48,21 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
             throw new ArgumentNullException(nameof(rig));
         }
 
-        return rig.Descriptor is not null
-            ? rig
-            : rig with { Descriptor = CreateDefaultDescriptor(rig) };
+        if (!string.Equals(rig.Camera.Descriptor.Manufacturer, "Unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return rig;
+        }
+
+        return rig with
+        {
+            Camera = rig.Camera with { Descriptor = CreateDefaultDescriptor(rig) }
+        };
     }
+
+    private static CameraDescriptor CreateDefaultDescriptor(RigSpec rig) => new(
+        Manufacturer: "ZWO",
+        Model: rig.Name,
+        DriverVersion: "unversioned",
+        AdapterName: nameof(ZwoCameraAdapter),
+        Capabilities: new[] { "NativeHardware", "RequiresImplementation" });
 }

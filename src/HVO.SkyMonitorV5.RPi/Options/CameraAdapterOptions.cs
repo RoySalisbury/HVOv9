@@ -64,6 +64,12 @@ public sealed class RigSpecOptions : IValidatableObject
 
     public CameraSpecOptions? Camera { get; set; }
 
+    [Range(0.0, 90.0)]
+    public double? BoresightAltDeg { get; set; }
+
+    [Range(0.0, 360.0)]
+    public double? BoresightAzDeg { get; set; }
+
     public RigSpec ToRigSpec()
     {
         var sensorSpec = Sensor.ToSensorSpec();
@@ -77,16 +83,16 @@ public sealed class RigSpecOptions : IValidatableObject
                 : Name;
 
         var capabilities = cameraOptions?.Capabilities?.ToCameraCapabilities() ?? CameraCapabilities.Empty;
-        var cameraSpec = new CameraSpec(
-            resolvedCameraName,
-            sensorSpec,
-            capabilities);
+        var cameraSpec = descriptor is not null
+            ? new CameraSpec(resolvedCameraName, sensorSpec, capabilities, descriptor)
+            : new CameraSpec(resolvedCameraName, sensorSpec, capabilities);
 
         return new RigSpec(
             Name,
             cameraSpec,
             Lens.ToLensSpec(),
-            descriptor);
+            BoresightAltDeg ?? 90.0,
+            BoresightAzDeg ?? 0.0);
     }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -106,17 +112,17 @@ public sealed class RigSpecOptions : IValidatableObject
             yield return new ValidationResult("Lens configuration is required.", new[] { nameof(Lens) });
         }
 
-        if (Descriptor is not null)
+        if (Camera is not null)
         {
-            foreach (var result in Descriptor.Validate(nameof(Descriptor)))
+            foreach (var result in Camera.Validate(nameof(Camera)))
             {
                 yield return result;
             }
         }
 
-        if (Camera is not null)
+        if (Descriptor is not null)
         {
-            foreach (var result in Camera.Validate(nameof(Camera)))
+            foreach (var result in Descriptor.Validate(nameof(Descriptor)))
             {
                 yield return result;
             }

@@ -12,12 +12,14 @@ public sealed record RigSpec(
     string Name,
     CameraSpec Camera,
     LensSpec Lens,
-    CameraDescriptor? Descriptor = null
-)
+    double BoresightAltDeg = 90.0,
+    double BoresightAzDeg = 0.0)
 {
     public SensorSpec Sensor => Camera.Sensor;
 
     public CameraCapabilities Capabilities => Camera.Capabilities;
+
+    public CameraDescriptor Descriptor => Camera.Descriptor;
 }
 
 /// <summary>
@@ -41,13 +43,8 @@ public static class RigPresets
             Name: "Fujinon FE185C086HA-1",
             Kind: LensKind.Fisheye
         ),
-        Descriptor: new CameraDescriptor(
-            Manufacturer: "HVO",
-            Model: "Mock Fisheye AllSky",
-            DriverVersion: "2.0.0",
-            AdapterName: "MockCameraAdapter",
-            Capabilities: new[] { "Synthetic", "StackingCompatible", "FisheyeProjection" }
-        )
+        BoresightAltDeg: 90.0,
+        BoresightAzDeg: 0.0
     );
 
     /// <summary>
@@ -65,12 +62,7 @@ public static class RigPresets
             Name: "Fujinon FE185C086HA-1",
             Kind: LensKind.Fisheye
         ),
-        Descriptor: new CameraDescriptor(
-            Manufacturer: "HVO",
-            Model: "Mock Colour Fisheye AllSky",
-            DriverVersion: "2.0.0",
-            AdapterName: "MockColorCameraAdapter",
-            Capabilities: new[] { "Synthetic", "StackingCompatible", "FisheyeProjection", "Colour" }
-        )
+        BoresightAltDeg: 90.0,
+        BoresightAzDeg: 0.0
     );
 }
