@@ -1,4 +1,4 @@
-namespace HVO.SkyMonitorV5.RPi.Data;
+namespace HVO.SkyMonitorV5.Data.Catalogs.Constellations;
 
 public sealed class ConstellationLineStarEntity
 {

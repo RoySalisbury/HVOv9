@@ -23,6 +23,9 @@ public sealed class RemoteDispatchOptions
     [MaxLength(256)]
     public string? FanoutExchange { get; set; }
 
+    [MaxLength(128)]
+    public string? Region { get; set; }
+
     [MaxLength(256)]
     public string? Endpoint { get; set; }
 
@@ -43,6 +46,7 @@ public sealed class RemoteDispatchOptions
 
         S3Bucket = string.IsNullOrWhiteSpace(S3Bucket) ? null : S3Bucket.Trim();
         FanoutExchange = string.IsNullOrWhiteSpace(FanoutExchange) ? null : FanoutExchange.Trim();
+        Region = string.IsNullOrWhiteSpace(Region) ? null : Region.Trim();
         Endpoint = string.IsNullOrWhiteSpace(Endpoint) ? null : Endpoint.Trim();
         AccessKey = string.IsNullOrWhiteSpace(AccessKey) ? null : AccessKey.Trim();
         SecretKey = string.IsNullOrWhiteSpace(SecretKey) ? null : SecretKey.Trim();
@@ -51,6 +55,7 @@ public sealed class RemoteDispatchOptions
         {
             S3Bucket = null;
             FanoutExchange = null;
+            Region = null;
             Endpoint = null;
             AccessKey = null;
             SecretKey = null;

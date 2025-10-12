@@ -39,6 +39,7 @@ public class MockCameraCaptureBenchmarks
 
         var starRepository = new BenchmarkStarRepository();
         var scopeFactory = new BenchmarkServiceScopeFactory(starRepository);
+        var observatoryClock = new BenchmarkObservatoryClock(locationOptions.TimeZoneId);
 
         _adapter = new MockCameraAdapter(
             new StaticOptionsMonitor<ObservatoryLocationOptions>(locationOptions),
@@ -46,6 +47,7 @@ public class MockCameraCaptureBenchmarks
             new StaticOptionsMonitor<CardinalDirectionsOptions>(cardinalOptions),
             scopeFactory,
             RigPresets.MockAsi174_Fujinon,
+            observatoryClock,
             NullLogger<MockCameraAdapter>.Instance);
 
         _exposure = new ExposureSettings(ExposureMilliseconds: 1_500, Gain: 220, AutoExposure: false, AutoGain: false);

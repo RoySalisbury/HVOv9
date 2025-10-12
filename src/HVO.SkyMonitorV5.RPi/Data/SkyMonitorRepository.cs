@@ -9,6 +9,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
+using HVO.SkyMonitorV5.Data.Catalogs.Constellations;
+using HVO.SkyMonitorV5.Data.Catalogs.DeepSky;
+using HVO.SkyMonitorV5.Data.Catalogs.Hyg;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -19,7 +22,7 @@ using Microsoft.Extensions.Options;
 
 namespace HVO.SkyMonitorV5.RPi.Data;
 
-public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, IConstellationCatalog
+public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, IConstellationCatalog, IDeepSkyCatalog
 {
     private static readonly IReadOnlyDictionary<string, string> ConstellationNameLookup = ConstellationNames.BuildDisplayNameLookup();
     private static readonly TimeSpan VisibleStarsAbsoluteTtl = TimeSpan.FromMinutes(30);
@@ -33,6 +36,8 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
     private static readonly TimeSpan VisiblePlanetsSlidingTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan ConstellationCatalogAbsoluteTtl = TimeSpan.FromHours(12);
     private static readonly TimeSpan ConstellationCatalogSlidingTtl = TimeSpan.FromHours(1);
+    private static readonly TimeSpan DeepSkyCatalogAbsoluteTtl = TimeSpan.FromHours(6);
+    private static readonly TimeSpan DeepSkyCatalogSlidingTtl = TimeSpan.FromHours(2);
 
     private static readonly IReadOnlyDictionary<int, HarvardAlias> HarvardRevisedAliasMap = new Dictionary<int, HarvardAlias>
     {
@@ -53,6 +58,7 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
     private static readonly MemoryCacheEntryOptions VisibleConstellationCacheOptions = CreateCacheEntryOptions(VisibleConstellationAbsoluteTtl, TimeSpan.FromMinutes(5));
     private static readonly MemoryCacheEntryOptions VisiblePlanetsCacheOptions = CreateCacheEntryOptions(VisiblePlanetsAbsoluteTtl, VisiblePlanetsSlidingTtl);
     private static readonly MemoryCacheEntryOptions ConstellationCatalogCacheOptions = CreateCacheEntryOptions(ConstellationCatalogAbsoluteTtl, ConstellationCatalogSlidingTtl);
+    private static readonly MemoryCacheEntryOptions DeepSkyCatalogCacheOptions = CreateCacheEntryOptions(DeepSkyCatalogAbsoluteTtl, DeepSkyCatalogSlidingTtl);
 
     private static readonly IReadOnlyList<Star> EmptyStarList = Array.AsReadOnly(Array.Empty<Star>());
     private static readonly IReadOnlyList<VisibleConstellation> EmptyVisibleConstellations = Array.AsReadOnly(Array.Empty<VisibleConstellation>());
@@ -60,6 +66,7 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
 
     private readonly HygContext _hygContext;
     private readonly IDbContextFactory<ConstellationCatalogContext> _constellationContextFactory;
+    private readonly IDbContextFactory<DeepSkyCatalogContext> _deepSkyContextFactory;
     private readonly IMemoryCache _cache;
     private readonly IOptionsMonitor<StarCatalogOptions> _catalogOptions;
     private readonly ILogger<SkyMonitorRepository> _logger;
@@ -69,12 +76,14 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
     public SkyMonitorRepository(
         HygContext hygContext,
         IDbContextFactory<ConstellationCatalogContext> constellationContextFactory,
+        IDbContextFactory<DeepSkyCatalogContext> deepSkyContextFactory,
         IMemoryCache cache,
         IOptionsMonitor<StarCatalogOptions> catalogOptions,
         ILogger<SkyMonitorRepository> logger)
     {
         _hygContext = hygContext ?? throw new ArgumentNullException(nameof(hygContext));
         _constellationContextFactory = constellationContextFactory ?? throw new ArgumentNullException(nameof(constellationContextFactory));
+        _deepSkyContextFactory = deepSkyContextFactory ?? throw new ArgumentNullException(nameof(deepSkyContextFactory));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _catalogOptions = catalogOptions ?? throw new ArgumentNullException(nameof(catalogOptions));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -409,6 +418,79 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
         {
             _logger.LogError(ex, "Failed to compute visible constellations for {LatitudeDeg}, {LongitudeDeg} at {Utc}.", latitudeDeg, longitudeDeg, utc);
             return Result<IReadOnlyList<VisibleConstellation>>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<IReadOnlyList<DeepSkyObject>>> GetDeepSkyObjectsAsync(
+        double magnitudeLimit = 8.0,
+        int limit = 50,
+        string? objectType = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+        {
+            return Result<IReadOnlyList<DeepSkyObject>>.Success(Array.AsReadOnly(Array.Empty<DeepSkyObject>()));
+        }
+
+    var normalizedType = string.IsNullOrWhiteSpace(objectType) ? null : objectType.Trim();
+        var cacheKey = CacheKeys.Build("DeepSky", magnitudeLimit, limit, normalizedType ?? "*");
+
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<DeepSkyObject>? cached) && cached is not null)
+        {
+            return Result<IReadOnlyList<DeepSkyObject>>.Success(cached);
+        }
+
+        try
+        {
+            await using var context = await _deepSkyContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var query = context.DeepSkyObjects.AsNoTracking();
+
+            if (normalizedType is not null)
+            {
+                query = query.Where(obj => obj.ObjectType != null && EF.Functions.Like(obj.ObjectType!, normalizedType));
+            }
+
+            if (!double.IsNaN(magnitudeLimit) && !double.IsInfinity(magnitudeLimit))
+            {
+                query = query.Where(obj => obj.ApparentMagnitude != null && obj.ApparentMagnitude <= magnitudeLimit);
+            }
+
+            var maxRows = Math.Clamp(limit, 1, 500);
+
+            var entities = await query
+                .OrderBy(obj => obj.ApparentMagnitude ?? double.MaxValue)
+                .ThenBy(obj => obj.PrimaryId)
+                .Take(maxRows)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var results = entities
+                .Select(entity => new DeepSkyObject(
+                    entity.PrimaryId,
+                    string.IsNullOrWhiteSpace(entity.CommonName) ? entity.PrimaryId : entity.CommonName!,
+                    entity.Constellation,
+                    entity.RightAscensionHours,
+                    entity.DeclinationDegrees,
+                    entity.ApparentMagnitude,
+                    entity.ObjectType))
+                .ToList()
+                .AsReadOnly();
+
+            _cache.Set(cacheKey, results, DeepSkyCatalogCacheOptions);
+
+            return Result<IReadOnlyList<DeepSkyObject>>.Success(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Deep sky catalog lookup failed for magnitude <= {MagnitudeLimit}, limit {Limit}, objectType {ObjectType}.",
+                magnitudeLimit,
+                limit,
+                normalizedType ?? "*");
+
+            return Result<IReadOnlyList<DeepSkyObject>>.Failure(ex);
         }
     }
 

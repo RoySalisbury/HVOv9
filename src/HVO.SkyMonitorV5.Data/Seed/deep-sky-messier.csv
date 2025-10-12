@@ -1,0 +1,111 @@
+primary_id,common_name,constellation,right_ascension_hours,declination_degrees,apparent_magnitude,object_type
+M1,Crab Nebula,TAU,5.575,22.017,8.4,SupernovaRemnant
+M2,,AQR,21.548,-0.823,6.5,GlobularCluster
+M3,,CVN,13.703,28.383,6.2,GlobularCluster
+M4,,SCO,16.404,-26.533,5.4,GlobularCluster
+M5,,SER,15.310,2.083,5.7,GlobularCluster
+M6,Butterfly Cluster,SCO,17.671,-32.217,4.2,OpenCluster
+M7,Ptolemy Cluster,SCO,17.919,-34.817,3.3,OpenCluster
+M8,Lagoon Nebula,SAG,18.060,-24.383,5.8,Nebula
+M9,,OPH,17.250,-18.517,7.7,GlobularCluster
+M10,,OPH,16.955,-4.100,6.6,GlobularCluster
+M11,Wild Duck Cluster,SGR,18.852,-6.267,6.3,OpenCluster
+M12,,OPH,16.783,-1.950,6.6,GlobularCluster
+M13,Great Globular Cluster,HER,16.695,36.467,5.8,GlobularCluster
+M14,,OPH,17.630,-3.250,7.6,GlobularCluster
+M15,,PEG,21.501,12.167,6.4,GlobularCluster
+M16,Eagle Nebula,SER,18.314,-13.792,6.0,Nebula
+M17,Omega Nebula,SAG,18.313,-16.175,6.0,Nebula
+M18,,SAG,18.335,-17.083,7.5,OpenCluster
+M19,,OPH,17.043,-26.267,7.2,GlobularCluster
+M20,Trifid Nebula,SAG,18.051,-22.971,6.3,Nebula
+M21,,SAG,18.041,-22.500,6.5,OpenCluster
+M22,,SAG,18.608,-23.917,5.1,GlobularCluster
+M23,,SAG,17.955,-18.983,6.9,OpenCluster
+M24,Small Sagittarius Star Cloud,SAG,18.288,-18.358,4.6,StarCloud
+M25,,SGR,18.528,-19.250,6.5,OpenCluster
+M26,,SGR,18.769,-9.383,8.0,OpenCluster
+M27,Dumbbell Nebula,VUL,19.993,22.720,7.4,PlanetaryNebula
+M28,,SAG,18.407,-24.867,6.9,GlobularCluster
+M29,,CYG,20.402,38.508,7.1,OpenCluster
+M30,,CAP,21.671,-23.180,7.2,GlobularCluster
+M31,Andromeda Galaxy,AND,0.712,41.269,3.4,Galaxy
+M32,,AND,0.716,40.866,8.1,Galaxy
+M33,Triangulum Galaxy,TRI,1.557,30.661,5.7,Galaxy
+M34,,PER,2.854,42.788,5.5,OpenCluster
+M35,,GEM,6.153,24.333,5.1,OpenCluster
+M36,,AUR,5.603,34.140,6.3,OpenCluster
+M37,,AUR,5.872,32.553,5.6,OpenCluster
+M38,,AUR,5.480,35.850,7.0,OpenCluster
+M39,,CYG,21.530,48.433,4.6,OpenCluster
+M40,Winnecke 4,UMA,12.445,58.083,9.6,DoubleStar
+M41,,CMA,6.767,-20.758,4.5,OpenCluster
+M42,Orion Nebula,ORI,5.588,-5.391,4.0,Nebula
+M43,De Mairan's Nebula,ORI,5.587,-5.267,9.0,Nebula
+M44,Beehive Cluster,CNC,8.672,19.667,3.7,OpenCluster
+M45,Pleiades,TAU,3.790,24.117,1.6,OpenCluster
+M46,,PUP,7.696,-14.817,6.1,OpenCluster
+M47,,PUP,7.608,-14.483,4.4,OpenCluster
+M48,,HYA,8.324,-5.800,5.5,OpenCluster
+M49,,VIR,12.496,8.000,8.4,Galaxy
+M50,,MON,7.052,-8.367,5.9,OpenCluster
+M51,Whirlpool Galaxy,CVN,13.493,47.200,8.4,Galaxy
+M52,,CAS,23.399,61.583,7.3,OpenCluster
+M53,,COM,13.217,18.167,7.7,GlobularCluster
+M54,,SGR,18.920,-30.481,7.6,GlobularCluster
+M55,,SGR,19.667,-30.967,6.3,GlobularCluster
+M56,,LYR,19.276,30.184,8.3,GlobularCluster
+M57,Ring Nebula,LYR,18.893,33.035,8.8,PlanetaryNebula
+M58,,VIR,12.679,11.818,9.7,Galaxy
+M59,,VIR,12.708,11.645,9.6,Galaxy
+M60,,VIR,12.727,11.552,8.8,Galaxy
+M61,,VIR,12.367,4.473,9.7,Galaxy
+M62,,OPH,17.020,-30.113,6.6,GlobularCluster
+M63,Sunflower Galaxy,CVN,13.253,42.029,8.6,Galaxy
+M64,Black Eye Galaxy,COM,12.945,21.683,8.5,Galaxy
+M65,,LEO,11.301,13.135,9.3,Galaxy
+M66,,LEO,11.337,12.997,8.9,Galaxy
+M67,,CNC,8.855,11.817,6.9,OpenCluster
+M68,,HYA,12.630,-26.744,7.8,GlobularCluster
+M69,,SGR,18.525,-32.348,7.7,GlobularCluster
+M70,,SGR,18.725,-32.292,7.9,GlobularCluster
+M71,,SGR,19.898,18.780,8.4,GlobularCluster
+M72,,AQR,20.891,-12.538,9.4,GlobularCluster
+M73,,AQR,20.975,-12.632,9.0,Asterism
+M74,Phantom Galaxy,PIS,1.610,15.783,10.1,Galaxy
+M75,,SGR,20.101,-21.923,8.6,GlobularCluster
+M76,Little Dumbbell Nebula,PER,1.445,51.567,10.1,PlanetaryNebula
+M77,,CET,2.709,-0.014,8.9,Galaxy
+M78,,ORI,5.707,0.090,8.0,Nebula
+M79,,LEP,5.400,-24.524,7.7,GlobularCluster
+M80,,SCO,16.285,-22.975,7.3,GlobularCluster
+M81,Bode's Galaxy,UMA,9.926,69.066,6.9,Galaxy
+M82,Cigar Galaxy,UMA,9.933,69.679,8.4,Galaxy
+M83,Southern Pinwheel,HYD,13.617,-29.868,7.6,Galaxy
+M84,,VIR,12.664,12.889,9.1,Galaxy
+M85,,COM,12.422,18.191,9.1,Galaxy
+M86,,VIR,12.444,12.946,8.9,Galaxy
+M87,Virgo A,VIR,12.514,12.392,8.6,Galaxy
+M88,,COM,12.468,14.420,9.6,Galaxy
+M89,,VIR,12.506,12.556,9.8,Galaxy
+M90,,VIR,12.546,13.162,9.5,Galaxy
+M91,,COM,12.581,14.496,10.2,Galaxy
+M92,,HER,17.333,43.135,6.4,GlobularCluster
+M93,,PUP,7.744,-23.857,6.0,OpenCluster
+M94,,CVN,12.307,41.120,8.2,Galaxy
+M95,,LEO,10.744,11.703,9.7,Galaxy
+M96,,LEO,10.778,11.819,9.2,Galaxy
+M97,Owl Nebula,UMA,11.247,55.019,9.9,PlanetaryNebula
+M98,,COM,12.393,14.900,10.1,Galaxy
+M99,Pinwheel Galaxy,COM,12.378,14.416,10.0,Galaxy
+M100,,COM,12.372,15.823,9.4,Galaxy
+M101,Pinwheel Galaxy,UMA,14.054,54.347,7.9,Galaxy
+M102,Spindle Galaxy,DRC,15.107,55.755,9.9,Galaxy
+M103,,CAS,1.348,60.700,7.4,OpenCluster
+M104,Sombrero Galaxy,SEX,12.513,-11.623,8.0,Galaxy
+M105,,LEO,10.810,12.581,9.3,Galaxy
+M106,,CVN,12.317,47.304,8.4,Galaxy
+M107,,OPH,16.541,-13.053,8.9,GlobularCluster
+M108,,UMA,11.273,55.674,10.0,Galaxy
+M109,,UMA,11.962,53.375,10.6,Galaxy
+M110,,AND,0.712,41.685,8.1,Galaxy

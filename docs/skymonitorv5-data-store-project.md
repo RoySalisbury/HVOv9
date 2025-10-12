@@ -1,8 +1,10 @@
 # SkyMonitorV5 Data Store Project Plan
 
-_Last updated: 2025-10-11 (evening)_
+_Last updated: 2025-10-11 (night)_
 
 > **Status context:** The Frame Context & Rig Integration initiative is complete. This data store project is the next major effort in the SkyMonitor roadmap and should absorb all follow-on storage/configuration items noted in the global TODO catalog.
+>
+> **Execution workflow:** Each phase below should land as an isolated set of commits. When a phase is complete, commit with a detailed message, run the full verification for that phase, push to origin, and create an annotated tag `datastore-phase-{N}` before beginning the next phase. Update this document after each phase to check off completed tasks and capture any findings.
 
 ## Project Goals
 
@@ -24,23 +26,33 @@ _Last updated: 2025-10-11 (evening)_
 
 ## Phase Breakdown
 
-### Phase 1 – Project Foundation
+### Phase 1 – Project Foundation ☑
 
-- Scaffold `HVO.SkyMonitorV5.Data` project targeting .NET 9.
-- Reference `Microsoft.EntityFrameworkCore.Sqlite` and related tooling packages.
-- Establish folder layout (`Contexts/`, `Configurations/`, `Migrations/`, `Seed/`).
-- Add DI extension methods to register contexts with configurable file paths.
-- Decide on default data root (`Data/` under repo, `/var/hvo/datastores/` in containers) and expose via options.
+- [x] Scaffold `HVO.SkyMonitorV5.Data` project targeting .NET 9.
+- [x] Reference `Microsoft.EntityFrameworkCore.Sqlite` and related tooling packages.
+- [x] Establish folder layout (`Contexts/`, `Configurations/`, `Migrations/`, `Seed/`, plus foundational `Abstractions/`, `Options/`, `Services/`, and `Extensions/`).
+- [x] Add DI extension methods to register contexts with configurable file paths.
+- [x] Decide on default data root (`Data/` under repo, `/var/hvo/datastores/` in containers) and expose via options with automatic directory creation.
+- [x] Verify the `dotnet-ef` global tool is available; install or update automatically if the exact version required by the solution is missing.
 
-### Phase 2 – Catalog & Configuration Integration
+### Phase 2 – Catalog & Configuration Integration ☐
 
-- Relocate existing Constellation Lines / HYG EF models into the data project and add the interim Deep Sky object database we manage until an external source is formalized.
-- Model observatory configuration entities (rigs, cameras, optics, filters, image encoding, capture pacing, per-rig overrides) and migrate current JSON defaults into EF seed data.
-- Point contexts to their respective SQLite files (`catalogs/constellation.db`, `catalogs/hyg_v42.db`, `catalogs/deep-sky.db`, `configuration/sm-config.db`).
-- Ensure catalog contexts run in read-only mode (no migrations) while configuration contexts use migrations and optional version/audit tables.
-- Update publish steps to copy catalog DBs and seed configuration snapshots into the runtime data directory and document bootstrap logic when files are absent.
+- Migration approach:
+	- Move existing catalog DbContexts and entity models into `HVO.SkyMonitorV5.Data/Catalogs/` with namespaces aligning to their folders.
+	- Introduce dedicated context types for HYG stars and constellation figures that run against read-only SQLite database files under `catalogs/`.
+	- Provide configuration context stubs (`ConfigurationDbContext`) ready to host rig/camera entities with seed defaults sourced from current JSON options.
+	- Register catalog contexts via `AddSkyMonitorDataInfrastructure` extensions, using `AddDbContextFactory` where factories are currently consumed.
+	- Ensure path provider resolves catalog file locations (`catalogs/hyg_v42.db`, `catalogs/constellation-lines.db`, `catalogs/deep-sky.db`).
+		- Interim wiring keeps catalog files at the data-root level (`hyg_v42.sqlite`, `ConstellationLines.sqlite`); move them into explicit `catalogs/` folders once publishing scripts are updated.
+- Next steps:
+	- [x] Relocate existing Constellation Lines / HYG EF models into the data project and add the interim Deep Sky object database we manage until an external source is formalized. _(Deep sky catalog ships as `catalogs/deep-sky.sqlite` with the full Messier 1–110 set sourced from our CSV seed.)_
+	- [x] Model initial observatory configuration entities (site metadata, camera/lens/rig catalogs, capture pipeline, star catalog) in `SkyMonitorConfigurationContext` with EF seed defaults replacing the JSON configuration.
+	- [x] Point runtime services to the configuration database via `AddSkyMonitorConfigurationStore` and load host options through the database-backed configurator (removing appsettings bindings).
+	- [x] Relocate catalog SQLite assets under `Data/catalogs/` and update publish/build paths so deployments copy the new directory structure.
+	- [x] Ensure catalog contexts run in read-only mode (no migrations) while configuration contexts use migrations and optional version/audit tables. _(Catalog registrations now disable migrations and enforce read-only SQL connections while a startup bootstrapper applies the configuration migration set.)_
+	- [x] Update publish steps to copy catalog DBs and seed configuration snapshots into the runtime data directory and document bootstrap logic when files are absent. _(Publish output now includes the `Data/catalogs/` and `Data/configuration/` trees, and the bootstrapper migrates/creates `sm-config.db` on first run.)_
 
-### Phase 3 – Telemetry & Log Persistence
+### Phase 3 – Telemetry & Log Persistence ☐
 
 - Design telemetry schema (e.g., `DispatchAttempt`, `DispatchFormatSummary`, `StackerSample`, `CapturePacingSample`, `PipelineTimingSample`).
 - Add a structured log/event table to back the forthcoming real-time diagnostics log viewer and historical exports.
@@ -50,7 +62,7 @@ _Last updated: 2025-10-11 (evening)_
 - Update SkyMonitorV5 services (`DiagnosticsService`, `FrameStateStore`, future log sink) to append finalized samples while keeping in-memory caches for live dashboards.
 - Add integration tests covering append/query behaviour, retention jobs, and migration startup.
 
-### Phase 4 – Observability & Operations
+### Phase 4 – Observability & Operations ☐
 
 - Emit metrics for DB size, row counts, retention jobs, and bootstrap/default seeding operations via diagnostics endpoints.
 - Document backup/restore, catalog replacement workflows, and configuration change audit strategies for operators.
@@ -76,3 +88,20 @@ _Last updated: 2025-10-11 (evening)_
 - Exact retention policy (time-based vs fixed-row) needs confirmation before Phase 3 kicks off.
 - Do we need a lightweight admin UI to inspect telemetry tables, or are CLI tools sufficient?
 - Should catalog DBs be versioned using the same migration mechanism or remain static snapshots?
+
+## Notes & Follow-Ups
+
+- UX adjustments (navigation, configuration editors, diagnostics log viewers) are deferred to the dedicated UX project; capture any UX-related ideas here for future triage.
+- Record phase-specific lessons learned, tech debt, or toolchain gaps discovered during implementation.
+- Phase 1 installed the `dotnet-ef` global tool (9.0.0) to support migrations and seeded the shared data root infrastructure.
+- Phase 2 now routes catalog access through `HVO.SkyMonitorV5.Data` with `AddSkyMonitorDataInfrastructure` and read-only SQLite contexts, paving the way for shared configuration and telemetry stores.
+- Catalog SQLite payloads ship from `Data/catalogs/` and the SkyMonitor host consumes configuration values exclusively from the new `SkyMonitorConfigurationContext` seeds. The configuration bootstrapper runs EF Core migrations at startup so deployments always receive a seeded `sm-config.db`. Remember to tag the repository (`datastore-phase-2`) once Phase 2 wraps so Phase 3 starts from a clean, tagged baseline.
+- EF Core dependencies across the solution (including `dotnet-ef`) have been standardized on 9.0.9 to keep tooling and runtime in lockstep for upcoming migration work.
+- Deep sky overlays can now source curated coordinates from the stub catalog while we evaluate third-party catalogs; repository APIs expose magnitude-limited queries on top of the new dataset.
+- Deep sky catalog now includes the complete Messier set; the authoritative seed lives in `src/HVO.SkyMonitorV5.Data/Seed/deep-sky-messier.csv` and can be re-imported into `Data/catalogs/deep-sky.sqlite` with `sqlite3 deep-sky.sqlite ".mode csv" ".import --skip 1 ../../../HVO.SkyMonitorV5.Data/Seed/deep-sky-messier.csv deep_sky_object"` (see regeneration notes below).
+
+### Regenerating Catalog Seeds (Phase 2)
+
+- `src/HVO.SkyMonitorV5.Data/Seed/deep-sky-messier.csv` maintains the full Messier 1–110 dataset with J2000 RA/Dec, magnitudes, object types, and optional common names.
+- To rebuild `Data/catalogs/deep-sky.sqlite`, create the schema via `sqlite3 deep-sky.sqlite "CREATE TABLE ..."` (see `DeepSkyCatalogContext` for column/ index definitions), run the CSV import, and drop any staging tables once the main table is populated. The documented command above mirrors the process checked in during this phase.
+- Include the CSV in release packages so future deployments can recreate the catalog even if the SQLite file is lost or corrupted.

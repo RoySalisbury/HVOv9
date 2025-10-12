@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace HVO.SkyMonitorV5.RPi.Data;
+namespace HVO.SkyMonitorV5.Data.Catalogs.Constellations;
 
 public sealed class ConstellationLineEntity
 {

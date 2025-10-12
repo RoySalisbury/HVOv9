@@ -2,6 +2,12 @@ using Asp.Versioning;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using HVO.SkyMonitorV5.Data.Catalogs.Constellations;
+using HVO.SkyMonitorV5.Data.Catalogs.DeepSky;
+using HVO.SkyMonitorV5.Data.Catalogs.Hyg;
+using HVO.SkyMonitorV5.Data.Configurations;
+using HVO.SkyMonitorV5.Data.Extensions;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
 using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
@@ -57,15 +63,29 @@ public static class Program
 
     private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
-        var hygConnectionString = BuildSqliteConnectionString(configuration.GetConnectionString("HygDatabase"));
-        var constellationConnectionString = BuildSqliteConnectionString(configuration.GetConnectionString("ConstellationDatabase"));
+        services.AddSkyMonitorDataInfrastructure(configuration);
 
-        services.AddDbContext<HygContext>(opt => opt.UseSqlite(hygConnectionString));
+        services.AddSkyMonitorConfigurationStore(
+            relativePath: "configuration/sm-config.db",
+            configureOptions: builder => builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
-        services.AddDbContextFactory<ConstellationCatalogContext>(options =>
-        {
-            options.UseSqlite(constellationConnectionString);
-        });
+        services.AddHostedService<ConfigurationStoreBootstrapper>();
+
+        services.AddSkyMonitorSqliteDbContext<HygContext>(
+            relativePath: "catalogs/hyg_v42.sqlite",
+            configureOptions: builder => builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking),
+            openMode: SqliteOpenMode.ReadOnly,
+            enableMigrations: false);
+
+        services.AddSkyMonitorSqliteDbContextFactory<ConstellationCatalogContext>(
+            relativePath: "catalogs/ConstellationLines.sqlite",
+            openMode: SqliteOpenMode.ReadOnly,
+            enableMigrations: false);
+
+        services.AddSkyMonitorSqliteDbContextFactory<DeepSkyCatalogContext>(
+            relativePath: "catalogs/deep-sky.sqlite",
+            openMode: SqliteOpenMode.ReadOnly,
+            enableMigrations: false);
 
         services.AddMemoryCache(options =>
         {
@@ -78,6 +98,7 @@ public static class Program
         services.AddScoped<IStarRepository>(sp => sp.GetRequiredService<SkyMonitorRepository>());
         services.AddScoped<IPlanetRepository>(sp => sp.GetRequiredService<SkyMonitorRepository>());
         services.AddScoped<IConstellationCatalog>(sp => sp.GetRequiredService<SkyMonitorRepository>());
+    services.AddScoped<IDeepSkyCatalog>(sp => sp.GetRequiredService<SkyMonitorRepository>());
 
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
@@ -147,12 +168,10 @@ public static class Program
         }).AddApiExplorer();
 
         services.AddOptions<CameraPipelineOptions>()
-            .Bind(configuration.GetSection("CameraPipeline"))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddOptions<ObservatoryLocationOptions>()
-            .Bind(configuration.GetSection("ObservatoryLocation"))
             .ValidateDataAnnotations()
             .Validate(static options =>
                 !double.IsNaN(options.LatitudeDegrees) && !double.IsNaN(options.LongitudeDegrees),
@@ -160,26 +179,22 @@ public static class Program
             .ValidateOnStart();
 
         services.AddOptions<StarCatalogOptions>()
-            .Bind(configuration.GetSection(StarCatalogOptions.SectionName))
+            .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddOptions<CardinalDirectionsOptions>()
-            .Bind(configuration.GetSection(CardinalDirectionsOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddOptions<CircularApertureMaskOptions>()
-            .Bind(configuration.GetSection(CircularApertureMaskOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddOptions<CelestialAnnotationsOptions>()
-            .Bind(configuration.GetSection(CelestialAnnotationsOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddOptions<ConstellationFigureOptions>()
-            .Bind(configuration.GetSection(ConstellationFigureOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -187,6 +202,16 @@ public static class Program
             .Bind(configuration.GetSection(DiagnosticsOverlayOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
+        services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CardinalDirectionsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CircularApertureMaskOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
         services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
@@ -213,7 +238,6 @@ public static class Program
         services.AddSingleton<IObservatoryClock, ObservatoryClock>();
 
         services.AddOptions<AllSkyCatalogOptions>()
-            .Bind(configuration.GetSection(AllSkyCatalogOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -230,7 +254,7 @@ public static class Program
         services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
         services.AddSingleton<IDiagnosticsService, DiagnosticsService>();
 
-        RegisterCameraAdapters(services, configuration);
+        RegisterCameraAdapters(services);
 
     services.AddHostedService<AllSkyCaptureService>();
         
@@ -247,113 +271,82 @@ public static class Program
             });
     }
 
-    private static void RegisterCameraAdapters(IServiceCollection services, IConfiguration configuration)
+    private static void RegisterCameraAdapters(IServiceCollection services)
     {
-        var cameraConfigurations = configuration
-            .GetSection(CameraAdapterOptions.SectionName)
-            .Get<IReadOnlyList<CameraAdapterOptions>>() ?? Array.Empty<CameraAdapterOptions>();
-
-        if (cameraConfigurations.Count == 0)
+        services.AddSingleton<ICameraAdapter>(sp =>
         {
-            throw new InvalidOperationException("No all-sky camera adapters are configured. Add at least one entry under 'AllSkyCameras'.");
-        }
+            var configurator = sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>();
+            var adapters = configurator.GetCameraAdapters();
 
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var camera in cameraConfigurations)
-        {
-            if (camera is null)
+            if (adapters.Count == 0)
             {
-                continue;
+                throw new InvalidOperationException("No all-sky camera adapters are configured in the SkyMonitor data store.");
             }
 
-            Validator.ValidateObject(camera, new ValidationContext(camera), validateAllProperties: true);
+            var catalogOptions = sp.GetRequiredService<IOptionsMonitor<AllSkyCatalogOptions>>().CurrentValue;
+            var preferredRigKey = catalogOptions?.Rigs?.ActiveRig;
 
-            if (string.IsNullOrWhiteSpace(camera.Name))
+            var descriptor = adapters
+                .FirstOrDefault(adapter =>
+                    !string.IsNullOrWhiteSpace(preferredRigKey) &&
+                    string.Equals(adapter.RigKey, preferredRigKey, StringComparison.OrdinalIgnoreCase))
+                ?? adapters[0];
+
+            if (string.IsNullOrWhiteSpace(descriptor.RigKey))
             {
-                throw new InvalidOperationException("Each camera adapter must specify a non-empty Name.");
+                throw new InvalidOperationException($"Camera adapter '{descriptor.Name}' must reference a rig catalog entry.");
             }
 
-            var cameraName = camera.Name.Trim();
-
-            if (!seenNames.Add(cameraName))
+            var adapterOptions = new CameraAdapterOptions
             {
-                throw new InvalidOperationException($"Duplicate camera adapter name '{cameraName}' detected. Each adapter must have a unique name.");
+                Name = descriptor.Name,
+                Adapter = descriptor.AdapterType,
+                RigCatalog = descriptor.RigKey
+            };
+
+            Validator.ValidateObject(adapterOptions, new ValidationContext(adapterOptions), validateAllProperties: true);
+
+            var rigCatalog = sp.GetRequiredService<IRigCatalog>();
+            var loggerFactory = sp.GetService<ILoggerFactory>();
+            var configLogger = loggerFactory?.CreateLogger("HVO.SkyMonitor.CameraAdapters");
+            var rigSpec = adapterOptions.ResolveRig(rigCatalog, configLogger);
+            var observatoryClock = sp.GetRequiredService<IObservatoryClock>();
+
+            if (CameraAdapterTypes.IsMockColor(adapterOptions.Adapter))
+            {
+                return new MockColorCameraAdapter(
+                    sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
+                    sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
+                    sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
+                    sp.GetRequiredService<IServiceScopeFactory>(),
+                    rigSpec,
+                    observatoryClock,
+                    loggerFactory,
+                    sp.GetService<ILogger<MockColorCameraAdapter>>());
             }
-            var adapterKey = string.IsNullOrWhiteSpace(camera.Adapter)
-                ? CameraAdapterTypes.Mock
-                : camera.Adapter.Trim();
 
-            var normalizedAdapterKey = adapterKey;
-
-            services.AddKeyedSingleton<ICameraAdapter>(cameraName, (sp, _) =>
+            if (CameraAdapterTypes.IsMock(adapterOptions.Adapter))
             {
-                var rigCatalog = sp.GetRequiredService<IRigCatalog>();
-                var loggerFactory = sp.GetService<ILoggerFactory>();
-                var configLogger = loggerFactory?.CreateLogger("HVO.SkyMonitor.CameraAdapters");
-                var rigSpec = camera.ResolveRig(rigCatalog, configLogger);
-                var observatoryClock = sp.GetRequiredService<IObservatoryClock>();
-                if (CameraAdapterTypes.IsMockColor(normalizedAdapterKey))
-                {
-                    return new MockColorCameraAdapter(
-                        sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
-                        sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
-                        sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
-                        sp.GetRequiredService<IServiceScopeFactory>(),
-                        rigSpec,
-                        observatoryClock,
-                        sp.GetService<ILoggerFactory>(),
-                        sp.GetService<ILogger<MockColorCameraAdapter>>());
-                }
+                return new MockCameraAdapter(
+                    sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
+                    sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
+                    sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
+                    sp.GetRequiredService<IServiceScopeFactory>(),
+                    rigSpec,
+                    observatoryClock,
+                    sp.GetService<ILogger<MockCameraAdapter>>());
+            }
 
-                if (CameraAdapterTypes.IsMock(normalizedAdapterKey))
-                {
-                    return new MockCameraAdapter(
-                        sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
-                        sp.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>(),
-                        sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
-                        sp.GetRequiredService<IServiceScopeFactory>(),
-                        rigSpec,
-                        observatoryClock,
-                        sp.GetService<ILogger<MockCameraAdapter>>());
-                }
+            if (CameraAdapterTypes.IsZwo(adapterOptions.Adapter))
+            {
+                return new ZwoCameraAdapter(
+                    rigSpec,
+                    observatoryClock,
+                    sp.GetService<ILogger<ZwoCameraAdapter>>());
+            }
 
-                if (CameraAdapterTypes.IsZwo(normalizedAdapterKey))
-                {
-                    return new ZwoCameraAdapter(
-                        rigSpec,
-                        observatoryClock,
-                        sp.GetService<ILogger<ZwoCameraAdapter>>());
-                }
-
-                throw new InvalidOperationException($"Unsupported camera adapter type '{normalizedAdapterKey}' for camera '{cameraName}'.");
-            });
-        }
-
-        var defaultCameraName = cameraConfigurations[0]?.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(defaultCameraName))
-        {
-            throw new InvalidOperationException("The first camera adapter entry must specify a name so the capture pipeline can resolve the default adapter.");
-        }
-
-        services.AddSingleton<ICameraAdapter>(sp => sp.GetRequiredKeyedService<ICameraAdapter>(defaultCameraName));
-    }
-
-    private static string BuildSqliteConnectionString(string? connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException("Connection string 'HygDatabase' is not configured.");
-        }
-
-        var builder = new SqliteConnectionStringBuilder(connectionString);
-
-        if (!string.IsNullOrWhiteSpace(builder.DataSource) && !Path.IsPathRooted(builder.DataSource))
-        {
-            builder.DataSource = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, builder.DataSource));
-        }
-
-        return builder.ToString();
+            throw new InvalidOperationException($"Unsupported camera adapter type '{adapterOptions.Adapter}'.");
+        });
     }
 
     private static void ConfigureLogging(ILoggingBuilder logging)
