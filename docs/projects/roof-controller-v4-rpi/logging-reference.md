@@ -127,5 +127,5 @@ Then follow subsequent `traceId`.
 
 ---
 ## 9. References
-- `HARDWARE_OVERVIEW.md`
-- `API_REFERENCE.md`
+- `hardware-overview.md`
+- `api-reference.md`

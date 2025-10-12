@@ -97,4 +97,4 @@ Partial stops increasing? -> Evaluate operator intent vs mechanical drag.
 | 1.0 | Initial troubleshooting mapping.
 
 ---
-References: `HARDWARE_OVERVIEW.md`, `API_REFERENCE.md`, `OPERATOR_CHEAT_SHEET.md`, `LOGGING_REFERENCE.md`
+References: `hardware-overview.md`, `api-reference.md`, `operator-cheat-sheet.md`, `logging-reference.md`

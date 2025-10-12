@@ -27,12 +27,12 @@ A .NET 9 Blazor Server + ASP.NET Core application that automates the Hualapai Va
 - Open `HVO.RoofControllerV4.RPi.http` in this project and use the **Send Request** action on any request snippet to exercise status, configuration, motion, and fault-clear endpoints.
 
 ## Documentation
-- [Hardware Overview](Documents/HARDWARE_OVERVIEW.md) – wiring, relay/limit mappings, safety philosophy
-- [API Reference](Documents/API_REFERENCE.md) – REST endpoints, payloads, and health data
-- [Operator Cheat Sheet](Documents/OPERATOR_CHEAT_SHEET.md) – quick reference for field operations
-- [Troubleshooting Guide](Documents/TROUBLESHOOTING_GUIDE.md) – symptom → diagnosis mapping
-- [Logging Reference](Documents/LOGGING_REFERENCE.md) – structured logging templates and conventions
-- Roof diagrams bundle: `Documents/RoofController_Diagrams_2025-09-26.zip`
+- [Hardware Overview](../../docs/projects/roof-controller-v4-rpi/hardware-overview.md) – wiring, relay/limit mappings, safety philosophy
+- [API Reference](../../docs/projects/roof-controller-v4-rpi/api-reference.md) – REST endpoints, payloads, and health data
+- [Operator Cheat Sheet](../../docs/projects/roof-controller-v4-rpi/operator-cheat-sheet.md) – quick reference for field operations
+- [Troubleshooting Guide](../../docs/projects/roof-controller-v4-rpi/troubleshooting-guide.md) – symptom → diagnosis mapping
+- [Logging Reference](../../docs/projects/roof-controller-v4-rpi/logging-reference.md) – structured logging templates and conventions
+- Roof diagrams bundle: `../../docs/projects/roof-controller-v4-rpi/RoofController_Diagrams_2025-09-26.zip`
 
 ## Configuration Notes
 - Operational settings live in `appsettings*.json` under `RoofControllerOptionsV4` and `RoofControllerHostOptionsV4`.

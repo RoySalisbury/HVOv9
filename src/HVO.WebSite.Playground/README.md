@@ -13,6 +13,10 @@ A Blazor Server web application for testing API endpoints with both Blazor compo
 - **Error Handling**: Comprehensive error handling and logging
 - **Side-by-Side Comparison**: Both approaches accessing the same API
 
+## Documentation
+
+- [`docs/projects/website-playground/weather-api-guide.md`](../../docs/projects/website-playground/weather-api-guide.md) – walkthrough of the sample weather integration and REST client usage.
+
 ## Project Structure
 
 ```
@@ -64,12 +68,12 @@ Navigate to the application root to see a comparison page:
 
 #### MVC UI Testing
 1. Navigate to `http://localhost:5136/Home/HealthCheckMVC`
-2. Click the "� Test Health Check API" button
+2. Click the "Test Health Check API" button
 3. View the response with traditional JavaScript/DOM manipulation
 
 #### Blazor UI Testing
 1. Navigate to `http://localhost:5136/health-check-blazor`
-2. Click the "� Test Health Check API" button
+2. Click the "Test Health Check API" button
 3. View the response with real-time C# updates via SignalR
 
 ## API Endpoints

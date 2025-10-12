@@ -303,6 +303,7 @@ namespace HVO.ProjectName
 - Include README.md files for complex projects
 - Document configuration options and environment setup
 - Provide usage examples for public APIs
+- Centralize supplemental docs under `docs/` (project-specific content in `docs/projects/<project>`; cross-cutting guides in `docs/guides` or `docs/testing`)
 
 ## Git Workflow
 - Use meaningful commit messages

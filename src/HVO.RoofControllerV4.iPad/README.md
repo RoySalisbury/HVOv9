@@ -2,6 +2,12 @@
 
 The HVO Roof Controller V4 iPad app is a .NET MAUI client that monitors and controls the observatory roof automation stack. It targets the iOS simulator (iPad) and communicates with the Roof Controller API hosted on the local network.
 
+## Documentation
+
+- [`docs/projects/roof-controller-v4-rpi/api-reference.md`](../../docs/projects/roof-controller-v4-rpi/api-reference.md) – command surface and payload schema used by the client.
+- [`docs/projects/roof-controller-v4-rpi/operator-cheat-sheet.md`](../../docs/projects/roof-controller-v4-rpi/operator-cheat-sheet.md) – field operations quick reference shared with the mobile UI.
+- [`docs/projects/roof-controller-v4-rpi/troubleshooting-guide.md`](../../docs/projects/roof-controller-v4-rpi/troubleshooting-guide.md) – diagnostic steps for API/API connectivity issues the app may surface.
+
 ## Prerequisites
 
 - macOS with Xcode command-line tools and iOS 18.6 simulator runtime installed

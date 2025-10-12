@@ -2,6 +2,11 @@
 
 This project hosts performance benchmarks for the SkyMonitor v5 capture and processing pipeline. The goal is to provide quick, repeatable measurements that highlight CPU and memory hotspots outside of CI-only scenarios.
 
+## Documentation
+
+- [`docs/projects/sky-monitor-v5/skymonitor-flow.svg`](../../docs/projects/sky-monitor-v5/skymonitor-flow.svg) – high-level capture/stack/filter flow referenced by the benchmarks.
+- [`docs/sky-monitor-starfield.md`](../../docs/sky-monitor-starfield.md) – detailed explanation of the synthetic starfield renderer used in synthetic benchmark inputs.
+
 ## Scenarios
 
 | Benchmark | Purpose | Notes |

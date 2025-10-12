@@ -8,6 +8,8 @@
 - [ ] Perform full end-to-end validation against physical camera hardware once access is restored; capture notes on exposure behavior, queue pressure, and on-device telemetry before release.
 - [ ] Add a light-mode variant of the theme and expose a runtime toggle.
 - [ ] Migrate CelestialAnnotations filter configuration (DeepSkyObjects list, thresholds, labels) entirely into the database catalog and remove the unused legacy appsettings entries.
+- [ ] Regenerate `docs/projects/sky-monitor-v5/skymonitor-flow.svg` and `docs/projects/sky-monitor-v5/skymonitor-sequence.svg` with the updated architecture once the new diagrams are drafted.
+- [ ] Audit design diagrams in docs and rebuild any outdated folder structure illustrations inside the Markdown guides.
 
 ### UX Improvements _(deferred to upcoming UI overhaul project)_
 - [ ] Promote the current SkyMonitor landing page into a dedicated **Monitor** view and hold the root **Dashboard** route for a future minimal overview.

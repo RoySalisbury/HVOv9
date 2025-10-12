@@ -1,10 +1,10 @@
 # RoofController — Project Overview (v1.3.1)
 
 > Related Documents (proposed new companion files):
-> - `API_REFERENCE.md` – Detailed REST endpoints, request/response schemas, error codes
-> - `LOGGING_REFERENCE.md` – Structured log event catalog + sample correlation flows
-> - `OPERATOR_CHEAT_SHEET.md` – Printable one-page operational quick reference
-> - `TROUBLESHOOTING_GUIDE.md` – Common symptoms, root causes, escalation steps
+- `api-reference.md` – Detailed REST endpoints, request/response schemas, error codes
+- `logging-reference.md` – Structured log event catalog + sample correlation flows
+- `operator-cheat-sheet.md` – Printable one-page operational quick reference
+- `troubleshooting-guide.md` – Common symptoms, root causes, escalation steps
 
 **Date:** September 26, 2025  
 **Owner:** Roy Salisbury  

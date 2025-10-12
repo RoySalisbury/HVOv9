@@ -2,6 +2,13 @@
 
 HVO SkyMonitor v5 is the Raspberry Pi service that captures synthetic or hardware camera frames, performs rolling integration/stacking, and projects annotated all-sky imagery for the Hualapai Valley Observatory. The service ships with a modular processing pipeline that lets you arrange post-processing filters per camera without touching code.
 
+## Documentation
+
+- [`docs/projects/sky-monitor-v5/skymonitor-flow.svg`](../../docs/projects/sky-monitor-v5/skymonitor-flow.svg) – latest high-level flow diagram.
+- [`docs/projects/sky-monitor-v5/skymonitor-sequence.svg`](../../docs/projects/sky-monitor-v5/skymonitor-sequence.svg) – capture-to-display sequence.
+- [`docs/sky-monitor-starfield.md`](../../docs/sky-monitor-starfield.md) – deeper dive into the synthetic starfield generator.
+- [`docs/skymonitor-v5-operations-runbook.md`](../../docs/skymonitor-v5-operations-runbook.md) – operational checklist and recovery procedures.
+
 ## System overview
 
 - **Capture loop** – `AllSkyCaptureService` orchestrates exposures, capture, stacking, filtering, and persistence.

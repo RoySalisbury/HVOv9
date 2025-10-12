@@ -2,6 +2,12 @@
 
 This test project validates safety, motion control, and API-facing status semantics for `RoofControllerServiceV4`.
 
+## Documentation
+
+- [`docs/projects/roof-controller-v4-rpi/hardware-overview.md`](../../docs/projects/roof-controller-v4-rpi/hardware-overview.md) – wiring map and relay/limit switch context for the test assumptions.
+- [`docs/projects/roof-controller-v4-rpi/api-reference.md`](../../docs/projects/roof-controller-v4-rpi/api-reference.md) – REST contract enforced by controller API tests.
+- [`docs/projects/roof-controller-v4-rpi/logging-reference.md`](../../docs/projects/roof-controller-v4-rpi/logging-reference.md) – structured logging catalog referenced in verification assertions.
+
 ## Wiring & Polarity Assumptions
 - Limit switches are **Normally Closed (NC)**. Raw HIGH = circuit closed (not at limit); raw LOW = limit engaged.
 - Digital Inputs Mapping (raw electrical):

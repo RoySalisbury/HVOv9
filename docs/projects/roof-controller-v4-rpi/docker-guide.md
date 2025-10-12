@@ -230,7 +230,7 @@ For CI/CD scenarios push the tagged image to your registry of choice and pull on
 
 ## 9. Related Documentation
 
-- `docs/roofcontrollerv4-docker.md` – deep dive walkthrough (original notes; kept for historical context).
-- `src/HVO.RoofControllerV4.RPi/Documents/HARDWARE_OVERVIEW.md` – hardware wiring and device overview.
+- [`roofcontrollerv4-docker.md`](../../roofcontrollerv4-docker.md) – deep dive walkthrough (legacy notes, kept for historical context).
+- `hardware-overview.md` – hardware wiring and device overview.
 
 Keep this guide up to date whenever Docker build arguments or runtime flags change so deployments stay repeatable.

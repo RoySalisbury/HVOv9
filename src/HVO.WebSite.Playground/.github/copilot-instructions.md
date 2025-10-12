@@ -12,7 +12,7 @@ This is a Blazor Server web application project for testing and demonstrating AP
 - API Versioning with URL segments
 - Bootstrap 5 for responsive UI
 - HttpClient with IHttpClientFactory pattern
-- xUnit for comprehensive testing
+- MSTest with WebApplicationFactory-based integration testing
 
 ## Architecture Guidelines
 - Use Server-side Blazor components for interactive UI with `@rendermode InteractiveServer`
@@ -43,12 +43,16 @@ This is a Blazor Server web application project for testing and demonstrating AP
 - Maintain consistent styling between Blazor and MVC approaches
 - Implement proper error handling in both server and client code
 
-### Testing Approach
-- Use WebApplicationFactory for integration testing
-- Test both API endpoints and web page responses
-- Verify API versioning functionality
-- Test error handling scenarios
-- Ensure proper HTTP status codes and content types
+## Testing Approach
+- Use `WebApplicationFactory<TEntryPoint>` for integration testing
+- Exercise both API endpoints and page responses (Blazor + MVC)
+- Verify API versioning functionality and negotiated content types
+- Cover error handling scenarios and logging expectations
+- Reuse MSTest conventions (AAA pattern, `TestMethod` attributes, `ClassInitialize` for expensive setup)
+
+## Documentation
+- Project README: `src/HVO.WebSite.Playground/README.md`
+- Centralized guides: `docs/projects/website-playground/weather-api-guide.md` for REST walkthroughs
 
 ## Code Style Preferences
 - Follow HVOv9 standards (no top-level statements, explicit Main method)

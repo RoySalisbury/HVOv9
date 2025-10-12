@@ -99,4 +99,4 @@ No motion on Open/Close?
 | 1.0 | Initial operator extraction from full overview.
 
 ---
-References: `HARDWARE_OVERVIEW.md`, `API_REFERENCE.md`, `LOGGING_REFERENCE.md`
+References: `hardware-overview.md`, `api-reference.md`, `logging-reference.md`

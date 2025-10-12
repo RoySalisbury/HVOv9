@@ -33,6 +33,12 @@ Complete equipment control and imaging operations:
 - ✅ **Dependency Injection**: Full support for Microsoft DI container with configuration binding
 - ✅ **HTTP Client Integration**: Built on `IHttpClientFactory` for optimal performance and resource management
 
+## Documentation
+
+- [`docs/projects/nina-client/profile-api-usage.md`](../../docs/projects/nina-client/profile-api-usage.md) – reference workflows for profile management and equipment orchestration.
+- [`docs/projects/nina-client/result-pattern-improvements.md`](../../docs/projects/nina-client/result-pattern-improvements.md) – guidelines for applying the `Result<T>` pattern to client operations.
+- [`docs/projects/nina-client/resilience-architecture.md`](../../docs/projects/nina-client/resilience-architecture.md) – reconnection, retry, and circuit-breaker design notes.
+
 ## Installation
 
 Add the project reference to your application:

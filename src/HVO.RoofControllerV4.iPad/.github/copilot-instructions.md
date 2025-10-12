@@ -17,4 +17,9 @@
 ## Logging & Monitoring
 - Expect verbose HTTP polling in the simulator output while the roof controller dashboard is active. Focus on non-200 responses before investigating popup lifecycle issues.
 
+## Documentation
+- Project README: `src/HVO.RoofControllerV4.iPad/README.md`
+- Shared roof controller docs: `docs/projects/roof-controller-v4-rpi/` (hardware overview, API contract, operator guide, logging reference)
+- Update those references when API endpoints or operational flows change so the mobile client stays aligned with the backend.
+
 Keep these notes in mind when updating the iPad project or debugging simulator runs.

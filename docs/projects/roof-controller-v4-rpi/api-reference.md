@@ -188,14 +188,14 @@ The API uses RFC 7807 ProblemDetails objects for failures.
 | Version | Notes |
 |---------|-------|
 | 1.1 | Updated for v4 endpoints, payload shape, and health data |
-| 1.0 | Initial extraction from `HARDWARE_OVERVIEW.md` |
+| 1.0 | Initial extraction from `hardware-overview.md` |
 
 ---
 ## 9. References
-- `HARDWARE_OVERVIEW.md`
-- `LOGGING_REFERENCE.md`
-- `TROUBLESHOOTING_GUIDE.md`
-- `OPERATOR_CHEAT_SHEET.md`
+- `hardware-overview.md`
+- `logging-reference.md`
+- `troubleshooting-guide.md`
+- `operator-cheat-sheet.md`
 
 # RoofController REST API Reference (v1.0)
 
@@ -420,9 +420,9 @@ Excessively tight polling (<250 ms) provides no practical benefit and may inflat
 ## 8. Change Log
 | Version | Notes |
 |---------|-------|
-| 1.0 | Initial extraction from `HARDWARE_OVERVIEW.md`.
+| 1.0 | Initial extraction from `hardware-overview.md`.
 
 ---
 ## 9. References
-- `HARDWARE_OVERVIEW.md` — wiring, state machine, safety philosophy
-- `LOGGING_REFERENCE.md` — structured events for correlating API + service internals
+- `hardware-overview.md` — wiring, state machine, safety philosophy
+- `logging-reference.md` — structured events for correlating API + service internals
