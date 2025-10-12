@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Telemetry;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
@@ -23,11 +24,16 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
         private readonly IEnumerable<IFrameFilter> _filters;
         private readonly ILogger<FrameFilterPipeline> _logger;
         private readonly FilterTelemetryStore _telemetryStore = new();
+        private readonly ISkyMonitorTelemetryRecorder? _telemetryRecorder;
 
-        public FrameFilterPipeline(IEnumerable<IFrameFilter> filters, ILogger<FrameFilterPipeline> logger)
+        public FrameFilterPipeline(
+            IEnumerable<IFrameFilter> filters,
+            ILogger<FrameFilterPipeline> logger,
+            ISkyMonitorTelemetryRecorder? telemetryRecorder = null)
         {
             _filters = filters ?? throw new ArgumentNullException(nameof(filters));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _telemetryRecorder = telemetryRecorder;
         }
 
         /// <summary>
@@ -103,7 +109,15 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                             filterTimings.Add(new FilterTiming(filter.Name, duration));
                         }
 
-                        _telemetryStore.Record(filter.Name, duration);
+                        var telemetrySnapshot = _telemetryStore.Record(filter.Name, duration);
+                        if (telemetrySnapshot is not null)
+                        {
+                            _telemetryRecorder?.RecordFilterMetricSample(
+                                telemetrySnapshot.FilterName,
+                                telemetrySnapshot.AppliedCount,
+                                telemetrySnapshot.LastDurationMilliseconds,
+                                telemetrySnapshot.AverageDurationMilliseconds);
+                        }
                     }
                     catch (OperationCanceledException)
                     {

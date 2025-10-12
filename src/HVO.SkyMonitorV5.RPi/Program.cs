@@ -24,6 +24,7 @@ using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
+using HVO.SkyMonitorV5.RPi.Telemetry;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -71,6 +72,22 @@ public static class Program
 
         services.AddHostedService<ConfigurationStoreBootstrapper>();
 
+        services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
+        services.AddHostedService<TelemetryStoreBootstrapper>();
+
+        services.AddOptions<SkyMonitorTelemetryRetentionOptions>()
+            .Bind(configuration.GetSection(SkyMonitorTelemetryRetentionOptions.SectionName))
+            .ValidateDataAnnotations()
+            .PostConfigure(options =>
+            {
+                options.RemoteDispatch ??= TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), 5_000);
+                options.BackgroundStacker ??= TelemetryRetentionPolicy.Create(TimeSpan.FromDays(14), 15_000);
+                options.CapturePacing ??= TelemetryRetentionPolicy.Create(TimeSpan.FromDays(14), 15_000);
+                options.ProcessingQueue ??= TelemetryRetentionPolicy.Create(TimeSpan.FromDays(14), 15_000);
+                options.FilterMetrics ??= TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), 5_000);
+                options.TelemetryEvents ??= TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), 20_000);
+            });
+
         services.AddSkyMonitorSqliteDbContext<HygContext>(
             relativePath: "catalogs/hyg_v42.sqlite",
             configureOptions: builder => builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking),
@@ -98,7 +115,7 @@ public static class Program
         services.AddScoped<IStarRepository>(sp => sp.GetRequiredService<SkyMonitorRepository>());
         services.AddScoped<IPlanetRepository>(sp => sp.GetRequiredService<SkyMonitorRepository>());
         services.AddScoped<IConstellationCatalog>(sp => sp.GetRequiredService<SkyMonitorRepository>());
-    services.AddScoped<IDeepSkyCatalog>(sp => sp.GetRequiredService<SkyMonitorRepository>());
+        services.AddScoped<IDeepSkyCatalog>(sp => sp.GetRequiredService<SkyMonitorRepository>());
 
         services.AddRazorComponents()
             .AddInteractiveServerComponents();
@@ -203,17 +220,23 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
-        services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<CardinalDirectionsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<CircularApertureMaskOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
+    services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<CardinalDirectionsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<CircularApertureMaskOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
-        services.AddSingleton<IFrameStateStore, FrameStateStore>();
+    services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
+    services.AddSingleton<ISkyMonitorTelemetryRecorder, SkyMonitorTelemetryRecorder>();
+    services.AddHostedService<SkyMonitorTelemetryIngestionService>();
+    services.AddSingleton<SkyMonitorTelemetryRetentionProcessor>();
+    services.AddHostedService<SkyMonitorTelemetryRetentionService>();
+
+    services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
         services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
@@ -224,8 +247,8 @@ public static class Program
         services.AddSingleton<BackgroundFrameStackerService>();
         services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
         services.AddHostedService(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
-    services.AddSingleton<RemoteDispatchMetricsObserver>();
-    services.AddHostedService(sp => sp.GetRequiredService<RemoteDispatchMetricsObserver>());
+        services.AddSingleton<RemoteDispatchMetricsObserver>();
+        services.AddHostedService(sp => sp.GetRequiredService<RemoteDispatchMetricsObserver>());
 
         services.AddSingleton<IFrameFilter, CardinalDirectionsFilter>();
         services.AddSingleton<IFrameFilter, ConstellationFigureFilter>();
@@ -256,7 +279,7 @@ public static class Program
 
         RegisterCameraAdapters(services);
 
-    services.AddHostedService<AllSkyCaptureService>();
+        services.AddHostedService<AllSkyCaptureService>();
         
         services.AddOpenTelemetry()
             .WithMetrics(builder =>

@@ -10,15 +10,15 @@ internal sealed class FilterTelemetryStore
 {
     private readonly ConcurrentDictionary<string, FilterTelemetryEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
 
-    public void Record(string filterName, double durationMilliseconds)
+    public FilterTelemetrySnapshot? Record(string filterName, double durationMilliseconds)
     {
         if (string.IsNullOrWhiteSpace(filterName))
         {
-            return;
+            return null;
         }
 
         var entry = _entries.GetOrAdd(filterName, name => new FilterTelemetryEntry(name));
-        entry.Record(durationMilliseconds);
+        return entry.Record(durationMilliseconds);
     }
 
     public FilterMetricsSnapshot Snapshot()

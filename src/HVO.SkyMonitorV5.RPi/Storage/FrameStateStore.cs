@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
@@ -9,6 +11,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Threading;
+using HVO.SkyMonitorV5.RPi.Telemetry;
 
 namespace HVO.SkyMonitorV5.RPi.Storage;
 
@@ -18,6 +21,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private readonly ILogger<FrameStateStore>? _logger;
     private readonly IDisposable? _optionsReloadSubscription;
     private readonly IObservatoryClock _clock;
+    private readonly ISkyMonitorTelemetryRecorder? _telemetryRecorder;
 
     private CameraConfiguration _configuration;
     private int _configurationVersion;
@@ -41,8 +45,17 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private const int RemoteDispatchHistoryCapacity = 480;
     private readonly Queue<BackgroundStackerHistorySample> _backgroundStackerHistory = new();
     private const int BackgroundStackerHistoryCapacity = 720;
+    private static readonly JsonSerializerOptions TelemetryEventSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
-    public FrameStateStore(IOptionsMonitor<CameraPipelineOptions> optionsMonitor, IObservatoryClock clock, ILogger<FrameStateStore>? logger = null)
+    public FrameStateStore(
+        IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
+        IObservatoryClock clock,
+        ILogger<FrameStateStore>? logger = null,
+        ISkyMonitorTelemetryRecorder? telemetryRecorder = null)
     {
         if (optionsMonitor is null)
         {
@@ -52,7 +65,9 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         _logger = logger;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _configuration = CameraConfiguration.FromOptions(optionsMonitor.CurrentValue);
-    _optionsReloadSubscription = optionsMonitor.OnChange(OnPipelineOptionsChanged);
+        _telemetryRecorder = telemetryRecorder;
+
+        _optionsReloadSubscription = optionsMonitor.OnChange(OnPipelineOptionsChanged);
     }
 
     public CameraConfiguration Configuration
@@ -324,6 +339,8 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             throw new ArgumentNullException(nameof(status));
         }
 
+    BackgroundStackerHistorySample sample = null!;
+
         lock (_sync)
         {
             var localizedStatus = status with
@@ -333,8 +350,10 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             };
 
             _backgroundStackerStatus = localizedStatus;
-            EnqueueBackgroundStackerSample(localizedStatus);
+            sample = EnqueueBackgroundStackerSample(localizedStatus);
         }
+
+        _telemetryRecorder?.RecordBackgroundStackerSample(_clock.UtcNow, sample);
     }
 
     public void UpdateCapturePacingStatus(CapturePacingStatus status)
@@ -344,6 +363,8 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             throw new ArgumentNullException(nameof(status));
         }
 
+    CapturePacingStatus localizedStatus = null!;
+
         lock (_sync)
         {
             var localizedTimestamp = _clock.ToLocal(status.Timestamp);
@@ -351,24 +372,34 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 ? _clock.ToLocal(expires)
                 : null;
 
-            _capturePacingStatus = status with
+            localizedStatus = status with
             {
                 Timestamp = localizedTimestamp,
                 PenaltyExpiresAt = penaltyExpires
             };
+
+            _capturePacingStatus = localizedStatus;
         }
+
+        _telemetryRecorder?.RecordCapturePacingSample(status.Timestamp, localizedStatus);
     }
 
     public void UpdateProcessingQueueStatus(ProcessingQueueStatus status)
     {
+    ProcessingQueueStatus localizedStatus = null!;
+
         lock (_sync)
         {
             var localizedTimestamp = _clock.ToLocal(status.Timestamp);
-            _processingQueueStatus = status with
+            localizedStatus = status with
             {
                 Timestamp = localizedTimestamp
             };
+
+            _processingQueueStatus = localizedStatus;
         }
+
+        _telemetryRecorder?.RecordProcessingQueueSample(status.Timestamp, localizedStatus);
     }
 
     public void UpdateRemoteDispatchStatus(RemoteDispatchStatus status, RemoteDispatchEventMetrics eventMetrics)
@@ -378,17 +409,24 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             throw new ArgumentNullException(nameof(status));
         }
 
+        var latency = SanitizeLatency(eventMetrics.LatencyMilliseconds);
+        var contentType = NormalizeContentType(eventMetrics.PayloadContentType);
+        var extension = NormalizeExtension(eventMetrics.PayloadFileExtension);
+
+    RemoteDispatchHistorySample sample = null!;
+    string? formatKey = null;
+
         lock (_sync)
         {
             var localizedTimestamp = _clock.ToLocal(status.Timestamp);
-            var sample = new RemoteDispatchHistorySample(
+            sample = new RemoteDispatchHistorySample(
                 Timestamp: localizedTimestamp,
                 Outcome: status.Outcome,
                 Mode: status.Mode,
-                LatencyMilliseconds: SanitizeLatency(eventMetrics.LatencyMilliseconds),
+                LatencyMilliseconds: latency,
                 PayloadBytes: eventMetrics.PayloadBytes,
-                PayloadContentType: NormalizeContentType(eventMetrics.PayloadContentType),
-                PayloadExtension: NormalizeExtension(eventMetrics.PayloadFileExtension),
+                PayloadContentType: contentType,
+                PayloadExtension: extension,
                 Message: status.Message,
                 ErrorMessage: status.ErrorMessage);
 
@@ -402,8 +440,93 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 Timestamp = localizedTimestamp,
                 Metrics = snapshot
             };
+
+            formatKey = BuildFormatKey(sample);
         }
+
+        _telemetryRecorder?.RecordRemoteDispatchAttempt(
+            status.Timestamp,
+            sample.Timestamp,
+            status.Mode,
+            status.Outcome,
+            sample.LatencyMilliseconds,
+            eventMetrics.PayloadBytes,
+            sample.PayloadContentType,
+            sample.PayloadExtension,
+            status.Message,
+            status.ErrorMessage,
+            formatKey);
+
+        var severity = ResolveRemoteDispatchSeverity(status.Outcome);
+        var summary = ResolveRemoteDispatchSummary(status.Outcome, status.Message, status.ErrorMessage);
+        var properties = new RemoteDispatchTelemetryEventProperties(
+            status.Mode,
+            status.Outcome.ToString(),
+            sample.LatencyMilliseconds,
+            eventMetrics.PayloadBytes,
+            sample.PayloadContentType,
+            sample.PayloadExtension,
+            formatKey,
+            sample.Timestamp,
+            status.Message,
+            status.ErrorMessage);
+
+        var propertiesJson = JsonSerializer.Serialize(properties, TelemetryEventSerializerOptions);
+
+        _telemetryRecorder?.RecordTelemetryEvent(
+            status.Timestamp,
+            sample.Timestamp,
+            category: "RemoteDispatch",
+            eventType: $"RemoteDispatch{status.Outcome}",
+            severity: severity,
+            summary: summary,
+            detail: status.ErrorMessage,
+            propertiesJson: propertiesJson);
     }
+
+    private static string ResolveRemoteDispatchSeverity(RemoteDispatchOutcome outcome)
+        => outcome switch
+        {
+            RemoteDispatchOutcome.Succeeded => "Information",
+            RemoteDispatchOutcome.Disabled => "Debug",
+            RemoteDispatchOutcome.Skipped => "Debug",
+            RemoteDispatchOutcome.Failed => "Error",
+            _ => "Information"
+        };
+
+    private static string ResolveRemoteDispatchSummary(RemoteDispatchOutcome outcome, string? message, string? errorMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            return message!;
+        }
+
+        if (outcome == RemoteDispatchOutcome.Failed && !string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return errorMessage!;
+        }
+
+        return outcome switch
+        {
+            RemoteDispatchOutcome.Succeeded => "Remote dispatch succeeded.",
+            RemoteDispatchOutcome.Disabled => "Remote dispatch disabled.",
+            RemoteDispatchOutcome.Skipped => "Remote dispatch skipped.",
+            RemoteDispatchOutcome.Failed => "Remote dispatch failed.",
+            _ => "Remote dispatch update."
+        };
+    }
+
+    private sealed record RemoteDispatchTelemetryEventProperties(
+        string Mode,
+        string Outcome,
+        double? LatencyMilliseconds,
+        long? PayloadBytes,
+        string? PayloadContentType,
+        string? PayloadExtension,
+        string? FormatKey,
+        DateTimeOffset CapturedAtLocal,
+        string? Message,
+        string? ErrorMessage);
 
     public void UpdateExposureOverride(ExposureOverrideUpdate update)
     {
@@ -465,7 +588,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
 
     public void Dispose()
     {
-    _optionsReloadSubscription?.Dispose();
+        _optionsReloadSubscription?.Dispose();
     }
 
     public AllSkyStatusResponse GetStatus()
@@ -587,7 +710,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             state.Applied.Gain);
     }
 
-    private void EnqueueBackgroundStackerSample(BackgroundStackerStatus status)
+    private BackgroundStackerHistorySample EnqueueBackgroundStackerSample(BackgroundStackerStatus status)
     {
         var sample = new BackgroundStackerHistorySample(
             Timestamp: _clock.LocalNow,
@@ -607,6 +730,8 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
 
         _backgroundStackerHistory.Enqueue(sample);
+
+        return sample;
     }
 
     private void EnqueueRemoteDispatchSample(RemoteDispatchHistorySample sample)

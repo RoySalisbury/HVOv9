@@ -15,14 +15,20 @@ internal sealed class FilterTelemetryEntry
         FilterName = filterName ?? throw new ArgumentNullException(nameof(filterName));
     }
 
-    public void Record(double durationMilliseconds)
+    public FilterTelemetrySnapshot Record(double durationMilliseconds)
     {
         _appliedCount++;
         _totalDurationMs += durationMilliseconds;
         _lastDurationMs = durationMilliseconds;
+        return CreateSnapshot();
     }
 
     public FilterTelemetrySnapshot Snapshot()
+    {
+        return CreateSnapshot();
+    }
+
+    private FilterTelemetrySnapshot CreateSnapshot()
     {
         double? average = _appliedCount > 0 ? _totalDurationMs / _appliedCount : null;
         return new FilterTelemetrySnapshot(FilterName, _appliedCount, _lastDurationMs, average);

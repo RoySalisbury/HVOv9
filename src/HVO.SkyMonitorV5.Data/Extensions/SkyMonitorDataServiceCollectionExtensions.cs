@@ -3,6 +3,8 @@ using HVO.SkyMonitorV5.Data.Abstractions;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Options;
 using HVO.SkyMonitorV5.Data.Services;
+using HVO.SkyMonitorV5.Data.Telemetry;
+using HVO.SkyMonitorV5.Data.Telemetry.Repositories;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -162,6 +164,41 @@ public static class SkyMonitorDataServiceCollectionExtensions
             configureOptions,
             openMode,
             enableMigrations: true);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the SkyMonitor telemetry store which captures diagnostic and performance telemetry.
+    /// </summary>
+    /// <param name="services">The service collection to update.</param>
+    /// <param name="relativePath">Relative path (beneath the data root) for the telemetry database.</param>
+    /// <param name="configureSqlite">Optional SQLite configuration callback.</param>
+    /// <param name="configureOptions">Optional DbContext configuration callback.</param>
+    /// <param name="openMode">SQLite open mode used when creating connections.</param>
+    /// <returns>The original service collection for chaining.</returns>
+    public static IServiceCollection AddSkyMonitorTelemetryStore(
+        this IServiceCollection services,
+        string relativePath = "telemetry/sm-telemetry.db",
+        Action<SqliteDbContextOptionsBuilder>? configureSqlite = null,
+        Action<DbContextOptionsBuilder>? configureOptions = null,
+        SqliteOpenMode openMode = SqliteOpenMode.ReadWriteCreate)
+    {
+        services.AddSkyMonitorSqliteDbContext<SkyMonitorTelemetryContext>(
+            relativePath,
+            configureSqlite,
+            configureOptions,
+            openMode,
+            enableMigrations: true);
+
+        services.AddSkyMonitorSqliteDbContextFactory<SkyMonitorTelemetryContext>(
+            relativePath,
+            configureSqlite,
+            configureOptions,
+            openMode,
+            enableMigrations: true);
+
+        services.TryAddScoped<ISkyMonitorTelemetryRepository, SkyMonitorTelemetryRepository>();
 
         return services;
     }

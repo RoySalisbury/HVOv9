@@ -1,6 +1,6 @@
 # SkyMonitorV5 Data Store Project Plan
 
-_Last updated: 2025-10-11 (night)_
+ _Last updated: 2025-10-11 (late)_
 
 > **Status context:** The Frame Context & Rig Integration initiative is complete. This data store project is the next major effort in the SkyMonitor roadmap and should absorb all follow-on storage/configuration items noted in the global TODO catalog.
 >
@@ -54,13 +54,16 @@ _Last updated: 2025-10-11 (night)_
 
 ### Phase 3 – Telemetry & Log Persistence ☐
 
-- Design telemetry schema (e.g., `DispatchAttempt`, `DispatchFormatSummary`, `StackerSample`, `CapturePacingSample`, `PipelineTimingSample`).
-- Add a structured log/event table to back the forthcoming real-time diagnostics log viewer and historical exports.
-- Create initial EF Core migration set for the telemetry database (`telemetry/sm-telemetry.db`).
-- Implement retention helpers (rolling purge, optional vacuum) with configurable policies (time- or count-based).
-- Persist remote dispatch attempt history (e.g., last N attempts) so UI features pull from the database instead of in-memory buffers.
-- Update SkyMonitorV5 services (`DiagnosticsService`, `FrameStateStore`, future log sink) to append finalized samples while keeping in-memory caches for live dashboards.
-- Add integration tests covering append/query behaviour, retention jobs, and migration startup.
+- [x] **Kickoff:** Begin by reviewing existing telemetry event producers (DiagnosticsService, FrameStateStore) and draft the consolidated schema prior to scaffolding EF entities.
+- [x] Design telemetry schema (e.g., `DispatchAttempt`, `DispatchFormatSummary`, `StackerSample`, `CapturePacingSample`, `PipelineTimingSample`).
+- [x] Add a structured log/event table to back the forthcoming real-time diagnostics log viewer and historical exports.
+- [x] Create initial EF Core migration set for the telemetry database (`telemetry/sm-telemetry.db`).
+- [x] Implement retention helpers (rolling purge, optional vacuum) with configurable policies (time- or count-based).
+- [x] Persist remote dispatch attempt history (e.g., last N attempts) so UI features pull from the database instead of in-memory buffers.
+- [x] Update SkyMonitorV5 services (`DiagnosticsService`, `FrameStateStore`, future log sink) to append finalized samples while keeping in-memory caches for live dashboards.
+- [x] Add integration tests covering append/query behaviour, retention jobs, and migration startup.
+
+**Phase 3 progress notes (2025-10-11):** Implemented the SkyMonitor telemetry EF Core context, factory, and initial migration targeting `sm-telemetry.db`, along with repository, recorder, queue, and ingestion hosted service wiring. `FrameStateStore` and the filter pipeline now emit telemetry work items that drain through the asynchronous ingestion service, giving us the first durable dispatch and pacing history backed by SQLite. Structured telemetry events feed the diagnostics log table, automated retention sweeps run with configurable age/count policies, and the integration test suite now verifies ingestion, retention, and migration bootstrap behaviours to close out the phase deliverables.
 
 ### Phase 4 – Observability & Operations ☐
 
@@ -68,6 +71,31 @@ _Last updated: 2025-10-11 (night)_
 - Document backup/restore, catalog replacement workflows, and configuration change audit strategies for operators.
 - Create Docker volume guidance (sample `docker-compose` snippet mapping host `./data` to container `/var/hvo/datastores`).
 - Produce `README` updates and runbooks for migrating existing deployments off JSON configuration into the database.
+
+_Phase 4 kickoff prep (2025-10-11):_
+
+- [ ] Confirm telemetry ingestion metrics can be surfaced via the existing diagnostics endpoint infrastructure; extend `SkyMonitorTelemetryRecorder` logging to export gauges for queue depth, ingest latency, and retention sweep durations. _(Owner: Telemetry platform team · Target: before first Phase 4 sprint planning)_
+- [ ] Draft operations runbook outline covering backup cadence, DB vacuum guidance, and catalog replacement procedure so documentation tasks can reference concrete sections. _(Owner: Ops & SRE · Target: align with documentation sprint retro)_
+- [ ] Audit runtime configuration for any remaining JSON-backed options and catalog their migration path to the configuration store before observers begin the runbook work. _(Owner: Configuration squad · Target: lock list prior to migration story kickoff)_
+- [ ] Coordinate with container packaging scripts to prototype the volume mapping examples prior to writing `docker-compose` snippets, ensuring the new telemetry database paths are included. _(Owner: Release engineering · Target: immediately after tagging `datastore-phase-3`)_
+
+**Acceptance criteria for Phase 4:**
+
+- Diagnostics endpoint exposes at least three new gauges (DB size MB, total telemetry rows, retention job duration) and they surface through the existing telemetry dashboard without manual scraping.
+- Operations runbook documents backup cadence, restore rehearsal checklist, and catalog swap procedure with explicit ownership and on-call paging expectations.
+- Container guidance includes validated `docker-compose` example plus Helm overlay notes so deployments in both Docker Compose and Kubernetes environments pick up the new volume layout.
+
+**Risk watch / mitigation:**
+
+- Metrics pipeline relies on diagnostics endpoint throughput; if payload size becomes an issue, budget a fallback to stream metrics via Prometheus scrape with sampling reducers.
+- Operational docs require coordination with support—schedule review time with the field team to validate runbook assumptions before publishing.
+- Container volume adjustments may break existing automation scripts; maintain a compatibility note and ensure scripts run during Phase 4 dry run prior to release.
+
+**Coordination notes:**
+
+- Observability guild to host a working session with telemetry platform team to agree on metric naming/label conventions before instrumentation lands.
+- Ops & SRE to loop in field-support SMEs so backup/restore procedures reflect real deployment constraints (e.g., on-site bandwidth limits).
+- Release engineering to sync with DevOps on container image changes and validate CI pipelines publish the new data directories before documentation goes live.
 
 ## Dependencies & Tooling
 
@@ -96,9 +124,11 @@ _Last updated: 2025-10-11 (night)_
 - Phase 1 installed the `dotnet-ef` global tool (9.0.0) to support migrations and seeded the shared data root infrastructure.
 - Phase 2 now routes catalog access through `HVO.SkyMonitorV5.Data` with `AddSkyMonitorDataInfrastructure` and read-only SQLite contexts, paving the way for shared configuration and telemetry stores.
 - Catalog SQLite payloads ship from `Data/catalogs/` and the SkyMonitor host consumes configuration values exclusively from the new `SkyMonitorConfigurationContext` seeds. The configuration bootstrapper runs EF Core migrations at startup so deployments always receive a seeded `sm-config.db`. Remember to tag the repository (`datastore-phase-2`) once Phase 2 wraps so Phase 3 starts from a clean, tagged baseline.
+- Telemetry work is complete; after final verification and review, tag the repository as `datastore-phase-3` to capture the telemetry milestone before launching Phase 4.
 - EF Core dependencies across the solution (including `dotnet-ef`) have been standardized on 9.0.9 to keep tooling and runtime in lockstep for upcoming migration work.
 - Deep sky overlays can now source curated coordinates from the stub catalog while we evaluate third-party catalogs; repository APIs expose magnitude-limited queries on top of the new dataset.
 - Deep sky catalog now includes the complete Messier set; the authoritative seed lives in `src/HVO.SkyMonitorV5.Data/Seed/deep-sky-messier.csv` and can be re-imported into `Data/catalogs/deep-sky.sqlite` with `sqlite3 deep-sky.sqlite ".mode csv" ".import --skip 1 ../../../HVO.SkyMonitorV5.Data/Seed/deep-sky-messier.csv deep_sky_object"` (see regeneration notes below).
+- Telemetry ingestion now runs via `SkyMonitorTelemetryRecorder` and `SkyMonitorTelemetryIngestionService`, providing durable dispatch and pacing history with EF Core-managed migrations while we flesh out retention and diagnostics log tables.
 
 ### Regenerating Catalog Seeds (Phase 2)
 
