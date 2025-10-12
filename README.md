@@ -160,6 +160,8 @@ The script keeps the terminal attached to the device console. Press `Ctrl+C` whe
 
 - [RoofController V4 Docker guide](docs/roofcontrollerv4-docker.md) – build and run the roof controller on a Raspberry Pi 5 with GPIO/I²C access inside a minimal container.
 - [SkyMonitor v5 Docker guide](docs/skymonitor-v5-docker.md) – covers building locally or against the Pi. When launching from VS Code terminals, export `TAIL_LOGS=false` to avoid blocking while the container runs.
+- [SkyMonitor v5 Operations Runbook](docs/skymonitor-v5-operations-runbook.md) – backup cadence, restore rehearsals, catalog swaps, and change-control guidance for ops teams.
+- [SkyMonitor v5 JSON Migration Guide](docs/skymonitor-v5-json-migration-guide.md) – step-by-step workflow for moving legacy appsettings configuration into the new SQLite stores.
 
 ### CI/CD Workflow
 

@@ -1,6 +1,6 @@
 # SkyMonitorV5 Data Store Project Plan
 
- _Last updated: 2025-10-11 (late)_
+_Last updated: 2025-10-12_
 
 > **Status context:** The Frame Context & Rig Integration initiative is complete. This data store project is the next major effort in the SkyMonitor roadmap and should absorb all follow-on storage/configuration items noted in the global TODO catalog.
 >
@@ -65,15 +65,17 @@
 
 **Phase 3 progress notes (2025-10-11):** Implemented the SkyMonitor telemetry EF Core context, factory, and initial migration targeting `sm-telemetry.db`, along with repository, recorder, queue, and ingestion hosted service wiring. `FrameStateStore` and the filter pipeline now emit telemetry work items that drain through the asynchronous ingestion service, giving us the first durable dispatch and pacing history backed by SQLite. Structured telemetry events feed the diagnostics log table, automated retention sweeps run with configurable age/count policies, and the integration test suite now verifies ingestion, retention, and migration bootstrap behaviours to close out the phase deliverables.
 
-### Phase 4 – Observability & Operations ☐
+### Phase 4 – Observability & Operations ☑
 
-- Emit metrics for DB size, row counts, retention jobs, and bootstrap/default seeding operations via diagnostics endpoints.
-- Document backup/restore, catalog replacement workflows, and configuration change audit strategies for operators.
-- Create Docker volume guidance (sample `docker-compose` snippet mapping host `./data` to container `/var/hvo/datastores`).
-- Produce `README` updates and runbooks for migrating existing deployments off JSON configuration into the database.
-- Capture local benchmark baseline instructions (use the `hvo-local` Docker context, bind `benchmarks/<host>/datastore`, and set `TAIL_LOGS=false` so VS Code terminals remain responsive during 2‑minute runs).
+- [x] Emit metrics for DB size, row counts, retention jobs, and bootstrap/default seeding operations via diagnostics endpoints.
+- [x] Document backup/restore, catalog replacement workflows, and configuration change audit strategies for operators. _(See `docs/skymonitor-v5-operations-runbook.md`.)_
+- [x] Create Docker volume guidance (sample `docker-compose` snippet mapping host `./data` to container `/var/hvo/datastores`).
+- [x] Produce `README` updates and runbooks for migrating existing deployments off JSON configuration into the database. _(See `docs/skymonitor-v5-json-migration-guide.md`.)_
+- [x] Capture local benchmark baseline instructions (use the `hvo-local` Docker context, bind `benchmarks/<host>/datastore`, and set `TAIL_LOGS=false` so VS Code terminals remain responsive during 2‑minute runs).
 
 **Phase 4 progress notes (2025-10-11):** The diagnostics API now exposes `GET /api/v1.0/diagnostics/data-stores`, returning configuration and telemetry database metadata (file size, page metrics, table row counts) alongside bootstrap status and the live telemetry queue/retention snapshots. Bootstrap hosted services record migration start/end times and errors into a shared `DataStoreBootstrapStatus`, giving the UI a single source of truth for “Did the DB finish migrating?” indicators. Next steps: surface the snapshot in the diagnostics view, extend tests, and wire the metrics into existing OpenTelemetry gauges so dashboards light up automatically.
+
+**Phase 4 updates (2025-10-12):** Telemetry instrumentation now emits gauges for telemetry database size (`hvo_skymonitor_telemetry_db_size_mb`) and total telemetry rows (`hvo_skymonitor_telemetry_row_count`) alongside the existing retention duration gauge, and the diagnostics endpoint returns the new values so dashboards can surface them without custom scraping. The full operations runbook is published in `docs/skymonitor-v5-operations-runbook.md`, providing scripted backups, restoration playbooks, catalog swap procedures, and change-control guidance for ops teams. The JSON migration workflow is documented in `docs/skymonitor-v5-json-migration-guide.md` and linked from the repository README. Legacy `appsettings.json` content was archived to `docs/archive/skymonitor-v5-appsettings-pre-phase4.md` so the runtime now ships with logging-only defaults.
 
 _Phase 4 kickoff prep (2025-10-11):_
 
@@ -237,6 +239,7 @@ Next steps: integrate the docker-compose snippet into the deployment docs, add H
 - Multi-station replication or cloud sync is left for a later initiative.
 - FITS/TIFF encoder work stays with the core SkyMonitorV5 project but will rely on configuration data housed here when revisited.
 - Admin UI for editing configuration is scheduled as part of subsequent UX improvements and will consume the stores built in this project.
+- Non-essential UI/UX refinements are deferred to the dedicated overhaul project so Phase 4 can focus on telemetry, diagnostics, and operations deliverables.
 
 ## Open Questions
 

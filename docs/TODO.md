@@ -9,7 +9,7 @@
 - [ ] Add a light-mode variant of the theme and expose a runtime toggle.
 - [ ] Migrate CelestialAnnotations filter configuration (DeepSkyObjects list, thresholds, labels) entirely into the database catalog and remove the unused legacy appsettings entries.
 
-### UX Improvements
+### UX Improvements _(deferred to upcoming UI overhaul project)_
 - [ ] Promote the current SkyMonitor landing page into a dedicated **Monitor** view and hold the root **Dashboard** route for a future minimal overview.
 - [ ] Refresh top-level navigation to use compact badge-styled buttons (matching diagnostics tabs) with entries for: Dashboard, Monitor, Image History, Configuration, Diagnostics.
 - [ ] Ensure non-dashboard pages expose secondary tab bars to group content (e.g., Configuration tabs for System, Rig, Cameras, Optics, Pipeline, Filters, etc.).
@@ -18,12 +18,12 @@
 - [ ] Add system-level controls (start, stop, pause, reload) for the active camera adapter within the Configuration area.
 - [ ] Reorganize Diagnostics layout to highlight the expanded telemetry set and add a real-time log viewer tab using the shared tab navigation pattern.
 
-### Dashboard
+### Dashboard _(deferred to upcoming UI overhaul project)_
 - [x] Display observatory-local time in the SkyMonitor footer instead of UTC.
 - [ ] Split the pipeline information into a two-column layout, presenting queue stats side-by-side and moving the filters section beneath the capabilities summary.
 - [ ] Surface end-to-end frame processing time (capture to pipeline completion) plus inter-frame delay alongside the existing pipeline duration metric.
 
-### Diagnostics
+### Diagnostics _(deferred to upcoming UI overhaul project)_
 - [x] Add navigation affordance (tabs or sidebar) so queue diagnostics, filter diagnostics, and system diagnostics sub-views fit without cluttering the layout. The current theme is fine, but may need to slight modifactions in font size (smaller, like the dashbaord).
 - [x] Enable auto-refresh with per-tab throttling to ensure only the visible diagnostics pane polls for data, reducing CPU load.
 - [ ] Capture diagnostics snapshots to disk for offline analysis (JSON export triggered from the diagnostics page).

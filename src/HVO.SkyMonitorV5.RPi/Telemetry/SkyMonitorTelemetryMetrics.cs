@@ -12,8 +12,12 @@ internal sealed class SkyMonitorTelemetryMetrics : IDisposable
     private readonly ObservableGauge<double> _queueDepthGauge;
     private readonly ObservableGauge<double> _ingestionLatencyGauge;
     private readonly ObservableGauge<double> _retentionDurationGauge;
+    private readonly ObservableGauge<double> _telemetryDatabaseSizeGauge;
+    private readonly ObservableGauge<double> _telemetryRowCountGauge;
     private double _lastIngestionLatencyMs;
     private double _lastRetentionDurationMs;
+    private double _lastTelemetryDatabaseMegabytes;
+    private double _lastTelemetryRowCount;
     private readonly object _retentionLock = new();
     private TelemetryRetentionSnapshot _lastRetentionSnapshot = TelemetryRetentionSnapshot.Empty;
     private bool _disposed;
@@ -42,6 +46,18 @@ internal sealed class SkyMonitorTelemetryMetrics : IDisposable
             observeValue: ObserveRetentionDuration,
             unit: "ms",
             description: "Most recent telemetry retention sweep duration in milliseconds.");
+
+        _telemetryDatabaseSizeGauge = _meter.CreateObservableGauge(
+            name: "hvo_skymonitor_telemetry_db_size_mb",
+            observeValue: ObserveTelemetryDatabaseSize,
+            unit: "MB",
+            description: "Size of the telemetry database in megabytes.");
+
+        _telemetryRowCountGauge = _meter.CreateObservableGauge(
+            name: "hvo_skymonitor_telemetry_row_count",
+            observeValue: ObserveTelemetryRowCount,
+            unit: "rows",
+            description: "Total telemetry row count across tracked tables.");
 
         logger.LogDebug("SkyMonitor telemetry metrics initialized.");
     }
@@ -88,18 +104,33 @@ internal sealed class SkyMonitorTelemetryMetrics : IDisposable
         }
     }
 
+    public void ReportTelemetryStoreStats(double? telemetryDatabaseMegabytes, long totalTelemetryRows)
+    {
+        var sizeValue = Math.Max(0d, telemetryDatabaseMegabytes.GetValueOrDefault());
+        var rowValue = Math.Max(0L, totalTelemetryRows);
+
+        Volatile.Write(ref _lastTelemetryDatabaseMegabytes, sizeValue);
+        Volatile.Write(ref _lastTelemetryRowCount, rowValue);
+    }
+
     private double ObserveQueueDepth() => _queue.PendingCount;
 
     private double ObserveIngestionLatency() => Volatile.Read(ref _lastIngestionLatencyMs);
 
     private double ObserveRetentionDuration() => Volatile.Read(ref _lastRetentionDurationMs);
 
+    private double ObserveTelemetryDatabaseSize() => Volatile.Read(ref _lastTelemetryDatabaseMegabytes);
+
+    private double ObserveTelemetryRowCount() => Volatile.Read(ref _lastTelemetryRowCount);
+
     public TelemetryMetricsSnapshot GetTelemetrySnapshot()
     {
         return new TelemetryMetricsSnapshot(
             QueueDepth: _queue.PendingCount,
             LastIngestionLatencyMilliseconds: Volatile.Read(ref _lastIngestionLatencyMs),
-            LastRetentionDurationMilliseconds: Volatile.Read(ref _lastRetentionDurationMs));
+            LastRetentionDurationMilliseconds: Volatile.Read(ref _lastRetentionDurationMs),
+            TelemetryDatabaseMegabytes: Volatile.Read(ref _lastTelemetryDatabaseMegabytes),
+            TelemetryRowCount: Volatile.Read(ref _lastTelemetryRowCount));
     }
 
     public TelemetryRetentionSnapshot GetRetentionSnapshot()

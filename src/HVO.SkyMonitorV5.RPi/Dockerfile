@@ -4,6 +4,7 @@
 # Restore dependencies and prepare build assets
 # ---------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS restore
+ARG SKYMONITOR_RUNTIME=linux-arm64
 WORKDIR /src
 
 # Ensure native dependencies for SkiaSharp and telemetry are present during restore/test stages
@@ -29,7 +30,7 @@ COPY ["src/HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.cspro
 COPY [".LocalPackages/", "/.LocalPackages/"]
 
 RUN dotnet restore "HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj" \
-    --runtime linux-arm64 \
+    --runtime ${SKYMONITOR_RUNTIME} \
     --disable-parallel
 
 # Bring in the remaining source tree for downstream stages
@@ -61,11 +62,12 @@ RUN if [ "$RUN_BENCHMARKS" = "true" ]; then \
 # Publish stage
 # ---------------------------------
 FROM restore AS publish
+ARG SKYMONITOR_RUNTIME=linux-arm64
 WORKDIR /src/HVO.SkyMonitorV5.RPi
 
 RUN dotnet publish "HVO.SkyMonitorV5.RPi.csproj" \
     --configuration Release \
-    --runtime linux-arm64 \
+    --runtime ${SKYMONITOR_RUNTIME} \
     --self-contained false \
     --output /app/publish
 

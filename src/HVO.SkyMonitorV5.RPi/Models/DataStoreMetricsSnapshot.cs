@@ -34,7 +34,9 @@ public sealed record DataStoreBootstrapStatusMetrics(
 public sealed record TelemetryIngestionMetricsSummary(
     double QueueDepth,
     double LastIngestionLatencyMilliseconds,
-    double LastRetentionDurationMilliseconds);
+    double LastRetentionDurationMilliseconds,
+    double TelemetryDatabaseMegabytes,
+    long TotalTelemetryRows);
 
 public sealed record TelemetryRetentionSummaryMetrics(
     DateTimeOffset? LastStartedAtUtc,

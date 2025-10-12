@@ -328,6 +328,10 @@ public sealed class DiagnosticsServiceTests
     Assert.IsNotNull(telemetryIngestion, "Telemetry ingestion metrics should be present.");
     Assert.AreEqual(telemetryQueue.PendingCount, telemetryIngestion!.QueueDepth, "Queue depth should match telemetry metrics snapshot.");
     Assert.AreEqual(87d, telemetryIngestion.LastIngestionLatencyMilliseconds, 0.001, "Ingestion latency should reflect latest metric.");
+    var expectedTelemetryMegabytes = snapshot.TelemetryStore.FileMegabytes ?? 0d;
+    Assert.AreEqual(expectedTelemetryMegabytes, telemetryIngestion.TelemetryDatabaseMegabytes, 0.001, "Telemetry database size gauge should align with file statistics.");
+    var expectedTelemetryRows = snapshot.TelemetryStore.Tables.Sum(table => table.RowCount);
+    Assert.AreEqual(expectedTelemetryRows, telemetryIngestion.TotalTelemetryRows, "Telemetry row count gauge should match aggregated table row totals.");
 
     var telemetryRetention = snapshot.TelemetryStore.TelemetryRetention;
     Assert.IsNotNull(telemetryRetention, "Telemetry retention snapshot should be present.");

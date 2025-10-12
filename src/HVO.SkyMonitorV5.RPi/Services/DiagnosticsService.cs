@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
@@ -260,11 +261,10 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             var generatedAtLocal = _clock.LocalNow;
 
             var bootstrapSnapshot = _bootstrapStatus.GetSnapshot();
-            var telemetrySnapshot = _telemetryMetrics.GetTelemetrySnapshot();
             var retentionSnapshot = _telemetryMetrics.GetRetentionSnapshot();
 
             var configurationStore = await CreateConfigurationStoreMetricsAsync(bootstrapSnapshot.Configuration, cancellationToken).ConfigureAwait(false);
-            var telemetryStore = await CreateTelemetryStoreMetricsAsync(bootstrapSnapshot.Telemetry, telemetrySnapshot, retentionSnapshot, cancellationToken).ConfigureAwait(false);
+            var telemetryStore = await CreateTelemetryStoreMetricsAsync(bootstrapSnapshot.Telemetry, retentionSnapshot, cancellationToken).ConfigureAwait(false);
 
             var snapshot = new DataStoreMetricsSnapshot(
                 GeneratedAtUtc: generatedAtUtc,
@@ -335,7 +335,6 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
     private async Task<DataStoreInstanceMetrics> CreateTelemetryStoreMetricsAsync(
         DataStoreBootstrapState bootstrapState,
-        TelemetryMetricsSnapshot telemetrySnapshot,
         TelemetryRetentionSnapshot retentionSnapshot,
         CancellationToken cancellationToken)
     {
@@ -344,6 +343,13 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         var tables = fileStats.Exists
             ? await CaptureTelemetryTableMetricsAsync(cancellationToken).ConfigureAwait(false)
             : Array.Empty<DataStoreTableMetric>();
+
+        var totalRows = tables.Count > 0
+            ? tables.Sum(static table => table.RowCount)
+            : 0L;
+
+        _telemetryMetrics.ReportTelemetryStoreStats(fileStats.Megabytes, totalRows);
+        var telemetrySnapshot = _telemetryMetrics.GetTelemetrySnapshot();
 
         return new DataStoreInstanceMetrics(
             DatabasePath: databasePath,
@@ -521,10 +527,16 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
     private static TelemetryIngestionMetricsSummary MapTelemetryMetrics(TelemetryMetricsSnapshot snapshot)
     {
+        var totalRows = snapshot.TelemetryRowCount < 0
+            ? 0L
+            : Convert.ToInt64(Math.Round(snapshot.TelemetryRowCount, MidpointRounding.AwayFromZero));
+
         return new TelemetryIngestionMetricsSummary(
             QueueDepth: snapshot.QueueDepth,
             LastIngestionLatencyMilliseconds: snapshot.LastIngestionLatencyMilliseconds,
-            LastRetentionDurationMilliseconds: snapshot.LastRetentionDurationMilliseconds);
+            LastRetentionDurationMilliseconds: snapshot.LastRetentionDurationMilliseconds,
+            TelemetryDatabaseMegabytes: snapshot.TelemetryDatabaseMegabytes,
+            TotalTelemetryRows: totalRows);
     }
 
     private static TelemetryRetentionSummaryMetrics MapRetentionMetrics(TelemetryRetentionSnapshot snapshot)

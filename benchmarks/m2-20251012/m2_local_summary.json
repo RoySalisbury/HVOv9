@@ -1,17 +1,17 @@
 [
   {
-    "path": "benchmarks/m2-20251012/datastore/telemetry/archive/sm-telemetry_mono-bg-on_20251012-172202.db",
+    "path": "benchmarks/m2-20251012/datastore/telemetry/archive/sm-telemetry_mono-bg-on_20251012-181109.db",
     "queue": {
-      "samples": 123,
-      "avg_stack_ms": 53.84809016393443,
-      "avg_filter_ms": 48.89514016393443,
-      "avg_queue_latency_ms": 0.16746639344262296,
-      "avg_fill_pct": 3.455284552845528,
-      "avg_depth": 0.8536585365853658,
-      "capacity": 25.528455284552845,
-      "max_depth": 1,
-      "max_latency_ms": 1.2102,
-      "avg_queue_memory_mb": 8.90745680894309
+      "samples": 1797,
+      "avg_stack_ms": 53.898924721603564,
+      "avg_filter_ms": 47.29576603563474,
+      "avg_queue_latency_ms": 0.12445946547884187,
+      "avg_fill_pct": 4.134205156742719,
+      "avg_depth": 0.9944351697273233,
+      "capacity": 24.104618809126322,
+      "max_depth": 2,
+      "max_latency_ms": 3.9647,
+      "avg_queue_memory_mb": 8.930493965637172
     },
     "processing": {
       "samples": 1,
@@ -24,8 +24,8 @@
       "backpressure_events": 0
     },
     "capture": {
-      "samples": 120,
-      "avg_adjusted_delay_ms": 897.775,
+      "samples": 1794,
+      "avg_adjusted_delay_ms": 908.2519509476032,
       "avg_pressure_delay_ms": 0,
       "penalty_seconds": 0,
       "penalty_rate": 0.0,
@@ -34,23 +34,188 @@
     "filters": [
       {
         "filter_name": "CardinalDirections",
-        "avg_duration_ms": 0.4795288853471277,
-        "last_duration_ms": 0.255
+        "avg_duration_ms": 0.21514936733158815,
+        "last_duration_ms": 0.1342
       },
       {
         "filter_name": "CelestialAnnotations",
-        "avg_duration_ms": 2.4304153596829376,
-        "last_duration_ms": 1.9135
+        "avg_duration_ms": 2.1783294832885067,
+        "last_duration_ms": 2.7321
       },
       {
         "filter_name": "CircularApertureMask",
-        "avg_duration_ms": 0.39778313887860994,
-        "last_duration_ms": 0.3837
+        "avg_duration_ms": 0.3550376359271347,
+        "last_duration_ms": 0.3644
       },
       {
         "filter_name": "ConstellationFigures",
-        "avg_duration_ms": 28.441075917221053,
-        "last_duration_ms": 53.4897
+        "avg_duration_ms": 27.174680452475908,
+        "last_duration_ms": 98.5915
+      }
+    ]
+  },
+  {
+    "path": "benchmarks/m2-20251012/datastore/telemetry/archive/sm-telemetry_mono-bg-off_20251012-191117.db",
+    "queue": {
+      "samples": 1789,
+      "avg_stack_ms": 0.0,
+      "avg_filter_ms": 0.0,
+      "avg_queue_latency_ms": 0.0,
+      "avg_fill_pct": 0.0,
+      "avg_depth": 0,
+      "capacity": 32,
+      "max_depth": 0,
+      "max_latency_ms": 0,
+      "avg_queue_memory_mb": 0.0
+    },
+    "processing": {
+      "samples": 1,
+      "avg_processing_ms": 0.0,
+      "avg_enqueue_wait_ms": 0.0,
+      "peak_processing_ms": 0,
+      "peak_enqueue_wait_ms": 0,
+      "avg_depth": 0,
+      "capacity": 0,
+      "backpressure_events": 0
+    },
+    "capture": {
+      "samples": 1788,
+      "avg_adjusted_delay_ms": 809.0134228187919,
+      "avg_pressure_delay_ms": 0,
+      "penalty_seconds": 0,
+      "penalty_rate": 0.0,
+      "queue_pressure_level_avg": 0
+    },
+    "filters": [
+      {
+        "filter_name": "CardinalDirections",
+        "avg_duration_ms": 0.1587352513763149,
+        "last_duration_ms": 0.1196
+      },
+      {
+        "filter_name": "CelestialAnnotations",
+        "avg_duration_ms": 1.9074788346932252,
+        "last_duration_ms": 1.6342
+      },
+      {
+        "filter_name": "CircularApertureMask",
+        "avg_duration_ms": 0.3361783049002707,
+        "last_duration_ms": 0.3242
+      },
+      {
+        "filter_name": "ConstellationFigures",
+        "avg_duration_ms": 25.864727193058613,
+        "last_duration_ms": 23.8562
+      }
+    ]
+  },
+  {
+    "path": "benchmarks/m2-20251012/datastore/telemetry/archive/sm-telemetry_color-bg-on_20251012-184114.db",
+    "queue": {
+      "samples": 1796,
+      "avg_stack_ms": 65.00093259052925,
+      "avg_filter_ms": 47.46017331476323,
+      "avg_queue_latency_ms": 0.15157727019498607,
+      "avg_fill_pct": 3.693392724573125,
+      "avg_depth": 0.8864142538975501,
+      "capacity": 24.104677060133632,
+      "max_depth": 1,
+      "max_latency_ms": 2.5652,
+      "avg_queue_memory_mb": 8.895464313056793
+    },
+    "processing": {
+      "samples": 1,
+      "avg_processing_ms": 0.0,
+      "avg_enqueue_wait_ms": 0.0,
+      "peak_processing_ms": 0,
+      "peak_enqueue_wait_ms": 0,
+      "avg_depth": 0,
+      "capacity": 0,
+      "backpressure_events": 0
+    },
+    "capture": {
+      "samples": 1793,
+      "avg_adjusted_delay_ms": 886.8427216954824,
+      "avg_pressure_delay_ms": 0,
+      "penalty_seconds": 0,
+      "penalty_rate": 0.0,
+      "queue_pressure_level_avg": 0
+    },
+    "filters": [
+      {
+        "filter_name": "CardinalDirections",
+        "avg_duration_ms": 0.2198825351179777,
+        "last_duration_ms": 0.1086
+      },
+      {
+        "filter_name": "CelestialAnnotations",
+        "avg_duration_ms": 2.1449615063443606,
+        "last_duration_ms": 1.5529
+      },
+      {
+        "filter_name": "CircularApertureMask",
+        "avg_duration_ms": 0.3461655923578251,
+        "last_duration_ms": 0.3266
+      },
+      {
+        "filter_name": "ConstellationFigures",
+        "avg_duration_ms": 26.687518644324953,
+        "last_duration_ms": 22.4817
+      }
+    ]
+  },
+  {
+    "path": "benchmarks/m2-20251012/datastore/telemetry/archive/sm-telemetry_color-bg-off_20251012-194119.db",
+    "queue": {
+      "samples": 1788,
+      "avg_stack_ms": 0.0,
+      "avg_filter_ms": 0.0,
+      "avg_queue_latency_ms": 0.0,
+      "avg_fill_pct": 0.0,
+      "avg_depth": 0,
+      "capacity": 32,
+      "max_depth": 0,
+      "max_latency_ms": 0,
+      "avg_queue_memory_mb": 0.0
+    },
+    "processing": {
+      "samples": 1,
+      "avg_processing_ms": 0.0,
+      "avg_enqueue_wait_ms": 0.0,
+      "peak_processing_ms": 0,
+      "peak_enqueue_wait_ms": 0,
+      "avg_depth": 0,
+      "capacity": 0,
+      "backpressure_events": 0
+    },
+    "capture": {
+      "samples": 1787,
+      "avg_adjusted_delay_ms": 777.494124230554,
+      "avg_pressure_delay_ms": 0,
+      "penalty_seconds": 0,
+      "penalty_rate": 0.0,
+      "queue_pressure_level_avg": 0
+    },
+    "filters": [
+      {
+        "filter_name": "CardinalDirections",
+        "avg_duration_ms": 0.15699420643569023,
+        "last_duration_ms": 0.1099
+      },
+      {
+        "filter_name": "CelestialAnnotations",
+        "avg_duration_ms": 1.9678164043335171,
+        "last_duration_ms": 1.7065
+      },
+      {
+        "filter_name": "CircularApertureMask",
+        "avg_duration_ms": 0.34438150102057574,
+        "last_duration_ms": 0.3459
+      },
+      {
+        "filter_name": "ConstellationFigures",
+        "avg_duration_ms": 27.24228814398932,
+        "last_duration_ms": 24.4581
       }
     ]
   }

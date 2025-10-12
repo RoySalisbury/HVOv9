@@ -1,0 +1,101 @@
+# SkyMonitor v5 Operations Runbook
+
+_Last updated: 2025-10-12_
+
+This runbook documents operational procedures for SkyMonitor v5 deployments that rely on the new configuration and telemetry data stores. It assumes the data root is `/var/hvo/datastores/` for Linux containers (or `%PROGRAMDATA%/HVO/datastores/` on Windows hosts) and that telemetry/configuration databases are managed by Entity Framework Core migrations.
+
+## Contacts & Scope
+
+- **Primary owners:** Operations & SRE
+- **Secondary:** Field Support (on-site coordination)
+- **Tertiary:** Release Engineering (build artifacts & catalog bundles)
+- **Systems covered:** All SkyMonitor v5 environments using the SQLite-backed configuration (`sm-config.db`) and telemetry (`sm-telemetry.db`) databases.
+- **Prerequisites:** Shell access with `sqlite3`, `dotnet ef`, and `docker` (or the equivalent Kubernetes tooling), plus the `hvoctl` helper once published.
+
+## Routine Tasks
+
+### 1. Nightly Backups
+
+1. Run `sqlite3 sm-config.db ".backup 'sm-config_$(date -u +%Y%m%d).bak'"` inside `/var/hvo/datastores/configuration`.
+2. Run `sqlite3 sm-telemetry.db ".backup 'sm-telemetry_$(date -u +%Y%m%d).bak'"` inside `/var/hvo/datastores/telemetry`.
+3. Copy the resulting backups to off-device storage (rsync/S3/SMB) and publish a `SHA256SUMS` manifest.
+4. Retain **7 days** of configuration backups and **14 days** of telemetry backups on the primary site.
+
+> Automation tip: configure a `systemd` timer or Task Scheduler job to execute the backup script nightly at 02:00 local time.
+
+### 2. Weekly Vacuum & Integrity Check
+
+1. Stop the SkyMonitor host (or pause the container) to avoid write contention.
+2. Run `sqlite3 sm-telemetry.db "PRAGMA wal_checkpoint(FULL); VACUUM;"`.
+3. Run `sqlite3 sm-config.db "PRAGMA wal_checkpoint(FULL); VACUUM;"`.
+4. Execute `sqlite3 <db> "PRAGMA integrity_check;"` on both databases and record the results in the site journal.
+5. Restart the service and confirm health via `/health` and `/api/v1.0/diagnostics/data-stores`.
+
+### 3. Metrics Monitoring
+
+- Confirm `hvo_skymonitor_telemetry_db_size_mb`, `hvo_skymonitor_telemetry_row_count`, and `hvo_skymonitor_telemetry_retention_duration_ms` appear in the observability dashboards.
+- Raise an alert if database size increases >15% week-over-week or retention duration exceeds 5 minutes.
+
+### Development Object Storage (MinIO)
+
+- A shared MinIO instance is available for development backups at `http://192.168.2.104` (Admin UI on port `9001`, S3 API on port `9000`).
+- Credentials: `MINIO_ROOT_USER=admin`, `MINIO_ROOT_PASSWORD=change-me-now-32chars`. Do not reuse these outside of the internal lab network; production deployments must provision their own accounts.
+- Verify access before wiring automated backups:
+   ```bash
+   export AWS_ACCESS_KEY_ID=admin
+   export AWS_SECRET_ACCESS_KEY=change-me-now-32chars
+   aws s3 ls --endpoint-url http://192.168.2.104:9000
+   ```
+- If the AWS CLI is not available, validate connectivity with
+   ```bash
+   curl -I http://192.168.2.104:9000
+   curl -I http://192.168.2.104:9001
+   ```
+- Recommended CLI: `mc alias set hvominio http://192.168.2.104:9000 admin change-me-now-32chars`.
+- Create per-environment buckets (for example `skymonitor-dev-backups`) and update backup scripts accordingly. Rotate credentials once the permanent auth strategy lands.
+
+## Restore & Disaster Recovery
+
+1. **Preparation:** Provision a clean data directory on the target host.
+2. **Restore configuration:** Copy the latest `sm-config_*.bak` into the configuration directory and run `sqlite3 sm-config.db ".restore 'sm-config_*.bak'"`.
+3. **Restore telemetry (optional):** Repeat for `sm-telemetry.db` using the chosen backup timestamp.
+4. **Migrations:** Execute `dotnet ef database update --context SkyMonitorConfigurationContext` and `dotnet ef database update --context SkyMonitorTelemetryContext` from the deployed binary path to ensure migrations align with the current build.
+5. **Validation:**
+   - Call `/api/v1.0/diagnostics/data-stores` and verify `Bootstrap.Succeeded=true` for both stores.
+   - Inspect `/api/v1.0/diagnostics/data-stores` telemetry ingestion metrics to ensure queue depth and retention gauges report finite values.
+6. **Cutover:** Bring the SkyMonitor service online, monitor dashboards for one full capture cycle, and document the event in the operations log.
+
+_A rehearsal of this procedure should occur quarterly in staging._
+
+## Catalog Replacement
+
+1. Obtain the signed catalog bundle (`catalogs/*.sqlite` + manifest) from Release Engineering.
+2. Verify the schema version using `sqlite3 catalogs/deep-sky.sqlite "SELECT value FROM metadata WHERE key='CatalogVersion';"`.
+3. Schedule maintenance and stop the SkyMonitor service.
+4. Replace the catalog files atomically (move the old directory aside, copy new bundle, verify permissions 775).
+5. Restart SkyMonitor, call `hvoctl catalog verify` (once available), and confirm the diagnostics endpoint lists the expected catalog counts.
+6. Record the change with checksum references in the site journal.
+
+## Change Control & Auditing
+
+- Log every backup, restore, catalog swap, and retention policy change with timestamp, operator, assets touched, and verification steps.
+- Weekly, review telemetry size/row gauges for growth anomalies and confirm the backup job logs are present.
+- Escalation path: Ops primary on-call → Field Support → Release Engineering.
+
+## Diagnostic References
+
+- `GET /api/v1.0/diagnostics/data-stores`: Current snapshot including bootstrap status, database size/rows, and telemetry retention metrics.
+- `GET /api/v1.0/diagnostics/background-stacker`: Queue depth and processing telemetry.
+- `GET /api/v1.0/diagnostics/filters`: Filter timing breakdown.
+
+## Maintenance Windows
+
+- **Backup/restore:** 30 minutes, typically off-hours.
+- **Catalog update:** 15 minutes (includes verification).
+- **Database vacuum:** <5 minutes when performed with service stopped.
+
+## Future Enhancements
+
+- Publish the `hvoctl` command-line helper to automate backup/restore and catalog verification.
+- Integrate UI workflows in the forthcoming SkyMonitor admin overhaul so operators can trigger backups or verify catalogs without shell access.
+- Evaluate automated alerts on telemetry gauge thresholds after the observability integration sprint.

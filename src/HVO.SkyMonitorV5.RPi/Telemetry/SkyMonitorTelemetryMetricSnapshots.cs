@@ -5,7 +5,9 @@ namespace HVO.SkyMonitorV5.RPi.Telemetry;
 internal readonly record struct TelemetryMetricsSnapshot(
     double QueueDepth,
     double LastIngestionLatencyMilliseconds,
-    double LastRetentionDurationMilliseconds);
+    double LastRetentionDurationMilliseconds,
+    double TelemetryDatabaseMegabytes,
+    double TelemetryRowCount);
 
 internal sealed record TelemetryRetentionSnapshot(
     DateTimeOffset? LastStartedAtUtc,

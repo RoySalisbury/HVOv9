@@ -31,6 +31,7 @@ RUN_DURATION=${RUN_DURATION:-60}
 HOST_HTTP_PORT=${HOST_HTTP_PORT:-5136}
 EXTRA_DOCKER_ARGS=${EXTRA_DOCKER_ARGS:-}
 TAIL_LOGS=${TAIL_LOGS:-true}
+SKYMONITOR_RUNTIME=${SKYMONITOR_RUNTIME:-}
 
 DOCKERFILE_PATH="${REPO_ROOT}/src/HVO.SkyMonitorV5.RPi/Dockerfile"
 BUILD_VERSION=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo "dev")
@@ -44,6 +45,28 @@ echo "Using Docker context: ${DOCKER_CONTEXT}"
 echo "Building image tag:   ${IMAGE_TAG}"
 echo "Remote data root:     ${DATA_ROOT}"
 
+HOST_ARCH=$(docker --context "${DOCKER_CONTEXT}" info --format '{{.Architecture}}')
+if [[ -z "${SKYMONITOR_RUNTIME}" ]]; then
+  case "${HOST_ARCH}" in
+    aarch64)
+      SKYMONITOR_RUNTIME="linux-arm64"
+      ;;
+    armv7l|armhf)
+      SKYMONITOR_RUNTIME="linux-arm"
+      ;;
+    x86_64)
+      SKYMONITOR_RUNTIME="linux-x64"
+      ;;
+    *)
+      echo "Unsupported Docker host architecture '${HOST_ARCH}'. Set SKYMONITOR_RUNTIME explicitly." >&2
+      exit 1
+      ;;
+  esac
+fi
+
+echo "Docker host arch:    ${HOST_ARCH}"
+echo "Target runtime:      ${SKYMONITOR_RUNTIME}"
+
 export DOCKER_BUILDKIT=1
 
 if [[ "${RUN_TESTS}" == "true" ]]; then
@@ -51,6 +74,7 @@ if [[ "${RUN_TESTS}" == "true" ]]; then
   docker --context "${DOCKER_CONTEXT}" build \
     --target tests \
     --build-arg RUN_BENCHMARKS="${RUN_BENCHMARKS}" \
+    --build-arg SKYMONITOR_RUNTIME="${SKYMONITOR_RUNTIME}" \
     -f "${DOCKERFILE_PATH}" \
     "${REPO_ROOT}" >/dev/null
   echo "✓ Test stage completed"
@@ -59,6 +83,7 @@ fi
 echo "\n→ Building SkyMonitor runtime image..."
 docker --context "${DOCKER_CONTEXT}" build \
   --build-arg BUILD_VERSION="${BUILD_VERSION}" \
+  --build-arg SKYMONITOR_RUNTIME="${SKYMONITOR_RUNTIME}" \
   -t "${IMAGE_TAG}" \
   -f "${DOCKERFILE_PATH}" \
   "${REPO_ROOT}"
