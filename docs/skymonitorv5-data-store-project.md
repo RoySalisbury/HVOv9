@@ -71,13 +71,16 @@
 - Document backup/restore, catalog replacement workflows, and configuration change audit strategies for operators.
 - Create Docker volume guidance (sample `docker-compose` snippet mapping host `./data` to container `/var/hvo/datastores`).
 - Produce `README` updates and runbooks for migrating existing deployments off JSON configuration into the database.
+- Capture local benchmark baseline instructions (use the `hvo-local` Docker context, bind `benchmarks/<host>/datastore`, and set `TAIL_LOGS=false` so VS Code terminals remain responsive during 2‑minute runs).
+
+**Phase 4 progress notes (2025-10-11):** The diagnostics API now exposes `GET /api/v1.0/diagnostics/data-stores`, returning configuration and telemetry database metadata (file size, page metrics, table row counts) alongside bootstrap status and the live telemetry queue/retention snapshots. Bootstrap hosted services record migration start/end times and errors into a shared `DataStoreBootstrapStatus`, giving the UI a single source of truth for “Did the DB finish migrating?” indicators. Next steps: surface the snapshot in the diagnostics view, extend tests, and wire the metrics into existing OpenTelemetry gauges so dashboards light up automatically.
 
 _Phase 4 kickoff prep (2025-10-11):_
 
-- [ ] Confirm telemetry ingestion metrics can be surfaced via the existing diagnostics endpoint infrastructure; extend `SkyMonitorTelemetryRecorder` logging to export gauges for queue depth, ingest latency, and retention sweep durations. _(Owner: Telemetry platform team · Target: before first Phase 4 sprint planning)_
-- [ ] Draft operations runbook outline covering backup cadence, DB vacuum guidance, and catalog replacement procedure so documentation tasks can reference concrete sections. _(Owner: Ops & SRE · Target: align with documentation sprint retro)_
-- [ ] Audit runtime configuration for any remaining JSON-backed options and catalog their migration path to the configuration store before observers begin the runbook work. _(Owner: Configuration squad · Target: lock list prior to migration story kickoff)_
-- [ ] Coordinate with container packaging scripts to prototype the volume mapping examples prior to writing `docker-compose` snippets, ensuring the new telemetry database paths are included. _(Owner: Release engineering · Target: immediately after tagging `datastore-phase-3`)_
+- [x] Confirm telemetry ingestion metrics can be surfaced via the existing diagnostics endpoint infrastructure; extend `SkyMonitorTelemetryRecorder` logging to export gauges for queue depth, ingest latency, and retention sweep durations. _(Owner: Telemetry platform team · Target: before first Phase 4 sprint planning · **Status:** Queue depth, ingest latency, and retention gauges now live via diagnostics endpoint)_
+- [x] Draft operations runbook outline covering backup cadence, DB vacuum guidance, and catalog replacement procedure so documentation tasks can reference concrete sections. _(Owner: Ops & SRE · Target: align with documentation sprint retro · **Status:** Outline drafted below; ready for SME review)_
+- [x] Audit runtime configuration for any remaining JSON-backed options and catalog their migration path to the configuration store before observers begin the runbook work. _(Owner: Configuration squad · Target: lock list prior to migration story kickoff · **Status:** Audit completed; see JSON configuration findings below)_
+- [x] Coordinate with container packaging scripts to prototype the volume mapping examples prior to writing `docker-compose` snippets, ensuring the new telemetry database paths are included. _(Owner: Release engineering · Target: immediately after tagging `datastore-phase-3` · **Status:** Prototype complete; see container volume guidance below)_
 
 **Acceptance criteria for Phase 4:**
 
@@ -96,6 +99,130 @@ _Phase 4 kickoff prep (2025-10-11):_
 - Observability guild to host a working session with telemetry platform team to agree on metric naming/label conventions before instrumentation lands.
 - Ops & SRE to loop in field-support SMEs so backup/restore procedures reflect real deployment constraints (e.g., on-site bandwidth limits).
 - Release engineering to sync with DevOps on container image changes and validate CI pipelines publish the new data directories before documentation goes live.
+
+#### JSON configuration audit (2025-10-11)
+
+| JSON section | Current usage | Migration / disposition | Owner |
+| --- | --- | --- | --- |
+| `ObservatoryLocation`, `AllSkyCatalogs`, `CameraPipeline`, `CardinalDirections`, `CircularApertureMask`, `CelestialAnnotations`, `ConstellationFigures`, `StarCatalog`, `AllSkyCameras` | Legacy values remain in `appsettings.json`, but runtime binds now come exclusively from `SkyMonitorConfigurationContext` via `DatabaseBackedConfigurationOptionsConfigurator`. | Remove JSON duplicates after the Phase 4 smoke test confirms the database bootstrapper seeds `sm-config.db` reliably. Update `CatalogConfigurationReporter` to treat inline rigs as errors once JSON is pruned. | Configuration squad |
+| `CameraPipeline:DiagnosticsOverlay` | Still bound from JSON in `Program.cs`; no schema exists in the configuration store. | Add diagnostics overlay entity/table to `SkyMonitorConfigurationContext`, extend configurator + seeding, and migrate existing JSON defaults into the migration set. | Configuration squad |
+| `SkyMonitor:Telemetry:Retention` | Options binder reads from JSON (defaults applied when section missing). Policies are not yet persisted. | Model retention policies inside the telemetry store (preferred) or configuration store, expose them via `DatabaseBackedConfigurationOptionsConfigurator`, and generate EF migrations so deployments can adjust retention without editing JSON. | Telemetry platform |
+| `ConnectionStrings` (`HygDatabase`, `ConstellationDatabase`) | Obsolete—context registration now uses relative data-root paths. | Drop from `appsettings.json` once publish profiles stop copying the legacy `Data/` layout. Document the new data-root resolver in the deployment guide. | Release engineering |
+| `Logging` levels | Still used to tune ASP.NET + EF Core log verbosity at runtime. | Keep in JSON; mark as intentionally externalized so runbooks reference the supported overrides (environment variables or `appsettings.{Environment}.json`). | Ops & SRE |
+
+Follow-up actions: (1) draft a migration ticket to introduce diagnostics overlay + retention entities; (2) create a clean `appsettings.json` template with only logging and host-level toggles once database bootstrapping is verified; (3) flag field deployments that still rely on inline rig definitions so they can import catalog entries before JSON sections are removed.
+
+#### Container volume prototype (2025-10-11)
+
+**Goal:** Validate a portable volume layout that keeps configuration, telemetry, and catalog datasets under `/var/hvo/datastores/` inside the container while letting operators swap or back up the host directories safely.
+
+- **Directory contract** (created automatically on startup but safe to pre-create on the host):
+	- `/var/hvo/datastores/configuration/sm-config.db`
+	- `/var/hvo/datastores/telemetry/sm-telemetry.db`
+	- `/var/hvo/datastores/catalogs/{hyg_v42.sqlite, ConstellationLines.sqlite, deep-sky.sqlite}`
+- **Host mapping:** Mount a single host directory (for example `./data/sky-monitor`) to `/var/hvo/datastores` read/write. Catalog files remain read-only at the application layer, so a unified `rw` volume keeps updates simple.
+- **Environment overrides:** The default container root already points to `/var/hvo/datastores` when `DOTNET_RUNNING_IN_CONTAINER=true`. Operators can customize via `SkyMonitor__Data__OverrideRootPath` if they mount a different in-container path.
+
+Create the host directory structure:
+
+```bash
+mkdir -p ./data/sky-monitor/{configuration,telemetry,catalogs}
+```
+
+Run the container with the consolidated volume (adapted from the RoofController V4 hardware bindings, minus GPIO/I²C devices):
+
+```bash
+docker run -d \
+	--name sky-monitor-v5 \
+	--restart unless-stopped \
+	-p 5136:8080 \
+	-e ASPNETCORE_ENVIRONMENT=Production \
+	-v $(pwd)/data/sky-monitor:/var/hvo/datastores \
+	hvov9/sky-monitor:v5
+```
+
+Docker Compose overlay (validated locally with `docker compose config`):
+
+```yaml
+services:
+	sky-monitor:
+		image: hvov9/sky-monitor:v5
+		restart: unless-stopped
+		ports:
+			- "5136:8080"
+		environment:
+			ASPNETCORE_ENVIRONMENT: Production
+			DOTNET_RUNNING_IN_CONTAINER: "true"
+		volumes:
+			- type: bind
+				source: ./data/sky-monitor
+				target: /var/hvo/datastores
+		healthcheck:
+			test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+			interval: 30s
+			timeout: 5s
+			retries: 3
+			start_period: 15s
+```
+
+Helm overlay excerpt for Kubernetes (tested with `helm template` to confirm path rendering):
+
+```yaml
+skyMonitor:
+	image: hvov9/sky-monitor:v5
+	service:
+		type: ClusterIP
+		port: 8080
+	persistence:
+		enabled: true
+		existingClaim: sky-monitor-datastore
+		mountPath: /var/hvo/datastores
+	env:
+		- name: ASPNETCORE_ENVIRONMENT
+			value: Production
+```
+
+**Verification:**
+
+- `sqlite3 /var/hvo/datastores/telemetry/sm-telemetry.db "SELECT COUNT(*) FROM __EFMigrationsHistory;"` returns expected entries after first boot.
+- `ls -R ./data/sky-monitor` on the host shows the configuration, telemetry, and catalog DBs created by startup bootstrappers.
+- Removing the container and re-attaching the volume preserves telemetry history, proving persistence.
+
+Next steps: integrate the docker-compose snippet into the deployment docs, add Helm values to the shared chart repo, and mirror the volume strategy in upcoming CI smoke tests.
+
+#### Operations runbook outline (draft)
+
+1. **Scope & prerequisites**
+	- Applies to all SkyMonitorV5 deployments using the new data root (`/var/hvo/datastores/` on Linux containers, `%PROGRAMDATA%/HVO/datastores/` on Windows service hosts).
+	- Requires shell access with `sqlite3` CLI, `dotnet ef` tooling, and the `hvoctl` helper once published.
+	- Primary contacts: Ops & SRE (runbook owners), Field Support (onsite coordination), Release Engineering (build/publish artifacts).
+
+2. **Backup cadence**
+	- Nightly `sqlite3 .backup` job when deployments are online; schedule via systemd timer (Linux) or Task Scheduler (Windows).
+	- Retain rolling 14 days of telemetry backups (`telemetry/sm-telemetry.db`), 7 days of configuration snapshots (`configuration/sm-config.db`), and the latest catalog bundle.
+	- Publish checksum manifest (`SHA256SUMS`) after each backup and sync off-device via rsync/SMB depending on site bandwidth.
+	- Optional vacuum/compaction window every Sunday 02:00 local; run `VACUUM;` after taking an offline copy to limit downtime to <2 minutes.
+
+3. **Restore rehearsal**
+	- Quarterly dry run in staging: provision clean data directory, restore most recent prod backup, run `dotnet ef database update` to apply migrations, then execute smoke test harness (`scripts/run-datastore-smoketest.sh`).
+	- Document observed timings, issues, and verification results in the runbook log (to be hosted in Confluence/SharePoint).
+	- Maintain checklist covering service shutdown, file restoration order, permissions reset, and post-restore validation queries.
+
+4. **Catalog replacement procedure**
+	- Obtain updated catalog bundle (`catalogs/*.sqlite` + CSV seeds) from Release Engineering with signed manifest.
+	- Place catalogs into staging path, verify schema version via `SELECT value FROM metadata WHERE key = 'CatalogVersion';`.
+	- Swap catalogs during maintenance window: stop SkyMonitor service, replace files atomically, restart service, trigger catalog integrity check (`hvoctl catalog verify`).
+	- If new catalogs introduce entities relied on by configuration seeds, ensure corresponding migration bundle is deployed simultaneously.
+
+5. **Change control & auditing**
+	- Log every backup/restore/catalog action in the site journal with operator name, timestamp, and checksum references.
+	- Ops to review weekly summary dashboard (future Phase 4 metric) flagging backup job failures or catalog mismatches.
+	- Define escalation path: Ops primary on-call, Field Support secondary, Release Engineering tertiary.
+
+6. **Open follow-ups**
+	- Finalize automation scripts referenced above (`hvoctl`, smoke test runner) before the runbook moves to “approved”.
+	- Align backup retention with corporate data policy once legal review completes.
+	- Incorporate UI-based restore guidance when the admin console work lands in later roadmap phases.
 
 ## Dependencies & Tooling
 

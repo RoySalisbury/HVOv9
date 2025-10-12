@@ -1,0 +1,56 @@
+# Global ignores for Docker build contexts
+# Exclude VCS and tooling metadata
+.git
+.gitignore
+.gitattributes
+.github/
+.vscode/
+.idea/
+*.code-workspace
+
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+**/out/
+
+# Test artifacts
+TestResults/
+**/TestResults/
+*.trx
+.coverage
+coverage/
+**/coverage/
+*.lcov
+
+# Package caches and dependencies
+node_modules/
+**/node_modules/
+packages/
+**/packages/
+
+# User or IDE-specific files
+*.user
+*.suo
+*.userprefs
+*.ncb
+*.opendb
+*.VC.db
+*.DS_Store
+Thumbs.db
+
+# Logs and dumps
+*.log
+logs/
+**/logs/
+*.dmp
+*.dump
+*.mdmp
+
+# Local configuration overrides
+.env
+**/.env
+secrets.json
+**/secrets.json
+appsettings.*.local.json

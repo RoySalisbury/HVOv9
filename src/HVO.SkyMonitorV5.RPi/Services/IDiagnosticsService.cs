@@ -18,4 +18,6 @@ public interface IDiagnosticsService
     Task<Result<RemoteDispatchMetricsSnapshot>> GetRemoteDispatchMetricsAsync(CancellationToken cancellationToken = default);
 
     Task<Result<RemoteDispatchHistoryResponse>> GetRemoteDispatchHistoryAsync(CancellationToken cancellationToken = default);
+
+    Task<Result<DataStoreMetricsSnapshot>> GetDataStoreMetricsAsync(CancellationToken cancellationToken = default);
 }

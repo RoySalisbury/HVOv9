@@ -17,4 +17,6 @@ public interface ISkyMonitorTelemetryRepository
     Task SaveFilterMetricSampleAsync(FilterMetricSampleEntity entity, CancellationToken cancellationToken = default);
 
     Task SaveTelemetryEventAsync(TelemetryEventEntity entity, CancellationToken cancellationToken = default);
+
+    Task<TelemetrySystemProfileEntity> UpsertSystemProfileAsync(TelemetrySystemProfileEntity entity, CancellationToken cancellationToken = default);
 }

@@ -6,33 +6,56 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
+using HVO.SkyMonitorV5.Data.Abstractions;
+using HVO.SkyMonitorV5.Data.Configurations;
+using HVO.SkyMonitorV5.Data.Telemetry;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Telemetry;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
 
-public sealed class DiagnosticsService : IDiagnosticsService
+internal sealed class DiagnosticsService : IDiagnosticsService
 {
     private readonly IFrameStateStore _frameStateStore;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
+    private readonly IDbContextFactory<SkyMonitorConfigurationContext> _configurationContextFactory;
+    private readonly IDbContextFactory<SkyMonitorTelemetryContext> _telemetryContextFactory;
+    private readonly ISkyMonitorDataPathProvider _dataPathProvider;
+    private readonly SkyMonitorTelemetryMetrics _telemetryMetrics;
+    private readonly IDataStoreBootstrapStatus _bootstrapStatus;
     private readonly ILogger<DiagnosticsService> _logger;
     private readonly IObservatoryClock _clock;
     private readonly object _systemMetricsLock = new();
     private CpuSample? _lastCpuSample;
     private DateTimeOffset? _lastProcessCpuSampleAtUtc;
     private TimeSpan _lastProcessCpuTotalProcessorTime;
+    private const string ConfigurationDatabaseRelativePath = "configuration/sm-config.db";
+    private const string TelemetryDatabaseRelativePath = "telemetry/sm-telemetry.db";
 
     public DiagnosticsService(
         IFrameStateStore frameStateStore,
         IFrameFilterPipeline frameFilterPipeline,
+        IDbContextFactory<SkyMonitorConfigurationContext> configurationContextFactory,
+        IDbContextFactory<SkyMonitorTelemetryContext> telemetryContextFactory,
+        ISkyMonitorDataPathProvider dataPathProvider,
+        SkyMonitorTelemetryMetrics telemetryMetrics,
+        IDataStoreBootstrapStatus bootstrapStatus,
         ILogger<DiagnosticsService> logger,
         IObservatoryClock clock)
     {
         _frameStateStore = frameStateStore ?? throw new ArgumentNullException(nameof(frameStateStore));
         _frameFilterPipeline = frameFilterPipeline ?? throw new ArgumentNullException(nameof(frameFilterPipeline));
+        _configurationContextFactory = configurationContextFactory ?? throw new ArgumentNullException(nameof(configurationContextFactory));
+        _telemetryContextFactory = telemetryContextFactory ?? throw new ArgumentNullException(nameof(telemetryContextFactory));
+        _dataPathProvider = dataPathProvider ?? throw new ArgumentNullException(nameof(dataPathProvider));
+        _telemetryMetrics = telemetryMetrics ?? throw new ArgumentNullException(nameof(telemetryMetrics));
+        _bootstrapStatus = bootstrapStatus ?? throw new ArgumentNullException(nameof(bootstrapStatus));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
@@ -227,6 +250,41 @@ public sealed class DiagnosticsService : IDiagnosticsService
         }
     }
 
+    public async Task<Result<DataStoreMetricsSnapshot>> GetDataStoreMetricsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var generatedAtUtc = _clock.UtcNow;
+            var generatedAtLocal = _clock.LocalNow;
+
+            var bootstrapSnapshot = _bootstrapStatus.GetSnapshot();
+            var telemetrySnapshot = _telemetryMetrics.GetTelemetrySnapshot();
+            var retentionSnapshot = _telemetryMetrics.GetRetentionSnapshot();
+
+            var configurationStore = await CreateConfigurationStoreMetricsAsync(bootstrapSnapshot.Configuration, cancellationToken).ConfigureAwait(false);
+            var telemetryStore = await CreateTelemetryStoreMetricsAsync(bootstrapSnapshot.Telemetry, telemetrySnapshot, retentionSnapshot, cancellationToken).ConfigureAwait(false);
+
+            var snapshot = new DataStoreMetricsSnapshot(
+                GeneratedAtUtc: generatedAtUtc,
+                GeneratedAtLocal: generatedAtLocal,
+                ConfigurationStore: configurationStore,
+                TelemetryStore: telemetryStore);
+
+            return Result<DataStoreMetricsSnapshot>.Success(snapshot);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while gathering data store metrics snapshot.");
+            return Result<DataStoreMetricsSnapshot>.Failure(ex);
+        }
+    }
+
     private static BackgroundStackerMetricsResponse CreateEmptyStackerMetrics() => new(
         Enabled: false,
         QueueDepth: 0,
@@ -252,6 +310,250 @@ public sealed class DiagnosticsService : IDiagnosticsService
         LastCompletedAt: null,
         SecondsSinceLastCompleted: null,
         LastFrameNumber: null);
+
+    private async Task<DataStoreInstanceMetrics> CreateConfigurationStoreMetricsAsync(DataStoreBootstrapState bootstrapState, CancellationToken cancellationToken)
+    {
+        var databasePath = ResolveDatabasePath(ConfigurationDatabaseRelativePath, bootstrapState.DatabasePath);
+        var fileStats = await CaptureFileStatsAsync(databasePath, cancellationToken).ConfigureAwait(false);
+        var tables = fileStats.Exists
+            ? await CaptureConfigurationTableMetricsAsync(cancellationToken).ConfigureAwait(false)
+            : Array.Empty<DataStoreTableMetric>();
+
+        return new DataStoreInstanceMetrics(
+            DatabasePath: databasePath,
+            Exists: fileStats.Exists,
+            FileBytes: fileStats.LengthBytes,
+            FileMegabytes: fileStats.Megabytes,
+            PageCount: fileStats.PageCount,
+            PageSizeBytes: fileStats.PageSizeBytes,
+            FreePages: fileStats.FreePages,
+            Tables: tables,
+            Bootstrap: MapBootstrapState(bootstrapState),
+            TelemetryIngestion: null,
+            TelemetryRetention: null);
+    }
+
+    private async Task<DataStoreInstanceMetrics> CreateTelemetryStoreMetricsAsync(
+        DataStoreBootstrapState bootstrapState,
+        TelemetryMetricsSnapshot telemetrySnapshot,
+        TelemetryRetentionSnapshot retentionSnapshot,
+        CancellationToken cancellationToken)
+    {
+        var databasePath = ResolveDatabasePath(TelemetryDatabaseRelativePath, bootstrapState.DatabasePath);
+        var fileStats = await CaptureFileStatsAsync(databasePath, cancellationToken).ConfigureAwait(false);
+        var tables = fileStats.Exists
+            ? await CaptureTelemetryTableMetricsAsync(cancellationToken).ConfigureAwait(false)
+            : Array.Empty<DataStoreTableMetric>();
+
+        return new DataStoreInstanceMetrics(
+            DatabasePath: databasePath,
+            Exists: fileStats.Exists,
+            FileBytes: fileStats.LengthBytes,
+            FileMegabytes: fileStats.Megabytes,
+            PageCount: fileStats.PageCount,
+            PageSizeBytes: fileStats.PageSizeBytes,
+            FreePages: fileStats.FreePages,
+            Tables: tables,
+            Bootstrap: MapBootstrapState(bootstrapState),
+            TelemetryIngestion: MapTelemetryMetrics(telemetrySnapshot),
+            TelemetryRetention: MapRetentionMetrics(retentionSnapshot));
+    }
+
+    private string ResolveDatabasePath(string relativePath, string bootstrapReportedPath)
+    {
+        if (!string.IsNullOrWhiteSpace(bootstrapReportedPath) && Path.IsPathRooted(bootstrapReportedPath))
+        {
+            return bootstrapReportedPath;
+        }
+
+        return _dataPathProvider.ResolvePath(relativePath);
+    }
+
+    private async Task<IReadOnlyList<DataStoreTableMetric>> CaptureConfigurationTableMetricsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var context = await _configurationContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var tables = new List<DataStoreTableMetric>
+            {
+                new("observatory_site", await context.ObservatorySites.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("camera_catalog_camera", await context.CameraCatalogCameras.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("camera_catalog_lens", await context.CameraCatalogLenses.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("rig_catalog_entry", await context.RigCatalogEntries.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("camera_adapter_config", await context.CameraAdapters.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("camera_pipeline_config", await context.CameraPipelineConfigurations.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("star_catalog_settings", await context.StarCatalogSettings.LongCountAsync(cancellationToken).ConfigureAwait(false))
+            };
+
+            return tables;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to gather configuration store table metrics.");
+            return Array.Empty<DataStoreTableMetric>();
+        }
+    }
+
+    private async Task<IReadOnlyList<DataStoreTableMetric>> CaptureTelemetryTableMetricsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var context = await _telemetryContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var tables = new List<DataStoreTableMetric>
+            {
+                new("remote_dispatch_attempt", await context.RemoteDispatchAttempts.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("background_stacker_sample", await context.BackgroundStackerSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("capture_pacing_sample", await context.CapturePacingSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("processing_queue_sample", await context.ProcessingQueueSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("filter_metric_sample", await context.FilterMetricSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("telemetry_event", await context.TelemetryEvents.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("telemetry_system_profile", await context.TelemetrySystemProfiles.LongCountAsync(cancellationToken).ConfigureAwait(false))
+            };
+
+            return tables;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to gather telemetry store table metrics.");
+            return Array.Empty<DataStoreTableMetric>();
+        }
+    }
+
+    private async Task<DataStoreFileStats> CaptureFileStatsAsync(string databasePath, CancellationToken cancellationToken)
+    {
+        var fileInfo = new FileInfo(databasePath);
+        if (!fileInfo.Exists)
+        {
+            return DataStoreFileStats.Missing;
+        }
+
+        try
+        {
+            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = SqliteOpenMode.ReadOnly
+            }.ToString());
+
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+            var pageCount = await ExecutePragmaLongAsync(connection, "PRAGMA page_count;", cancellationToken).ConfigureAwait(false);
+            var pageSize = await ExecutePragmaLongAsync(connection, "PRAGMA page_size;", cancellationToken).ConfigureAwait(false);
+            var freePages = await ExecutePragmaLongAsync(connection, "PRAGMA freelist_count;", cancellationToken).ConfigureAwait(false);
+
+            return new DataStoreFileStats(
+                Exists: true,
+                LengthBytes: fileInfo.Length,
+                Megabytes: ToMegabytes(fileInfo.Length),
+                PageCount: pageCount,
+                PageSizeBytes: pageSize,
+                FreePages: freePages);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to capture SQLite statistics for {DatabasePath}.", databasePath);
+            return new DataStoreFileStats(
+                Exists: true,
+                LengthBytes: fileInfo.Length,
+                Megabytes: ToMegabytes(fileInfo.Length),
+                PageCount: null,
+                PageSizeBytes: null,
+                FreePages: null);
+        }
+    }
+
+    private static async Task<long?> ExecutePragmaLongAsync(SqliteConnection connection, string sql, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return ConvertToNullableLong(result);
+    }
+
+    private static long? ConvertToNullableLong(object? value)
+    {
+        if (value is null || value is DBNull)
+        {
+            return null;
+        }
+
+        if (value is long longValue)
+        {
+            return longValue;
+        }
+
+        if (value is int intValue)
+        {
+            return intValue;
+        }
+
+        if (long.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    private static DataStoreBootstrapStatusMetrics MapBootstrapState(DataStoreBootstrapState state)
+    {
+        return new DataStoreBootstrapStatusMetrics(
+            Ran: state.Ran,
+            Succeeded: state.Succeeded,
+            StartedAtUtc: state.StartedAtUtc,
+            CompletedAtUtc: state.CompletedAtUtc,
+            ErrorMessage: state.ErrorMessage);
+    }
+
+    private static TelemetryIngestionMetricsSummary MapTelemetryMetrics(TelemetryMetricsSnapshot snapshot)
+    {
+        return new TelemetryIngestionMetricsSummary(
+            QueueDepth: snapshot.QueueDepth,
+            LastIngestionLatencyMilliseconds: snapshot.LastIngestionLatencyMilliseconds,
+            LastRetentionDurationMilliseconds: snapshot.LastRetentionDurationMilliseconds);
+    }
+
+    private static TelemetryRetentionSummaryMetrics MapRetentionMetrics(TelemetryRetentionSnapshot snapshot)
+    {
+        return new TelemetryRetentionSummaryMetrics(
+            LastStartedAtUtc: snapshot.LastStartedAtUtc,
+            LastCompletedAtUtc: snapshot.LastCompletedAtUtc,
+            LastDuration: snapshot.LastDuration,
+            RemoteDispatchPurged: snapshot.RemoteDispatchPurged,
+            BackgroundStackerPurged: snapshot.BackgroundStackerPurged,
+            CapturePacingPurged: snapshot.CapturePacingPurged,
+            ProcessingQueuePurged: snapshot.ProcessingQueuePurged,
+            FilterMetricsPurged: snapshot.FilterMetricsPurged,
+            TelemetryEventsPurged: snapshot.TelemetryEventsPurged,
+            TotalPurged: snapshot.TotalPurged,
+            VacuumAttempted: snapshot.VacuumAttempted,
+            VacuumSucceeded: snapshot.VacuumSucceeded);
+    }
+
+    private sealed record DataStoreFileStats(
+        bool Exists,
+        long? LengthBytes,
+        double? Megabytes,
+        long? PageCount,
+        long? PageSizeBytes,
+        long? FreePages)
+    {
+        public static DataStoreFileStats Missing { get; } = new(false, null, null, null, null, null);
+    }
 
     private static RemoteDispatchMetricsSnapshot CreateEmptyRemoteDispatchMetrics(DateTimeOffset generatedAt) => new(
         GeneratedAt: generatedAt,

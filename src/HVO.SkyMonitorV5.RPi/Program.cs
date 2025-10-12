@@ -2,6 +2,7 @@ using Asp.Versioning;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using HVO.SkyMonitorV5.Data.Catalogs.Constellations;
 using HVO.SkyMonitorV5.Data.Catalogs.DeepSky;
@@ -25,11 +26,15 @@ using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Telemetry;
+using HVO.SkyMonitorV5.RPi.Infrastructure.Logging;
+using HVO.SkyMonitorV5.Data.Options;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,11 +71,22 @@ public static class Program
     {
         services.AddSkyMonitorDataInfrastructure(configuration);
 
+        var dataRootOptions = new SkyMonitorDataRootOptions();
+        configuration.GetSection(SkyMonitorDataRootOptions.SectionName).Bind(dataRootOptions);
+        var dataProtectionDirectory = Path.Combine(dataRootOptions.ResolveRootPath(), "dataprotection", "keys");
+        Directory.CreateDirectory(dataProtectionDirectory);
+
+        services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionDirectory))
+            .SetApplicationName("HVO.SkyMonitorV5.RPi");
+
         services.AddSkyMonitorConfigurationStore(
             relativePath: "configuration/sm-config.db",
             configureOptions: builder => builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
-        services.AddHostedService<ConfigurationStoreBootstrapper>();
+    services.AddSingleton<IDataStoreBootstrapStatus, DataStoreBootstrapStatus>();
+
+    services.AddHostedService<ConfigurationStoreBootstrapper>();
 
         services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
         services.AddHostedService<TelemetryStoreBootstrapper>();
@@ -231,7 +247,10 @@ public static class Program
     services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
     services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
+    services.AddSingleton<SkyMonitorTelemetryMetrics>();
     services.AddSingleton<ISkyMonitorTelemetryRecorder, SkyMonitorTelemetryRecorder>();
+    services.AddSingleton<ITelemetrySystemProfileCollector, TelemetrySystemProfileCollector>();
+    services.AddScoped<ITelemetrySystemProfileRegistrar, TelemetrySystemProfileRegistrar>();
     services.AddHostedService<SkyMonitorTelemetryIngestionService>();
     services.AddSingleton<SkyMonitorTelemetryRetentionProcessor>();
     services.AddHostedService<SkyMonitorTelemetryRetentionService>();
@@ -290,6 +309,7 @@ public static class Program
 
                 builder.AddMeter("HVO.SkyMonitor.BackgroundStacker");
                 builder.AddMeter("HVO.SkyMonitor.RemoteDispatch");
+                builder.AddMeter("HVO.SkyMonitor.Telemetry");
                 builder.AddPrometheusExporter();
             });
     }
@@ -377,6 +397,71 @@ public static class Program
         logging.AddConsole();
         logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
         logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Warning);
+
+        logging.Services.AddSingleton<ILoggerProvider>(sp =>
+        {
+            var configuration = sp.GetRequiredService<IConfiguration>();
+            var configuredDirectory = configuration.GetValue<string>("SkyMonitor:Logging:Directory")
+                ?? configuration.GetValue<string>("SkyMonitor__Logging__Directory")
+                ?? "/var/hvo/logs";
+
+            var directory = ResolveLoggingDirectory(configuredDirectory);
+
+            var fileName = configuration.GetValue<string>("SkyMonitor:Logging:FileName")
+                ?? configuration.GetValue<string>("SkyMonitor__Logging__FileName")
+                ?? "skymonitor.log";
+
+            var maxFileSizeMb = configuration.GetValue("SkyMonitor:Logging:MaxFileSizeMB", 10);
+            var maxRetainedFiles = configuration.GetValue("SkyMonitor:Logging:MaxRetainedFiles", 5);
+
+            var maxFileSizeBytes = Math.Max(1, maxFileSizeMb) * 1024L * 1024L;
+            var retainedFiles = Math.Max(1, maxRetainedFiles);
+
+            return new RollingFileLoggerProvider(directory, fileName, maxFileSizeBytes, retainedFiles, LogLevel.Information);
+        });
+    }
+
+    private static string ResolveLoggingDirectory(string configuredPath)
+    {
+        if (TryEnsureDirectory(configuredPath, out var resolvedPath))
+        {
+            return resolvedPath;
+        }
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var fallbackRoot = !string.IsNullOrWhiteSpace(localAppData)
+            ? Path.Combine(localAppData, "HVO", "SkyMonitor", "logs")
+            : Path.Combine(AppContext.BaseDirectory, "logs");
+
+        if (TryEnsureDirectory(fallbackRoot, out resolvedPath))
+        {
+            Console.WriteLine($"[SkyMonitor] Falling back to writable logging directory '{resolvedPath}' because '{configuredPath}' is not accessible.");
+            return resolvedPath;
+        }
+
+        Console.WriteLine($"[SkyMonitor] Unable to create logging directory '{configuredPath}' or fallback '{fallbackRoot}'. Defaulting to current directory.");
+        return Directory.GetCurrentDirectory();
+    }
+
+    private static bool TryEnsureDirectory(string path, out string resolvedPath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                resolvedPath = string.Empty;
+                return false;
+            }
+
+            Directory.CreateDirectory(path);
+            resolvedPath = path;
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            resolvedPath = string.Empty;
+            return false;
+        }
     }
 
     private static void Configure(WebApplication app)
@@ -386,17 +471,18 @@ public static class Program
 
         app.MapOpenApi();
 
+        var enableHttpsRedirect = app.Configuration.GetValue<bool?>("EnableHttpsRedirect") ?? false;
+
         if (app.Environment.IsDevelopment())
         {
             app.MapScalarApiReference();
             app.UseDeveloperExceptionPage();
         }
-        else
+        else if (enableHttpsRedirect)
         {
             app.UseHsts();
         }
 
-        var enableHttpsRedirect = app.Configuration.GetValue("EnableHttpsRedirect", !app.Environment.IsDevelopment());
         if (enableHttpsRedirect)
         {
             app.UseHttpsRedirection();

@@ -1,9 +1,23 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.Metrics;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Telemetry;
+using HVO.SkyMonitorV5.Data.Abstractions;
+using HVO.SkyMonitorV5.Data.Configurations;
+using HVO.SkyMonitorV5.Data.Telemetry;
+using HVO.SkyMonitorV5.Data.Telemetry.Entities;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -195,14 +209,206 @@ public sealed class DiagnosticsServiceTests
         Assert.IsTrue(snapshot.ProcessWorkingSetMegabytes >= 0, "Working set should be non-negative.");
     }
 
+    [TestMethod]
+    public async Task GetDataStoreMetricsAsync_ReportsDatabaseAndTelemetrySnapshots()
+    {
+        var rootPath = Path.Combine(Path.GetTempPath(), $"hvo-diagnostics-tests-{Guid.NewGuid():N}");
+        var dataPathProvider = new TestDataPathProvider(rootPath);
+
+        var configurationPath = dataPathProvider.ResolvePath("configuration/sm-config.db");
+        var telemetryPath = dataPathProvider.ResolvePath("telemetry/sm-telemetry.db");
+
+        static SkyMonitorConfigurationContext CreateConfigurationContext(string path)
+        {
+            var options = new DbContextOptionsBuilder<SkyMonitorConfigurationContext>()
+                .UseSqlite(new SqliteConnectionStringBuilder { DataSource = path }.ToString())
+                .Options;
+
+            var context = new SkyMonitorConfigurationContext(options);
+            context.Database.EnsureCreated();
+            return context;
+        }
+
+        static SkyMonitorTelemetryContext CreateTelemetryContext(string path)
+        {
+            var options = new DbContextOptionsBuilder<SkyMonitorTelemetryContext>()
+                .UseSqlite(new SqliteConnectionStringBuilder { DataSource = path }.ToString())
+                .Options;
+
+            var context = new SkyMonitorTelemetryContext(options);
+            context.Database.EnsureCreated();
+            return context;
+        }
+
+        await using (var configurationContext = CreateConfigurationContext(configurationPath))
+        {
+            // Force schema creation and seed data.
+            await configurationContext.Database.EnsureCreatedAsync();
+        }
+
+        await using (var telemetryContext = CreateTelemetryContext(telemetryPath))
+        {
+            telemetryContext.RemoteDispatchAttempts.Add(new RemoteDispatchAttemptEntity
+            {
+                AttemptedAtUtc = DateTimeOffset.UtcNow,
+                AttemptedAtLocal = DateTimeOffset.UtcNow,
+                Mode = "Test",
+                Outcome = 1,
+                LatencyMilliseconds = 12.3
+            });
+
+            telemetryContext.BackgroundStackerSamples.Add(new BackgroundStackerSampleEntity
+            {
+                CapturedAtUtc = DateTimeOffset.UtcNow,
+                CapturedAtLocal = DateTimeOffset.UtcNow,
+                QueueDepth = 1,
+                QueueCapacity = 8,
+                QueueFillPercentage = 12.5,
+                QueuePressureLevel = 0,
+                QueueMemoryMegabytes = 0.5
+            });
+
+            telemetryContext.SaveChanges();
+        }
+
+        var configurationFactory = new TestDbContextFactory<SkyMonitorConfigurationContext>(() => CreateConfigurationContext(configurationPath));
+        var telemetryFactory = new TestDbContextFactory<SkyMonitorTelemetryContext>(() => CreateTelemetryContext(telemetryPath));
+
+        var telemetryQueue = new TestTelemetryQueue { PendingCount = 3 };
+        var telemetryMetrics = CreateTelemetryMetrics(telemetryQueue);
+        telemetryMetrics.ReportIngestionLatency(TimeSpan.FromMilliseconds(87));
+
+        var retentionStarted = DateTimeOffset.UtcNow.AddSeconds(-15);
+        var retentionCompleted = retentionStarted.AddSeconds(6);
+        var retentionSummary = new TelemetryRetentionSummary(1, 2, 3, 4, 5, 6, 21, VacuumAttempted: true, VacuumSucceeded: true);
+        telemetryMetrics.ReportRetentionCompletion(retentionStarted, retentionCompleted, retentionSummary);
+
+        var bootstrapStatus = new Mock<IDataStoreBootstrapStatus>();
+        bootstrapStatus.Setup(status => status.GetSnapshot()).Returns(new DataStoreBootstrapSnapshot(
+            DataStoreBootstrapState.Success(configurationPath, retentionStarted, retentionCompleted),
+            DataStoreBootstrapState.Success(telemetryPath, retentionStarted, retentionCompleted)));
+
+        var clock = CreateDefaultClockMock();
+        clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
+        clock.SetupGet(c => c.LocalNow).Returns(() => DateTimeOffset.UtcNow);
+        clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(value => value);
+
+        var frameStateStore = new Mock<IFrameStateStore>();
+        var pipeline = new Mock<IFrameFilterPipeline>();
+
+        var service = CreateService(
+            frameStateStore.Object,
+            pipeline.Object,
+            clock,
+            configurationFactory,
+            telemetryFactory,
+            dataPathProvider,
+            telemetryQueue,
+            telemetryMetrics,
+            bootstrapStatus.Object);
+
+        var result = await service.GetDataStoreMetricsAsync();
+
+        Assert.IsTrue(result.IsSuccessful, "Data store metrics should resolve successfully.");
+
+        var snapshot = result.Value;
+        Assert.AreEqual(configurationPath, snapshot.ConfigurationStore.DatabasePath, "Configuration path should match resolved location.");
+        Assert.AreEqual(telemetryPath, snapshot.TelemetryStore.DatabasePath, "Telemetry path should match resolved location.");
+        Assert.IsTrue(snapshot.ConfigurationStore.Exists, "Configuration database should exist.");
+        Assert.IsTrue(snapshot.TelemetryStore.Exists, "Telemetry database should exist.");
+        Assert.IsTrue(snapshot.ConfigurationStore.FileBytes > 0, "Configuration database size should be reported.");
+        Assert.IsTrue(snapshot.TelemetryStore.FileBytes > 0, "Telemetry database size should be reported.");
+
+    Assert.IsTrue(snapshot.ConfigurationStore.Tables.Any(t => t.Table == "observatory_site" && t.RowCount > 0), "Seeded configuration tables should report row counts.");
+
+    Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "remote_dispatch_attempt" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
+    Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "background_stacker_sample" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
+
+    var telemetryIngestion = snapshot.TelemetryStore.TelemetryIngestion;
+    Assert.IsNotNull(telemetryIngestion, "Telemetry ingestion metrics should be present.");
+    Assert.AreEqual(telemetryQueue.PendingCount, telemetryIngestion!.QueueDepth, "Queue depth should match telemetry metrics snapshot.");
+    Assert.AreEqual(87d, telemetryIngestion.LastIngestionLatencyMilliseconds, 0.001, "Ingestion latency should reflect latest metric.");
+
+    var telemetryRetention = snapshot.TelemetryStore.TelemetryRetention;
+    Assert.IsNotNull(telemetryRetention, "Telemetry retention snapshot should be present.");
+    Assert.AreEqual(retentionSummary.TotalPurged, telemetryRetention!.TotalPurged, "Retention summary should propagate purge totals.");
+    Assert.AreEqual(retentionCompleted, telemetryRetention.LastCompletedAtUtc, "Retention completion timestamp should propagate.");
+
+        Assert.IsTrue(snapshot.TelemetryStore.Bootstrap.Ran && snapshot.TelemetryStore.Bootstrap.Succeeded, "Bootstrap status should indicate success.");
+        Assert.IsTrue(snapshot.ConfigurationStore.Bootstrap.Ran && snapshot.ConfigurationStore.Bootstrap.Succeeded, "Configuration bootstrap status should indicate success.");
+    }
+
     private static DiagnosticsService CreateService(
         IFrameStateStore frameStateStore,
         IFrameFilterPipeline pipeline,
-        Mock<IObservatoryClock>? clockMock = null)
+        Mock<IObservatoryClock>? clockMock = null,
+        IDbContextFactory<SkyMonitorConfigurationContext>? configurationContextFactory = null,
+        IDbContextFactory<SkyMonitorTelemetryContext>? telemetryContextFactory = null,
+        ISkyMonitorDataPathProvider? dataPathProvider = null,
+        TestTelemetryQueue? telemetryQueue = null,
+        SkyMonitorTelemetryMetrics? telemetryMetrics = null,
+        IDataStoreBootstrapStatus? bootstrapStatus = null,
+        ILogger<DiagnosticsService>? logger = null)
     {
         var clock = clockMock ?? CreateDefaultClockMock();
+        configurationContextFactory ??= new TestDbContextFactory<SkyMonitorConfigurationContext>(CreateInMemoryConfigurationContext);
+        telemetryContextFactory ??= new TestDbContextFactory<SkyMonitorTelemetryContext>(CreateInMemoryTelemetryContext);
+        dataPathProvider ??= new TestDataPathProvider(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
 
-        return new DiagnosticsService(frameStateStore, pipeline, NullLogger<DiagnosticsService>.Instance, clock.Object);
+        telemetryQueue ??= new TestTelemetryQueue();
+        telemetryMetrics ??= CreateTelemetryMetrics(telemetryQueue);
+
+        bootstrapStatus ??= CreateBootstrapStatusMock().Object;
+        logger ??= NullLogger<DiagnosticsService>.Instance;
+
+        return new DiagnosticsService(
+            frameStateStore,
+            pipeline,
+            configurationContextFactory,
+            telemetryContextFactory,
+            dataPathProvider,
+            telemetryMetrics,
+            bootstrapStatus,
+            logger,
+            clock.Object);
+    }
+
+    private static SkyMonitorConfigurationContext CreateInMemoryConfigurationContext()
+    {
+        var options = new DbContextOptionsBuilder<SkyMonitorConfigurationContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        var context = new SkyMonitorConfigurationContext(options);
+        context.Database.EnsureCreated();
+        return context;
+    }
+
+    private static SkyMonitorTelemetryContext CreateInMemoryTelemetryContext()
+    {
+        var options = new DbContextOptionsBuilder<SkyMonitorTelemetryContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        var context = new SkyMonitorTelemetryContext(options);
+        context.Database.EnsureCreated();
+        return context;
+    }
+
+    private static SkyMonitorTelemetryMetrics CreateTelemetryMetrics(TestTelemetryQueue queue)
+    {
+        return new SkyMonitorTelemetryMetrics(new TestMeterFactory(), queue, NullLogger<SkyMonitorTelemetryMetrics>.Instance);
+    }
+
+    private static Mock<IDataStoreBootstrapStatus> CreateBootstrapStatusMock()
+    {
+        var snapshot = new DataStoreBootstrapSnapshot(
+            DataStoreBootstrapState.NotRun("configuration/sm-config.db"),
+            DataStoreBootstrapState.NotRun("telemetry/sm-telemetry.db"));
+
+        var mock = new Mock<IDataStoreBootstrapStatus>();
+        mock.Setup(status => status.GetSnapshot()).Returns(snapshot);
+        return mock;
     }
 
     private static Mock<IObservatoryClock> CreateDefaultClockMock()
@@ -215,5 +421,71 @@ public sealed class DiagnosticsServiceTests
         clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
         clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
         return clock;
+    }
+
+    private sealed class TestDbContextFactory<TContext> : IDbContextFactory<TContext>
+        where TContext : DbContext
+    {
+        private readonly Func<TContext> _factory;
+
+        public TestDbContextFactory(Func<TContext> factory)
+        {
+            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        }
+
+        public TContext CreateDbContext() => _factory();
+
+        public ValueTask<TContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => new(_factory());
+    }
+
+    private sealed class TestDataPathProvider : ISkyMonitorDataPathProvider
+    {
+        private readonly string _rootPath;
+
+        public TestDataPathProvider(string rootPath)
+        {
+            _rootPath = rootPath ?? throw new ArgumentNullException(nameof(rootPath));
+            Directory.CreateDirectory(_rootPath);
+        }
+
+        public string RootPath => _rootPath;
+
+        public string ResolvePath(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                throw new ArgumentException("Relative path cannot be null or empty.", nameof(relativePath));
+            }
+
+            var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(Path.Combine(_rootPath, normalized));
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            return fullPath;
+        }
+    }
+
+    private sealed class TestTelemetryQueue : ISkyMonitorTelemetryIngestionQueue
+    {
+        public int PendingCount { get; set; }
+
+        public bool TryWrite(TelemetryWorkItem workItem) => throw new NotSupportedException();
+
+        public IAsyncEnumerable<TelemetryWorkItem> ReadAllAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class TestMeterFactory : IMeterFactory
+    {
+        public Meter Create(string name) => new(name);
+
+        public Meter Create(MeterOptions meterOptions) => new(meterOptions);
+
+        public void Dispose()
+        {
+        }
     }
 }

@@ -91,4 +91,28 @@ public sealed class DiagnosticsController : ControllerBase
             detail: error?.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
+
+    [HttpGet("data-stores")]
+    [ProducesResponseType(typeof(DataStoreMetricsSnapshot), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<DataStoreMetricsSnapshot>> GetDataStoreMetricsAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetDataStoreMetricsAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve data store diagnostics.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 }

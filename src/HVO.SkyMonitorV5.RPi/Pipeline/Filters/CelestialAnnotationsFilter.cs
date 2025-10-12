@@ -226,7 +226,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         using var labelPaint = new SKPaint { IsAntialias = true, Color = cache.StarLabelColor };
         using var haloPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 150) };
 
-        var renderedStars = AnnotateTargets(
+        var starOutcome = AnnotateTargets(
             "star",
             starAnnotations,
             engine,
@@ -239,7 +239,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             cancellationToken,
             _logger);
 
-        var renderedDeepSky = AnnotateTargets(
+        var deepSkyOutcome = AnnotateTargets(
             "deep-sky",
             cache.DeepSkyTargets,
             engine,
@@ -252,23 +252,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             cancellationToken,
             _logger);
 
-        if (starAnnotations.Count > 0 && renderedStars < starAnnotations.Count)
-        {
-            _logger.LogWarning(
-                "Celestial annotations: rendered {Rendered} of {Requested} star annotations (skipped {Skipped}).",
-                renderedStars,
-                starAnnotations.Count,
-                starAnnotations.Count - renderedStars);
-        }
-
-        if (cache.DeepSkyTargets.Count > 0 && renderedDeepSky < cache.DeepSkyTargets.Count)
-        {
-            _logger.LogWarning(
-                "Celestial annotations: rendered {Rendered} of {Requested} deep-sky annotations (skipped {Skipped}).",
-                renderedDeepSky,
-                cache.DeepSkyTargets.Count,
-                cache.DeepSkyTargets.Count - renderedDeepSky);
-        }
+        LogAnnotationOutcome(starOutcome, "star", _logger);
+        LogAnnotationOutcome(deepSkyOutcome, "deep-sky", _logger);
 
         if (annotatePlanets)
         {
@@ -399,7 +384,27 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             autoSelection);
     }
 
-    private static int AnnotateTargets(
+    private readonly record struct AnnotationOutcome(int Requested, int Projected, int Skipped)
+    {
+        public bool HasRequests => Requested > 0;
+        public bool AllSkipped => HasRequests && Projected == 0;
+    }
+
+    private static void LogAnnotationOutcome(AnnotationOutcome outcome, string targetType, ILogger logger)
+    {
+        if (!outcome.HasRequests || outcome.Skipped == 0)
+        {
+            return;
+        }
+
+        logger.LogDebug(
+            "Celestial annotations: skipped {Skipped}/{Requested} {TargetType} annotation(s) because they were off-frame or below the horizon.",
+            outcome.Skipped,
+            outcome.Requested,
+            targetType);
+    }
+
+    private static AnnotationOutcome AnnotateTargets(
         string targetType,
         IReadOnlyList<ResolvedAnnotation> targets,
         StarFieldEngine engine,
@@ -414,7 +419,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     {
         if (targets.Count == 0)
         {
-            return 0;
+            return new AnnotationOutcome(0, 0, 0);
         }
 
         var projectedCount = 0;
@@ -454,25 +459,27 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             }
         }
 
-        if (projectedCount == 0)
-        {
-            logger.LogWarning(
-                "Celestial annotations: unable to project any {TargetType} annotation(s) onto the canvas (attempted {Attempts}).",
-                targetType,
-                targets.Count);
-        }
-        else if (logger.IsEnabled(LogLevel.Debug))
+        var outcome = new AnnotationOutcome(targets.Count, projectedCount, skippedCount);
+
+        if (outcome.AllSkipped)
         {
             logger.LogDebug(
-                "Celestial annotations: projected {Projected}/{Total} {TargetType} annotation(s); skipped {Skipped} (sample: {Sample}).",
-                projectedCount,
-                targets.Count,
+                "Celestial annotations: all configured {TargetType} annotation(s) are currently off-frame or below the horizon (requested {Requested}).",
                 targetType,
-                skippedCount,
+                outcome.Requested);
+        }
+        else if (logger.IsEnabled(LogLevel.Trace))
+        {
+            logger.LogTrace(
+                "Celestial annotations: projected {Projected}/{Requested} {TargetType} annotation(s); skipped {Skipped} (sample: {Sample}).",
+                outcome.Projected,
+                outcome.Requested,
+                targetType,
+                outcome.Skipped,
                 sampleCoordinates.Count > 0 ? string.Join(", ", sampleCoordinates) : "n/a");
         }
 
-        return projectedCount;
+        return outcome;
     }
 
     private async Task<IReadOnlyList<ResolvedAnnotation>> ResolveAutomaticStarAnnotationsAsync(

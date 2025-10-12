@@ -3,6 +3,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.Data.Telemetry.Entities;
 using HVO.SkyMonitorV5.Data.Telemetry.Repositories;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -11,25 +13,39 @@ namespace HVO.SkyMonitorV5.RPi.Telemetry;
 internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
 {
     private readonly ISkyMonitorTelemetryIngestionQueue _queue;
-    private readonly ISkyMonitorTelemetryRepository _repository;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IObservatoryClock _clock;
+    private readonly SkyMonitorTelemetryMetrics _metrics;
     private readonly ILogger<SkyMonitorTelemetryIngestionService> _logger;
 
     public SkyMonitorTelemetryIngestionService(
         ISkyMonitorTelemetryIngestionQueue queue,
-        ISkyMonitorTelemetryRepository repository,
+        IServiceScopeFactory scopeFactory,
+        IObservatoryClock clock,
+        SkyMonitorTelemetryMetrics metrics,
         ILogger<SkyMonitorTelemetryIngestionService> logger)
     {
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var workItem in _queue.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+        await foreach (var workItem in _queue.ReadAllAsync(stoppingToken))
         {
             try
             {
+                var latency = _clock.UtcNow - workItem.EnqueuedAtUtc;
+                if (latency < TimeSpan.Zero)
+                {
+                    latency = TimeSpan.Zero;
+                }
+
+                _metrics.ReportIngestionLatency(latency);
+
                 await HandleWorkItemAsync(workItem, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -45,25 +61,28 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
 
     private async Task HandleWorkItemAsync(TelemetryWorkItem workItem, CancellationToken cancellationToken)
     {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ISkyMonitorTelemetryRepository>();
+
         switch (workItem)
         {
-            case TelemetryWorkItem.RemoteDispatchAttempt(var payload):
-                await HandleRemoteDispatchAttemptAsync(payload, cancellationToken).ConfigureAwait(false);
+            case TelemetryWorkItem.RemoteDispatchAttempt(_, var payload):
+                await HandleRemoteDispatchAttemptAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
-            case TelemetryWorkItem.BackgroundStackerSample(var payload):
-                await HandleBackgroundStackerSampleAsync(payload, cancellationToken).ConfigureAwait(false);
+            case TelemetryWorkItem.BackgroundStackerSample(_, var payload):
+                await HandleBackgroundStackerSampleAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
-            case TelemetryWorkItem.CapturePacingSample(var payload):
-                await HandleCapturePacingSampleAsync(payload, cancellationToken).ConfigureAwait(false);
+            case TelemetryWorkItem.CapturePacingSample(_, var payload):
+                await HandleCapturePacingSampleAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
-            case TelemetryWorkItem.ProcessingQueueSample(var payload):
-                await HandleProcessingQueueSampleAsync(payload, cancellationToken).ConfigureAwait(false);
+            case TelemetryWorkItem.ProcessingQueueSample(_, var payload):
+                await HandleProcessingQueueSampleAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
-            case TelemetryWorkItem.FilterMetricSample(var payload):
-                await HandleFilterMetricSampleAsync(payload, cancellationToken).ConfigureAwait(false);
+            case TelemetryWorkItem.FilterMetricSample(_, var payload):
+                await HandleFilterMetricSampleAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
-            case TelemetryWorkItem.TelemetryEvent(var payload):
-                await HandleTelemetryEventAsync(payload, cancellationToken).ConfigureAwait(false);
+            case TelemetryWorkItem.TelemetryEvent(_, var payload):
+                await HandleTelemetryEventAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
             default:
                 _logger.LogWarning("Received unknown telemetry work item type {WorkItemType}.", workItem.GetType().Name);
@@ -71,7 +90,7 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
         }
     }
 
-    private Task HandleRemoteDispatchAttemptAsync(RemoteDispatchAttemptPayload payload, CancellationToken cancellationToken)
+    private static Task HandleRemoteDispatchAttemptAsync(ISkyMonitorTelemetryRepository repository, RemoteDispatchAttemptPayload payload, CancellationToken cancellationToken)
     {
         var entity = new RemoteDispatchAttemptEntity
         {
@@ -88,10 +107,10 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             FormatKey = Truncate(payload.FormatKey, 64)
         };
 
-        return _repository.SaveRemoteDispatchAttemptAsync(entity, cancellationToken);
+        return repository.SaveRemoteDispatchAttemptAsync(entity, cancellationToken);
     }
 
-    private Task HandleBackgroundStackerSampleAsync(BackgroundStackerSamplePayload payload, CancellationToken cancellationToken)
+    private static Task HandleBackgroundStackerSampleAsync(ISkyMonitorTelemetryRepository repository, BackgroundStackerSamplePayload payload, CancellationToken cancellationToken)
     {
         var entity = new BackgroundStackerSampleEntity
         {
@@ -108,10 +127,10 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             QueueMemoryMegabytes = payload.QueueMemoryMegabytes
         };
 
-        return _repository.SaveBackgroundStackerSampleAsync(entity, cancellationToken);
+        return repository.SaveBackgroundStackerSampleAsync(entity, cancellationToken);
     }
 
-    private Task HandleCapturePacingSampleAsync(CapturePacingSamplePayload payload, CancellationToken cancellationToken)
+    private static Task HandleCapturePacingSampleAsync(ISkyMonitorTelemetryRepository repository, CapturePacingSamplePayload payload, CancellationToken cancellationToken)
     {
         var entity = new CapturePacingSampleEntity
         {
@@ -128,10 +147,10 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             PenaltyExpiresAtLocal = payload.PenaltyExpiresAtLocal
         };
 
-        return _repository.SaveCapturePacingSampleAsync(entity, cancellationToken);
+        return repository.SaveCapturePacingSampleAsync(entity, cancellationToken);
     }
 
-    private Task HandleProcessingQueueSampleAsync(ProcessingQueueSamplePayload payload, CancellationToken cancellationToken)
+    private static Task HandleProcessingQueueSampleAsync(ISkyMonitorTelemetryRepository repository, ProcessingQueueSamplePayload payload, CancellationToken cancellationToken)
     {
         var entity = new ProcessingQueueSampleEntity
         {
@@ -149,10 +168,10 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             AverageProcessingMilliseconds = payload.AverageProcessingMilliseconds
         };
 
-        return _repository.SaveProcessingQueueSampleAsync(entity, cancellationToken);
+        return repository.SaveProcessingQueueSampleAsync(entity, cancellationToken);
     }
 
-    private Task HandleFilterMetricSampleAsync(FilterMetricSamplePayload payload, CancellationToken cancellationToken)
+    private static Task HandleFilterMetricSampleAsync(ISkyMonitorTelemetryRepository repository, FilterMetricSamplePayload payload, CancellationToken cancellationToken)
     {
         var entity = new FilterMetricSampleEntity
         {
@@ -164,10 +183,10 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             AverageDurationMilliseconds = payload.AverageDurationMilliseconds
         };
 
-        return _repository.SaveFilterMetricSampleAsync(entity, cancellationToken);
+        return repository.SaveFilterMetricSampleAsync(entity, cancellationToken);
     }
 
-    private Task HandleTelemetryEventAsync(TelemetryEventPayload payload, CancellationToken cancellationToken)
+    private static Task HandleTelemetryEventAsync(ISkyMonitorTelemetryRepository repository, TelemetryEventPayload payload, CancellationToken cancellationToken)
     {
         var entity = new TelemetryEventEntity
         {
@@ -181,7 +200,7 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             PropertiesJson = payload.PropertiesJson
         };
 
-        return _repository.SaveTelemetryEventAsync(entity, cancellationToken);
+        return repository.SaveTelemetryEventAsync(entity, cancellationToken);
     }
 
     private static string? Truncate(string? value, int maxLength)

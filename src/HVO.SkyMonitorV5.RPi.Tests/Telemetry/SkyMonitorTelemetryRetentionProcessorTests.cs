@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.Data.Telemetry.Entities;
@@ -43,8 +44,13 @@ public sealed class SkyMonitorTelemetryRetentionProcessorTests
             await context.SaveChangesAsync().ConfigureAwait(false);
         }
 
-        var clock = new TestClock(now);
-        var processor = new SkyMonitorTelemetryRetentionProcessor(harness.ContextFactory, clock, NullLogger<SkyMonitorTelemetryRetentionProcessor>.Instance);
+    var clock = new TestClock(now);
+
+    using var meter = new Meter("HVO.SkyMonitor.Telemetry.RetentionTests");
+    var meterFactory = new TestMeterFactory(meter);
+    using var metrics = new SkyMonitorTelemetryMetrics(meterFactory, new SkyMonitorTelemetryIngestionQueue(), NullLogger<SkyMonitorTelemetryMetrics>.Instance);
+
+    var processor = new SkyMonitorTelemetryRetentionProcessor(harness.ContextFactory, clock, metrics, NullLogger<SkyMonitorTelemetryRetentionProcessor>.Instance);
         var options = new SkyMonitorTelemetryRetentionOptions
         {
             RemoteDispatch = TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), null),
@@ -66,6 +72,25 @@ public sealed class SkyMonitorTelemetryRetentionProcessorTests
         var remaining = await verification.RemoteDispatchAttempts.ToListAsync().ConfigureAwait(false);
         Assert.AreEqual(1, remaining.Count);
         Assert.AreEqual("Recent", remaining[0].Message);
+    }
+
+    private sealed class TestMeterFactory : IMeterFactory, IDisposable
+    {
+        private readonly Meter _meter;
+
+        public TestMeterFactory(Meter meter)
+        {
+            _meter = meter ?? throw new ArgumentNullException(nameof(meter));
+        }
+
+        public Meter Create(MeterOptions options) => _meter;
+
+        public Meter Create(string name) => _meter;
+
+        public void Dispose()
+        {
+            _meter.Dispose();
+        }
     }
 
     private sealed class TestClock : IObservatoryClock

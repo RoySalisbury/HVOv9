@@ -25,8 +25,8 @@ internal sealed class TelemetryTestHarness : IAsyncDisposable
         Directory.CreateDirectory(workingDirectory);
         var databasePath = Path.Combine(workingDirectory, "sm-telemetry.db");
 
-    var services = new ServiceCollection();
-    services.AddLogging();
+        var services = new ServiceCollection();
+        services.AddLogging();
         services.AddDbContextFactory<SkyMonitorTelemetryContext>(options =>
         {
             options.UseSqlite($"Data Source={databasePath}");
@@ -48,6 +48,9 @@ internal sealed class TelemetryTestHarness : IAsyncDisposable
 
     public ISkyMonitorTelemetryRepository GetRepository()
         => _provider.GetRequiredService<ISkyMonitorTelemetryRepository>();
+
+    public IServiceScopeFactory ScopeFactory
+        => _provider.GetRequiredService<IServiceScopeFactory>();
 
     public IDbContextFactory<SkyMonitorTelemetryContext> ContextFactory
         => _provider.GetRequiredService<IDbContextFactory<SkyMonitorTelemetryContext>>();

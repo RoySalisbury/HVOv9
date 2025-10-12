@@ -52,7 +52,9 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
             errorMessage,
             formatKey);
 
-        if (!_queue.TryWrite(new TelemetryWorkItem.RemoteDispatchAttempt(payload)))
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.RemoteDispatchAttempt(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping remote dispatch attempt telemetry for mode {Mode}.", mode);
         }
@@ -78,7 +80,9 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
             sample.SecondsSinceLastCompleted,
             sample.QueueMemoryMegabytes);
 
-        if (!_queue.TryWrite(new TelemetryWorkItem.BackgroundStackerSample(payload)))
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.BackgroundStackerSample(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping background stacker sample.");
         }
@@ -99,7 +103,9 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
             localizedStatus.PenaltyActive,
             localizedStatus.PenaltyExpiresAt);
 
-        if (!_queue.TryWrite(new TelemetryWorkItem.CapturePacingSample(payload)))
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.CapturePacingSample(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping capture pacing sample.");
         }
@@ -121,7 +127,9 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
             localizedStatus.PeakProcessingMilliseconds,
             localizedStatus.AverageProcessingMilliseconds);
 
-        if (!_queue.TryWrite(new TelemetryWorkItem.ProcessingQueueSample(payload)))
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.ProcessingQueueSample(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping processing queue sample.");
         }
@@ -142,7 +150,9 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
             lastDurationMilliseconds,
             averageDurationMilliseconds);
 
-        if (!_queue.TryWrite(new TelemetryWorkItem.FilterMetricSample(payload)))
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.FilterMetricSample(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping filter metric sample for {FilterName}.", filterName);
         }
@@ -165,7 +175,9 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
             detail,
             propertiesJson);
 
-        if (!_queue.TryWrite(new TelemetryWorkItem.TelemetryEvent(payload)))
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.TelemetryEvent(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping telemetry event {Category}/{EventType}.", category, eventType);
         }

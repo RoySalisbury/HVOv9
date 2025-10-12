@@ -22,6 +22,8 @@ public sealed class SkyMonitorTelemetryContext : DbContext
 
     public DbSet<TelemetryEventEntity> TelemetryEvents => Set<TelemetryEventEntity>();
 
+    public DbSet<TelemetrySystemProfileEntity> TelemetrySystemProfiles => Set<TelemetrySystemProfileEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<RemoteDispatchAttemptEntity>(entity =>
@@ -139,6 +141,31 @@ public sealed class SkyMonitorTelemetryContext : DbContext
             entity.HasIndex(e => e.OccurredAtLocal).HasDatabaseName("ix_telemetry_event_local");
             entity.HasIndex(e => e.Category).HasDatabaseName("ix_telemetry_event_category");
             entity.HasIndex(e => e.EventType).HasDatabaseName("ix_telemetry_event_type");
+        });
+
+        modelBuilder.Entity<TelemetrySystemProfileEntity>(entity =>
+        {
+            entity.ToTable("telemetry_system_profile");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.SystemHash).IsRequired().HasMaxLength(128).HasColumnName("system_hash");
+            entity.Property(e => e.MachineName).HasMaxLength(256).HasColumnName("machine_name");
+            entity.Property(e => e.HostName).HasMaxLength(256).HasColumnName("host_name");
+            entity.Property(e => e.OperatingSystem).HasMaxLength(256).HasColumnName("operating_system");
+            entity.Property(e => e.OsArchitecture).HasMaxLength(64).HasColumnName("os_architecture");
+            entity.Property(e => e.ProcessArchitecture).HasMaxLength(64).HasColumnName("process_architecture");
+            entity.Property(e => e.FrameworkDescription).HasMaxLength(128).HasColumnName("framework_description");
+            entity.Property(e => e.ProcessorCount).HasColumnName("processor_count");
+            entity.Property(e => e.TotalMemoryMegabytes).HasColumnName("total_memory_mb");
+            entity.Property(e => e.CpuModel).HasMaxLength(256).HasColumnName("cpu_model");
+            entity.Property(e => e.HardwareModel).HasMaxLength(256).HasColumnName("hardware_model");
+            entity.Property(e => e.IsContainerized).HasColumnName("is_containerized");
+            entity.Property(e => e.AdditionalPropertiesJson).HasColumnName("additional_properties_json");
+            entity.Property(e => e.FirstSeenAtUtc).IsRequired().HasColumnName("first_seen_at_utc");
+            entity.Property(e => e.LastSeenAtUtc).IsRequired().HasColumnName("last_seen_at_utc");
+
+            entity.HasIndex(e => e.SystemHash).IsUnique().HasDatabaseName("ux_telemetry_system_profile_hash");
+            entity.HasIndex(e => e.LastSeenAtUtc).HasDatabaseName("ix_telemetry_system_profile_last_seen");
         });
     }
 }

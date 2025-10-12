@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -17,15 +18,18 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
 {
     private readonly IDbContextFactory<SkyMonitorTelemetryContext> _contextFactory;
     private readonly IObservatoryClock _clock;
+    private readonly SkyMonitorTelemetryMetrics _metrics;
     private readonly ILogger<SkyMonitorTelemetryRetentionProcessor> _logger;
 
     public SkyMonitorTelemetryRetentionProcessor(
         IDbContextFactory<SkyMonitorTelemetryContext> contextFactory,
         IObservatoryClock clock,
+        SkyMonitorTelemetryMetrics metrics,
         ILogger<SkyMonitorTelemetryRetentionProcessor> logger)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -33,92 +37,112 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var nowUtc = _clock.UtcNow;
-        var summaryBuilder = new TelemetryRetentionSummaryBuilder();
+        var stopwatch = Stopwatch.StartNew();
+        var runStartedAtUtc = _clock.UtcNow;
+        TelemetryRetentionSummary? capturedSummary = null;
 
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-
-        summaryBuilder.RemoteDispatchPurged += await PurgeAsync(
-            context,
-            context.RemoteDispatchAttempts,
-            options.RemoteDispatch,
-            nowUtc,
-            static entity => entity.AttemptedAtUtc,
-            static entity => entity.Id,
-            cancellationToken).ConfigureAwait(false);
-
-        summaryBuilder.BackgroundStackerPurged += await PurgeAsync(
-            context,
-            context.BackgroundStackerSamples,
-            options.BackgroundStacker,
-            nowUtc,
-            static entity => entity.CapturedAtUtc,
-            static entity => entity.Id,
-            cancellationToken).ConfigureAwait(false);
-
-        summaryBuilder.CapturePacingPurged += await PurgeAsync(
-            context,
-            context.CapturePacingSamples,
-            options.CapturePacing,
-            nowUtc,
-            static entity => entity.CapturedAtUtc,
-            static entity => entity.Id,
-            cancellationToken).ConfigureAwait(false);
-
-        summaryBuilder.ProcessingQueuePurged += await PurgeAsync(
-            context,
-            context.ProcessingQueueSamples,
-            options.ProcessingQueue,
-            nowUtc,
-            static entity => entity.CapturedAtUtc,
-            static entity => entity.Id,
-            cancellationToken).ConfigureAwait(false);
-
-        summaryBuilder.FilterMetricsPurged += await PurgeAsync(
-            context,
-            context.FilterMetricSamples,
-            options.FilterMetrics,
-            nowUtc,
-            static entity => entity.CapturedAtUtc,
-            static entity => entity.Id,
-            cancellationToken).ConfigureAwait(false);
-
-        summaryBuilder.TelemetryEventsPurged += await PurgeAsync(
-            context,
-            context.TelemetryEvents,
-            options.TelemetryEvents,
-            nowUtc,
-            static entity => entity.OccurredAtUtc,
-            static entity => entity.Id,
-            cancellationToken).ConfigureAwait(false);
-
-        var summary = summaryBuilder.Build();
-
-        if (summary.TotalPurged > 0 && options.VacuumAfterPurge)
+        try
         {
-            summary = await VacuumAsync(context, summary, cancellationToken).ConfigureAwait(false);
-        }
+            var nowUtc = _clock.UtcNow;
+            var summaryBuilder = new TelemetryRetentionSummaryBuilder();
 
-        if (summary.TotalPurged > 0)
-        {
-            _logger.LogInformation(
-                "Telemetry retention sweep removed {Total} rows (remote: {Remote}, stacker: {Stacker}, pacing: {Pacing}, processing: {Processing}, filters: {Filters}, events: {Events}). Vacuum attempted: {VacuumAttempted}, succeeded: {VacuumSucceeded}.",
-                summary.TotalPurged,
-                summary.RemoteDispatchPurged,
-                summary.BackgroundStackerPurged,
-                summary.CapturePacingPurged,
-                summary.ProcessingQueuePurged,
-                summary.FilterMetricsPurged,
-                summary.TelemetryEventsPurged,
-                summary.VacuumAttempted,
-                summary.VacuumSucceeded);
-        }
-        else
-        {
-            _logger.LogDebug("Telemetry retention sweep completed without purging records.");
-        }
+            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        return summary;
+            summaryBuilder.RemoteDispatchPurged += await PurgeAsync(
+                context,
+                context.RemoteDispatchAttempts,
+                options.RemoteDispatch,
+                nowUtc,
+                static entity => entity.AttemptedAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
+            summaryBuilder.BackgroundStackerPurged += await PurgeAsync(
+                context,
+                context.BackgroundStackerSamples,
+                options.BackgroundStacker,
+                nowUtc,
+                static entity => entity.CapturedAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
+            summaryBuilder.CapturePacingPurged += await PurgeAsync(
+                context,
+                context.CapturePacingSamples,
+                options.CapturePacing,
+                nowUtc,
+                static entity => entity.CapturedAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
+            summaryBuilder.ProcessingQueuePurged += await PurgeAsync(
+                context,
+                context.ProcessingQueueSamples,
+                options.ProcessingQueue,
+                nowUtc,
+                static entity => entity.CapturedAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
+            summaryBuilder.FilterMetricsPurged += await PurgeAsync(
+                context,
+                context.FilterMetricSamples,
+                options.FilterMetrics,
+                nowUtc,
+                static entity => entity.CapturedAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
+            summaryBuilder.TelemetryEventsPurged += await PurgeAsync(
+                context,
+                context.TelemetryEvents,
+                options.TelemetryEvents,
+                nowUtc,
+                static entity => entity.OccurredAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
+            var summary = summaryBuilder.Build();
+
+            if (summary.TotalPurged > 0 && options.VacuumAfterPurge)
+            {
+                summary = await VacuumAsync(context, summary, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (summary.TotalPurged > 0)
+            {
+                _logger.LogInformation(
+                    "Telemetry retention sweep removed {Total} rows (remote: {Remote}, stacker: {Stacker}, pacing: {Pacing}, processing: {Processing}, filters: {Filters}, events: {Events}). Vacuum attempted: {VacuumAttempted}, succeeded: {VacuumSucceeded}.",
+                    summary.TotalPurged,
+                    summary.RemoteDispatchPurged,
+                    summary.BackgroundStackerPurged,
+                    summary.CapturePacingPurged,
+                    summary.ProcessingQueuePurged,
+                    summary.FilterMetricsPurged,
+                    summary.TelemetryEventsPurged,
+                    summary.VacuumAttempted,
+                    summary.VacuumSucceeded);
+            }
+            else
+            {
+                _logger.LogDebug("Telemetry retention sweep completed without purging records.");
+            }
+
+            capturedSummary = summary;
+            return summary;
+        }
+        finally
+        {
+            stopwatch.Stop();
+            _metrics.ReportRetentionSweepDuration(stopwatch.Elapsed);
+
+            var completedAtUtc = _clock.UtcNow;
+
+            if (capturedSummary is { } summary)
+            {
+                _metrics.ReportRetentionCompletion(runStartedAtUtc, completedAtUtc, summary);
+            }
+        }
     }
 
     private static async Task<int> PurgeAsync<TEntity>(

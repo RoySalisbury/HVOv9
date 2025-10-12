@@ -104,3 +104,4 @@ Running `dotnet run -c Release --project src/HVO.SkyMonitorV5.RPi.Benchmarks` wi
 - Profile on-device with `dotnet-counters` or `dotnet-trace` to observe CPU/concurrency behaviour under load.
 - Use the benchmark harness to evaluate changes (for example, alternate image encoders or filter tweaks) before deploying to the observatory hardware.
 - Combine runtime diagnostics with BenchmarkDotNet results to zoom in on bottlenecks.
+- For container-level soaks, run `scripts/run-skymonitor-benchmark-matrix.sh` with `SCENARIO_FILTER=mono-bg-on` (comma-separated for multiple scenarios) and `RUN_DURATION=120` for a two-minute local baseline. Pair the script with `DOCKER_CONTEXT=hvo-local`, point `DATA_ROOT` at `benchmarks/<host>/datastore`, and export `TAIL_LOGS=false` if you invoke `deploy-skymonitor-rpi.sh` first from within VS Code terminals to avoid long-running log streams.

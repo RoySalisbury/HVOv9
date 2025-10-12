@@ -371,6 +371,95 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Telemetry
 
                     b.ToTable("telemetry_event", (string)null);
                 });
+
+            modelBuilder.Entity("HVO.SkyMonitorV5.Data.Telemetry.Entities.TelemetrySystemProfileEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AdditionalPropertiesJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("additional_properties_json");
+
+                    b.Property<string>("CpuModel")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cpu_model");
+
+                    b.Property<string>("FrameworkDescription")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("framework_description");
+
+                    b.Property<DateTimeOffset>("FirstSeenAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("first_seen_at_utc");
+
+                    b.Property<string>("HardwareModel")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("hardware_model");
+
+                    b.Property<string>("HostName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host_name");
+
+                    b.Property<bool?>("IsContainerized")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_containerized");
+
+                    b.Property<DateTimeOffset>("LastSeenAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_seen_at_utc");
+
+                    b.Property<string>("MachineName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("machine_name");
+
+                    b.Property<string>("OperatingSystem")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("operating_system");
+
+                    b.Property<string>("OsArchitecture")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("os_architecture");
+
+                    b.Property<int?>("ProcessorCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("processor_count");
+
+                    b.Property<string>("ProcessArchitecture")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("process_architecture");
+
+                    b.Property<string>("SystemHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("system_hash");
+
+                    b.Property<double?>("TotalMemoryMegabytes")
+                        .HasColumnType("REAL")
+                        .HasColumnName("total_memory_mb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LastSeenAtUtc")
+                        .HasDatabaseName("ix_telemetry_system_profile_last_seen");
+
+                    b.HasIndex("SystemHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_telemetry_system_profile_hash");
+
+                    b.ToTable("telemetry_system_profile", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

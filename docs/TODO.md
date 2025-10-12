@@ -5,7 +5,9 @@
 - _No open items tracked. Reserve for NuGet updates, global cleanup, or cross-project initiatives._
 
 ## HVO.SkyMonitorV5.RPi
+- [ ] Perform full end-to-end validation against physical camera hardware once access is restored; capture notes on exposure behavior, queue pressure, and on-device telemetry before release.
 - [ ] Add a light-mode variant of the theme and expose a runtime toggle.
+- [ ] Migrate CelestialAnnotations filter configuration (DeepSkyObjects list, thresholds, labels) entirely into the database catalog and remove the unused legacy appsettings entries.
 
 ### UX Improvements
 - [ ] Promote the current SkyMonitor landing page into a dedicated **Monitor** view and hold the root **Dashboard** route for a future minimal overview.

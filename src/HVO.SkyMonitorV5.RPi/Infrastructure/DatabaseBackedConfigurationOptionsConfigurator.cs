@@ -344,6 +344,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
             var adapters = context.CameraAdapters.AsNoTracking().OrderBy(adapter => adapter.Id).ToList();
 
             var pipeline = context.CameraPipelineConfigurations.AsNoTracking()
+                .AsSplitQuery()
                 .Include(p => p.Filters)
                 .Include(p => p.CelestialAnnotations.DeepSkyObjects)
                 .SingleOrDefault()

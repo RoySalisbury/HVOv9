@@ -3,23 +3,19 @@ using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Telemetry;
 
-internal abstract record TelemetryWorkItem
+internal abstract record TelemetryWorkItem(DateTimeOffset EnqueuedAtUtc)
 {
-    private TelemetryWorkItem()
-    {
-    }
+    internal sealed record RemoteDispatchAttempt(DateTimeOffset EnqueuedAtUtc, RemoteDispatchAttemptPayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
-    internal sealed record RemoteDispatchAttempt(RemoteDispatchAttemptPayload Payload) : TelemetryWorkItem;
+    internal sealed record BackgroundStackerSample(DateTimeOffset EnqueuedAtUtc, BackgroundStackerSamplePayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
-    internal sealed record BackgroundStackerSample(BackgroundStackerSamplePayload Payload) : TelemetryWorkItem;
+    internal sealed record CapturePacingSample(DateTimeOffset EnqueuedAtUtc, CapturePacingSamplePayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
-    internal sealed record CapturePacingSample(CapturePacingSamplePayload Payload) : TelemetryWorkItem;
+    internal sealed record ProcessingQueueSample(DateTimeOffset EnqueuedAtUtc, ProcessingQueueSamplePayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
-    internal sealed record ProcessingQueueSample(ProcessingQueueSamplePayload Payload) : TelemetryWorkItem;
+    internal sealed record FilterMetricSample(DateTimeOffset EnqueuedAtUtc, FilterMetricSamplePayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
-    internal sealed record FilterMetricSample(FilterMetricSamplePayload Payload) : TelemetryWorkItem;
-
-    internal sealed record TelemetryEvent(TelemetryEventPayload Payload) : TelemetryWorkItem;
+    internal sealed record TelemetryEvent(DateTimeOffset EnqueuedAtUtc, TelemetryEventPayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 }
 
 internal sealed record RemoteDispatchAttemptPayload(
