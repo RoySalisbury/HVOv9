@@ -2,7 +2,6 @@
   <Folder Name="/RoofController/">
   <Project Path="HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj" />
   <Project Path="HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj" />
-  <Project Path="HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj" />
   <Project Path="HVO.RoofControllerV4.Common/HVO.RoofControllerV4.Common.csproj" />
   </Folder>
   <Folder Name="/SkyMonitor/">

@@ -1,4 +1,10 @@
+
 <Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Skip build on non-macOS systems -->
+	<PropertyGroup Condition="'$(OS)' != 'OSX'">
+		<BuildProject>false</BuildProject>
+	</PropertyGroup>
 
 	<PropertyGroup>
 		<TargetFramework>net9.0-ios</TargetFramework>
