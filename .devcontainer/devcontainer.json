@@ -36,5 +36,5 @@
         }
       ],
       "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh",
-      "postCreateCommand": "sudo apt update && sudo apt install -y gh libgpiod-dev i2c-tools && sudo usermod -aG i2c vscode"
+  "postCreateCommand": "bash .devcontainer/copy-catalogs.sh && sudo apt update && sudo apt install -y gh libgpiod-dev i2c-tools git curl wget unzip zip tar gzip make build-essential pkg-config libssl-dev ca-certificates jq nano python3 python3-pip lsb-release net-tools iproute2 && sudo usermod -aG i2c vscode && dotnet workload install maui-tizen wasm-tools web ios && dotnet tool install --global dotnet-ef"
     }
