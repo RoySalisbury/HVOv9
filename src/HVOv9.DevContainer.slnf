@@ -1,11 +1,10 @@
 {
   "solution": {
-    "path": "HVOv9.slnx",
+    "path": "HVOv9.DevContainer.slnx",
     "projects": [
       "HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj",
       "HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
       "HVO.RoofControllerV4.Common/HVO.RoofControllerV4.Common.csproj",
-      "HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj",
       "HVO.SkyMonitorV4.CLI/HVO.SkyMonitorV4.CLI.csproj",
       "HVO.SkyMonitorV4.RPi/HVO.SkyMonitorV4.RPi.csproj",
       "HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj",

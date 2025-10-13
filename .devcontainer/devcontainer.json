@@ -1,40 +1,45 @@
 {
-      "image": "mcr.microsoft.com/devcontainers/dotnet:9.0",
-      "runArgs": [
-        "--device=/dev/net/tun"
-      ],
-      "privileged": true,
-      "features": {
-        "ghcr.io/tailscale/codespace/tailscale": {}
+  "name": "HVOv9",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:9.0",
+  "runArgs": [
+    "--device=/dev/net/tun",
+    "--env-file",
+    "${localWorkspaceFolder}/.devcontainer/devcontainer.local.env"
+  ],
+  "privileged": true,
+  "features": {
+    "ghcr.io/tailscale/codespace/tailscale": {},
+    "ghcr.io/devcontainers/features/docker-from-docker:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "dotnet.defaultSolution": "src/HVOv9.DevContainer.slnx"
       },
-      "customizations": {
-        "vscode": {
-          "extensions": [
-            "ms-dotnettools.csdevkit",
-            "ms-dotnettools.vscode-dotnet-runtime",
-            "GitHub.remotehub",
-            "GitHub.vscode-pull-request-github",
-            "ms-vsliveshare.vsliveshare",
-            "GitHub.vscode-github-actions"
-          ]
-        }
-      },
-      "forwardPorts": [
-        5136,
-        7151
-      ],
-      "mounts": [
-        {
-          "type": "volume",
-          "source": "x509stores",
-          "target": "/home/vscode/.dotnet/corefx/cryptography/x509stores"
-        },
-        {
-          "type": "bind",
-          "target": "/proc/device-tree/model",
-          "source": "/proc/device-tree/model"
-        }
-      ],
-      "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh",
-  "postCreateCommand": "bash .devcontainer/copy-catalogs.sh && sudo apt update && sudo apt install -y gh libgpiod-dev i2c-tools git curl wget unzip zip tar gzip make build-essential pkg-config libssl-dev ca-certificates jq nano python3 python3-pip lsb-release net-tools iproute2 && sudo usermod -aG i2c vscode && dotnet workload install maui-tizen wasm-tools web ios && dotnet tool install --global dotnet-ef"
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "GitHub.remotehub",
+        "GitHub.vscode-pull-request-github",
+        "ms-vsliveshare.vsliveshare",
+        "GitHub.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
+      ]
     }
+  },
+  "forwardPorts": [
+    5136,
+    7151
+  ],
+  "mounts": [
+    {
+      "type": "volume",
+      "source": "x509stores",
+      "target": "/home/vscode/.dotnet/corefx/cryptography/x509stores"
+    }
+  ],
+  "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh",
+  "postCreateCommand": "bash .devcontainer/post-create.sh"
+}

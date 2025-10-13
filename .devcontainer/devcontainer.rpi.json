@@ -1,0 +1,17 @@
+{
+  "name": "HVOv9 (Raspberry Pi)",
+  "runArgs": [
+    "--device=/dev/i2c-1",
+    "--device=/dev/gpiomem",
+    "--device=/dev/net/tun",
+    "--env-file",
+    "${localWorkspaceFolder}/.devcontainer/devcontainer.local.env"
+  ],
+  "mounts": [
+    {
+      "type": "bind",
+      "source": "/proc/device-tree/model",
+      "target": "/proc/device-tree/model"
+    }
+  ]
+}

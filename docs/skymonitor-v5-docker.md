@@ -7,7 +7,7 @@ This guide explains how to build, validate, and exercise the SkyMonitor v5 conta
 ## Prerequisites
 
 - Docker CLI 24+ with the `rpi-remote` and/or `hvo-proxmox-home` contexts configured (`docker context ls` should list them).
-- Password-less SSH access for each remote context (typically configured with SSH certificates).
+- Password-less SSH access for each remote context (typically configured with SSH certificates). Inside the devcontainer or GitHub Codespaces, run `scripts/setup-ssh.sh` so the `HVO_SECRET__SSH__PRIVATE_KEY_B64` / `HVO_SECRET__SSH__PUBLIC_KEY_B64` secrets hydrate `~/.ssh/id_hvo_docker` automatically.
 - The `HVOv9` repository cloned locally with this branch checked out.
 - Optional: ensure the repository scripts directory is on your `$PATH`, or use explicit paths when invoking scripts.
 

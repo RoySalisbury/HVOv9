@@ -54,10 +54,11 @@ To swap between hardware and simulation, configure the DI options to supply your
 ## Dev environment (VS Code + Dev Container)
 
 This repo is configured for VS Code Dev Containers / GitHub Codespaces:
-- Dev container installs .NET 9 SDK and helpful extensions
+- Dev container installs .NET 9 SDK and helper tooling (Docker CLI, GitHub Copilot, etc.)
 - Ports forwarded by default: 5136 (HTTP) and 7151 (HTTPS)
 - VS Code launch profiles auto-build and open the site in your browser
 - Dev certificates are provisioned by the dev container automatically (no manual export or `.certs` files required)
+- Default solution inside the container: `src/HVOv9.DevContainer.slnx` (excludes the iPad project for faster restore)
 
 ### Dev Container details
 - Base image: mcr.microsoft.com/devcontainers/dotnet:9.0 (includes .NET 9 SDK)
@@ -67,11 +68,26 @@ This repo is configured for VS Code Dev Containers / GitHub Codespaces:
    - GitHub.remotehub (GitHub Repositories)
    - GitHub.vscode-pull-request-github (GitHub Pull Requests)
    - ms-vsliveshare.vsliveshare (Live Share)
+   - ms-azuretools.vscode-docker (Docker tooling)
+   - GitHub.copilot & GitHub.copilot-chat
 - Forwarded ports: 5136 (HTTP), 7151 (HTTPS)
 - Features/Mounts:
    - tailscale feature enabled for Codespaces (ghcr.io/tailscale/codespace/tailscale)
+   - Docker CLI feature (ghcr.io/devcontainers/features/docker-from-docker:1) available for host or remote contexts
    - Volume mount for X509 stores at /home/vscode/.dotnet/corefx/cryptography/x509stores (persists dev cert store between rebuilds)
 - On create, the container runs a script to set up the .NET dev certificate inside the container
+
+#### Secrets & SSH bootstrap
+- `scripts/setup-user-secrets.sh` hydrates .NET user secrets when the environment provides:
+   - `HVO_SECRET__WEBSITEV9__DB_CONNECTION`
+   - `HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION`
+   - `HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY`
+   - `HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT`
+- `scripts/setup-ssh.sh` provisions SSH keys for Docker contexts (optional env vars):
+   - `HVO_SECRET__SSH__PRIVATE_KEY` or `HVO_SECRET__SSH__PRIVATE_KEY_B64`
+   - `HVO_SECRET__SSH__PUBLIC_KEY` or `HVO_SECRET__SSH__PUBLIC_KEY_B64`
+- Configure these as GitHub repository or Codespaces secrets so they flow into the container automatically. For local VS Code outside the devcontainer, run the scripts manually after exporting the same env vars.
+- The Tailscale feature honours the standard `TS_AUTHKEY` environment variable; store it in GitHub secrets to authenticate the tunnel during devcontainer startup.
 
 ### Quick start
 
@@ -80,11 +96,25 @@ This repo is configured for VS Code Dev Containers / GitHub Codespaces:
     - HTTPS: https://localhost:7151
     - HTTP:  http://localhost:5136
     - There’s also “.NET Debug (HTTP only)” to avoid HTTPS entirely.
+3) (Optional) Outside the devcontainer, hydrate secrets and SSH keys manually:
+   ```bash
+   HVO_SECRET__WEBSITEV9__DB_CONNECTION="..." \
+   HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION="..." \
+   HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY="..." \
+   HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT="..." \
+   bash scripts/setup-user-secrets.sh
+
+   HVO_SECRET__SSH__PRIVATE_KEY_B64="$(base64 ~/.ssh/my_rsa_key | tr -d '\n')" \
+   HVO_SECRET__SSH__PUBLIC_KEY_B64="$(base64 ~/.ssh/my_rsa_key.pub | tr -d '\n')" \
+   bash scripts/setup-ssh.sh
+   ```
+   Configure the same values as GitHub repository/Codespaces secrets so the devcontainer picks them up automatically.
 
 Notes
 - In Development, HTTPS redirection is disabled by default (configurable).
 - LocalApi HttpClient can trust dev certs in Development to avoid SSL errors over port forwarding.
 - Dev certs are container-managed; you don’t need to run any setup scripts or keep a local PFX.
+- Need the iPad project? Open the full solution (`src/HVOv9.slnx`) from a native macOS environment.
 
 ### Troubleshooting the Dev Container
 - Rebuild the container (fixes most environment drift):
@@ -158,7 +188,7 @@ The script keeps the terminal attached to the device console. Press `Ctrl+C` whe
 
 ## Docker deployment
 
-- [RoofController V4 Docker guide](docs/projects/roof-controller-v4-rpi/docker-guide.md) – build and run the roof controller on a Raspberry Pi 5 with GPIO/I²C access inside a minimal container.
+- [RoofController V4 Docker guide](docs/roofcontrollerv4-docker.md) – build and run the roof controller on a Raspberry Pi 5 with GPIO/I²C access inside a minimal container.
 - [SkyMonitor v5 Docker guide](docs/skymonitor-v5-docker.md) – covers building locally or against the Pi. When launching from VS Code terminals, export `TAIL_LOGS=false` to avoid blocking while the container runs.
 - [SkyMonitor v5 Operations Runbook](docs/skymonitor-v5-operations-runbook.md) – backup cadence, restore rehearsals, catalog swaps, and change-control guidance for ops teams.
 - [SkyMonitor v5 JSON Migration Guide](docs/skymonitor-v5-json-migration-guide.md) – step-by-step workflow for moving legacy appsettings configuration into the new SQLite stores.

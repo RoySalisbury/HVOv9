@@ -20,18 +20,29 @@ set -euo pipefail
 #   EXTRA_DOCKER_ARGS   Additional arguments appended to docker run (default: none)
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-DOCKER_CONTEXT=${DOCKER_CONTEXT:-rpi-remote}
-IMAGE_TAG=${IMAGE_TAG:-hvov9/skymonitor-v5:latest}
-CONTAINER_NAME=${CONTAINER_NAME:-hvo-skymonitor-v5}
-DATA_ROOT=${DATA_ROOT:-/srv/hvo/skymonitor/datastores}
-RUN_TESTS=${RUN_TESTS:-true}
-RUN_BENCHMARKS=${RUN_BENCHMARKS:-false}
-START_CONTAINER=${START_CONTAINER:-false}
-RUN_DURATION=${RUN_DURATION:-60}
-HOST_HTTP_PORT=${HOST_HTTP_PORT:-5136}
-EXTRA_DOCKER_ARGS=${EXTRA_DOCKER_ARGS:-}
-TAIL_LOGS=${TAIL_LOGS:-true}
+if [[ -z "${DOCKER_CONTEXT:-}" ]]; then
+  echo "DOCKER_CONTEXT must be set (e.g. rpi-remote)" >&2
+  exit 1
+fi
+
+# Using defaults here would mask configuration issues (e.g. wrong data root or log handling),
+# so require callers to be explicit for scripts invoked from automation.
+: "${IMAGE_TAG:?Set IMAGE_TAG to the target tag, e.g. hvov9/skymonitor-v5:latest}"
+: "${CONTAINER_NAME:?Set CONTAINER_NAME to the container name, e.g. hvo-skymonitor-v5}"
+: "${DATA_ROOT:?Set DATA_ROOT to the remote datastore root, e.g. /srv/hvo/skymonitor/datastores}"
+: "${RUN_TESTS:?Set RUN_TESTS to true/false explicitly}"
+: "${RUN_BENCHMARKS:?Set RUN_BENCHMARKS to true/false explicitly}"
+: "${START_CONTAINER:?Set START_CONTAINER to true/false explicitly}"
+: "${RUN_DURATION:?Set RUN_DURATION to desired seconds (e.g. 60)}"
+: "${HOST_HTTP_PORT:?Set HOST_HTTP_PORT to the desired port (e.g. 5136)}"
+: "${TAIL_LOGS:?Set TAIL_LOGS to true/false explicitly}"
+
 SKYMONITOR_RUNTIME=${SKYMONITOR_RUNTIME:-}
+EXTRA_DOCKER_ARGS=${EXTRA_DOCKER_ARGS:-}
+
+echo "Using Docker context: ${DOCKER_CONTEXT}"
+echo "Building image tag:   ${IMAGE_TAG}"
+echo "Remote data root:     ${DATA_ROOT}"
 
 DOCKERFILE_PATH="${REPO_ROOT}/src/HVO.SkyMonitorV5.RPi/Dockerfile"
 BUILD_VERSION=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo "dev")

@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    <UserSecretsId>hvo-website-playground</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
