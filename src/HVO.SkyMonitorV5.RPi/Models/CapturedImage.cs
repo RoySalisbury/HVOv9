@@ -7,6 +7,7 @@ namespace HVO.SkyMonitorV5.RPi.Models;
 /// Represents a freshly captured raw image plus metadata supplied by a camera adapter.
 /// </summary>
 public sealed record CapturedImage(
+    Guid FrameId,
     SKBitmap Image,
     DateTimeOffset Timestamp,
     ExposureSettings Exposure,

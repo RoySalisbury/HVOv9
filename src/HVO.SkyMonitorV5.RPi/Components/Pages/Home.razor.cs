@@ -201,6 +201,16 @@ public sealed partial class Home : ComponentBase, IDisposable
 
     private ExposureOverrideSnapshot? NightExposureOverride => _status?.ExposureOverrides?.Night;
 
+    private ExposureProfileSummary? ExposureProfiles => _status?.ExposureProfiles ?? _status?.Summary?.ExposureProfiles;
+
+    private string DayExposureProfileExposureSummary => FormatExposureLine(ExposureProfiles?.Day);
+
+    private string DayExposureProfileGainSummary => FormatGainLine(ExposureProfiles?.Day);
+
+    private string NightExposureProfileExposureSummary => FormatExposureLine(ExposureProfiles?.Night);
+
+    private string NightExposureProfileGainSummary => FormatGainLine(ExposureProfiles?.Night);
+
     private string ExposureAnalysisTimestampText
     {
         get
@@ -307,6 +317,64 @@ public sealed partial class Home : ComponentBase, IDisposable
     private string DayExposureOverrideSummary => FormatOverrideSummary(DayExposureOverride, "Day");
 
     private string NightExposureOverrideSummary => FormatOverrideSummary(NightExposureOverride, "Night");
+
+    private static string FormatExposureLine(ExposureProfileBucketSummary? bucket)
+    {
+        if (bucket is null)
+        {
+            return "Exposure configuration unavailable";
+        }
+
+        var culture = CultureInfo.CurrentCulture;
+        var rangeText = bucket.MinExposureMilliseconds == bucket.MaxExposureMilliseconds
+            ? string.Format(culture, "fixed {0} ms", bucket.MinExposureMilliseconds)
+            : string.Format(culture, "range {0}-{1} ms", bucket.MinExposureMilliseconds, bucket.MaxExposureMilliseconds);
+
+        if (bucket.StartExposureMilliseconds != bucket.BaselineExposureMilliseconds)
+        {
+            return string.Format(
+                culture,
+                "Exposure start {0} ms · default {1} ms · {2}",
+                bucket.StartExposureMilliseconds,
+                bucket.BaselineExposureMilliseconds,
+                rangeText);
+        }
+
+        return string.Format(
+            culture,
+            "Exposure default {0} ms · {1}",
+            bucket.BaselineExposureMilliseconds,
+            rangeText);
+    }
+
+    private static string FormatGainLine(ExposureProfileBucketSummary? bucket)
+    {
+        if (bucket is null)
+        {
+            return "Gain configuration unavailable";
+        }
+
+        var culture = CultureInfo.CurrentCulture;
+        var rangeText = bucket.MinGain == bucket.MaxGain
+            ? string.Format(culture, "fixed {0}", bucket.MinGain)
+            : string.Format(culture, "range {0}-{1}", bucket.MinGain, bucket.MaxGain);
+
+        if (bucket.StartGain != bucket.BaselineGain)
+        {
+            return string.Format(
+                culture,
+                "Gain start {0} · default {1} · {2}",
+                bucket.StartGain,
+                bucket.BaselineGain,
+                rangeText);
+        }
+
+        return string.Format(
+            culture,
+            "Gain default {0} · {1}",
+            bucket.BaselineGain,
+            rangeText);
+    }
 
     private string LastFrameTimestampText
     {

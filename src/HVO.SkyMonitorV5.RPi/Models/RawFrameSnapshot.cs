@@ -9,6 +9,7 @@ namespace HVO.SkyMonitorV5.RPi.Models;
 /// when replaced.
 /// </summary>
 public sealed record RawFrameSnapshot(
+    Guid FrameId,
     SKBitmap Image,
     DateTimeOffset Timestamp,
     ExposureSettings Exposure);

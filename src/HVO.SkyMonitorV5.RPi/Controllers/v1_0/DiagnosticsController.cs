@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Asp.Versioning;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
@@ -88,6 +89,54 @@ public sealed class DiagnosticsController : ControllerBase
 
         return Problem(
             title: "Unable to retrieve filter telemetry.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [HttpGet("frame-exports")]
+    [ProducesResponseType(typeof(FrameExportMetricsSnapshot), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<FrameExportMetricsSnapshot>> GetFrameExportMetricsAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetFrameExportMetricsAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve frame export metrics.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [HttpGet("frame-exports/history")]
+    [ProducesResponseType(typeof(FrameExportHistoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<FrameExportHistoryResponse>> GetFrameExportHistoryAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetFrameExportHistoryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve frame export history.",
             detail: error?.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }

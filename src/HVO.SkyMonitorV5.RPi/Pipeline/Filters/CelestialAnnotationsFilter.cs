@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -226,13 +227,47 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         using var labelPaint = new SKPaint { IsAntialias = true, Color = cache.StarLabelColor };
         using var haloPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 150) };
 
+        var labelFont = textFont;
+        SKTypeface? fallbackTypeface = null;
+        SKFont? fallbackFont = null;
+
+        if (HasMissingGlyphs(labelFont))
+        {
+            var customFontPath = Environment.GetEnvironmentVariable("HVO_CELESTIAL_FONT_PATH");
+            fallbackTypeface = TryResolveFallbackTypeface(customFontPath, _logger);
+
+            if (fallbackTypeface is not null)
+            {
+                fallbackFont = new SKFont(fallbackTypeface, labelFontSize);
+                labelFont = fallbackFont;
+
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    var family = string.IsNullOrWhiteSpace(fallbackTypeface.FamilyName) ? "<unknown>" : fallbackTypeface.FamilyName;
+                    _logger.LogInformation("Celestial annotations: using fallback typeface '{FamilyName}'.", family);
+                }
+
+                if (HasMissingGlyphs(labelFont))
+                {
+                    var family = string.IsNullOrWhiteSpace(fallbackTypeface.FamilyName) ? "<unknown>" : fallbackTypeface.FamilyName;
+                    _logger.LogWarning(
+                        "Celestial annotations: fallback typeface '{FamilyName}' is missing required glyphs; labels may still be incomplete.",
+                        family);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Celestial annotations: no fallback font with glyph support was found; labels may not render correctly.");
+            }
+        }
+
         var starOutcome = AnnotateTargets(
             "star",
             starAnnotations,
             engine,
             canvas,
             haloPaint,
-            textFont,
+            labelFont,
             labelPaint,
             bitmap.Width,
             bitmap.Height,
@@ -245,7 +280,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             engine,
             canvas,
             haloPaint,
-            textFont,
+            labelFont,
             labelPaint,
             bitmap.Width,
             bitmap.Height,
@@ -280,7 +315,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                     planet.Name,
                     planet.Color,
                     cache.PlanetRingRadius,
-                    textFont,
+                    labelFont,
                     labelPaint,
                     haloPaint,
                     bitmap.Width,
@@ -289,6 +324,9 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                     useFaintRing: false);
             }
         }
+
+        fallbackFont?.Dispose();
+        fallbackTypeface?.Dispose();
     }
 
     // ------- helpers (unchanged from your previous version, trimmed where possible) -------
@@ -738,6 +776,16 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
     private static SKColor ResolveColor(string? hex, SKColor fallback)
         => !string.IsNullOrWhiteSpace(hex) && SKColor.TryParse(hex, out var parsed) ? parsed : fallback;
 
+    private static bool HasMissingGlyphs(SKFont font)
+    {
+        const string ProbeText = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+        var glyphs = new ushort[ProbeText.Length];
+        font.GetGlyphs(ProbeText, glyphs);
+
+        return glyphs.All(glyph => glyph == 0);
+    }
+
     private static IReadOnlyDictionary<string, Star> BuildCatalogStarIndex(IConstellationCatalog catalog)
     {
         var index = new Dictionary<string, Star>(StringComparer.OrdinalIgnoreCase);
@@ -786,6 +834,101 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         else if (rect.Bottom > maxY) offsetY = maxY - rect.Bottom;
 
         rect.Offset(offsetX, offsetY);
+    }
+
+    private static SKTypeface? TryResolveFallbackTypeface(string? customFontPath, ILogger logger)
+    {
+        static IEnumerable<string> ExpandCandidates(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) yield break;
+
+            if (Path.IsPathRooted(path))
+            {
+                yield return path;
+                yield break;
+            }
+
+            var baseDirectory = AppContext.BaseDirectory;
+            yield return Path.GetFullPath(path, baseDirectory);
+
+            var contentRoot = Directory.GetCurrentDirectory();
+            yield return Path.GetFullPath(path, contentRoot);
+        }
+
+        var candidates = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(customFontPath))
+        {
+            candidates.Add(customFontPath);
+        }
+
+        var baseDir = AppContext.BaseDirectory;
+        candidates.Add(Path.Combine(baseDir, "Resources", "Fonts", "OpenSans-Semibold.ttf"));
+        candidates.Add(Path.Combine(baseDir, "Resources", "Fonts", "OpenSans-Regular.ttf"));
+        candidates.Add(Path.Combine(baseDir, "fonts", "OpenSans-Semibold.ttf"));
+
+        var contentDir = Directory.GetCurrentDirectory();
+        candidates.Add(Path.Combine(contentDir, "Resources", "Fonts", "OpenSans-Semibold.ttf"));
+        candidates.Add(Path.Combine(contentDir, "Resources", "Fonts", "OpenSans-Regular.ttf"));
+        candidates.Add(Path.Combine(contentDir, "wwwroot", "fonts", "OpenSans-Semibold.ttf"));
+        candidates.Add(Path.Combine(contentDir, "wwwroot", "fonts", "OpenSans-Regular.ttf"));
+        candidates.Add(Path.Combine(contentDir, "..", "HVO.RoofControllerV4.iPad", "Resources", "Fonts", "OpenSans-Semibold.ttf"));
+        candidates.Add(Path.Combine(contentDir, "..", "HVO.RoofControllerV4.iPad", "Resources", "Fonts", "OpenSans-Regular.ttf"));
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var candidate in candidates.SelectMany(ExpandCandidates))
+        {
+            string? normalized = null;
+
+            try
+            {
+                normalized = Path.GetFullPath(candidate);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (!seen.Add(normalized))
+            {
+                continue;
+            }
+
+            if (!File.Exists(normalized))
+            {
+                logger.LogTrace(
+                    "Celestial annotations: fallback font candidate {Path} not found.",
+                    normalized);
+                continue;
+            }
+
+            try
+            {
+                var typeface = SKTypeface.FromFile(normalized);
+                if (typeface is null)
+                {
+                    continue;
+                }
+
+                logger.LogInformation(
+                    "Celestial annotations: fallback typeface loaded from {Path} (family '{Family}').",
+                    normalized,
+                    string.IsNullOrWhiteSpace(typeface.FamilyName) ? "<unknown>" : typeface.FamilyName);
+
+                return typeface;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Celestial annotations: failed to load fallback font from {Path}.",
+                    normalized);
+            }
+        }
+
+        logger.LogWarning("Celestial annotations: no fallback font candidates succeeded.");
+        return null;
     }
 
     private sealed record ResolvedAnnotation(string Name, Star Star, SKColor RingColor, float RingRadius, bool UseFaintRing, SKColor LabelColor);

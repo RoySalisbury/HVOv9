@@ -194,7 +194,7 @@ public sealed class RemoteFramePublisherTests
         public EnvelopeFixture()
         {
             _bitmap = new SKBitmap(4, 4);
-            var capturedImage = new CapturedImage(_bitmap, DateTimeOffset.UtcNow, new ExposureSettings(1000, 100, false, false), null);
+            var capturedImage = new CapturedImage(Guid.NewGuid(), _bitmap, DateTimeOffset.UtcNow, new ExposureSettings(1000, 100, false, false), null);
             var configuration = CameraConfiguration.FromOptions(new CameraPipelineOptions());
             var rig = RigPresets.MockAsi174_Fujinon;
 

@@ -15,14 +15,18 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Telemetry;
+using HVO.SkyMonitorV5.RPi.Exports;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using HVO.SkyMonitorV5.Data.Telemetry.Entities;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
 
 internal sealed class DiagnosticsService : IDiagnosticsService
 {
+    private const int FrameExportHistoryLimit = 200;
+    private const int PendingRetryPreviewLimit = 10;
     private readonly IFrameStateStore _frameStateStore;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _configurationContextFactory;
@@ -186,6 +190,228 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         }
     }
 
+    public async Task<Result<FrameExportMetricsSnapshot>> GetFrameExportMetricsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var telemetryContext = await _telemetryContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var attemptRows = await telemetryContext.FrameExportAttempts
+                .AsNoTracking()
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var aggregates = attemptRows
+                .GroupBy(attempt => new { attempt.Stage, attempt.SinkName })
+                .Select(group =>
+                {
+                    var orderedAttempts = group
+                        .OrderByDescending(static attempt => attempt.AttemptedAtUtc)
+                        .ToList();
+
+                    var lastAttempt = orderedAttempts.FirstOrDefault();
+                    var lastSuccess = orderedAttempts.FirstOrDefault(static attempt => attempt.Success);
+                    var lastFailure = orderedAttempts.FirstOrDefault(static attempt => !attempt.Success);
+
+                    return new FrameExportAggregateRow(
+                        Stage: group.Key.Stage,
+                        SinkName: group.Key.SinkName,
+                        AttemptCount: group.Count(),
+                        SuccessCount: group.Count(static attempt => attempt.Success),
+                        FailureCount: group.Count(static attempt => !attempt.Success),
+                        AverageLatencyMilliseconds: group.Average(static attempt => attempt.LatencyMilliseconds),
+                        AverageQueueLatencyMilliseconds: group.Average(static attempt => attempt.QueueLatencyMilliseconds),
+                        AverageProcessingMilliseconds: group.Average(static attempt => attempt.ProcessingMilliseconds),
+                        AverageFullPipelineMilliseconds: group.Average(static attempt => attempt.FullPipelineMilliseconds),
+                        LastAttemptAtUtc: lastAttempt?.AttemptedAtUtc,
+                        LastSuccessAtUtc: lastSuccess?.AttemptedAtUtc,
+                        LastFailureAtUtc: lastFailure?.AttemptedAtUtc,
+                        LastAttempt: lastAttempt,
+                        LastSuccess: lastSuccess,
+                        LastFailure: lastFailure);
+                })
+                .ToList();
+
+            var pendingRetryEntities = await telemetryContext.FrameExportRetries
+                .AsNoTracking()
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var pendingRetryCountLong = pendingRetryEntities.LongCount();
+            var pendingRetryPreview = pendingRetryEntities
+                .OrderBy(static entity => entity.NextAttemptAtUtc)
+                .Take(PendingRetryPreviewLimit)
+                .ToList();
+
+            var pendingRetryCount = pendingRetryCountLong >= int.MaxValue
+                ? int.MaxValue
+                : (int)pendingRetryCountLong;
+
+            var pendingRetrySnapshots = pendingRetryPreview
+                .Select(entity => new FrameExportRetryEntry(
+                    entity.FrameId,
+                    (FrameExportStage)entity.Stage,
+                    entity.SinkName,
+                    entity.AttemptCount,
+                    entity.EnqueuedAtUtc,
+                    entity.LastAttemptAtUtc,
+                    entity.NextAttemptAtUtc,
+                    entity.LastErrorMessage))
+                .ToList();
+
+            if (aggregates.Count == 0)
+            {
+                var emptySnapshot = new FrameExportMetricsSnapshot(
+                    GeneratedAt: _clock.LocalNow,
+                    TotalAttemptCount: 0,
+                    TotalSuccessCount: 0,
+                    TotalFailureCount: 0,
+                    SuccessRatePercent: 0d,
+                    Sinks: Array.Empty<FrameExportSinkMetrics>(),
+                    PendingRetryCount: pendingRetryCount,
+                    PendingRetries: pendingRetrySnapshots);
+
+                return Result<FrameExportMetricsSnapshot>.Success(emptySnapshot);
+            }
+
+            var sinkMetrics = new List<FrameExportSinkMetrics>(aggregates.Count);
+            var totalAttemptCount = 0;
+            var totalSuccessCount = 0;
+            var totalFailureCount = 0;
+
+            foreach (var aggregate in aggregates)
+            {
+                totalAttemptCount += aggregate.AttemptCount;
+                totalSuccessCount += aggregate.SuccessCount;
+                totalFailureCount += aggregate.FailureCount;
+
+                var lastAttempt = aggregate.LastAttempt;
+                var lastSuccess = aggregate.LastSuccess;
+                var lastFailure = aggregate.LastFailure;
+
+                var successRate = aggregate.AttemptCount == 0
+                    ? 0d
+                    : Math.Round(aggregate.SuccessCount * 100d / aggregate.AttemptCount, 2, MidpointRounding.AwayFromZero);
+
+                sinkMetrics.Add(new FrameExportSinkMetrics(
+                    Stage: MapFrameExportStage(aggregate.Stage),
+                    SinkName: aggregate.SinkName,
+                    AttemptCount: aggregate.AttemptCount,
+                    SuccessCount: aggregate.SuccessCount,
+                    FailureCount: aggregate.FailureCount,
+                    SuccessRatePercent: successRate,
+                    AverageLatencyMilliseconds: aggregate.AverageLatencyMilliseconds,
+                    AverageQueueLatencyMilliseconds: aggregate.AverageQueueLatencyMilliseconds,
+                    AverageProcessingMilliseconds: aggregate.AverageProcessingMilliseconds,
+                    AverageFullPipelineMilliseconds: aggregate.AverageFullPipelineMilliseconds,
+                    LastAttemptAtUtc: aggregate.LastAttemptAtUtc,
+                    LastAttemptAtLocal: lastAttempt?.AttemptedAtLocal,
+                    LastAttemptSucceeded: lastAttempt?.Success,
+                    LastAttemptLatencyMilliseconds: lastAttempt?.LatencyMilliseconds,
+                    LastAttemptPayloadBytes: lastAttempt?.PayloadBytes,
+                    LastAttemptContentType: lastAttempt?.PayloadContentType,
+                    LastAttemptExtension: lastAttempt?.PayloadExtension,
+                    LastAttemptQueueLatencyMilliseconds: lastAttempt?.QueueLatencyMilliseconds,
+                    LastAttemptProcessingMilliseconds: lastAttempt?.ProcessingMilliseconds,
+                    LastAttemptFullPipelineMilliseconds: lastAttempt?.FullPipelineMilliseconds,
+                    LastSuccessAtUtc: aggregate.LastSuccessAtUtc,
+                    LastSuccessAtLocal: lastSuccess?.AttemptedAtLocal,
+                    LastFailureAtUtc: aggregate.LastFailureAtUtc,
+                    LastFailureAtLocal: lastFailure?.AttemptedAtLocal,
+                    LastFailureMessage: lastFailure?.ErrorMessage));
+            }
+
+            var overallSuccessRate = totalAttemptCount == 0
+                ? 0d
+                : Math.Round(totalSuccessCount * 100d / totalAttemptCount, 2, MidpointRounding.AwayFromZero);
+
+            var snapshot = new FrameExportMetricsSnapshot(
+                GeneratedAt: _clock.LocalNow,
+                TotalAttemptCount: totalAttemptCount,
+                TotalSuccessCount: totalSuccessCount,
+                TotalFailureCount: totalFailureCount,
+                SuccessRatePercent: overallSuccessRate,
+                Sinks: sinkMetrics,
+                PendingRetryCount: pendingRetryCount,
+                PendingRetries: pendingRetrySnapshots);
+
+            return Result<FrameExportMetricsSnapshot>.Success(snapshot);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while gathering frame export metrics snapshot.");
+            return Result<FrameExportMetricsSnapshot>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<FrameExportHistoryResponse>> GetFrameExportHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var telemetryContext = await _telemetryContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var recentAttempts = await telemetryContext.FrameExportAttempts
+                .AsNoTracking()
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            recentAttempts = recentAttempts
+                .OrderByDescending(static attempt => attempt.AttemptedAtUtc)
+                .Take(FrameExportHistoryLimit)
+                .ToList();
+
+            if (recentAttempts.Count == 0)
+            {
+                var emptyResponse = new FrameExportHistoryResponse(_clock.LocalNow, Array.Empty<FrameExportHistorySample>());
+                return Result<FrameExportHistoryResponse>.Success(emptyResponse);
+            }
+
+            recentAttempts.Sort(static (left, right) => DateTimeOffset.Compare(left.AttemptedAtLocal, right.AttemptedAtLocal));
+
+            var samples = new List<FrameExportHistorySample>(recentAttempts.Count);
+            foreach (var attempt in recentAttempts)
+            {
+                samples.Add(new FrameExportHistorySample(
+                    attempt.FrameId,
+                    attempt.AttemptedAtUtc,
+                    attempt.AttemptedAtLocal,
+                    MapFrameExportStage(attempt.Stage),
+                    attempt.SinkName,
+                    attempt.Success,
+                    attempt.LatencyMilliseconds,
+                    attempt.PayloadBytes,
+                    attempt.PayloadContentType,
+                    attempt.PayloadExtension,
+                    attempt.QueueLatencyMilliseconds,
+                    attempt.ProcessingMilliseconds,
+                    attempt.FullPipelineMilliseconds,
+                    attempt.FramesStacked,
+                    attempt.IntegrationMilliseconds,
+                    attempt.ErrorMessage));
+            }
+
+            var response = new FrameExportHistoryResponse(_clock.LocalNow, samples);
+            return Result<FrameExportHistoryResponse>.Success(response);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while gathering frame export telemetry history.");
+            return Result<FrameExportHistoryResponse>.Failure(ex);
+        }
+    }
+
     public Task<Result<SystemDiagnosticsSnapshot>> GetSystemDiagnosticsAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -285,6 +511,30 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         }
     }
 
+    private async Task<DataStoreInstanceMetrics> CreateConfigurationStoreMetricsAsync(
+        DataStoreBootstrapState bootstrapState,
+        CancellationToken cancellationToken)
+    {
+        var databasePath = ResolveDatabasePath(ConfigurationDatabaseRelativePath, bootstrapState.DatabasePath);
+        var fileStats = await CaptureFileStatsAsync(databasePath, cancellationToken).ConfigureAwait(false);
+        var tables = fileStats.Exists
+            ? await CaptureConfigurationTableMetricsAsync(cancellationToken).ConfigureAwait(false)
+            : Array.Empty<DataStoreTableMetric>();
+
+        return new DataStoreInstanceMetrics(
+            DatabasePath: databasePath,
+            Exists: fileStats.Exists,
+            FileBytes: fileStats.LengthBytes,
+            FileMegabytes: fileStats.Megabytes,
+            PageCount: fileStats.PageCount,
+            PageSizeBytes: fileStats.PageSizeBytes,
+            FreePages: fileStats.FreePages,
+            Tables: tables,
+            Bootstrap: MapBootstrapState(bootstrapState),
+            TelemetryIngestion: null,
+            TelemetryRetention: null);
+    }
+
     private static BackgroundStackerMetricsResponse CreateEmptyStackerMetrics() => new(
         Enabled: false,
         QueueDepth: 0,
@@ -311,27 +561,26 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         SecondsSinceLastCompleted: null,
         LastFrameNumber: null);
 
-    private async Task<DataStoreInstanceMetrics> CreateConfigurationStoreMetricsAsync(DataStoreBootstrapState bootstrapState, CancellationToken cancellationToken)
-    {
-        var databasePath = ResolveDatabasePath(ConfigurationDatabaseRelativePath, bootstrapState.DatabasePath);
-        var fileStats = await CaptureFileStatsAsync(databasePath, cancellationToken).ConfigureAwait(false);
-        var tables = fileStats.Exists
-            ? await CaptureConfigurationTableMetricsAsync(cancellationToken).ConfigureAwait(false)
-            : Array.Empty<DataStoreTableMetric>();
+    private sealed record FrameExportAggregateRow(
+        int Stage,
+        string SinkName,
+        int AttemptCount,
+        int SuccessCount,
+        int FailureCount,
+        double? AverageLatencyMilliseconds,
+        double? AverageQueueLatencyMilliseconds,
+        double? AverageProcessingMilliseconds,
+    double? AverageFullPipelineMilliseconds,
+        DateTimeOffset? LastAttemptAtUtc,
+        DateTimeOffset? LastSuccessAtUtc,
+        DateTimeOffset? LastFailureAtUtc,
+        FrameExportAttemptEntity? LastAttempt,
+        FrameExportAttemptEntity? LastSuccess,
+        FrameExportAttemptEntity? LastFailure);
 
-        return new DataStoreInstanceMetrics(
-            DatabasePath: databasePath,
-            Exists: fileStats.Exists,
-            FileBytes: fileStats.LengthBytes,
-            FileMegabytes: fileStats.Megabytes,
-            PageCount: fileStats.PageCount,
-            PageSizeBytes: fileStats.PageSizeBytes,
-            FreePages: fileStats.FreePages,
-            Tables: tables,
-            Bootstrap: MapBootstrapState(bootstrapState),
-            TelemetryIngestion: null,
-            TelemetryRetention: null);
-    }
+    private static FrameExportStage MapFrameExportStage(int stageValue) => Enum.IsDefined(typeof(FrameExportStage), stageValue)
+        ? (FrameExportStage)stageValue
+        : FrameExportStage.Raw;
 
     private async Task<DataStoreInstanceMetrics> CreateTelemetryStoreMetricsAsync(
         DataStoreBootstrapState bootstrapState,
@@ -414,6 +663,7 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             var tables = new List<DataStoreTableMetric>
             {
                 new("remote_dispatch_attempt", await context.RemoteDispatchAttempts.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("frame_export_attempt", await context.FrameExportAttempts.LongCountAsync(cancellationToken).ConfigureAwait(false)),
                 new("background_stacker_sample", await context.BackgroundStackerSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
                 new("capture_pacing_sample", await context.CapturePacingSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
                 new("processing_queue_sample", await context.ProcessingQueueSamples.LongCountAsync(cancellationToken).ConfigureAwait(false)),
@@ -450,20 +700,30 @@ internal sealed class DiagnosticsService : IDiagnosticsService
                 DataSource = databasePath,
                 Mode = SqliteOpenMode.ReadOnly
             }.ToString());
-
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            var pageCount = await ExecutePragmaLongAsync(connection, "PRAGMA page_count;", cancellationToken).ConfigureAwait(false);
-            var pageSize = await ExecutePragmaLongAsync(connection, "PRAGMA page_size;", cancellationToken).ConfigureAwait(false);
-            var freePages = await ExecutePragmaLongAsync(connection, "PRAGMA freelist_count;", cancellationToken).ConfigureAwait(false);
+            await using var pageCountCommand = connection.CreateCommand();
+            pageCountCommand.CommandText = "PRAGMA page_count;";
+            var pageCount = await pageCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var pageSizeCommand = connection.CreateCommand();
+            pageSizeCommand.CommandText = "PRAGMA page_size;";
+            var pageSize = await pageSizeCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var freelistCommand = connection.CreateCommand();
+            freelistCommand.CommandText = "PRAGMA freelist_count;";
+            var freelistCount = await freelistCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            var fileBytes = fileInfo.Length;
+            var megabytes = fileBytes / 1024d / 1024d;
 
             return new DataStoreFileStats(
                 Exists: true,
-                LengthBytes: fileInfo.Length,
-                Megabytes: ToMegabytes(fileInfo.Length),
-                PageCount: pageCount,
-                PageSizeBytes: pageSize,
-                FreePages: freePages);
+                LengthBytes: fileBytes,
+                Megabytes: megabytes,
+                PageCount: ConvertToNullableLong(pageCount),
+                PageSizeBytes: ConvertToNullableLong(pageSize),
+                FreePages: ConvertToNullableLong(freelistCount));
         }
         catch (OperationCanceledException)
         {
@@ -471,23 +731,16 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to capture SQLite statistics for {DatabasePath}.", databasePath);
+            _logger.LogWarning(ex, "Failed to read SQLite file stats for {DatabasePath}.", databasePath);
+            var fileBytes = fileInfo.Length;
             return new DataStoreFileStats(
                 Exists: true,
-                LengthBytes: fileInfo.Length,
-                Megabytes: ToMegabytes(fileInfo.Length),
+                LengthBytes: fileBytes,
+                Megabytes: fileBytes / 1024d / 1024d,
                 PageCount: null,
                 PageSizeBytes: null,
                 FreePages: null);
         }
-    }
-
-    private static async Task<long?> ExecutePragmaLongAsync(SqliteConnection connection, string sql, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return ConvertToNullableLong(result);
     }
 
     private static long? ConvertToNullableLong(object? value)
@@ -546,6 +799,7 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             LastCompletedAtUtc: snapshot.LastCompletedAtUtc,
             LastDuration: snapshot.LastDuration,
             RemoteDispatchPurged: snapshot.RemoteDispatchPurged,
+            FrameExportsPurged: snapshot.FrameExportsPurged,
             BackgroundStackerPurged: snapshot.BackgroundStackerPurged,
             CapturePacingPurged: snapshot.CapturePacingPurged,
             ProcessingQueuePurged: snapshot.ProcessingQueuePurged,

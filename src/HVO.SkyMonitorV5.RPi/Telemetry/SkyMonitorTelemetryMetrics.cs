@@ -89,6 +89,7 @@ internal sealed class SkyMonitorTelemetryMetrics : IDisposable
             completedAtUtc,
             duration,
             summary.RemoteDispatchPurged,
+            summary.FrameExportsPurged,
             summary.BackgroundStackerPurged,
             summary.CapturePacingPurged,
             summary.ProcessingQueuePurged,

@@ -26,6 +26,12 @@ public sealed class SkyMonitorTelemetryRetentionOptions
     public TelemetryRetentionPolicy RemoteDispatch { get; set; } = TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), maxRecords: 5_000);
 
     /// <summary>
+    /// Retention policy for frame export attempts.
+    /// </summary>
+    [Required]
+    public TelemetryRetentionPolicy FrameExports { get; set; } = TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), maxRecords: 20_000);
+
+    /// <summary>
     /// Retention policy for background stacker samples.
     /// </summary>
     [Required]

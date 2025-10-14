@@ -36,7 +36,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         return Task.FromResult(Result<bool>.Success(true));
     }
 
-    protected override Task<Result<AdapterFrame>> CaptureFrameAsync(ExposureSettings exposure, CancellationToken cancellationToken)
+    protected override Task<Result<AdapterFrame>> AcquireImageAsync(ExposureSettings exposure, CancellationToken cancellationToken)
     {
         return Task.FromResult(Result<AdapterFrame>.Failure(new NotImplementedException("ZWO capture pipeline has not been implemented.")));
     }

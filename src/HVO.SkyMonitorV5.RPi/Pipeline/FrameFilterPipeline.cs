@@ -156,6 +156,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 }
 
                 return new ProcessedFrame(
+                    stackResult.FrameId,
                     stackResult.Timestamp,
                     stackResult.Exposure,
                     bytes,

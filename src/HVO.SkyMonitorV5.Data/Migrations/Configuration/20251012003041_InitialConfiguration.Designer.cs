@@ -314,6 +314,7 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
                         .HasColumnType("INTEGER")
                         .HasColumnName("night_gain");
 
+
                     b.Property<string>("OverlayTextFormat")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -340,13 +341,13 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
                         {
                             Id = 1,
                             CaptureIntervalMilliseconds = 1000,
-                            DayExposureMilliseconds = 1000,
-                            DayGain = 30,
+                            DayExposureMilliseconds = 50,
+                            DayGain = 50,
                             DayNightTransitionHourOffset = 0,
                             EnableImageOverlays = true,
                             EnableStacking = true,
                             Name = "Default",
-                            NightExposureMilliseconds = 25000,
+                            NightExposureMilliseconds = 5000,
                             NightGain = 200,
                             OverlayTextFormat = "yyyy-MM-dd HH:mm:ss zzz",
                             StackingBufferIntegrationSeconds = 120,

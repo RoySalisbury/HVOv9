@@ -20,6 +20,7 @@ public sealed record AllSkyStatusResponse(
     CameraDescriptor Camera,
     RigSpec? Rig,
     AllSkyStatusSummary Summary,
+    ExposureProfileSummary? ExposureProfiles,
     ExposureAnalysisSummary? ExposureAnalysis,
     ExposureOverrideSummary? ExposureOverrides,
     RemoteDispatchStatus? RemoteDispatch
@@ -34,6 +35,7 @@ public sealed record AllSkyStatusSummary(
     BackgroundStackerStatus? BackgroundStacker,
     CapturePacingStatus? CapturePacing,
     ProcessingQueueStatus? ProcessingQueue,
+    ExposureProfileSummary? ExposureProfiles,
     ExposureAnalysisSummary? ExposureAnalysis,
     ExposureOverrideSummary? ExposureOverrides,
     RemoteDispatchStatus? RemoteDispatch

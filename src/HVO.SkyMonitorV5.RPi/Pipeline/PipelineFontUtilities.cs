@@ -28,4 +28,5 @@ internal static class PipelineFontUtilities
 
         return SKTypeface.Default;
     }
+
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
@@ -6,6 +7,7 @@ namespace HVO.SkyMonitorV5.RPi.Models;
 /// Represents a processed frame ready for distribution to clients.
 /// </summary>
 public sealed record ProcessedFrame(
+    Guid FrameId,
     DateTimeOffset Timestamp,
     ExposureSettings Exposure,
     byte[] ImageBytes,

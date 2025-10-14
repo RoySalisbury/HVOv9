@@ -28,7 +28,10 @@ internal static class BenchmarkDataFactory
             applyRefraction: true,
             horizonPadding: 0.95);
 
+        var frameId = Guid.NewGuid();
+
         var context = new FrameContext(
+            frameId,
             rig,
             engine,
             timestamp,
@@ -44,7 +47,7 @@ internal static class BenchmarkDataFactory
             AutoExposure: false,
             AutoGain: false);
 
-        return new CapturedImage(bitmap, timestamp, exposure, context);
+    return new CapturedImage(frameId, bitmap, timestamp, exposure, context);
     }
 
     public static FrameStackResult CreateStackResult(int width = 1920, int height = 1080)
@@ -57,6 +60,7 @@ internal static class BenchmarkDataFactory
         }
 
         return new FrameStackResult(
+            capture.FrameId,
             stacked,
             capture.Image,
             capture.Timestamp,

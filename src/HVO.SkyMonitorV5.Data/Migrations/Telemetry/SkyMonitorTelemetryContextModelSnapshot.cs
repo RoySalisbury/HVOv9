@@ -176,6 +176,169 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Telemetry
                     b.ToTable("filter_metric_sample", (string)null);
                 });
 
+            modelBuilder.Entity("HVO.SkyMonitorV5.Data.Telemetry.Entities.FrameExportAttemptEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AttemptedAtLocal")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("attempted_at_local");
+
+                    b.Property<DateTimeOffset>("AttemptedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("attempted_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<Guid>("FrameId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("frame_id");
+
+                    b.Property<int?>("FramesStacked")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("frames_stacked");
+
+                    b.Property<double?>("FullPipelineMilliseconds")
+                        .HasColumnType("REAL")
+                        .HasColumnName("full_pipeline_ms");
+
+                    b.Property<int?>("IntegrationMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("integration_ms");
+
+                    b.Property<double?>("LatencyMilliseconds")
+                        .HasColumnType("REAL")
+                        .HasColumnName("latency_ms");
+
+                    b.Property<long?>("PayloadBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payload_bytes");
+
+                    b.Property<string>("PayloadContentType")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payload_content_type");
+
+                    b.Property<string>("PayloadExtension")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payload_extension");
+
+                    b.Property<double?>("ProcessingMilliseconds")
+                        .HasColumnType("REAL")
+                        .HasColumnName("processing_ms");
+
+                    b.Property<double?>("QueueLatencyMilliseconds")
+                        .HasColumnType("REAL")
+                        .HasColumnName("queue_latency_ms");
+
+                    b.Property<string>("SinkName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sink_name");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stage");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("success");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttemptedAtLocal")
+                        .HasDatabaseName("ix_frame_export_attempt_local");
+
+                    b.HasIndex("FrameId")
+                        .HasDatabaseName("ix_frame_export_attempt_frame");
+
+                    b.HasIndex("Stage", "SinkName")
+                        .HasDatabaseName("ix_frame_export_attempt_stage_sink");
+
+                    b.ToTable("frame_export_attempt", (string)null);
+                });
+
+            modelBuilder.Entity("HVO.SkyMonitorV5.Data.Telemetry.Entities.FrameExportRetryEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("EnqueuedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("FileExtension")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("file_extension");
+
+                    b.Property<Guid>("FrameId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("frame_id");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_attempt_at_utc");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_error_message");
+
+                    b.Property<string>("MetadataJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("metadata_json");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<byte[]>("Payload")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("SinkName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sink_name");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stage");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAtUtc")
+                        .HasDatabaseName("ix_frame_export_retry_next_attempt");
+
+                    b.HasIndex("Stage", "SinkName")
+                        .HasDatabaseName("ix_frame_export_retry_stage_sink");
+
+                    b.ToTable("frame_export_retry", (string)null);
+                });
+
             modelBuilder.Entity("HVO.SkyMonitorV5.Data.Telemetry.Entities.ProcessingQueueSampleEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -388,14 +551,14 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Telemetry
                         .HasColumnType("TEXT")
                         .HasColumnName("cpu_model");
 
+                    b.Property<DateTimeOffset>("FirstSeenAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("first_seen_at_utc");
+
                     b.Property<string>("FrameworkDescription")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT")
                         .HasColumnName("framework_description");
-
-                    b.Property<DateTimeOffset>("FirstSeenAtUtc")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("first_seen_at_utc");
 
                     b.Property<string>("HardwareModel")
                         .HasMaxLength(256)
@@ -430,14 +593,14 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Telemetry
                         .HasColumnType("TEXT")
                         .HasColumnName("os_architecture");
 
-                    b.Property<int?>("ProcessorCount")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("processor_count");
-
                     b.Property<string>("ProcessArchitecture")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
                         .HasColumnName("process_architecture");
+
+                    b.Property<int?>("ProcessorCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("processor_count");
 
                     b.Property<string>("SystemHash")
                         .IsRequired()

@@ -8,6 +8,8 @@ public interface ISkyMonitorTelemetryRepository
 {
     Task SaveRemoteDispatchAttemptAsync(RemoteDispatchAttemptEntity entity, CancellationToken cancellationToken = default);
 
+    Task SaveFrameExportAttemptAsync(FrameExportAttemptEntity entity, CancellationToken cancellationToken = default);
+
     Task SaveBackgroundStackerSampleAsync(BackgroundStackerSampleEntity entity, CancellationToken cancellationToken = default);
 
     Task SaveCapturePacingSampleAsync(CapturePacingSampleEntity entity, CancellationToken cancellationToken = default);

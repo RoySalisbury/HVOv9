@@ -1,4 +1,5 @@
 using System;
+using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using Microsoft.Extensions.Logging;
@@ -57,6 +58,57 @@ internal sealed class SkyMonitorTelemetryRecorder : ISkyMonitorTelemetryRecorder
         if (!_queue.TryWrite(new TelemetryWorkItem.RemoteDispatchAttempt(enqueuedAtUtc, payload)))
         {
             _logger.LogWarning("Telemetry queue saturated; dropping remote dispatch attempt telemetry for mode {Mode}.", mode);
+        }
+    }
+
+    public void RecordFrameExportAttempt(
+        DateTimeOffset attemptedAtUtc,
+        DateTimeOffset attemptedAtLocal,
+        Guid frameId,
+        FrameExportStage stage,
+        string sinkName,
+        bool success,
+        double? latencyMilliseconds,
+        long? payloadBytes,
+        string? payloadContentType,
+        string? payloadExtension,
+        double? queueLatencyMilliseconds,
+        double? processingMilliseconds,
+        double? fullPipelineMilliseconds,
+        int? framesStacked,
+        int? integrationMilliseconds,
+        string? errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(sinkName))
+        {
+            return;
+        }
+
+        var payload = new FrameExportAttemptPayload(
+            attemptedAtUtc,
+            attemptedAtLocal,
+            frameId,
+            stage,
+            sinkName,
+            success,
+            latencyMilliseconds,
+            payloadBytes,
+            payloadContentType,
+            payloadExtension,
+            queueLatencyMilliseconds,
+            processingMilliseconds,
+            fullPipelineMilliseconds,
+            framesStacked,
+            integrationMilliseconds,
+            errorMessage);
+
+        var enqueuedAtUtc = _clock.UtcNow;
+
+        if (!_queue.TryWrite(new TelemetryWorkItem.FrameExportAttempt(enqueuedAtUtc, payload)))
+        {
+            _logger.LogWarning(
+                "Telemetry queue saturated; dropping frame export attempt telemetry for sink {SinkName}.",
+                sinkName);
         }
     }
 

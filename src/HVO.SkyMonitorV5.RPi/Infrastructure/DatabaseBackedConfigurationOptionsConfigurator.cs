@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using HVO.SkyMonitorV5.Data.Configurations;
@@ -12,8 +13,10 @@ using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Infrastructure;
 
@@ -33,6 +36,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.General);
 
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _contextFactory;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<DatabaseBackedConfigurationOptionsConfigurator>? _logger;
 
     private readonly object _snapshotLock = new();
@@ -40,9 +44,11 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
 
     public DatabaseBackedConfigurationOptionsConfigurator(
         IDbContextFactory<SkyMonitorConfigurationContext> contextFactory,
+        IConfiguration configuration,
         ILogger<DatabaseBackedConfigurationOptionsConfigurator>? logger = null)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _logger = logger;
     }
 
@@ -128,12 +134,11 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         options.StackingBufferIntegrationSeconds = pipeline.StackingBufferIntegrationSeconds;
         options.EnableStacking = pipeline.EnableStacking;
         options.EnableImageOverlays = pipeline.EnableImageOverlays;
-        options.DayExposureMilliseconds = pipeline.DayExposureMilliseconds;
-        options.NightExposureMilliseconds = pipeline.NightExposureMilliseconds;
-        options.DayGain = pipeline.DayGain;
-        options.NightGain = pipeline.NightGain;
         options.DayNightTransitionHourOffset = pipeline.DayNightTransitionHourOffset;
         options.OverlayTextFormat = pipeline.OverlayTextFormat;
+
+        ApplyExposureProfiles(options, pipeline);
+        ApplyGainProfiles(options, pipeline);
 
         options.ProcessedImageEncoding = new ImageEncodingOptions
         {
@@ -201,6 +206,72 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         options.FrameFilters = orderedFilters
             .Select(f => f.Name)
             .ToArray();
+
+        ApplyCameraPipelineOverrides(options);
+
+        static void ApplyExposureProfiles(CameraPipelineOptions options, CameraPipelineConfigEntity pipeline)
+        {
+            const int minBound = 1;
+            const int maxBound = 60_000;
+
+            static int Normalize(int value, int fallback, int min, int max)
+            {
+                var candidate = value > 0 ? value : fallback;
+                return Math.Clamp(candidate, min, max);
+            }
+
+            var dayMin = Normalize(pipeline.DayMinimumExposureMilliseconds, options.DayMinExposureMilliseconds, minBound, maxBound);
+            var dayMax = Normalize(pipeline.DayMaximumExposureMilliseconds, Math.Max(options.DayMaxExposureMilliseconds, dayMin), dayMin, maxBound);
+            var nightMin = Normalize(pipeline.NightMinimumExposureMilliseconds, options.NightMinExposureMilliseconds, minBound, maxBound);
+            var nightMax = Normalize(pipeline.NightMaximumExposureMilliseconds, Math.Max(options.NightMaxExposureMilliseconds, nightMin), nightMin, maxBound);
+
+            options.DayMinExposureMilliseconds = dayMin;
+            options.DayMaxExposureMilliseconds = dayMax;
+            options.NightMinExposureMilliseconds = nightMin;
+            options.NightMaxExposureMilliseconds = nightMax;
+
+            var dayStart = pipeline.DayStartExposureMilliseconds > 0 ? pipeline.DayStartExposureMilliseconds : options.DayStartExposureMilliseconds;
+            var nightStart = pipeline.NightStartExposureMilliseconds > 0 ? pipeline.NightStartExposureMilliseconds : options.NightStartExposureMilliseconds;
+
+            options.DayStartExposureMilliseconds = Math.Clamp(dayStart, dayMin, dayMax);
+            options.NightStartExposureMilliseconds = Math.Clamp(nightStart, nightMin, nightMax);
+            options.DayExposureMilliseconds = Math.Clamp(pipeline.DayExposureMilliseconds, dayMin, dayMax);
+            options.NightExposureMilliseconds = Math.Clamp(pipeline.NightExposureMilliseconds, nightMin, nightMax);
+        }
+
+        static void ApplyGainProfiles(CameraPipelineOptions options, CameraPipelineConfigEntity pipeline)
+        {
+            const int minGain = 0;
+            const int maxGain = 500;
+
+            static int NormalizeGain(int value, int fallback, int min, int max)
+            {
+                var candidate = value switch
+                {
+                    < 0 => fallback,
+                    _ => value
+                };
+                return Math.Clamp(candidate, min, max);
+            }
+
+            var dayMin = NormalizeGain(pipeline.DayMinimumGain, options.DayMinGain, minGain, maxGain);
+            var dayMax = NormalizeGain(pipeline.DayMaximumGain, Math.Max(options.DayMaxGain, dayMin), dayMin, maxGain);
+            var nightMin = NormalizeGain(pipeline.NightMinimumGain, options.NightMinGain, minGain, maxGain);
+            var nightMax = NormalizeGain(pipeline.NightMaximumGain, Math.Max(options.NightMaxGain, nightMin), nightMin, maxGain);
+
+            options.DayMinGain = dayMin;
+            options.DayMaxGain = dayMax;
+            options.NightMinGain = nightMin;
+            options.NightMaxGain = nightMax;
+
+            var dayStartGain = pipeline.DayStartGain > 0 ? pipeline.DayStartGain : options.DayStartGain;
+            var nightStartGain = pipeline.NightStartGain > 0 ? pipeline.NightStartGain : options.NightStartGain;
+
+            options.DayStartGain = Math.Clamp(dayStartGain, dayMin, dayMax);
+            options.NightStartGain = Math.Clamp(nightStartGain, nightMin, nightMax);
+            options.DayGain = Math.Clamp(pipeline.DayGain, dayMin, dayMax);
+            options.NightGain = Math.Clamp(pipeline.NightGain, nightMin, nightMax);
+        }
     }
 
     public void Configure(CardinalDirectionsOptions options)
@@ -270,6 +341,8 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
                 Color = o.Color
             })
             .ToList();
+
+        ApplyCelestialOverrides(options);
     }
 
     public void Configure(ConstellationFigureOptions options)
@@ -300,6 +373,93 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         options.IncludeSun = star.IncludeSun;
         options.RightAscensionBins = star.RightAscensionBins;
         options.DeclinationBands = star.DeclinationBands;
+    }
+
+    private void ApplyCameraPipelineOverrides(CameraPipelineOptions options)
+    {
+        var section = _configuration.GetSection("CameraPipeline:Overrides");
+        if (!section.Exists())
+        {
+            return;
+        }
+
+        if (TryGetBool(section, nameof(CameraPipelineOptions.EnableStacking), out var enableStacking))
+        {
+            options.EnableStacking = enableStacking;
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", nameof(CameraPipelineOptions.EnableStacking), enableStacking);
+        }
+
+        var hasBackgroundOverride = false;
+        if (TryGetBool(section, "BackgroundStackerEnabled", out var backgroundEnabled))
+        {
+            options.BackgroundStacker.Enabled = backgroundEnabled;
+            hasBackgroundOverride = true;
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", "BackgroundStackerEnabled", backgroundEnabled);
+        }
+
+        if (TryGetBool(section, nameof(CameraPipelineOptions.EnableImageOverlays), out var enableOverlays))
+        {
+            options.EnableImageOverlays = enableOverlays;
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", nameof(CameraPipelineOptions.EnableImageOverlays), enableOverlays);
+        }
+
+        if (TryGetInt(section, nameof(CameraPipelineOptions.StackingFrameCount), out var stackingFrameCount) && stackingFrameCount > 0)
+        {
+            options.StackingFrameCount = stackingFrameCount;
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", nameof(CameraPipelineOptions.StackingFrameCount), stackingFrameCount);
+        }
+
+        if (TryGetInt(section, nameof(CameraPipelineOptions.StackingBufferMinimumFrames), out var stackingBufferMinimumFrames) && stackingBufferMinimumFrames > 0)
+        {
+            options.StackingBufferMinimumFrames = stackingBufferMinimumFrames;
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", nameof(CameraPipelineOptions.StackingBufferMinimumFrames), stackingBufferMinimumFrames);
+        }
+
+        if (TryGetInt(section, nameof(CameraPipelineOptions.StackingBufferIntegrationSeconds), out var stackingBufferIntegrationSeconds) && stackingBufferIntegrationSeconds >= 0)
+        {
+            options.StackingBufferIntegrationSeconds = stackingBufferIntegrationSeconds;
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", nameof(CameraPipelineOptions.StackingBufferIntegrationSeconds), stackingBufferIntegrationSeconds);
+        }
+
+        var frameFiltersSection = section.GetSection(nameof(CameraPipelineOptions.FrameFilters));
+        if (frameFiltersSection.Exists())
+        {
+            var filters = frameFiltersSection
+                .GetChildren()
+                .Select(child => child.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.Trim())
+                .ToArray();
+
+            if (filters.Length > 0)
+            {
+                options.FrameFilters = filters;
+                options.Filters = filters
+                    .Select((name, index) => new FrameFilterOption
+                    {
+                        Name = name,
+                        Enabled = true,
+                        Order = index
+                    })
+                    .ToArray();
+
+                _logger?.LogDebug("Camera pipeline frame filter override applied. Filters: {Filters}", filters);
+            }
+        }
+
+        if (TryGetBool(section, "DisableSensorNoise", out var disableSensorNoise))
+        {
+            Environment.SetEnvironmentVariable("HVO_DISABLE_SENSOR_NOISE", disableSensorNoise ? "1" : "0");
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", "DisableSensorNoise", disableSensorNoise);
+        }
+
+        if (!options.EnableStacking && !hasBackgroundOverride)
+        {
+            options.BackgroundStacker.Enabled = false;
+            options.StackingFrameCount = Math.Max(1, options.StackingFrameCount);
+            options.StackingBufferMinimumFrames = Math.Max(1, options.StackingBufferMinimumFrames);
+            options.StackingBufferIntegrationSeconds = 0;
+        }
     }
 
     /// <summary>
@@ -356,6 +516,159 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
             _snapshot = new ConfigurationSnapshot(observatory, cameras, lenses, rigs, adapters, pipeline, starCatalog);
             return _snapshot;
         }
+    }
+
+    private void ApplyCelestialOverrides(CelestialAnnotationsOptions options)
+    {
+        var section = _configuration.GetSection(CelestialAnnotationsOptions.SectionName);
+        if (!section.Exists())
+        {
+            return;
+        }
+
+        if (TryGetFloat(section, nameof(CelestialAnnotationsOptions.LabelFontSize), out var labelFont) && labelFont > 0f)
+        {
+            options.LabelFontSize = Math.Clamp(labelFont, 4f, 72f);
+            _logger?.LogDebug("Celestial annotations override applied for LabelFontSize: {LabelFontSize}", options.LabelFontSize);
+        }
+
+        if (TryGetColor(section, nameof(CelestialAnnotationsOptions.StarLabelColor), out var starLabelColor))
+        {
+            options.StarLabelColor = starLabelColor;
+            _logger?.LogDebug("Celestial annotations override applied for StarLabelColor: {StarLabelColor}", options.StarLabelColor);
+        }
+
+        if (TryGetColor(section, nameof(CelestialAnnotationsOptions.PlanetLabelColor), out var planetLabelColor))
+        {
+            options.PlanetLabelColor = planetLabelColor;
+            _logger?.LogDebug("Celestial annotations override applied for PlanetLabelColor: {PlanetLabelColor}", options.PlanetLabelColor);
+        }
+
+        if (TryGetColor(section, nameof(CelestialAnnotationsOptions.DeepSkyLabelColor), out var deepSkyLabelColor))
+        {
+            options.DeepSkyLabelColor = deepSkyLabelColor;
+            _logger?.LogDebug("Celestial annotations override applied for DeepSkyLabelColor: {DeepSkyLabelColor}", options.DeepSkyLabelColor);
+        }
+
+        if (TryGetFloat(section, nameof(CelestialAnnotationsOptions.StarRingRadius), out var starRing) && starRing > 0f)
+        {
+            options.StarRingRadius = Math.Clamp(starRing, 1f, 64f);
+            _logger?.LogDebug("Celestial annotations override applied for StarRingRadius: {StarRingRadius}", options.StarRingRadius);
+        }
+
+        if (TryGetFloat(section, nameof(CelestialAnnotationsOptions.PlanetRingRadius), out var planetRing) && planetRing > 0f)
+        {
+            options.PlanetRingRadius = Math.Clamp(planetRing, 1f, 64f);
+            _logger?.LogDebug("Celestial annotations override applied for PlanetRingRadius: {PlanetRingRadius}", options.PlanetRingRadius);
+        }
+
+        if (TryGetFloat(section, nameof(CelestialAnnotationsOptions.DeepSkyRingRadius), out var deepSkyRing) && deepSkyRing > 0f)
+        {
+            options.DeepSkyRingRadius = Math.Clamp(deepSkyRing, 1f, 64f);
+            _logger?.LogDebug("Celestial annotations override applied for DeepSkyRingRadius: {DeepSkyRingRadius}", options.DeepSkyRingRadius);
+        }
+    }
+
+    private static bool TryGetBool(IConfiguration section, string key, out bool value)
+    {
+        var raw = section[key];
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            value = default;
+            return false;
+        }
+
+        if (bool.TryParse(raw, out value))
+        {
+            return true;
+        }
+
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric))
+        {
+            value = numeric != 0;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static bool TryGetInt(IConfiguration section, string key, out int value)
+    {
+        var raw = section[key];
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            value = default;
+            return false;
+        }
+
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryGetFloat(IConfiguration section, string key, out float value)
+    {
+        var raw = section[key];
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            value = default;
+            return false;
+        }
+
+        return float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryGetColor(IConfiguration section, string key, out string color)
+    {
+        var raw = section[key];
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            color = string.Empty;
+            return false;
+        }
+
+        var normalized = NormalizeHex(raw);
+        if (!IsValidHexColor(normalized))
+        {
+            color = string.Empty;
+            return false;
+        }
+
+        color = normalized;
+        return true;
+    }
+
+    private static string NormalizeHex(string value)
+    {
+        var trimmed = value.Trim();
+        if (!trimmed.StartsWith('#'))
+        {
+            trimmed = "#" + trimmed;
+        }
+
+        return trimmed.ToUpperInvariant();
+    }
+
+    private static bool IsValidHexColor(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        if (value.Length != 7 && value.Length != 9)
+        {
+            return false;
+        }
+
+        for (var i = 1; i < value.Length; i++)
+        {
+            if (!Uri.IsHexDigit(value[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private CameraCatalogEntryOptions CreateCameraOption(CameraCatalogCameraEntity entity)

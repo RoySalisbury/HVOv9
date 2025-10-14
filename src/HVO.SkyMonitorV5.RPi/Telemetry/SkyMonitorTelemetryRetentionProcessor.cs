@@ -57,6 +57,15 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
                 static entity => entity.Id,
                 cancellationToken).ConfigureAwait(false);
 
+            summaryBuilder.FrameExportsPurged += await PurgeAsync(
+                context,
+                context.FrameExportAttempts,
+                options.FrameExports,
+                nowUtc,
+                static entity => entity.AttemptedAtUtc,
+                static entity => entity.Id,
+                cancellationToken).ConfigureAwait(false);
+
             summaryBuilder.BackgroundStackerPurged += await PurgeAsync(
                 context,
                 context.BackgroundStackerSamples,
@@ -112,9 +121,10 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
             if (summary.TotalPurged > 0)
             {
                 _logger.LogInformation(
-                    "Telemetry retention sweep removed {Total} rows (remote: {Remote}, stacker: {Stacker}, pacing: {Pacing}, processing: {Processing}, filters: {Filters}, events: {Events}). Vacuum attempted: {VacuumAttempted}, succeeded: {VacuumSucceeded}.",
+                    "Telemetry retention sweep removed {Total} rows (remote: {Remote}, exports: {Exports}, stacker: {Stacker}, pacing: {Pacing}, processing: {Processing}, filters: {Filters}, events: {Events}). Vacuum attempted: {VacuumAttempted}, succeeded: {VacuumSucceeded}.",
                     summary.TotalPurged,
                     summary.RemoteDispatchPurged,
+                    summary.FrameExportsPurged,
                     summary.BackgroundStackerPurged,
                     summary.CapturePacingPurged,
                     summary.ProcessingQueuePurged,
@@ -294,6 +304,7 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
     private sealed class TelemetryRetentionSummaryBuilder
     {
         public int RemoteDispatchPurged { get; set; }
+        public int FrameExportsPurged { get; set; }
         public int BackgroundStackerPurged { get; set; }
         public int CapturePacingPurged { get; set; }
         public int ProcessingQueuePurged { get; set; }
@@ -303,6 +314,7 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
         public TelemetryRetentionSummary Build()
         {
             var total = RemoteDispatchPurged
+                + FrameExportsPurged
                 + BackgroundStackerPurged
                 + CapturePacingPurged
                 + ProcessingQueuePurged
@@ -311,6 +323,7 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
 
             return new TelemetryRetentionSummary(
                 RemoteDispatchPurged,
+                FrameExportsPurged,
                 BackgroundStackerPurged,
                 CapturePacingPurged,
                 ProcessingQueuePurged,
@@ -325,6 +338,7 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
 
 internal sealed record TelemetryRetentionSummary(
     int RemoteDispatchPurged,
+    int FrameExportsPurged,
     int BackgroundStackerPurged,
     int CapturePacingPurged,
     int ProcessingQueuePurged,

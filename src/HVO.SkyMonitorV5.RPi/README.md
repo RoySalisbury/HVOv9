@@ -9,6 +9,13 @@ HVO SkyMonitor v5 is the Raspberry Pi service that captures synthetic or hardwar
 - [`docs/sky-monitor-starfield.md`](../../docs/sky-monitor-starfield.md) – deeper dive into the synthetic starfield generator.
 - [`docs/skymonitor-v5-operations-runbook.md`](../../docs/skymonitor-v5-operations-runbook.md) – operational checklist and recovery procedures.
 
+## Celestial annotation visibility recap (October 2025)
+
+- **Symptom** – The `CelestialAnnotations` overlay rendered halos and debug boxes, but label glyphs never appeared in the processed frame even when we forced bright colours and standalone bitmap mode.
+- **Root cause** – Inside the dev container, Skia resolved the default bold sans-serif to a font whose family name was empty and whose glyph IDs were all zero, so every `DrawText` call effectively no-op’d. Debug logging confirmed the glyph buffer remained all zeros despite non-empty strings.
+- **Resolution** – We bundled the existing OpenSans assets (`OpenSans-Semibold.ttf`, `OpenSans-Regular.ttf`) with the SkyMonitor build, taught `CelestialAnnotationsFilter` to probe `HVO_CELESTIAL_FONT_PATH` and then the packaged fonts before falling back to system families, and emitted structured glyph diagnostics. Once the fallback returned `Open Sans`, glyph IDs populated and labels rendered normally.
+- **Operational note** – If you need a different typeface on-device, set `HVO_CELESTIAL_FONT_PATH` to an absolute or content-root relative TTF path; the filter will log which font was chosen. When the variable is unset the packaged OpenSans Semibold file becomes the default, so deployments no longer depend on host font availability.
+
 ## System overview
 
 - **Capture loop** – `AllSkyCaptureService` orchestrates exposures, capture, stacking, filtering, and persistence.

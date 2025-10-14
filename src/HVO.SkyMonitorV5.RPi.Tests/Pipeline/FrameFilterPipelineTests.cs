@@ -92,9 +92,11 @@ public sealed class FrameFilterPipelineTests
         var rig = RigPresets.MockAsi174_Fujinon;
         var timestamp = DateTimeOffset.UtcNow;
         var engine = new StarFieldEngine(rig, TestLatitude, TestLongitude, timestamp.UtcDateTime, flipHorizontal: true, applyRefraction: true, horizonPadding: 0.95);
+        var frameId = Guid.NewGuid();
 
         var disposed = false;
         var frameContext = new FrameContext(
+            frameId,
             rig,
             engine,
             timestamp,
@@ -108,7 +110,7 @@ public sealed class FrameFilterPipelineTests
         var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
         var stacked = new SKBitmap(width: 8, height: 8);
         var original = new SKBitmap(width: 8, height: 8);
-        var stackResult = new FrameStackResult(stacked, original, timestamp, exposure, frameContext, FramesStacked: 1, IntegrationMilliseconds: exposure.ExposureMilliseconds);
+        var stackResult = new FrameStackResult(frameId, stacked, original, timestamp, exposure, frameContext, FramesStacked: 1, IntegrationMilliseconds: exposure.ExposureMilliseconds);
 
         return new StackResultHarness(stackResult, () => disposed, stacked, original);
     }

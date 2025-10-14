@@ -10,6 +10,14 @@ WORKDIR /src
 # Ensure native dependencies for SkiaSharp and telemetry are present during restore/test stages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        fontconfig \
+        fonts-dejavu-core \
+        fonts-liberation2 \
+        fonts-noto-core \
+        fonts-noto-mono \
+        fonts-noto-color-emoji \
+        fonts-roboto \
+        fonts-open-sans \
         libuuid1 \
         libfontconfig1 \
         libfreetype6 \
@@ -17,7 +25,8 @@ RUN apt-get update && \
         libpng16-16 \
         libjpeg62-turbo \
         libexpat1 && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    fc-cache -f
 
 # Copy solution-level metadata and project files to maximize cache hits
 COPY ["src/global.json", "./"]
@@ -83,6 +92,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        fontconfig \
+        fonts-dejavu-core \
+        fonts-liberation2 \
+        fonts-noto-core \
+        fonts-noto-mono \
+        fonts-noto-color-emoji \
+        fonts-roboto \
+        fonts-open-sans \
         libuuid1 \
         libgpiod2 \
         i2c-tools \
@@ -92,7 +109,8 @@ RUN apt-get update && \
         libpng16-16 \
         libjpeg62-turbo \
         libexpat1 && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    fc-cache -f
 
 # Copy the published binaries from the publish stage
 COPY --from=publish /app/publish .
@@ -102,8 +120,10 @@ RUN mkdir -p /var/hvo/datastores && \
     cp -rT ./Data /var/hvo/datastores && \
     mkdir -p /var/hvo/datastores/configuration /var/hvo/datastores/telemetry /var/hvo/datastores/dataprotection && \
     mkdir -p /var/hvo/logs && \
+    mkdir -p /var/hvo/exports/raw /var/hvo/exports/processed && \
     chmod -R 775 /var/hvo/datastores && \
-    chmod -R 775 /var/hvo/logs
+    chmod -R 775 /var/hvo/logs && \
+    chmod -R 775 /var/hvo/exports
 
 ENV ASPNETCORE_URLS="http://+:5136" \
     ASPNETCORE_ENVIRONMENT=Production \

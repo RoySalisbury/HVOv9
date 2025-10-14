@@ -43,6 +43,7 @@ public sealed record TelemetryRetentionSummaryMetrics(
     DateTimeOffset? LastCompletedAtUtc,
     TimeSpan? LastDuration,
     int RemoteDispatchPurged,
+    int FrameExportsPurged,
     int BackgroundStackerPurged,
     int CapturePacingPurged,
     int ProcessingQueuePurged,

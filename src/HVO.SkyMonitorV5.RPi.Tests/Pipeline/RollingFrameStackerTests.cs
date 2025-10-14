@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -15,9 +16,9 @@ public sealed class RollingFrameStackerTests
     public void Accumulate_WhenStackingDisabled_ReturnsFrameContextWithoutDisposing()
     {
         using var captureBitmap = new SKBitmap(width: 8, height: 8);
-        var (context, wasDisposed) = CreateFrameContext();
+    var (context, wasDisposed) = CreateFrameContext();
         var exposure = new ExposureSettings(500, 200, false, false);
-        var capture = new CapturedImage(captureBitmap, DateTimeOffset.UtcNow, exposure, context);
+    var capture = new CapturedImage(context.FrameId, captureBitmap, DateTimeOffset.UtcNow, exposure, context);
 
         var stacker = new RollingFrameStacker();
         var configuration = new CameraConfiguration(
@@ -53,16 +54,16 @@ public sealed class RollingFrameStackerTests
             FrameFilters: Array.Empty<string>(),
             ProcessedImageEncoding: new ImageEncodingSettings());
 
-        var (context, wasDisposed) = CreateFrameContext();
+    var (context, wasDisposed) = CreateFrameContext();
         var exposure = new ExposureSettings(500, 200, false, false);
 
         using var firstBitmap = new SKBitmap(width: 8, height: 8);
-        var firstCapture = new CapturedImage(firstBitmap, DateTimeOffset.UtcNow, exposure, context);
+    var firstCapture = new CapturedImage(context.FrameId, firstBitmap, DateTimeOffset.UtcNow, exposure, context);
         var firstResult = stacker.Accumulate(firstCapture, configuration);
         DisposeFrameResult(firstResult);
 
         using var secondBitmap = new SKBitmap(width: 8, height: 8);
-        var secondCapture = new CapturedImage(secondBitmap, DateTimeOffset.UtcNow.AddMilliseconds(200), exposure, context);
+    var secondCapture = new CapturedImage(context.FrameId, secondBitmap, DateTimeOffset.UtcNow.AddMilliseconds(200), exposure, context);
         var stackedResult = stacker.Accumulate(secondCapture, configuration);
 
         Assert.AreSame(context, stackedResult.Context, "Stacked frame should retain the original frame context instance.");
@@ -73,6 +74,41 @@ public sealed class RollingFrameStackerTests
         context.Dispose();
     }
 
+    [TestMethod]
+    public void Accumulate_PartialStacksIncreaseUntilTarget()
+    {
+        var stacker = new RollingFrameStacker();
+        var configuration = new CameraConfiguration(
+            EnableStacking: true,
+            StackingFrameCount: 4,
+            EnableImageOverlays: false,
+            EnableCircularApertureMask: false,
+            StackingBufferMinimumFrames: 4,
+            StackingBufferIntegrationSeconds: 0,
+            FrameFilters: Array.Empty<string>(),
+            ProcessedImageEncoding: new ImageEncodingSettings());
+
+        var exposure = new ExposureSettings(1_000, 200, false, false);
+        var expectedCounts = new[] { 1, 2, 3, 4 };
+        var expectedIntegration = new[] { 1_000, 2_000, 3_000, 4_000 };
+        var observedCounts = new List<int>(expectedCounts.Length);
+
+        for (var i = 0; i < expectedCounts.Length; i++)
+        {
+            var bitmap = new SKBitmap(width: 8, height: 8);
+            var capture = new CapturedImage(Guid.NewGuid(), bitmap, DateTimeOffset.UtcNow.AddMilliseconds(i * 10), exposure, null);
+            var result = stacker.Accumulate(capture, configuration);
+
+            observedCounts.Add(result.FramesStacked);
+            Assert.AreEqual(expectedIntegration[i], result.IntegrationMilliseconds, "Integration should scale with the number of stacked frames.");
+
+            DisposeFrameResult(result);
+        }
+
+        CollectionAssert.AreEqual(expectedCounts, observedCounts, "Stacked frame count should increase as the buffer fills.");
+        stacker.Dispose();
+    }
+
     private static (FrameContext Context, Func<bool> WasDisposed) CreateFrameContext()
     {
         var rig = RigPresets.MockAsi174_Fujinon;
@@ -80,6 +116,7 @@ public sealed class RollingFrameStackerTests
         var engine = new StarFieldEngine(rig, TestLatitude, TestLongitude, timestamp.UtcDateTime, flipHorizontal: false, applyRefraction: true, horizonPadding: 0.95);
         var disposed = false;
         var context = new FrameContext(
+            Guid.NewGuid(),
             rig,
             engine,
             timestamp,

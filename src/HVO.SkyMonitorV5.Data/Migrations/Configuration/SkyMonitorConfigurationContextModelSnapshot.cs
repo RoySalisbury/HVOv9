@@ -286,9 +286,33 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
                         .HasColumnType("INTEGER")
                         .HasColumnName("day_gain");
 
+                    b.Property<int>("DayMaximumExposureMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("day_max_exposure_ms");
+
+                    b.Property<int>("DayMaximumGain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("day_max_gain");
+
+                    b.Property<int>("DayMinimumExposureMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("day_min_exposure_ms");
+
+                    b.Property<int>("DayMinimumGain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("day_min_gain");
+
                     b.Property<int>("DayNightTransitionHourOffset")
                         .HasColumnType("INTEGER")
                         .HasColumnName("day_night_transition_hour_offset");
+
+                    b.Property<int>("DayStartExposureMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("day_start_exposure_ms");
+
+                    b.Property<int>("DayStartGain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("day_start_gain");
 
                     b.Property<bool>("EnableImageOverlays")
                         .HasColumnType("INTEGER")
@@ -310,6 +334,30 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
                     b.Property<int>("NightGain")
                         .HasColumnType("INTEGER")
                         .HasColumnName("night_gain");
+
+                    b.Property<int>("NightMaximumExposureMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("night_max_exposure_ms");
+
+                    b.Property<int>("NightMaximumGain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("night_max_gain");
+
+                    b.Property<int>("NightMinimumExposureMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("night_min_exposure_ms");
+
+                    b.Property<int>("NightMinimumGain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("night_min_gain");
+
+                    b.Property<int>("NightStartExposureMilliseconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("night_start_exposure_ms");
+
+                    b.Property<int>("NightStartGain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("night_start_gain");
 
                     b.Property<string>("OverlayTextFormat")
                         .IsRequired()
@@ -337,14 +385,26 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
                         {
                             Id = 1,
                             CaptureIntervalMilliseconds = 1000,
-                            DayExposureMilliseconds = 1000,
-                            DayGain = 30,
+                            DayExposureMilliseconds = 50,
+                            DayGain = 50,
+                            DayMaximumExposureMilliseconds = 60000,
+                            DayMaximumGain = 500,
+                            DayMinimumExposureMilliseconds = 1,
+                            DayMinimumGain = 0,
                             DayNightTransitionHourOffset = 0,
+                            DayStartExposureMilliseconds = 2000,
+                            DayStartGain = 50,
                             EnableImageOverlays = true,
                             EnableStacking = true,
                             Name = "Default",
-                            NightExposureMilliseconds = 25000,
+                            NightExposureMilliseconds = 5000,
                             NightGain = 200,
+                            NightMaximumExposureMilliseconds = 60000,
+                            NightMaximumGain = 500,
+                            NightMinimumExposureMilliseconds = 1,
+                            NightMinimumGain = 0,
+                            NightStartExposureMilliseconds = 5000,
+                            NightStartGain = 200,
                             OverlayTextFormat = "yyyy-MM-dd HH:mm:ss zzz",
                             StackingBufferIntegrationSeconds = 120,
                             StackingBufferMinimumFrames = 24,

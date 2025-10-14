@@ -14,14 +14,15 @@ public sealed class SimulatedCpuLoadFrameStackerTests
     [TestMethod]
     public void Accumulate_WhenProfileDisabled_ForwardsWithoutWork()
     {
-        var captureBitmap = new SKBitmap(width: 4, height: 4);
-        var stackedBitmap = new SKBitmap(width: 4, height: 4);
+    var captureBitmap = new SKBitmap(width: 4, height: 4);
+    var stackedBitmap = new SKBitmap(width: 4, height: 4);
 
-        var exposure = new ExposureSettings(100, 50, false, false);
-        var capture = new CapturedImage(captureBitmap, DateTimeOffset.UtcNow, exposure, null);
+    var exposure = new ExposureSettings(100, 50, false, false);
+    var frameId = Guid.NewGuid();
+    var capture = new CapturedImage(frameId, captureBitmap, DateTimeOffset.UtcNow, exposure, null);
         var configuration = CreateConfiguration();
 
-        var expectedResult = new FrameStackResult(stackedBitmap, captureBitmap, capture.Timestamp, exposure, null, 1, 100);
+    var expectedResult = new FrameStackResult(frameId, stackedBitmap, captureBitmap, capture.Timestamp, exposure, null, 1, 100);
 
         var inner = new Mock<IFrameStacker>(MockBehavior.Strict);
         inner.Setup(stack => stack.Accumulate(capture, configuration)).Returns(expectedResult);
@@ -43,14 +44,15 @@ public sealed class SimulatedCpuLoadFrameStackerTests
     [TestMethod]
     public void Accumulate_WhenProfileEnabled_StillReturnsInnerResult()
     {
-        var captureBitmap = new SKBitmap(width: 4, height: 4);
-        var stackedBitmap = new SKBitmap(width: 4, height: 4);
+    var captureBitmap = new SKBitmap(width: 4, height: 4);
+    var stackedBitmap = new SKBitmap(width: 4, height: 4);
 
-        var exposure = new ExposureSettings(150, 60, false, false);
-        var capture = new CapturedImage(captureBitmap, DateTimeOffset.UtcNow, exposure, null);
+    var exposure = new ExposureSettings(150, 60, false, false);
+    var frameId = Guid.NewGuid();
+    var capture = new CapturedImage(frameId, captureBitmap, DateTimeOffset.UtcNow, exposure, null);
         var configuration = CreateConfiguration();
 
-        var expectedResult = new FrameStackResult(stackedBitmap, captureBitmap, capture.Timestamp, exposure, null, 1, 120);
+    var expectedResult = new FrameStackResult(frameId, stackedBitmap, captureBitmap, capture.Timestamp, exposure, null, 1, 120);
 
         var inner = new Mock<IFrameStacker>(MockBehavior.Strict);
         inner.Setup(stack => stack.Accumulate(capture, configuration)).Returns(expectedResult);

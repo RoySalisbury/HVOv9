@@ -44,9 +44,7 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
 
     protected override void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
     {
-        var luminanceNoiseLevel = Math.Clamp(exposure.Gain / 480d, 0.012d, 0.09d);
-        var chromaNoiseLevel = luminanceNoiseLevel * 0.35d;
-        var twinkleProbability = 0.0015d + exposure.Gain * 0.000012d;
+        var profile = BuildSensorResponseProfile(exposure);
 
         var span = bitmap.GetPixelSpan();
         for (var i = 0; i < span.Length; i += 4)
@@ -57,20 +55,25 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
             var green = span[i + 1];
             var red = span[i + 2];
 
-            var luminanceNoise = (int)((Random.NextDouble() - 0.5d) * 512 * luminanceNoiseLevel);
-            var chromaNoiseBlue = (int)((Random.NextDouble() - 0.5d) * 512 * chromaNoiseLevel);
-            var chromaNoiseRed = (int)((Random.NextDouble() - 0.5d) * 512 * chromaNoiseLevel);
+            var scaledBlue = Math.Clamp(blue * profile.BrightnessScale, 0d, 255d);
+            var scaledGreen = Math.Clamp(green * profile.BrightnessScale, 0d, 255d);
+            var scaledRed = Math.Clamp(red * profile.BrightnessScale, 0d, 255d);
 
-            var twinkleBoost = 0;
-            var maxChannel = Math.Max(red, Math.Max(green, blue));
-            if (maxChannel > 225 && Random.NextDouble() < twinkleProbability)
+            var luminanceNoise = (Random.NextDouble() - 0.5d) * 512d * profile.LuminanceNoise;
+            var chromaNoiseBlue = (Random.NextDouble() - 0.5d) * 512d * profile.ChrominanceNoise;
+            var chromaNoiseRed = (Random.NextDouble() - 0.5d) * 512d * profile.ChrominanceNoise;
+
+            var twinkleBoost = 0d;
+            var maxChannel = Math.Max(scaledRed, Math.Max(scaledGreen, scaledBlue));
+            if (maxChannel >= profile.TwinkleThreshold && Random.NextDouble() < profile.TwinkleProbability)
             {
-                twinkleBoost = Random.Next(8, 26);
+                twinkleBoost = Random.Next(profile.TwinkleBoostMin, profile.TwinkleBoostMax + 1);
             }
 
-            var boostedBlue = (byte)Math.Clamp(blue + luminanceNoise + chromaNoiseBlue + twinkleBoost, 0, 255);
-            var boostedGreen = (byte)Math.Clamp(green + luminanceNoise - (chromaNoiseBlue + chromaNoiseRed) * 0.5 + twinkleBoost / 2, 0, 255);
-            var boostedRed = (byte)Math.Clamp(red + luminanceNoise + chromaNoiseRed + twinkleBoost, 0, 255);
+            var boostedBlue = (byte)Math.Clamp(scaledBlue + luminanceNoise + chromaNoiseBlue + twinkleBoost, 0d, 255d);
+            var boostedRed = (byte)Math.Clamp(scaledRed + luminanceNoise + chromaNoiseRed + twinkleBoost, 0d, 255d);
+            var greenChromaCompensation = (chromaNoiseBlue + chromaNoiseRed) * 0.35d;
+            var boostedGreen = (byte)Math.Clamp(scaledGreen + luminanceNoise - greenChromaCompensation + twinkleBoost / 2d, 0d, 255d);
 
             span[i] = boostedBlue;
             span[i + 1] = boostedGreen;
@@ -78,6 +81,10 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
             span[i + 3] = alpha;
         }
 
-        _logger?.LogTrace("Applied colour sensor noise model with gain {Gain}.", exposure.Gain);
+        _logger?.LogTrace(
+            "Applied colour sensor response (exposure {ExposureMs} ms, gain {Gain}, brightness x{Brightness:0.00}).",
+            exposure.ExposureMilliseconds,
+            exposure.Gain,
+            profile.BrightnessScale);
     }
 }

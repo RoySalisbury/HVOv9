@@ -12,6 +12,10 @@ public sealed class SkyMonitorTelemetryContext : DbContext
 
     public DbSet<RemoteDispatchAttemptEntity> RemoteDispatchAttempts => Set<RemoteDispatchAttemptEntity>();
 
+    public DbSet<FrameExportAttemptEntity> FrameExportAttempts => Set<FrameExportAttemptEntity>();
+
+    public DbSet<FrameExportRetryEntity> FrameExportRetries => Set<FrameExportRetryEntity>();
+
     public DbSet<BackgroundStackerSampleEntity> BackgroundStackerSamples => Set<BackgroundStackerSampleEntity>();
 
     public DbSet<CapturePacingSampleEntity> CapturePacingSamples => Set<CapturePacingSampleEntity>();
@@ -46,6 +50,55 @@ public sealed class SkyMonitorTelemetryContext : DbContext
             entity.HasIndex(e => e.AttemptedAtLocal).HasDatabaseName("ix_remote_dispatch_attempt_local");
             entity.HasIndex(e => e.Outcome).HasDatabaseName("ix_remote_dispatch_attempt_outcome");
             entity.HasIndex(e => e.FormatKey).HasDatabaseName("ix_remote_dispatch_attempt_format");
+        });
+
+        modelBuilder.Entity<FrameExportAttemptEntity>(entity =>
+        {
+            entity.ToTable("frame_export_attempt");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AttemptedAtUtc).HasColumnName("attempted_at_utc");
+            entity.Property(e => e.AttemptedAtLocal).HasColumnName("attempted_at_local");
+            entity.Property(e => e.FrameId).HasColumnName("frame_id");
+            entity.Property(e => e.Stage).HasColumnName("stage");
+            entity.Property(e => e.SinkName).HasColumnName("sink_name");
+            entity.Property(e => e.Success).HasColumnName("success");
+            entity.Property(e => e.LatencyMilliseconds).HasColumnName("latency_ms");
+            entity.Property(e => e.PayloadBytes).HasColumnName("payload_bytes");
+            entity.Property(e => e.PayloadContentType).HasColumnName("payload_content_type");
+            entity.Property(e => e.PayloadExtension).HasColumnName("payload_extension");
+            entity.Property(e => e.QueueLatencyMilliseconds).HasColumnName("queue_latency_ms");
+            entity.Property(e => e.ProcessingMilliseconds).HasColumnName("processing_ms");
+            entity.Property(e => e.FramesStacked).HasColumnName("frames_stacked");
+            entity.Property(e => e.IntegrationMilliseconds).HasColumnName("integration_ms");
+            entity.Property(e => e.FullPipelineMilliseconds).HasColumnName("full_pipeline_ms");
+            entity.Property(e => e.ErrorMessage).HasColumnName("error_message");
+
+            entity.HasIndex(e => e.AttemptedAtLocal).HasDatabaseName("ix_frame_export_attempt_local");
+            entity.HasIndex(e => new { e.Stage, e.SinkName }).HasDatabaseName("ix_frame_export_attempt_stage_sink");
+            entity.HasIndex(e => e.FrameId).HasDatabaseName("ix_frame_export_attempt_frame");
+        });
+
+        modelBuilder.Entity<FrameExportRetryEntity>(entity =>
+        {
+            entity.ToTable("frame_export_retry");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.FrameId).HasColumnName("frame_id");
+            entity.Property(e => e.Stage).HasColumnName("stage");
+            entity.Property(e => e.SinkName).HasColumnName("sink_name");
+            entity.Property(e => e.EnqueuedAtUtc).HasColumnName("enqueued_at_utc");
+            entity.Property(e => e.NextAttemptAtUtc).HasColumnName("next_attempt_at_utc");
+            entity.Property(e => e.LastAttemptAtUtc).HasColumnName("last_attempt_at_utc");
+            entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+            entity.Property(e => e.Payload).HasColumnName("payload");
+            entity.Property(e => e.ContentType).HasColumnName("content_type");
+            entity.Property(e => e.FileExtension).HasColumnName("file_extension");
+            entity.Property(e => e.MetadataJson).HasColumnName("metadata_json");
+            entity.Property(e => e.LastErrorMessage).HasColumnName("last_error_message");
+
+            entity.HasIndex(e => e.NextAttemptAtUtc).HasDatabaseName("ix_frame_export_retry_next_attempt");
+            entity.HasIndex(e => new { e.Stage, e.SinkName }).HasDatabaseName("ix_frame_export_retry_stage_sink");
         });
 
         modelBuilder.Entity<BackgroundStackerSampleEntity>(entity =>

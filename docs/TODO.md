@@ -10,6 +10,12 @@
 - [ ] Migrate CelestialAnnotations filter configuration (DeepSkyObjects list, thresholds, labels) entirely into the database catalog and remove the unused legacy appsettings entries.
 - [ ] Regenerate `docs/projects/sky-monitor-v5/skymonitor-flow.svg` and `docs/projects/sky-monitor-v5/skymonitor-sequence.svg` with the updated architecture once the new diagrams are drafted.
 - [ ] Audit design diagrams in docs and rebuild any outdated folder structure illustrations inside the Markdown guides.
+- [ ] Expose `FrameExportOptions` in the admin configuration UI so operators can toggle sinks, prefixes, and manifest settings without editing JSON.
+- [ ] Provide CLI/support tooling (e.g., `scripts/export-frame-diagnostics.sh`) to inspect recent export attempts and replay failed envelopes.
+- [ ] Document the frame export operational runbook covering S3 prefixes, retention, troubleshooting steps, and retry workflows.
+- [ ] Perform a TODO sweep on the exporter/resilience code paths to ensure logging, Result<T> usage, and policy wiring match workspace standards.
+- [ ] Re-run stress harnesses to validate export channel capacity/backpressure defaults and capture tuning guidance in docs once hardware access resumes.
+- [ ] Tag the release milestone for the frame export project and capture final review notes from ops/support once the remaining docs/UI work lands.
 
 ### UX Improvements _(deferred to upcoming UI overhaul project)_
 - [ ] Promote the current SkyMonitor landing page into a dedicated **Monitor** view and hold the root **Dashboard** route for a future minimal overview.
@@ -34,6 +40,7 @@
 ### Camera
 - [x] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD, etc.) and mirror those attributes in the dashboard camera section alongside pipeline capabilities to guide setup decisions.
 - [x] Evaluate unifying synthetic and physical camera adapters behind a single implementation controlled by a `Synthetic` flag, sourcing frames from either live hardware or the starfield engine, with hooks for exposure/contrast/gain adjustments pre-pipeline. Explore whether this can converge further into one `CameraAdapter` class that relies on `RigSpec` for behaviour and delegates device-specific calls to `ICamera` implementations. Would also need to be able to access the running CameraAdaptor from things like the UI and API.  We can confine the applicaiotn to a single running adaptor at a time, but multiple configuraitons available.
+- [x] Break the camera adapter workflow into explicit pipeline stages (exposure configuration, image acquisition, pre-processing, post-processing, framebuffer assembly) so overrides remain focused and discoverable.
 
 ## HVO.SkyMonitorV5.RPi.Stress
 

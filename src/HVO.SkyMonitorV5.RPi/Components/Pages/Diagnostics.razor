@@ -1,6 +1,7 @@
 @page "/diagnostics"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using Microsoft.AspNetCore.Components.Routing
+@using System.Globalization
 
 <PageTitle>Diagnostics Dashboard</PageTitle>
 
@@ -8,7 +9,7 @@
     <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
         <div>
             <h1 class="page-heading text-light mb-0">Diagnostics Dashboard</h1>
-            <p class="page-subheading text-muted mb-0">Background stacker and filter telemetry updated every few seconds.</p>
+            <p class="page-subheading text-muted mb-0">Background stacker, frame export, and filter telemetry updated every few seconds.</p>
         </div>
         <div class="ms-auto d-flex align-items-center gap-3 status-panel">
             @if (LastUpdatedDisplay is not null)
@@ -624,6 +625,242 @@
                                                               XAxisLabel="Samples"
                                                               EmptyMessage="Stack duration history will appear after the first few samples." />
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mt-1">
+                            <div class="col-xxl-4 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Frame exports</h2>
+                                            <span class="badge bg-outline">@FrameExportSuccessRateDisplay</span>
+                                        </div>
+                                        <p class="text-muted small mb-3">Aggregate sink performance across recent export attempts.</p>
+                                        <dl class="metric-list">
+                                            <div class="metric-row">
+                                                <dt>Attempts</dt>
+                                                <dd>@FrameExportAttemptCountDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Successes</dt>
+                                                <dd>@FrameExportSuccessCountDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Failures</dt>
+                                                <dd>@FrameExportFailureCountDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Pending retries</dt>
+                                                <dd>@FrameExportPendingRetryDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last outcome</dt>
+                                                <dd>@FrameExportLastOutcomeDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last attempt</dt>
+                                                <dd>@FrameExportLastAttemptDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Latency</dt>
+                                                <dd>@FrameExportLastLatencyDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Queue latency</dt>
+                                                <dd>@FrameExportLastQueueLatencyDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Processing</dt>
+                                                <dd>@FrameExportLastProcessingDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Full pipeline</dt>
+                                                <dd>@FrameExportLastFullPipelineDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Payload</dt>
+                                                <dd>@FrameExportLastPayloadDisplay</dd>
+                                            </div>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xxl-4 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Export latency</h2>
+                                            <span class="badge bg-outline">@FrameExportHistoryDurationDisplay</span>
+                                        </div>
+                                        <div class="chart-wrapper mt-3">
+                                            <HistoryLineChart Values="@_frameExportLatencyHistory"
+                                                              DatasetLabel="Export Latency"
+                                                              Color="#facc15"
+                                                              YAxisLabel="Milliseconds"
+                                                              ValueSuffix=" ms"
+                                                              XAxisLabel="Samples"
+                                                              EmptyMessage="Latency history will appear once frame exports begin." />
+                                        </div>
+                                        <p class="text-muted small mt-3 mb-0">
+                                            <span>@FrameExportLatencyMaxDisplay</span><br />
+                                            <span>@FrameExportQueueLatencyMaxDisplay</span><br />
+                                            <span>@FrameExportProcessingMaxDisplay</span><br />
+                                            <span>@FrameExportFullPipelineMaxDisplay</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xxl-4">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Export sinks</h2>
+                                            <span class="badge bg-outline">@FrameExportAttemptCountDisplay</span>
+                                        </div>
+                                        @if (FrameExportSinks.Count > 0)
+                                        {
+                                            <div class="table-responsive mt-3">
+                                                <table class="table table-sm table-dark table-borderless align-middle mb-0">
+                                                    <thead class="text-muted small text-uppercase">
+                                                        <tr>
+                                                            <th scope="col">Sink</th>
+                                                            <th scope="col" class="text-end">Attempts</th>
+                                                            <th scope="col" class="text-end">Success</th>
+                                                            <th scope="col" class="text-end">Failure</th>
+                                                            <th scope="col" class="text-end">Success %</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var sink in FrameExportSinksByAttempts)
+                                                        {
+                                                            <tr>
+                                                                <td>
+                                                                    <div class="fw-semibold text-light">@sink.SinkName</div>
+                                                                    <div class="text-muted small">@FormatFrameExportStage(sink.Stage)</div>
+                                                                </td>
+                                                                <td class="text-end">@FormatCount(sink.AttemptCount)</td>
+                                                                <td class="text-end">@FormatCount(sink.SuccessCount)</td>
+                                                                <td class="text-end">@FormatCount(sink.FailureCount)</td>
+                                                                <td class="text-end">@FormatPercent(sink.SuccessRatePercent)</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="chart-empty text-muted mt-3">Frame export metrics will appear once frames start dispatching.</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (HasFrameExportPendingRetries)
+                        {
+                            <div class="row g-4 mt-1">
+                                <div class="col-12">
+                                    <div class="card diagnostics-card h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div>
+                                                    <h2 class="section-title mb-0">Retry backlog preview</h2>
+                                                    <p class="text-muted small mb-0">Latest queued attempts awaiting export. Limited to the first ten entries.</p>
+                                                </div>
+                                                @if (HasAdditionalPendingRetries)
+                                                {
+                                                    <span class="badge bg-outline">@FrameExportPendingRetryDisplay total</span>
+                                                }
+                                            </div>
+
+                                            <div class="table-responsive mt-3">
+                                                <table class="table table-sm table-dark table-borderless align-middle mb-0">
+                                                    <thead class="text-muted small text-uppercase">
+                                                        <tr>
+                                                            <th scope="col">Frame</th>
+                                                            <th scope="col">Sink</th>
+                                                            <th scope="col" class="text-end">Attempts</th>
+                                                            <th scope="col" class="text-end">Next attempt</th>
+                                                            <th scope="col">Last error</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var retry in FrameExportPendingRetries)
+                                                        {
+                                                            <tr>
+                                                                <td>
+                                                                    <div class="fw-semibold text-light">@FormatRetryFrameId(retry.FrameId)</div>
+                                                                    <div class="text-muted small">@FormatFrameExportStage(retry.Stage)</div>
+                                                                </td>
+                                                                <td>
+                                                                    <div class="fw-semibold text-light">@retry.SinkName</div>
+                                                                    <div class="text-muted small">Queued @FormatRetryTimestamp(retry.EnqueuedAtUtc)</div>
+                                                                </td>
+                                                                <td class="text-end">@FormatCount(retry.AttemptCount)</td>
+                                                                <td class="text-end" title="@FormatRetryTooltip(retry.NextAttemptAtUtc)">@FormatRetryTimestamp(retry.NextAttemptAtUtc)</td>
+                                                                <td class="text-muted small text-break">
+                                                                    <span title="@FormatRetryError(retry.LastErrorMessage)">@FormatRetryError(retry.LastErrorMessage)</span>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="row g-4 mt-1">
+                            <div class="col-12">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Recent export attempts</h2>
+                                            <span class="badge bg-outline">@FrameExportHistoryDurationDisplay</span>
+                                        </div>
+                                        @if (HasFrameExportHistory)
+                                        {
+                                            <div class="list-group list-group-flush export-history-list mt-3">
+                                                @foreach (var attempt in FrameExportHistoryDescending)
+                                                {
+                                                    <div class="list-group-item bg-transparent px-0 py-2">
+                                                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                                            <div>
+                                                                <div class="fw-semibold text-light">@attempt.SinkName</div>
+                                                                <div class="text-muted small">@FormatFrameExportStage(attempt.Stage)</div>
+                                                            </div>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <span class="badge @(attempt.Success ? "bg-success" : "bg-danger")">@FormatFrameExportAttemptOutcome(attempt.Success)</span>
+                                                                <span class="text-muted small">@attempt.AttemptedAtLocal.ToString("HH:mm:ss", CultureInfo.CurrentCulture)</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-muted small mt-2">
+                                                            Latency @FormatMilliseconds(attempt.LatencyMilliseconds)
+                                                            <span class="ms-3">Queue @FormatMilliseconds(attempt.QueueLatencyMilliseconds)</span>
+                                                            <span class="ms-3">Processing @FormatMilliseconds(attempt.ProcessingMilliseconds)</span>
+                                                            <span class="ms-3">Full pipeline @FormatMilliseconds(attempt.FullPipelineMilliseconds)</span>
+                                                            <span class="ms-3">Payload @BuildFrameExportPayloadDescriptor(attempt)</span>
+                                                        </div>
+                                                        @if (!attempt.Success && !string.IsNullOrWhiteSpace(attempt.ErrorMessage))
+                                                        {
+                                                            <div class="text-warning small mt-1">@attempt.ErrorMessage</div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="chart-empty text-muted mt-3">Frame export attempts will appear after the first successful dispatch.</div>
+                                        }
                                     </div>
                                 </div>
                             </div>

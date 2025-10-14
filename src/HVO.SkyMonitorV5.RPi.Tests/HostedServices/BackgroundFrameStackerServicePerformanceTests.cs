@@ -10,6 +10,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.HostedServices;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
+using HVO.SkyMonitorV5.RPi.Exports;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -61,12 +62,17 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
         clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
 
+        var dispatcher = new Mock<IFrameExportDispatcher>();
+        dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
+        var exportPublisher = new FrameExportPublisher(dispatcher.Object, NullLogger<FrameExportPublisher>.Instance);
+
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
             frameStacker.Object,
             pipeline.Object,
             frameStateStore.Object,
             clock.Object,
+            exportPublisher,
             NullLogger<BackgroundFrameStackerService>.Instance);
 
         frameStateStore.Invocations.Clear();
@@ -76,8 +82,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
             .Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()))
             .Callback<BackgroundStackerStatus>(status => capturedStatuses.Add(status));
 
-        var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
-        var capture = new CapturedImage(null!, DateTimeOffset.UtcNow, exposure, null);
+    var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
+    var capture = new CapturedImage(Guid.NewGuid(), null!, DateTimeOffset.UtcNow, exposure, null);
         const long captureSizeBytes = 0;
 
         var workItem1 = new StackingWorkItem(
@@ -171,12 +177,17 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
         clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
 
+        var dispatcher = new Mock<IFrameExportDispatcher>();
+        dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
+        var exportPublisher = new FrameExportPublisher(dispatcher.Object, NullLogger<FrameExportPublisher>.Instance);
+
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
             frameStacker.Object,
             pipeline.Object,
             frameStateStore.Object,
             clock.Object,
+            exportPublisher,
             NullLogger<BackgroundFrameStackerService>.Instance);
 
         var serviceType = typeof(BackgroundFrameStackerService);
@@ -254,6 +265,10 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
         frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
 
+    var dispatcher = new Mock<IFrameExportDispatcher>();
+    dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
+    var exportPublisher = new FrameExportPublisher(dispatcher.Object, NullLogger<FrameExportPublisher>.Instance);
+
         var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
         clock.SetupGet(c => c.LocalNow).Returns(() => DateTimeOffset.Now);
@@ -268,6 +283,7 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
             pipeline.Object,
             frameStateStore.Object,
             clock.Object,
+            exportPublisher,
             NullLogger<BackgroundFrameStackerService>.Instance);
 
         var serviceType = typeof(BackgroundFrameStackerService);
@@ -287,7 +303,7 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
             var frameNumber = ++frameCounter;
             return new StackingWorkItem(
                 FrameNumber: frameNumber,
-                Capture: new CapturedImage(null!, DateTimeOffset.UtcNow, exposure, null),
+                Capture: new CapturedImage(Guid.NewGuid(), null!, DateTimeOffset.UtcNow, exposure, null),
                 ConfigurationSnapshot: configurationSnapshot,
                 ConfigurationVersion: 1,
                 EnqueuedAt: DateTimeOffset.UtcNow,

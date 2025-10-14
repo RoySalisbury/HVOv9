@@ -10,6 +10,7 @@ namespace HVO.SkyMonitorV5.RPi.Models;
 /// Captures the per-frame rig, projection, and rendering state produced by a camera adapter.
 /// </summary>
 public sealed record FrameContext(
+    Guid FrameId,
     RigSpec Rig,
     StarFieldEngine Engine,
     DateTimeOffset Timestamp,

@@ -34,6 +34,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private Exception? _lastError;
     private CameraDescriptor? _cameraDescriptor;
     private RigSpec? _rigSpec;
+    private ExposureProfileSummary? _exposureProfiles;
     private BackgroundStackerStatus? _backgroundStackerStatus;
     private CapturePacingStatus? _capturePacingStatus;
     private ProcessingQueueStatus? _processingQueueStatus;
@@ -66,6 +67,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _configuration = CameraConfiguration.FromOptions(optionsMonitor.CurrentValue);
         _telemetryRecorder = telemetryRecorder;
+        UpdateExposureProfiles(optionsMonitor.CurrentValue);
 
         _optionsReloadSubscription = optionsMonitor.OnChange(OnPipelineOptionsChanged);
     }
@@ -611,6 +613,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             var analysis = CreateExposureAnalysisSummary(_latestExposureAnalysisTimestamp, _latestExposureAnalysis);
             var overrides = CreateExposureOverrideSummary(_dayOverride, _nightOverride);
             var remoteDispatch = _remoteDispatchStatus;
+            var exposureProfiles = _exposureProfiles;
 
             var summary = new AllSkyStatusSummary(
                 Camera: cameraSummary,
@@ -621,6 +624,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 BackgroundStacker: _backgroundStackerStatus,
                 CapturePacing: _capturePacingStatus,
                 ProcessingQueue: _processingQueueStatus,
+                ExposureProfiles: exposureProfiles,
                 ExposureAnalysis: analysis,
                 ExposureOverrides: overrides,
                 RemoteDispatch: remoteDispatch);
@@ -638,6 +642,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 Camera: descriptor,
                 Rig: rigSpec,
                 Summary: summary,
+                ExposureProfiles: exposureProfiles,
                 ExposureAnalysis: analysis,
                 ExposureOverrides: overrides,
                 RemoteDispatch: remoteDispatch);
@@ -924,6 +929,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             return;
         }
 
+        UpdateExposureProfiles(options);
         var updatedConfiguration = CameraConfiguration.FromOptions(options);
         if (TryUpdateConfiguration(updatedConfiguration, force: false, out var newVersion))
         {
@@ -931,6 +937,48 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
                 "Camera pipeline options reloaded from configuration; version advanced to {ConfigurationVersion}.",
                 newVersion);
         }
+    }
+
+    private void UpdateExposureProfiles(CameraPipelineOptions options)
+    {
+        if (options is null)
+        {
+            return;
+        }
+
+        var summary = BuildExposureProfileSummary(options);
+
+        lock (_sync)
+        {
+            _exposureProfiles = summary;
+        }
+    }
+
+    private static ExposureProfileSummary BuildExposureProfileSummary(CameraPipelineOptions options)
+    {
+        var day = new ExposureProfileBucketSummary(
+            Name: "Day",
+            BaselineExposureMilliseconds: options.DayExposureMilliseconds,
+            StartExposureMilliseconds: options.DayStartExposureMilliseconds,
+            MinExposureMilliseconds: options.DayMinExposureMilliseconds,
+            MaxExposureMilliseconds: options.DayMaxExposureMilliseconds,
+            BaselineGain: options.DayGain,
+            StartGain: options.DayStartGain,
+            MinGain: options.DayMinGain,
+            MaxGain: options.DayMaxGain).Normalize();
+
+        var night = new ExposureProfileBucketSummary(
+            Name: "Night",
+            BaselineExposureMilliseconds: options.NightExposureMilliseconds,
+            StartExposureMilliseconds: options.NightStartExposureMilliseconds,
+            MinExposureMilliseconds: options.NightMinExposureMilliseconds,
+            MaxExposureMilliseconds: options.NightMaxExposureMilliseconds,
+            BaselineGain: options.NightGain,
+            StartGain: options.NightStartGain,
+            MinGain: options.NightMinGain,
+            MaxGain: options.NightMaxGain).Normalize();
+
+        return new ExposureProfileSummary(day, night);
     }
 
     private bool TryUpdateConfiguration(CameraConfiguration configuration, bool force, out int newVersion)

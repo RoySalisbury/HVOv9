@@ -1,4 +1,5 @@
 using System;
+using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Telemetry;
@@ -17,6 +18,24 @@ public interface ISkyMonitorTelemetryRecorder
         string? message,
         string? errorMessage,
         string? formatKey);
+
+    void RecordFrameExportAttempt(
+        DateTimeOffset attemptedAtUtc,
+        DateTimeOffset attemptedAtLocal,
+        Guid frameId,
+        FrameExportStage stage,
+        string sinkName,
+        bool success,
+        double? latencyMilliseconds,
+        long? payloadBytes,
+        string? payloadContentType,
+        string? payloadExtension,
+        double? queueLatencyMilliseconds,
+        double? processingMilliseconds,
+    double? fullPipelineMilliseconds,
+        int? framesStacked,
+        int? integrationMilliseconds,
+        string? errorMessage);
 
     void RecordBackgroundStackerSample(DateTimeOffset capturedAtUtc, BackgroundStackerHistorySample sample);
 

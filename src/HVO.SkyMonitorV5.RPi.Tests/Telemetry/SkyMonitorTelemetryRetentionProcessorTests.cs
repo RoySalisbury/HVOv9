@@ -54,6 +54,7 @@ public sealed class SkyMonitorTelemetryRetentionProcessorTests
         var options = new SkyMonitorTelemetryRetentionOptions
         {
             RemoteDispatch = TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), null),
+            FrameExports = TelemetryRetentionPolicy.Create(null, null),
             BackgroundStacker = TelemetryRetentionPolicy.Create(null, null),
             CapturePacing = TelemetryRetentionPolicy.Create(null, null),
             ProcessingQueue = TelemetryRetentionPolicy.Create(null, null),

@@ -19,5 +19,9 @@ public interface IDiagnosticsService
 
     Task<Result<RemoteDispatchHistoryResponse>> GetRemoteDispatchHistoryAsync(CancellationToken cancellationToken = default);
 
+    Task<Result<FrameExportMetricsSnapshot>> GetFrameExportMetricsAsync(CancellationToken cancellationToken = default);
+
+    Task<Result<FrameExportHistoryResponse>> GetFrameExportHistoryAsync(CancellationToken cancellationToken = default);
+
     Task<Result<DataStoreMetricsSnapshot>> GetDataStoreMetricsAsync(CancellationToken cancellationToken = default);
 }

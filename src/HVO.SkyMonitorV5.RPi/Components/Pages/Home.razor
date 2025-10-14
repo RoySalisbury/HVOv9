@@ -270,6 +270,41 @@ else
                             </dd>
                         </div>
                     </dl>
+                        <div class="col-12 col-lg-6 col-xl-3">
+                            <div class="status-card">
+                                <header class="status-card__header">
+                                    <i class="bi bi-sliders"></i>
+                                    <span>Exposure Profiles</span>
+                                </header>
+                                @if (ExposureProfiles is null)
+                                {
+                                    <div class="status-card__empty">
+                                        <i class="bi bi-dash-circle"></i>
+                                        <span>Exposure configuration not available.</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <dl class="status-card__list">
+                                        <div class="status-card__item">
+                                            <dt>Day</dt>
+                                            <dd>
+                                                <div class="status-card__subline">@DayExposureProfileExposureSummary</div>
+                                                <div class="status-card__subline">@DayExposureProfileGainSummary</div>
+                                            </dd>
+                                        </div>
+                                        <div class="status-card__item">
+                                            <dt>Night</dt>
+                                            <dd>
+                                                <div class="status-card__subline">@NightExposureProfileExposureSummary</div>
+                                                <div class="status-card__subline">@NightExposureProfileGainSummary</div>
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                }
+                            </div>
+                        </div>
+
                 </div>
             </div>
 

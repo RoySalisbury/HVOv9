@@ -21,6 +21,20 @@ public sealed class CameraPipelineConfigEntity
     public int NightGain { get; set; }
     public int DayNightTransitionHourOffset { get; set; }
 
+    public int DayStartExposureMilliseconds { get; set; }
+    public int NightStartExposureMilliseconds { get; set; }
+    public int DayMinimumExposureMilliseconds { get; set; }
+    public int DayMaximumExposureMilliseconds { get; set; }
+    public int NightMinimumExposureMilliseconds { get; set; }
+    public int NightMaximumExposureMilliseconds { get; set; }
+
+    public int DayStartGain { get; set; }
+    public int NightStartGain { get; set; }
+    public int DayMinimumGain { get; set; }
+    public int DayMaximumGain { get; set; }
+    public int NightMinimumGain { get; set; }
+    public int NightMaximumGain { get; set; }
+
     public string OverlayTextFormat { get; set; } = string.Empty;
 
     public ImageEncodingSettings ProcessedImageEncoding { get; set; } = new();

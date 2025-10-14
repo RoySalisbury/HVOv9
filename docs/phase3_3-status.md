@@ -81,9 +81,9 @@ _Last updated: 2025-10-12 (afternoon)_
 - ✅ Stress harness completes 10s/15 sample runs without exiting early; elevated queue pressure documented for continued monitoring.
 - ✅ Remote dispatch telemetry visualized in dashboard (success, failure, latency, payload format trends).
 - ✅ Remote dispatch gauges exported for Prometheus scraping (success rate, latency snapshots, outcomes, payload bytes).
-- ☐ Processed-frame export hook implemented or deferred with a concrete plan for phase 4 kickoff.
+- ✅ Processed-frame export hook implemented (processed exports flow through filesystem sink with optional S3 destinations once credentials are supplied).
 - ✅ FITS/TIFF encoder work deferred to a future project (tracked in `docs/TODO.md`).
-- ☐ Configuration UX updated so operators can safely enable/disable remote dispatch and choose payload formats.
+- ☐ Configuration UX updated so operators can safely enable/disable remote dispatch and choose payload formats (deferred to Phase 4 configuration UI work).
 
 ## Open Questions
 

@@ -254,6 +254,18 @@ public sealed class SkyMonitorConfigurationContext : DbContext
             entity.Property(e => e.NightExposureMilliseconds).HasColumnName("night_exposure_ms");
             entity.Property(e => e.DayGain).HasColumnName("day_gain");
             entity.Property(e => e.NightGain).HasColumnName("night_gain");
+            entity.Property(e => e.DayStartExposureMilliseconds).HasColumnName("day_start_exposure_ms");
+            entity.Property(e => e.NightStartExposureMilliseconds).HasColumnName("night_start_exposure_ms");
+            entity.Property(e => e.DayMinimumExposureMilliseconds).HasColumnName("day_min_exposure_ms");
+            entity.Property(e => e.DayMaximumExposureMilliseconds).HasColumnName("day_max_exposure_ms");
+            entity.Property(e => e.NightMinimumExposureMilliseconds).HasColumnName("night_min_exposure_ms");
+            entity.Property(e => e.NightMaximumExposureMilliseconds).HasColumnName("night_max_exposure_ms");
+            entity.Property(e => e.DayStartGain).HasColumnName("day_start_gain");
+            entity.Property(e => e.NightStartGain).HasColumnName("night_start_gain");
+            entity.Property(e => e.DayMinimumGain).HasColumnName("day_min_gain");
+            entity.Property(e => e.DayMaximumGain).HasColumnName("day_max_gain");
+            entity.Property(e => e.NightMinimumGain).HasColumnName("night_min_gain");
+            entity.Property(e => e.NightMaximumGain).HasColumnName("night_max_gain");
             entity.Property(e => e.DayNightTransitionHourOffset).HasColumnName("day_night_transition_hour_offset");
             entity.Property(e => e.OverlayTextFormat).HasColumnName("overlay_text_format");
 
@@ -267,10 +279,22 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 StackingFrameCount = 4,
                 StackingBufferMinimumFrames = 24,
                 StackingBufferIntegrationSeconds = 120,
-                DayExposureMilliseconds = 1000,
-                NightExposureMilliseconds = 25000,
-                DayGain = 30,
+                DayExposureMilliseconds = 50,
+                NightExposureMilliseconds = 5000,
+                DayGain = 50,
                 NightGain = 200,
+                DayStartExposureMilliseconds = 2000,
+                NightStartExposureMilliseconds = 5000,
+                DayMinimumExposureMilliseconds = 1,
+                DayMaximumExposureMilliseconds = 60000,
+                NightMinimumExposureMilliseconds = 1,
+                NightMaximumExposureMilliseconds = 60000,
+                DayStartGain = 50,
+                NightStartGain = 200,
+                DayMinimumGain = 0,
+                DayMaximumGain = 500,
+                NightMinimumGain = 0,
+                NightMaximumGain = 500,
                 DayNightTransitionHourOffset = 0,
                 OverlayTextFormat = "yyyy-MM-dd HH:mm:ss zzz"
             });

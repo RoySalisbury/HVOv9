@@ -9,6 +9,7 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Exports;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -30,6 +31,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
     private readonly IObservatoryClock _clock;
     private readonly IFrameStackerConfigurationListener? _frameStackerConfigurationListener;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
+    private readonly FrameExportPublisher _frameExportPublisher;
     private IDisposable? _optionsReloadSubscription;
 
     private Channel<StackingWorkItem> _channel = null!;
@@ -80,6 +82,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         IFrameFilterPipeline frameFilterPipeline,
         IFrameStateStore frameStateStore,
         IObservatoryClock clock,
+    FrameExportPublisher frameExportPublisher,
         ILogger<BackgroundFrameStackerService> logger)
     {
         _optionsMonitor = optionsMonitor;
@@ -88,6 +91,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         _frameStateStore = frameStateStore;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger;
+    _frameExportPublisher = frameExportPublisher ?? throw new ArgumentNullException(nameof(frameExportPublisher));
         _frameStackerConfigurationListener = frameStacker as IFrameStackerConfigurationListener;
 
         _meter = new Meter("HVO.SkyMonitor.BackgroundStacker", "1.0.0");
@@ -414,15 +418,39 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 filterStopwatch.Stop();
                 filterMilliseconds = filterStopwatch.Elapsed.TotalMilliseconds;
 
+                var pipelineMilliseconds = Math.Max(0d, stackMilliseconds + filterMilliseconds);
+                var processingMillisecondsRounded = Math.Clamp(
+                    Math.Round(pipelineMilliseconds, MidpointRounding.AwayFromZero),
+                    0d,
+                    int.MaxValue);
+
                 processedFrame = processedFrame with
                 {
-                    ProcessingMilliseconds = (int)Math.Clamp(filterStopwatch.ElapsedMilliseconds, 0, int.MaxValue)
+                    ProcessingMilliseconds = (int)processingMillisecondsRounded
                 };
 
-                var rawSnapshot = new RawFrameSnapshot(stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure);
+                var rawSnapshot = new RawFrameSnapshot(stackResult.FrameId, stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure);
                 _frameStateStore.UpdateFrame(rawSnapshot, processedFrame);
                 _frameStateStore.SetLastError(null);
                 frameStored = true;
+
+                if (_frameStateStore.Rig is { } rig)
+                {
+                    _frameExportPublisher.PublishProcessedFrame(
+                        workItem.FrameNumber,
+                        stackResult,
+                        processedFrame,
+                        rig,
+                        queueLatencyMilliseconds: enqueueLatencyMs,
+                        processingMilliseconds: pipelineMilliseconds,
+                        stageTimestampUtc: _clock.UtcNow);
+                }
+                else if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace(
+                        "Skipping processed frame export for frame #{FrameNumber}; rig has not been published yet.",
+                        workItem.FrameNumber);
+                }
 
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {

@@ -29,6 +29,8 @@ apply_secret() {
 #   HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION
 #   HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY
 #   HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT
+#   HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY
+#   HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY
 
 apply_secret "src/HVO.WebSite.v9/HVO.WebSite.v9.csproj" \
               "ConnectionStrings:HualapaiValleyObservatory" \
@@ -45,5 +47,13 @@ apply_secret "src/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" \
 apply_secret "src/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" \
               "AzureDevOps:PersonalAccessToken" \
               "HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT"
+
+apply_secret "src/HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj" \
+              "FrameExport:Raw:S3:0:AccessKey" \
+              "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY"
+
+apply_secret "src/HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj" \
+              "FrameExport:Raw:S3:0:SecretKey" \
+              "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY"
 
 echo "[user-secrets] Completed provisioning (missing secrets were skipped)."

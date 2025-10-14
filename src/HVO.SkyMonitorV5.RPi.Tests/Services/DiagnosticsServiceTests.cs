@@ -11,6 +11,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Telemetry;
+using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.Data.Abstractions;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Telemetry;
@@ -192,6 +193,260 @@ public sealed class DiagnosticsServiceTests
     }
 
     [TestMethod]
+    public async Task GetFrameExportMetricsAsync_ReturnsEmptySnapshot_WhenNoAttemptsRecorded()
+    {
+        var frameStateStore = new Mock<IFrameStateStore>();
+        var pipeline = new Mock<IFrameFilterPipeline>();
+
+        var service = CreateService(frameStateStore.Object, pipeline.Object);
+
+        var result = await service.GetFrameExportMetricsAsync();
+
+        Assert.IsTrue(result.IsSuccessful, "Diagnostics should succeed even when no export telemetry exists.");
+
+        var snapshot = result.Value;
+        Assert.AreEqual(0, snapshot.TotalAttemptCount, "Empty snapshot should report zero attempts.");
+        Assert.AreEqual(0, snapshot.TotalSuccessCount, "Empty snapshot should report zero successes.");
+        Assert.AreEqual(0, snapshot.Sinks.Count, "No sinks should be returned when telemetry is absent.");
+        Assert.AreEqual(0d, snapshot.SuccessRatePercent, "Success rate should be zero with no attempts.");
+    Assert.AreEqual(0, snapshot.PendingRetries.Count, "Empty snapshot should not include pending retries.");
+    }
+
+    [TestMethod]
+    public async Task GetFrameExportMetricsAsync_AggregatesAttemptsPerSink()
+    {
+        var frameStateStore = new Mock<IFrameStateStore>();
+        var pipeline = new Mock<IFrameFilterPipeline>();
+
+        var baselineUtc = new DateTimeOffset(2025, 10, 12, 5, 0, 0, TimeSpan.Zero);
+
+        var telemetryFactory = new TestDbContextFactory<SkyMonitorTelemetryContext>(() =>
+        {
+            var context = CreateInMemoryTelemetryContext();
+
+            context.FrameExportAttempts.AddRange(new[]
+            {
+                new FrameExportAttemptEntity
+                {
+                    AttemptedAtUtc = baselineUtc.AddMinutes(1),
+                    AttemptedAtLocal = baselineUtc.AddMinutes(1),
+                    FrameId = Guid.NewGuid(),
+                    Stage = (int)FrameExportStage.Raw,
+                    SinkName = "raw-s3",
+                    Success = true,
+                    LatencyMilliseconds = 120,
+                    QueueLatencyMilliseconds = 35,
+                    ProcessingMilliseconds = 40,
+                    FullPipelineMilliseconds = 5120,
+                    PayloadBytes = 512_000,
+                    PayloadContentType = "image/png",
+                    PayloadExtension = ".png",
+                    FramesStacked = 1,
+                    IntegrationMilliseconds = 5000
+                },
+                new FrameExportAttemptEntity
+                {
+                    AttemptedAtUtc = baselineUtc.AddMinutes(2),
+                    AttemptedAtLocal = baselineUtc.AddMinutes(2),
+                    FrameId = Guid.NewGuid(),
+                    Stage = (int)FrameExportStage.Raw,
+                    SinkName = "raw-s3",
+                    Success = false,
+                    LatencyMilliseconds = 250,
+                    QueueLatencyMilliseconds = 60,
+                    ProcessingMilliseconds = 55,
+                    FullPipelineMilliseconds = 5500,
+                    PayloadBytes = 480_000,
+                    PayloadContentType = "image/png",
+                    PayloadExtension = "png",
+                    ErrorMessage = "Upload failed"
+                },
+                new FrameExportAttemptEntity
+                {
+                    AttemptedAtUtc = baselineUtc.AddMinutes(3),
+                    AttemptedAtLocal = baselineUtc.AddMinutes(3),
+                    FrameId = Guid.NewGuid(),
+                    Stage = (int)FrameExportStage.Processed,
+                    SinkName = "processed-s3",
+                    Success = true,
+                    LatencyMilliseconds = 300,
+                    QueueLatencyMilliseconds = 45,
+                    ProcessingMilliseconds = 110,
+                    FullPipelineMilliseconds = 18750,
+                    PayloadBytes = 1_200_000,
+                    PayloadContentType = "image/jpeg",
+                    PayloadExtension = ".jpg",
+                    FramesStacked = 8,
+                    IntegrationMilliseconds = 18000
+                }
+            });
+
+            context.SaveChanges();
+            return context;
+        });
+
+        var service = CreateService(
+            frameStateStore.Object,
+            pipeline.Object,
+            telemetryContextFactory: telemetryFactory);
+
+        var result = await service.GetFrameExportMetricsAsync();
+
+        Assert.IsTrue(result.IsSuccessful, "Frame export metrics should be aggregated successfully.");
+
+        var snapshot = result.Value;
+        Assert.AreEqual(3, snapshot.TotalAttemptCount, "Total attempt count should include all attempts.");
+        Assert.AreEqual(2, snapshot.TotalSuccessCount, "Total success count should reflect successful attempts.");
+        Assert.AreEqual(1, snapshot.TotalFailureCount, "Total failure count should reflect failed attempts.");
+        Assert.AreEqual(2, snapshot.Sinks.Count, "Each stage/sink pair should produce a summary row.");
+    Assert.AreEqual(0, snapshot.PendingRetries.Count, "No retries should be returned when none exist.");
+
+        var rawSink = snapshot.Sinks.Single(s => s.SinkName == "raw-s3" && s.Stage == FrameExportStage.Raw);
+        Assert.AreEqual(2, rawSink.AttemptCount, "Raw sink should aggregate both attempts.");
+        Assert.AreEqual(1, rawSink.SuccessCount, "Raw sink success count should match successful attempts.");
+        Assert.AreEqual(1, rawSink.FailureCount, "Raw sink failure count should match failed attempts.");
+        Assert.IsTrue(rawSink.LastAttemptSucceeded.HasValue && !rawSink.LastAttemptSucceeded.Value, "Last attempt should expose success flag.");
+        Assert.AreEqual("Upload failed", rawSink.LastFailureMessage, "Failure message should flow through telemetry snapshot.");
+    Assert.IsNotNull(rawSink.LastAttemptLatencyMilliseconds, "Last attempt latency should be populated.");
+    Assert.AreEqual(250d, rawSink.LastAttemptLatencyMilliseconds!.Value, 0.001, "Last attempt latency should be mapped.");
+    Assert.IsNotNull(rawSink.LastAttemptQueueLatencyMilliseconds, "Last attempt queue latency should be populated.");
+    Assert.AreEqual(60d, rawSink.LastAttemptQueueLatencyMilliseconds!.Value, 0.001, "Last attempt queue latency should be mapped.");
+    Assert.IsNotNull(rawSink.LastAttemptProcessingMilliseconds, "Last attempt processing latency should be populated.");
+    Assert.AreEqual(55d, rawSink.LastAttemptProcessingMilliseconds!.Value, 0.001, "Last attempt processing time should be mapped.");
+    Assert.IsNotNull(rawSink.LastAttemptFullPipelineMilliseconds, "Last attempt full pipeline duration should be visible.");
+    Assert.AreEqual(5500d, rawSink.LastAttemptFullPipelineMilliseconds!.Value, 0.001, "Full pipeline duration should reflect last attempt.");
+    Assert.AreEqual(baselineUtc.AddMinutes(2), rawSink.LastFailureAtUtc, "Failure timestamp should match latest raw attempt.");
+    Assert.AreEqual(baselineUtc.AddMinutes(2), rawSink.LastAttemptAtLocal, "Local timestamp should map latest attempt.");
+
+        var processedSink = snapshot.Sinks.Single(s => s.Stage == FrameExportStage.Processed);
+        Assert.AreEqual(1, processedSink.AttemptCount, "Processed sink should include single attempt.");
+        Assert.AreEqual(1, processedSink.SuccessCount, "Processed sink should count success.");
+        Assert.IsNull(processedSink.LastFailureMessage, "Processed sink should not report failure message for successful attempts.");
+    Assert.IsNotNull(processedSink.AverageLatencyMilliseconds, "Average latency should be calculated for the processed sink.");
+    Assert.AreEqual(300d, processedSink.AverageLatencyMilliseconds!.Value, 0.001, "Average latency should match lone attempt.");
+    Assert.IsNotNull(processedSink.AverageFullPipelineMilliseconds, "Average full pipeline duration should be calculated.");
+    Assert.AreEqual(18750d, processedSink.AverageFullPipelineMilliseconds!.Value, 0.001, "Average full pipeline duration should flow through telemetry.");
+
+        Assert.AreEqual(66.67d, snapshot.SuccessRatePercent, 0.01, "Overall success rate should round to two decimals.");
+        Assert.AreEqual(0, snapshot.PendingRetries.Count, "No pending retries should be returned when none exist.");
+    }
+
+    [TestMethod]
+    public async Task GetFrameExportMetricsAsync_ReturnsPendingRetryPreview()
+    {
+        var frameStateStore = new Mock<IFrameStateStore>();
+        var pipeline = new Mock<IFrameFilterPipeline>();
+
+        var baselineUtc = new DateTimeOffset(2025, 10, 12, 8, 0, 0, TimeSpan.Zero);
+
+        var telemetryFactory = new TestDbContextFactory<SkyMonitorTelemetryContext>(() =>
+        {
+            var context = CreateInMemoryTelemetryContext();
+
+            for (var index = 0; index < 12; index++)
+            {
+                context.FrameExportRetries.Add(new FrameExportRetryEntity
+                {
+                    FrameId = Guid.NewGuid(),
+                    Stage = (int)FrameExportStage.Raw,
+                    SinkName = "raw-s3",
+                    AttemptCount = index + 1,
+                    EnqueuedAtUtc = baselineUtc.AddMinutes(-index * 2),
+                    LastAttemptAtUtc = baselineUtc.AddMinutes(-index),
+                    NextAttemptAtUtc = baselineUtc.AddMinutes(index),
+                    LastErrorMessage = $"Error {index:00}"
+                });
+            }
+
+            context.SaveChanges();
+            return context;
+        });
+
+        var service = CreateService(frameStateStore.Object, pipeline.Object, telemetryContextFactory: telemetryFactory);
+
+        var result = await service.GetFrameExportMetricsAsync();
+
+        Assert.IsTrue(result.IsSuccessful, "Frame export metrics should succeed.");
+        var snapshot = result.Value;
+
+        Assert.AreEqual(12, snapshot.PendingRetryCount, "Pending retry count should reflect total queue depth.");
+        Assert.AreEqual(10, snapshot.PendingRetries.Count, "Diagnostics should include a preview of pending retries.");
+
+        var first = snapshot.PendingRetries.First();
+        var last = snapshot.PendingRetries.Last();
+        Assert.IsTrue(first.NextAttemptAtUtc <= last.NextAttemptAtUtc, "Preview list should be ordered by next attempt time.");
+        Assert.IsNotNull(first.LastErrorMessage, "Entries should surface last error message.");
+    }
+
+    [TestMethod]
+    public async Task GetFrameExportHistoryAsync_ReturnsAttemptsOrderedByLocalTimestamp()
+    {
+        var frameStateStore = new Mock<IFrameStateStore>();
+        var pipeline = new Mock<IFrameFilterPipeline>();
+
+        var baselineUtc = new DateTimeOffset(2025, 10, 12, 6, 0, 0, TimeSpan.Zero);
+
+        var telemetryFactory = new TestDbContextFactory<SkyMonitorTelemetryContext>(() =>
+        {
+            var context = CreateInMemoryTelemetryContext();
+
+            context.FrameExportAttempts.AddRange(new[]
+            {
+                new FrameExportAttemptEntity
+                {
+                    AttemptedAtUtc = baselineUtc.AddMinutes(5),
+                    AttemptedAtLocal = baselineUtc.AddMinutes(10),
+                    FrameId = Guid.NewGuid(),
+                    Stage = (int)FrameExportStage.Processed,
+                    SinkName = "processed-s3",
+                    Success = true,
+                    LatencyMilliseconds = 180,
+                    QueueLatencyMilliseconds = 40,
+                    ProcessingMilliseconds = 85,
+                    FullPipelineMilliseconds = 6350
+                },
+                new FrameExportAttemptEntity
+                {
+                    AttemptedAtUtc = baselineUtc.AddMinutes(2),
+                    AttemptedAtLocal = baselineUtc.AddMinutes(2),
+                    FrameId = Guid.NewGuid(),
+                    Stage = (int)FrameExportStage.Raw,
+                    SinkName = "raw-s3",
+                    Success = false,
+                    LatencyMilliseconds = 260,
+                    QueueLatencyMilliseconds = 75,
+                    ProcessingMilliseconds = 95,
+                    FullPipelineMilliseconds = 7200,
+                    ErrorMessage = "Timeout"
+                }
+            });
+
+            context.SaveChanges();
+            return context;
+        });
+
+        var service = CreateService(
+            frameStateStore.Object,
+            pipeline.Object,
+            telemetryContextFactory: telemetryFactory);
+
+        var result = await service.GetFrameExportHistoryAsync();
+
+        Assert.IsTrue(result.IsSuccessful, "Frame export history should be retrieved successfully.");
+
+        var history = result.Value.Attempts;
+        Assert.AreEqual(2, history.Count, "History should include all attempts.");
+
+        Assert.IsTrue(history[0].AttemptedAtLocal <= history[1].AttemptedAtLocal, "Attempts should be sorted by local timestamp ascending.");
+        Assert.AreEqual("Timeout", history[0].ErrorMessage, "The earliest attempt should expose its error details.");
+        Assert.IsTrue(history[1].Success, "The latest attempt should retain success state.");
+    Assert.IsNotNull(history[0].FullPipelineMilliseconds, "Failed attempt should capture full pipeline duration.");
+    Assert.IsNotNull(history[1].FullPipelineMilliseconds, "Successful attempt should capture full pipeline duration.");
+    Assert.AreEqual(7200d, history[0].FullPipelineMilliseconds!.Value, 0.001, "Failed attempt should retain full pipeline duration.");
+    Assert.AreEqual(6350d, history[1].FullPipelineMilliseconds!.Value, 0.001, "Successful attempt should retain full pipeline duration.");
+    }
+
+    [TestMethod]
     public async Task GetSystemDiagnosticsAsync_ReturnsSnapshot()
     {
         var frameStateStore = new Mock<IFrameStateStore>();
@@ -280,7 +535,17 @@ public sealed class DiagnosticsServiceTests
 
         var retentionStarted = DateTimeOffset.UtcNow.AddSeconds(-15);
         var retentionCompleted = retentionStarted.AddSeconds(6);
-        var retentionSummary = new TelemetryRetentionSummary(1, 2, 3, 4, 5, 6, 21, VacuumAttempted: true, VacuumSucceeded: true);
+        var retentionSummary = new TelemetryRetentionSummary(
+            RemoteDispatchPurged: 1,
+            FrameExportsPurged: 2,
+            BackgroundStackerPurged: 3,
+            CapturePacingPurged: 4,
+            ProcessingQueuePurged: 5,
+            FilterMetricsPurged: 6,
+            TelemetryEventsPurged: 7,
+            TotalPurged: 28,
+            VacuumAttempted: true,
+            VacuumSucceeded: true);
         telemetryMetrics.ReportRetentionCompletion(retentionStarted, retentionCompleted, retentionSummary);
 
         var bootstrapStatus = new Mock<IDataStoreBootstrapStatus>();
@@ -323,6 +588,7 @@ public sealed class DiagnosticsServiceTests
 
     Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "remote_dispatch_attempt" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
     Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "background_stacker_sample" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
+    Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "frame_export_attempt" && t.RowCount == 0), "Telemetry table counts should include export attempts even when empty.");
 
     var telemetryIngestion = snapshot.TelemetryStore.TelemetryIngestion;
     Assert.IsNotNull(telemetryIngestion, "Telemetry ingestion metrics should be present.");
@@ -335,7 +601,8 @@ public sealed class DiagnosticsServiceTests
 
     var telemetryRetention = snapshot.TelemetryStore.TelemetryRetention;
     Assert.IsNotNull(telemetryRetention, "Telemetry retention snapshot should be present.");
-    Assert.AreEqual(retentionSummary.TotalPurged, telemetryRetention!.TotalPurged, "Retention summary should propagate purge totals.");
+    Assert.AreEqual(retentionSummary.FrameExportsPurged, telemetryRetention!.FrameExportsPurged, "Retention summary should propagate frame export purges.");
+    Assert.AreEqual(retentionSummary.TotalPurged, telemetryRetention.TotalPurged, "Retention summary should propagate purge totals.");
     Assert.AreEqual(retentionCompleted, telemetryRetention.LastCompletedAtUtc, "Retention completion timestamp should propagate.");
 
         Assert.IsTrue(snapshot.TelemetryStore.Bootstrap.Ran && snapshot.TelemetryStore.Bootstrap.Succeeded, "Bootstrap status should indicate success.");

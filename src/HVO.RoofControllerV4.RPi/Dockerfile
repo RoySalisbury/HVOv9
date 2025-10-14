@@ -42,9 +42,18 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        fontconfig \
+        fonts-dejavu-core \
+        fonts-liberation2 \
+        fonts-noto-core \
+        fonts-noto-mono \
+        fonts-noto-color-emoji \
+        fonts-roboto \
+        fonts-open-sans \
         libgpiod2 \
         i2c-tools && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    fc-cache -f
 
 # Copy the published binaries from the build stage
 COPY --from=build /app/publish .

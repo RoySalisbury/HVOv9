@@ -55,6 +55,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         {
             DrainBuffer();
             return new FrameStackResult(
+                capture.FrameId,
                 capture.Image,
                 capture.Image,
                 capture.Timestamp,
@@ -70,21 +71,23 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
 
         TrimBuffer(configuration);
 
-        if (_buffer.Count < configuration.StackingFrameCount)
-        {
-            return new FrameStackResult(
-                capture.Image,
-                capture.Image,
-                capture.Timestamp,
-                capture.Exposure,
-                frameContext,
-                1,
-                capture.Exposure.ExposureMilliseconds);
-        }
-
         try
         {
-            var framesForStack = GetFramesForStack(configuration.StackingFrameCount);
+            var framesForStackCount = Math.Min(configuration.StackingFrameCount, _buffer.Count);
+            if (framesForStackCount <= 0)
+            {
+                return new FrameStackResult(
+                    capture.FrameId,
+                    capture.Image,
+                    capture.Image,
+                    capture.Timestamp,
+                    capture.Exposure,
+                    frameContext,
+                    1,
+                    capture.Exposure.ExposureMilliseconds);
+            }
+
+            var framesForStack = GetFramesForStack(framesForStackCount);
             var stackStopwatch = Stopwatch.StartNew();
             var result = AverageFrames(framesForStack, capture, frameContext);
             stackStopwatch.Stop();
@@ -109,6 +112,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         catch
         {
             return new FrameStackResult(
+                capture.FrameId,
                 capture.Image,
                 capture.Image,
                 capture.Timestamp,
@@ -147,6 +151,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         if (frames.Count == 0)
         {
             return new FrameStackResult(
+                latestFrame.FrameId,
                 latestFrame.Image,
                 latestFrame.Image,
                 latestFrame.Timestamp,
@@ -163,6 +168,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         if (width == 0 || height == 0)
         {
             return new FrameStackResult(
+                latestFrame.FrameId,
                 latestFrame.Image,
                 latestFrame.Image,
                 latestFrame.Timestamp,
@@ -202,6 +208,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         if (framesIncluded.Count == 0)
         {
             return new FrameStackResult(
+                latestFrame.FrameId,
                 latestFrame.Image,
                 latestFrame.Image,
                 latestFrame.Timestamp,
@@ -216,6 +223,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         var integrationMilliseconds = CalculateIntegrationMilliseconds(framesIncluded);
 
         return new FrameStackResult(
+            latestFrame.FrameId,
             stackedImage,
             latestFrame.Image,
             latestFrame.Timestamp,

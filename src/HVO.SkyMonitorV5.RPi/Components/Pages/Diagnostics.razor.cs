@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Exports;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,11 +23,16 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private static readonly TimeSpan FilterRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RemoteDispatchRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BackgroundRefreshInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan FrameExportRefreshInterval = TimeSpan.FromSeconds(5);
 
     private readonly List<double> _queueFillHistory = new();
     private readonly List<double> _queueLatencyHistory = new();
     private readonly List<double> _stackDurationHistory = new();
     private readonly List<double> _remoteDispatchLatencyHistory = new();
+    private readonly List<double> _frameExportLatencyHistory = new();
+    private readonly List<double> _frameExportQueueLatencyHistory = new();
+    private readonly List<double> _frameExportProcessingHistory = new();
+    private readonly List<double> _frameExportFullPipelineHistory = new();
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     private CancellationTokenSource? _refreshCts;
@@ -36,6 +42,9 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private SystemDiagnosticsSnapshot? _systemDiagnostics;
     private RemoteDispatchMetricsSnapshot? _remoteDispatchMetrics;
     private RemoteDispatchHistorySample? _lastRemoteDispatchSample;
+    private FrameExportMetricsSnapshot? _frameExportMetrics;
+    private FrameExportHistorySample? _lastFrameExportSample;
+    private IReadOnlyList<FrameExportHistorySample> _frameExportHistory = Array.Empty<FrameExportHistorySample>();
     private DateTimeOffset? _lastUpdated;
     private string? _errorMessage;
     private bool _isLoading = true;
@@ -44,6 +53,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private DateTimeOffset _lastQueueRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFilterRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
     private RemoteDispatchConfigSnapshot _remoteDispatchConfig = RemoteDispatchConfigSnapshot.Disabled;
     private IDisposable? _optionsChangeSubscription;
 
@@ -118,6 +128,39 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     };
     private string RemoteDispatchHistoryDurationDisplay => BuildHistoryDurationLabel(_remoteDispatchLatencyHistory.Count, RemoteDispatchRefreshInterval);
     private string RemoteDispatchLatencyMaxDisplay => BuildMaxLabel(_remoteDispatchLatencyHistory, "ms");
+    private FrameExportMetricsSnapshot? FrameExportMetrics => _frameExportMetrics;
+    private IReadOnlyList<FrameExportSinkMetrics> FrameExportSinks => FrameExportMetrics?.Sinks ?? Array.Empty<FrameExportSinkMetrics>();
+    private IReadOnlyList<FrameExportHistorySample> FrameExportHistory => _frameExportHistory;
+    private bool HasFrameExportTelemetry => FrameExportMetrics is { TotalAttemptCount: > 0 };
+    private string FrameExportAttemptCountDisplay => FormatCount(FrameExportMetrics?.TotalAttemptCount ?? 0);
+    private string FrameExportSuccessCountDisplay => FormatCount(FrameExportMetrics?.TotalSuccessCount ?? 0);
+    private string FrameExportFailureCountDisplay => FormatCount(FrameExportMetrics?.TotalFailureCount ?? 0);
+    private string FrameExportSuccessRateDisplay => FormatPercent(FrameExportMetrics?.SuccessRatePercent);
+    private string FrameExportPendingRetryDisplay => FormatCount(FrameExportMetrics?.PendingRetryCount ?? 0);
+    private IReadOnlyList<FrameExportRetryEntry> FrameExportPendingRetries => FrameExportMetrics?.PendingRetries ?? Array.Empty<FrameExportRetryEntry>();
+    private bool HasFrameExportPendingRetries => FrameExportPendingRetries.Count > 0;
+    private bool HasAdditionalPendingRetries => (FrameExportMetrics?.PendingRetryCount ?? 0) > FrameExportPendingRetries.Count;
+    private string FrameExportHistoryDurationDisplay => BuildHistoryDurationLabel(_frameExportLatencyHistory.Count, FrameExportRefreshInterval);
+    private string FrameExportLatencyMaxDisplay => BuildMaxLabel(_frameExportLatencyHistory, "ms");
+    private string FrameExportQueueLatencyMaxDisplay => BuildMaxLabel(_frameExportQueueLatencyHistory, "ms");
+    private string FrameExportProcessingMaxDisplay => BuildMaxLabel(_frameExportProcessingHistory, "ms");
+    private string FrameExportFullPipelineMaxDisplay => BuildMaxLabel(_frameExportFullPipelineHistory, "ms");
+    private string FrameExportLastOutcomeDisplay => _lastFrameExportSample is { } sample ? FormatFrameExportAttemptOutcome(sample.Success) : "No attempts yet";
+    private string FrameExportLastAttemptDisplay => _lastFrameExportSample is { } sample
+        ? sample.AttemptedAtLocal.ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+        : "—";
+    private string FrameExportLastLatencyDisplay => FormatMilliseconds(_lastFrameExportSample?.LatencyMilliseconds);
+    private string FrameExportLastQueueLatencyDisplay => FormatMilliseconds(_lastFrameExportSample?.QueueLatencyMilliseconds);
+    private string FrameExportLastProcessingDisplay => FormatMilliseconds(_lastFrameExportSample?.ProcessingMilliseconds);
+    private string FrameExportLastFullPipelineDisplay => FormatMilliseconds(_lastFrameExportSample?.FullPipelineMilliseconds);
+    private string FrameExportLastPayloadDisplay => BuildFrameExportPayloadDescriptor(_lastFrameExportSample);
+    private IEnumerable<FrameExportHistorySample> FrameExportHistoryDescending => FrameExportHistory.Count > 0
+        ? FrameExportHistory.Reverse().Take(10)
+        : Array.Empty<FrameExportHistorySample>();
+    private bool HasFrameExportHistory => FrameExportHistory.Count > 0;
+    private IEnumerable<FrameExportSinkMetrics> FrameExportSinksByAttempts => FrameExportSinks.Count > 0
+        ? FrameExportSinks.OrderByDescending(static sink => sink.AttemptCount)
+        : Array.Empty<FrameExportSinkMetrics>();
     private string RemoteDispatchConfigSummary => _remoteDispatchConfig.Summary;
     private string RemoteDispatchConfigBadgeText => _remoteDispatchConfig.Status switch
     {
@@ -176,6 +219,24 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private string ProcessWorkingSetDisplay => FormatMemory(_systemDiagnostics?.ProcessWorkingSetMegabytes ?? double.NaN);
     private string ProcessPrivateDisplay => FormatMemory(_systemDiagnostics?.ProcessPrivateMegabytes ?? double.NaN);
     private string ManagedMemoryDisplay => FormatMemory(_systemDiagnostics?.ManagedMemoryMegabytes ?? double.NaN);
+
+    private static string FormatRetryFrameId(Guid frameId)
+    {
+        var text = frameId.ToString("N", CultureInfo.InvariantCulture);
+        return text.Length <= 8 ? text.ToUpperInvariant() : text[..8].ToUpperInvariant();
+    }
+
+    private static string FormatRetryTimestamp(DateTimeOffset timestamp)
+        => timestamp.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+    private static string FormatRetryTimestamp(DateTimeOffset? timestamp)
+        => timestamp.HasValue ? FormatRetryTimestamp(timestamp.Value) : "—";
+
+    private static string FormatRetryError(string? message)
+        => string.IsNullOrWhiteSpace(message) ? "—" : message!;
+
+    private static string FormatRetryTooltip(DateTimeOffset timestamp)
+        => timestamp.ToLocalTime().ToString("G", CultureInfo.CurrentCulture);
 
     protected override async Task OnInitializedAsync()
     {
@@ -237,6 +298,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
             _lastQueueRefreshUtc = DateTimeOffset.MinValue;
             _lastFilterRefreshUtc = DateTimeOffset.MinValue;
             _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
+            _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
             return;
         }
 
@@ -244,6 +306,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         {
             _lastQueueRefreshUtc = DateTimeOffset.MinValue;
             _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
+            _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
             return;
         }
 
@@ -255,8 +318,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
 
     private TimeSpan GetCurrentLoopInterval() => _activeTab switch
     {
-        DiagnosticsTab.System => MinInterval(SystemRefreshInterval, RemoteDispatchRefreshInterval, FilterRefreshInterval, BackgroundRefreshInterval),
-        DiagnosticsTab.Queue => MinInterval(QueueRefreshInterval, RemoteDispatchRefreshInterval, BackgroundRefreshInterval),
+        DiagnosticsTab.System => MinInterval(SystemRefreshInterval, RemoteDispatchRefreshInterval, FrameExportRefreshInterval, FilterRefreshInterval, BackgroundRefreshInterval),
+        DiagnosticsTab.Queue => MinInterval(QueueRefreshInterval, RemoteDispatchRefreshInterval, FrameExportRefreshInterval, BackgroundRefreshInterval),
         DiagnosticsTab.Filters => MinInterval(FilterRefreshInterval, BackgroundRefreshInterval),
         _ => BackgroundRefreshInterval
     };
@@ -420,6 +483,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
             var queueHistoryApplied = false;
             RemoteDispatchMetricsSnapshot? latestRemoteDispatchMetrics = null;
             var remoteHistoryApplied = false;
+            FrameExportMetricsSnapshot? latestFrameExportMetrics = null;
+            var frameExportHistoryApplied = false;
             var nowUtc = ObservatoryClock.UtcNow;
 
             if (ShouldRefreshQueueMetrics() && nowUtc - _lastQueueRefreshUtc >= QueueRefreshInterval)
@@ -546,6 +611,67 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                 _lastRemoteDispatchRefreshUtc = nowUtc;
             }
 
+            if (ShouldRefreshFrameExportMetrics() && nowUtc - _lastFrameExportRefreshUtc >= FrameExportRefreshInterval)
+            {
+                try
+                {
+                    var exportResult = await DiagnosticsService.GetFrameExportMetricsAsync(cancellationToken).ConfigureAwait(false);
+                    if (exportResult.IsSuccessful)
+                    {
+                        latestFrameExportMetrics = exportResult.Value;
+                        _frameExportMetrics = exportResult.Value;
+                        _lastUpdated = ObservatoryClock.LocalNow;
+                    }
+                    else
+                    {
+                        var error = exportResult.Error ?? new InvalidOperationException("Unknown frame export diagnostics error");
+                        Logger.LogWarning(error, "Failed to refresh frame export metrics snapshot.");
+                        errorMessages.Add("Unable to retrieve frame export metrics.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Unexpected error refreshing frame export metrics snapshot.");
+                    errorMessages.Add("Unexpected error while retrieving frame export metrics.");
+                }
+
+                try
+                {
+                    var exportHistoryResult = await DiagnosticsService.GetFrameExportHistoryAsync(cancellationToken).ConfigureAwait(false);
+                    if (exportHistoryResult.IsSuccessful)
+                    {
+                        ApplyFrameExportHistory(exportHistoryResult.Value.Attempts);
+                        frameExportHistoryApplied = true;
+                    }
+                    else
+                    {
+                        var error = exportHistoryResult.Error ?? new InvalidOperationException("Unknown frame export history error");
+                        Logger.LogWarning(error, "Failed to refresh frame export history samples.");
+                        errorMessages.Add("Unable to retrieve frame export history.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Unexpected error refreshing frame export history.");
+                    errorMessages.Add("Unexpected error while retrieving frame export history.");
+                }
+
+                if (!frameExportHistoryApplied && latestFrameExportMetrics is not null)
+                {
+                    ApplyFrameExportFallbackFromMetrics(latestFrameExportMetrics);
+                }
+
+                _lastFrameExportRefreshUtc = nowUtc;
+            }
+
             if (ShouldRefreshFilterMetrics() && nowUtc - _lastFilterRefreshUtc >= FilterRefreshInterval)
             {
                 try
@@ -637,6 +763,32 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         }
     }
 
+    private void ApplyFrameExportHistory(IReadOnlyList<FrameExportHistorySample> attempts)
+    {
+        _frameExportHistory = attempts;
+
+        _frameExportLatencyHistory.Clear();
+        _frameExportQueueLatencyHistory.Clear();
+        _frameExportProcessingHistory.Clear();
+    _frameExportFullPipelineHistory.Clear();
+
+        if (attempts.Count == 0)
+        {
+            _lastFrameExportSample = null;
+            return;
+        }
+
+        foreach (var attempt in attempts)
+        {
+            UpdateHistory(_frameExportLatencyHistory, attempt.LatencyMilliseconds ?? 0d);
+            UpdateHistory(_frameExportQueueLatencyHistory, attempt.QueueLatencyMilliseconds ?? 0d);
+            UpdateHistory(_frameExportProcessingHistory, attempt.ProcessingMilliseconds ?? 0d);
+            UpdateHistory(_frameExportFullPipelineHistory, attempt.FullPipelineMilliseconds ?? 0d);
+        }
+
+        _lastFrameExportSample = attempts[^1];
+    }
+
     private void ApplyRemoteDispatchHistory(IReadOnlyList<RemoteDispatchHistorySample> samples)
     {
         _remoteDispatchLatencyHistory.Clear();
@@ -653,6 +805,71 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         }
 
         _lastRemoteDispatchSample = samples[^1];
+    }
+
+    private void ApplyFrameExportFallbackFromMetrics(FrameExportMetricsSnapshot snapshot)
+    {
+        if (snapshot.Sinks.Count == 0)
+        {
+            return;
+        }
+
+        FrameExportHistorySample? latestSample = _lastFrameExportSample;
+
+        foreach (var sink in snapshot.Sinks)
+        {
+            if (sink.LastAttemptLatencyMilliseconds is { } latency)
+            {
+                UpdateHistory(_frameExportLatencyHistory, latency);
+            }
+
+            if (sink.LastAttemptQueueLatencyMilliseconds is { } queueLatency)
+            {
+                UpdateHistory(_frameExportQueueLatencyHistory, queueLatency);
+            }
+
+            if (sink.LastAttemptProcessingMilliseconds is { } processing)
+            {
+                UpdateHistory(_frameExportProcessingHistory, processing);
+            }
+
+            if (sink.LastAttemptFullPipelineMilliseconds is { } fullPipeline)
+            {
+                UpdateHistory(_frameExportFullPipelineHistory, fullPipeline);
+            }
+
+            if (sink.LastAttemptAtUtc is { } attemptUtc)
+            {
+                var attemptLocal = sink.LastAttemptAtLocal ?? attemptUtc;
+                var candidate = new FrameExportHistorySample(
+                    FrameId: Guid.Empty,
+                    AttemptedAtUtc: attemptUtc,
+                    AttemptedAtLocal: attemptLocal,
+                    Stage: sink.Stage,
+                    SinkName: sink.SinkName,
+                    Success: sink.LastAttemptSucceeded ?? false,
+                    LatencyMilliseconds: sink.LastAttemptLatencyMilliseconds,
+                    PayloadBytes: sink.LastAttemptPayloadBytes,
+                    PayloadContentType: sink.LastAttemptContentType,
+                    PayloadExtension: sink.LastAttemptExtension,
+                    QueueLatencyMilliseconds: sink.LastAttemptQueueLatencyMilliseconds,
+                    ProcessingMilliseconds: sink.LastAttemptProcessingMilliseconds,
+                    FullPipelineMilliseconds: sink.LastAttemptFullPipelineMilliseconds,
+                    FramesStacked: null,
+                    IntegrationMilliseconds: null,
+                    ErrorMessage: sink.LastAttemptSucceeded is true ? null : sink.LastFailureMessage);
+
+                if (latestSample is null || candidate.AttemptedAtUtc > latestSample.AttemptedAtUtc)
+                {
+                    latestSample = candidate;
+                }
+            }
+        }
+
+        if (latestSample is not null)
+        {
+            _lastFrameExportSample = latestSample;
+        }
     }
 
     private static void UpdateHistory(List<double> history, double value)
@@ -811,6 +1028,45 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         return string.Create(CultureInfo.CurrentCulture, $"{duration.Seconds:D2}s");
     }
 
+    private string BuildFrameExportPayloadDescriptor(FrameExportHistorySample? sample)
+    {
+        if (sample is null)
+        {
+            return "—";
+        }
+
+        var parts = new List<string>();
+
+        var size = FormatBytes(sample.PayloadBytes);
+        if (size != "—")
+        {
+            parts.Add(size);
+        }
+
+        var extension = NormalizeExtension(sample.PayloadExtension);
+        if (!string.IsNullOrWhiteSpace(extension))
+        {
+            parts.Add(extension);
+        }
+
+        if (!string.IsNullOrWhiteSpace(sample.PayloadContentType))
+        {
+            parts.Add(sample.PayloadContentType);
+        }
+
+        if (sample.FramesStacked is { } stacked)
+        {
+            parts.Add(string.Create(CultureInfo.CurrentCulture, $"{stacked} frames"));
+        }
+
+        if (sample.IntegrationMilliseconds is { } integration)
+        {
+            parts.Add(string.Create(CultureInfo.CurrentCulture, $"{integration} ms integration"));
+        }
+
+        return parts.Count > 0 ? string.Join(" • ", parts) : "—";
+    }
+
     private string BuildRemoteDispatchPayloadDescriptor()
     {
         if (_remoteDispatchMetrics is not { } metrics)
@@ -895,6 +1151,15 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         _ => "High"
     };
 
+    private static string FormatFrameExportStage(FrameExportStage stage) => stage switch
+    {
+        FrameExportStage.Raw => "Raw",
+        FrameExportStage.Processed => "Processed",
+        _ => stage.ToString()
+    };
+
+    private static string FormatFrameExportAttemptOutcome(bool success) => success ? "Succeeded" : "Failed";
+
     private static string FormatRemoteDispatchOutcome(RemoteDispatchOutcome outcome) => outcome switch
     {
         RemoteDispatchOutcome.Disabled => "Disabled",
@@ -935,6 +1200,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         Filters,
         Queue
     }
+
+    private bool ShouldRefreshFrameExportMetrics() => ActiveTab is DiagnosticsTab.Queue or DiagnosticsTab.System;
 
     private bool ShouldRefreshRemoteDispatchMetrics() => ActiveTab is DiagnosticsTab.System or DiagnosticsTab.Queue;
 

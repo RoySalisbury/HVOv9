@@ -1,6 +1,8 @@
 # HVO custom data directories
+/artifacts/
 /datastores/
 /workspaces/HVOv9/datastores/
+/workspaces/HVOv9/artifacts
 benchmarks/**/datastore/
 benchmarks/**/*.{db,db-shm,db-wal,tar.gz}
 /.DS_Store
@@ -378,3 +380,5 @@ FodyWeavers.xsd
 
 # Local developer HTTPS certificate bundle
 .certs/
+
+.venv/

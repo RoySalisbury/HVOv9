@@ -12,6 +12,8 @@ set -euo pipefail
 #   CONTAINER_NAME      Name assigned to the running container (default: hvo-skymonitor-v5)
 #   DATA_ROOT           Absolute path on the remote host that should back /var/hvo/datastores
 #                       (default: /srv/hvo/skymonitor/datastores)
+#   EXPORT_ROOT         Absolute path on the remote host that should back /var/hvo/exports
+#                       (default: /srv/hvo/skymonitor/exports)
 #   RUN_TESTS           When "true", build the Dockerfile tests stage before publishing (default: true)
 #   RUN_BENCHMARKS      When "true", run the benchmark smoke job during the tests stage (default: false)
 #   START_CONTAINER     When "true", start the service container after the build (default: false)
@@ -30,6 +32,7 @@ fi
 : "${IMAGE_TAG:?Set IMAGE_TAG to the target tag, e.g. hvov9/skymonitor-v5:latest}"
 : "${CONTAINER_NAME:?Set CONTAINER_NAME to the container name, e.g. hvo-skymonitor-v5}"
 : "${DATA_ROOT:?Set DATA_ROOT to the remote datastore root, e.g. /srv/hvo/skymonitor/datastores}"
+: "${EXPORT_ROOT:?Set EXPORT_ROOT to the remote export root, e.g. /srv/hvo/skymonitor/exports}"
 : "${RUN_TESTS:?Set RUN_TESTS to true/false explicitly}"
 : "${RUN_BENCHMARKS:?Set RUN_BENCHMARKS to true/false explicitly}"
 : "${START_CONTAINER:?Set START_CONTAINER to true/false explicitly}"
@@ -43,6 +46,7 @@ EXTRA_DOCKER_ARGS=${EXTRA_DOCKER_ARGS:-}
 echo "Using Docker context: ${DOCKER_CONTEXT}"
 echo "Building image tag:   ${IMAGE_TAG}"
 echo "Remote data root:     ${DATA_ROOT}"
+echo "Remote export root:   ${EXPORT_ROOT}"
 
 DOCKERFILE_PATH="${REPO_ROOT}/src/HVO.SkyMonitorV5.RPi/Dockerfile"
 BUILD_VERSION=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo "dev")
@@ -55,6 +59,7 @@ fi
 echo "Using Docker context: ${DOCKER_CONTEXT}"
 echo "Building image tag:   ${IMAGE_TAG}"
 echo "Remote data root:     ${DATA_ROOT}"
+echo "Remote export root:   ${EXPORT_ROOT}"
 
 HOST_ARCH=$(docker --context "${DOCKER_CONTEXT}" info --format '{{.Architecture}}')
 if [[ -z "${SKYMONITOR_RUNTIME}" ]]; then
@@ -105,6 +110,12 @@ docker --context "${DOCKER_CONTEXT}" run --rm \
   alpine:3.20 \
   sh -c "mkdir -p /datastore/configuration /datastore/telemetry /datastore/catalogs /datastore/logs /datastore/dataprotection && chmod -R 775 /datastore"
 
+echo "\n→ Ensuring export root directories exist on remote host (${EXPORT_ROOT})..."
+docker --context "${DOCKER_CONTEXT}" run --rm \
+  -v "${EXPORT_ROOT}":/exports \
+  alpine:3.20 \
+  sh -c "mkdir -p /exports/raw /exports/processed && chmod -R 775 /exports"
+
 echo "\n→ Seeding catalog assets when host directory is empty..."
 docker --context "${DOCKER_CONTEXT}" run --rm \
   -v "${DATA_ROOT}/catalogs":/var/hvo/datastores/catalogs \
@@ -119,9 +130,11 @@ docker --context "${DOCKER_CONTEXT}" run --rm \
   -v "${DATA_ROOT}/catalogs":/var/hvo/datastores/catalogs \
   -v "${DATA_ROOT}/dataprotection":/var/hvo/datastores/dataprotection \
   -v "${DATA_ROOT}/logs":/var/hvo/logs \
+  -v "${EXPORT_ROOT}/raw":/var/hvo/exports/raw \
+  -v "${EXPORT_ROOT}/processed":/var/hvo/exports/processed \
   --entrypoint sh \
   "${IMAGE_TAG}" \
-  -c 'for dir in configuration telemetry dataprotection; do if [ -w "/var/hvo/datastores/${dir}" ]; then echo "[ok] ${dir} writable"; else echo "[err] ${dir} not writable" >&2; exit 1; fi; done; if [ ! -d /var/hvo/datastores/catalogs ] || [ -z "$(ls -A /var/hvo/datastores/catalogs 2>/dev/null)" ]; then echo "[err] catalogs missing" >&2; exit 1; else echo "[ok] catalogs present"; fi; if [ -w /var/hvo/logs ]; then echo "[ok] logs writable"; else echo "[err] logs not writable" >&2; exit 1; fi'
+  -c 'for dir in configuration telemetry dataprotection; do if [ -w "/var/hvo/datastores/${dir}" ]; then echo "[ok] ${dir} writable"; else echo "[err] ${dir} not writable" >&2; exit 1; fi; done; if [ ! -d /var/hvo/datastores/catalogs ] || [ -z "$(ls -A /var/hvo/datastores/catalogs 2>/dev/null)" ]; then echo "[err] catalogs missing" >&2; exit 1; else echo "[ok] catalogs present"; fi; if [ -w /var/hvo/logs ]; then echo "[ok] logs writable"; else echo "[err] logs not writable" >&2; exit 1; fi; for dir in raw processed; do if [ -w "/var/hvo/exports/${dir}" ]; then echo "[ok] exports/${dir} writable"; else echo "[err] exports/${dir} not writable" >&2; exit 1; fi; done'
 
 if [[ "${START_CONTAINER}" != "true" ]]; then
   echo "\nSkyMonitor image is ready. Set START_CONTAINER=true to launch it automatically."
@@ -137,6 +150,8 @@ CONTAINER_ID=$(docker --context "${DOCKER_CONTEXT}" run -d \
   -v "${DATA_ROOT}/catalogs":/var/hvo/datastores/catalogs \
   -v "${DATA_ROOT}/dataprotection":/var/hvo/datastores/dataprotection \
   -v "${DATA_ROOT}/logs":/var/hvo/logs \
+  -v "${EXPORT_ROOT}/raw":/var/hvo/exports/raw \
+  -v "${EXPORT_ROOT}/processed":/var/hvo/exports/processed \
   ${EXTRA_DOCKER_ARGS} \
   "${IMAGE_TAG}")
 

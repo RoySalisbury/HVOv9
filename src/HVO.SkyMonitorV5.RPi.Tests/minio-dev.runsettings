@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <ResultsDirectory>TestResults/MinioDev</ResultsDirectory>
+    <EnvironmentVariables>
+      <HVO_MINIO_DEV_USE_SSL>false</HVO_MINIO_DEV_USE_SSL>
+    </EnvironmentVariables>
+  </RunConfiguration>
+  <MSTest>
+    <TestCaseFilter>TestCategory=MinioDev</TestCaseFilter>
+  </MSTest>
+</RunSettings>

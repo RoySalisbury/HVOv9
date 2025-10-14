@@ -25,9 +25,12 @@ using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
+using HVO.SkyMonitorV5.RPi.Infrastructure.Resilience;
 using HVO.SkyMonitorV5.RPi.Telemetry;
 using HVO.SkyMonitorV5.RPi.Infrastructure.Logging;
 using HVO.SkyMonitorV5.Data.Options;
+using HVO.SkyMonitorV5.RPi.Exports;
+using HVO.SkyMonitorV5.RPi.Exports.Sinks;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
@@ -42,7 +45,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
-using System.IO;
 using System.Text.Json.Serialization;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -236,26 +238,26 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-    services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
-    services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<CardinalDirectionsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<CircularApertureMaskOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
+        services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CardinalDirectionsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CircularApertureMaskOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
-    services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
-    services.AddSingleton<SkyMonitorTelemetryMetrics>();
-    services.AddSingleton<ISkyMonitorTelemetryRecorder, SkyMonitorTelemetryRecorder>();
-    services.AddSingleton<ITelemetrySystemProfileCollector, TelemetrySystemProfileCollector>();
-    services.AddScoped<ITelemetrySystemProfileRegistrar, TelemetrySystemProfileRegistrar>();
-    services.AddHostedService<SkyMonitorTelemetryIngestionService>();
-    services.AddSingleton<SkyMonitorTelemetryRetentionProcessor>();
-    services.AddHostedService<SkyMonitorTelemetryRetentionService>();
+        services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
+        services.AddSingleton<SkyMonitorTelemetryMetrics>();
+        services.AddSingleton<ISkyMonitorTelemetryRecorder, SkyMonitorTelemetryRecorder>();
+        services.AddSingleton<ITelemetrySystemProfileCollector, TelemetrySystemProfileCollector>();
+        services.AddScoped<ITelemetrySystemProfileRegistrar, TelemetrySystemProfileRegistrar>();
+        services.AddHostedService<SkyMonitorTelemetryIngestionService>();
+        services.AddSingleton<SkyMonitorTelemetryRetentionProcessor>();
+        services.AddHostedService<SkyMonitorTelemetryRetentionService>();
 
-    services.AddSingleton<IFrameStateStore, FrameStateStore>();
+        services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
         services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
         services.AddSingleton<IExposureController, AdaptiveExposureController>();
@@ -263,6 +265,71 @@ public static class Program
         services.AddSingleton<IMinioClientProvider, MinioClientProvider>();
         services.AddSingleton<IRemoteFrameEncoder, SkiaRemoteFrameEncoder>();
         services.AddSingleton<IRemoteFramePublisher, RemoteFramePublisher>();
+
+        services.AddOptions<FrameExportOptions>()
+            .Bind(configuration.GetSection(FrameExportOptions.SectionName))
+            .PostConfigure(options => options.Normalize());
+
+        services.AddOptions<FrameExportResilienceOptions>()
+            .Bind(configuration.GetSection(FrameExportResilienceOptions.SectionName))
+            .ValidateDataAnnotations()
+            .PostConfigure(options => options.Normalize());
+
+        services.AddOptions<FrameExportRetryOptions>()
+            .Bind(configuration.GetSection(FrameExportRetryOptions.SectionName))
+            .ValidateDataAnnotations()
+            .PostConfigure(options => options.Normalize());
+
+        services.AddSingleton<IFrameExportResiliencePolicyProvider, FrameExportResiliencePolicyProvider>();
+
+        services.AddSingleton<IFrameExportSink>(sp =>
+            new FilesystemFrameExportSink(
+                FrameExportStage.Raw,
+                sp.GetRequiredService<IOptionsMonitor<FrameExportOptions>>(),
+                sp.GetRequiredService<ILogger<FilesystemFrameExportSink>>()));
+
+        services.AddSingleton<IFrameExportSink>(sp =>
+            new FilesystemFrameExportSink(
+                FrameExportStage.Processed,
+                sp.GetRequiredService<IOptionsMonitor<FrameExportOptions>>(),
+                sp.GetRequiredService<ILogger<FilesystemFrameExportSink>>()));
+
+        services.AddSingleton<IFrameExportSink>(sp =>
+            new S3FrameExportSink(
+                FrameExportStage.Raw,
+                sp.GetRequiredService<IOptionsMonitor<FrameExportOptions>>(),
+                sp.GetRequiredService<IMinioClientProvider>(),
+                sp.GetRequiredService<IFrameExportResiliencePolicyProvider>(),
+                sp.GetRequiredService<ILogger<S3FrameExportSink>>()));
+
+        services.AddSingleton<IFrameExportSink>(sp =>
+            new S3FrameExportSink(
+                FrameExportStage.Processed,
+                sp.GetRequiredService<IOptionsMonitor<FrameExportOptions>>(),
+                sp.GetRequiredService<IMinioClientProvider>(),
+                sp.GetRequiredService<IFrameExportResiliencePolicyProvider>(),
+                sp.GetRequiredService<ILogger<S3FrameExportSink>>()));
+
+        services.AddOptions<FrameExportDispatcherOptions>()
+            .Bind(configuration.GetSection(FrameExportDispatcherOptions.SectionName))
+            .PostConfigure(options =>
+            {
+                options.ChannelCapacity = Math.Max(1, options.ChannelCapacity);
+                options.MaxConcurrency = Math.Max(1, options.MaxConcurrency);
+                if (options.DrainTimeout <= TimeSpan.Zero)
+                {
+                    options.DrainTimeout = TimeSpan.FromSeconds(30);
+                }
+            });
+
+        services.AddSingleton<FrameExportMetrics>();
+    services.AddSingleton<FrameExportRetryService>();
+    services.AddSingleton<IFrameExportRetryQueue>(sp => sp.GetRequiredService<FrameExportRetryService>());
+    services.AddHostedService(sp => sp.GetRequiredService<FrameExportRetryService>());
+        services.AddSingleton<FrameExportDispatcher>();
+    services.AddSingleton<IFrameExportDispatcher>(sp => sp.GetRequiredService<FrameExportDispatcher>());
+    services.AddHostedService(sp => sp.GetRequiredService<FrameExportDispatcher>());
+        services.AddSingleton<FrameExportPublisher>();
         services.AddSingleton<BackgroundFrameStackerService>();
         services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
         services.AddHostedService(sp => sp.GetRequiredService<BackgroundFrameStackerService>());
@@ -310,6 +377,7 @@ public static class Program
                 builder.AddMeter("HVO.SkyMonitor.BackgroundStacker");
                 builder.AddMeter("HVO.SkyMonitor.RemoteDispatch");
                 builder.AddMeter("HVO.SkyMonitor.Telemetry");
+                builder.AddMeter("HVO.SkyMonitor.FrameExport");
                 builder.AddPrometheusExporter();
             });
     }

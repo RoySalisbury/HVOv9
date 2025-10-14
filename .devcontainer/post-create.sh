@@ -6,6 +6,14 @@ APT_PACKAGES=(
   gh
   libgpiod-dev
   i2c-tools
+  fontconfig
+  fonts-dejavu-core
+  fonts-liberation2
+  fonts-noto-core
+  fonts-noto-mono
+  fonts-noto-color-emoji
+  fonts-roboto
+  fonts-open-sans
   git
   curl
   wget
@@ -22,6 +30,9 @@ APT_PACKAGES=(
   nano
   python3
   python3-pip
+  python3-venv
+  python3-numpy
+  python3-pil
   lsb-release
   net-tools
   iproute2
@@ -55,6 +66,8 @@ install_packages() {
 
   log "Installing apt packages: ${APT_PACKAGES[*]}."
   sudo apt-get install -y "${APT_PACKAGES[@]}"
+  log "Regenerating font cache."
+  sudo fc-cache -f
 }
 
 install_dotnet_tools() {

@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Exports;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -30,6 +31,7 @@ public sealed class AllSkyCaptureService : BackgroundService
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private readonly IObservatoryClock _clock;
     private readonly IRemoteFramePublisher _remoteFramePublisher;
+    private readonly FrameExportPublisher _frameExportPublisher;
     private RigSpec? _lastPublishedRig;
 
     private double _dynamicCaptureDelayMilliseconds = MinimumFrameDelayMilliseconds;
@@ -55,6 +57,7 @@ public sealed class AllSkyCaptureService : BackgroundService
         IBackgroundFrameStacker backgroundFrameStacker,
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
     IRemoteFramePublisher remoteFramePublisher,
+    FrameExportPublisher frameExportPublisher,
     IObservatoryClock clock)
     {
         _logger = logger;
@@ -68,6 +71,7 @@ public sealed class AllSkyCaptureService : BackgroundService
         _backgroundFrameStacker = backgroundFrameStacker;
         _optionsMonitor = optionsMonitor;
     _remoteFramePublisher = remoteFramePublisher ?? throw new ArgumentNullException(nameof(remoteFramePublisher));
+        _frameExportPublisher = frameExportPublisher ?? throw new ArgumentNullException(nameof(frameExportPublisher));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
@@ -123,6 +127,11 @@ public sealed class AllSkyCaptureService : BackgroundService
         var configurationVersion = _frameStateStore.ConfigurationVersion;
         var configuration = _frameStateStore.Configuration;
         var useAsyncProcessing = _optionsMonitor.CurrentValue.EnableAsyncProcessing;
+
+        if (_exposureController is IExposureBootstrapAware bootstrapAware)
+        {
+            bootstrapAware.BeginCaptureSession();
+        }
         Channel<ProcessingWorkItem>? processingChannel = null;
         Task? processorTask = null;
 
@@ -156,6 +165,7 @@ public sealed class AllSkyCaptureService : BackgroundService
             var exposure = _exposureController.CreateNextExposure(configuration);
             _logger.LogTrace("Prepared exposure {ExposureMs}ms / Gain {Gain}", exposure.ExposureMilliseconds, exposure.Gain);
 
+            // Prior: exposure parameters resolved; Current: invoking adapter capture; Next: remote dispatch and export publishing on success.
             var captureStopwatch = Stopwatch.StartNew();
             var captureResult = await _rigAdapter.CaptureAsync(exposure, stoppingToken);
             captureStopwatch.Stop();
@@ -182,6 +192,14 @@ public sealed class AllSkyCaptureService : BackgroundService
                 captureMs,
                 capturedAtLocal,
                 stoppingToken).ConfigureAwait(false);
+
+            // Prior: remote dispatch complete; Current: publishing raw export envelope; Next: enqueue for background or synchronous processing.
+            _frameExportPublisher.PublishRawFrame(
+                frameNumber,
+                capturedFrame,
+                _rigAdapter.ActiveRig,
+                captureMs,
+                _clock.UtcNow);
 
             if (useAsyncProcessing)
             {
@@ -244,6 +262,7 @@ public sealed class AllSkyCaptureService : BackgroundService
                     configuration,
                     configurationVersion,
                     usingBackgroundStacker,
+                    captureMs,
                     stoppingToken).ConfigureAwait(false);
 
                 frameStopwatch.Stop();
@@ -392,6 +411,7 @@ public sealed class AllSkyCaptureService : BackgroundService
     }
 
     private async Task<(double StackMilliseconds, double FilterMilliseconds)> ProcessFrameSynchronouslyAsync(
+        int frameNumber,
         CapturedImage capturedFrame,
         CameraConfiguration configuration,
         CancellationToken stoppingToken)
@@ -415,8 +435,17 @@ public sealed class AllSkyCaptureService : BackgroundService
                 ProcessingMilliseconds = (int)Math.Clamp(filterStopwatch.ElapsedMilliseconds, 0, int.MaxValue)
             };
 
+            _frameExportPublisher.PublishProcessedFrame(
+                frameNumber,
+                stackResult,
+                processedFrame,
+                _rigAdapter.ActiveRig,
+                queueLatencyMilliseconds: null,
+                processingMilliseconds: filterMs,
+                stageTimestampUtc: _clock.UtcNow);
+
             _frameStateStore.UpdateFrame(
-                new RawFrameSnapshot(stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),
+                new RawFrameSnapshot(stackResult.FrameId, stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),
                 processedFrame);
             _frameStateStore.SetLastError(null);
             frameStored = true;
@@ -537,6 +566,7 @@ public sealed class AllSkyCaptureService : BackgroundService
         CameraConfiguration configuration,
         int configurationVersion,
         bool usingBackgroundStacker,
+        double captureMilliseconds,
         CancellationToken stoppingToken)
     {
         var capturedAtLocal = _clock.ToLocal(capturedFrame.Timestamp);
@@ -568,6 +598,7 @@ public sealed class AllSkyCaptureService : BackgroundService
                 configurationVersion,
                 DateTimeOffset.UtcNow,
                 captureSizeBytes);
+            // Prior: raw export already published; Current: offering frame to background stacker; Next: synchronous fallback if enqueue fails.
             var enqueueStopwatch = Stopwatch.StartNew();
             enqueued = await _backgroundFrameStacker.EnqueueAsync(workItem, stoppingToken).ConfigureAwait(false);
             enqueueStopwatch.Stop();
@@ -584,7 +615,7 @@ public sealed class AllSkyCaptureService : BackgroundService
 
         if (!usingBackgroundStacker || !enqueued)
         {
-            var (stack, filter) = await ProcessFrameSynchronouslyAsync(capturedFrame, configuration, stoppingToken).ConfigureAwait(false);
+            var (stack, filter) = await ProcessFrameSynchronouslyAsync(frameNumber, capturedFrame, configuration, stoppingToken).ConfigureAwait(false);
             stackMs = stack;
             filterMs = filter;
         }
@@ -963,6 +994,7 @@ public sealed class AllSkyCaptureService : BackgroundService
                     item.Configuration,
                     item.ConfigurationVersion,
                     item.UsingBackgroundStacker,
+                    item.CaptureMilliseconds,
                     cancellationToken).ConfigureAwait(false);
 
                 item.FrameStopwatch.Stop();

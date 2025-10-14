@@ -1,4 +1,5 @@
 using System;
+using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Models;
 
 namespace HVO.SkyMonitorV5.RPi.Telemetry;
@@ -6,6 +7,8 @@ namespace HVO.SkyMonitorV5.RPi.Telemetry;
 internal abstract record TelemetryWorkItem(DateTimeOffset EnqueuedAtUtc)
 {
     internal sealed record RemoteDispatchAttempt(DateTimeOffset EnqueuedAtUtc, RemoteDispatchAttemptPayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
+
+    internal sealed record FrameExportAttempt(DateTimeOffset EnqueuedAtUtc, FrameExportAttemptPayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
     internal sealed record BackgroundStackerSample(DateTimeOffset EnqueuedAtUtc, BackgroundStackerSamplePayload Payload) : TelemetryWorkItem(EnqueuedAtUtc);
 
@@ -30,6 +33,24 @@ internal sealed record RemoteDispatchAttemptPayload(
     string? Message,
     string? ErrorMessage,
     string? FormatKey);
+
+internal sealed record FrameExportAttemptPayload(
+    DateTimeOffset AttemptedAtUtc,
+    DateTimeOffset AttemptedAtLocal,
+    Guid FrameId,
+    FrameExportStage Stage,
+    string SinkName,
+    bool Success,
+    double? LatencyMilliseconds,
+    long? PayloadBytes,
+    string? PayloadContentType,
+    string? PayloadExtension,
+    double? QueueLatencyMilliseconds,
+    double? ProcessingMilliseconds,
+    double? FullPipelineMilliseconds,
+    int? FramesStacked,
+    int? IntegrationMilliseconds,
+    string? ErrorMessage);
 
 internal sealed record BackgroundStackerSamplePayload(
     DateTimeOffset CapturedAtUtc,

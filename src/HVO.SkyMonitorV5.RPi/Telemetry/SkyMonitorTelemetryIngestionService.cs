@@ -69,6 +69,9 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             case TelemetryWorkItem.RemoteDispatchAttempt(_, var payload):
                 await HandleRemoteDispatchAttemptAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
+            case TelemetryWorkItem.FrameExportAttempt(_, var payload):
+                await HandleFrameExportAttemptAsync(repository, payload, cancellationToken).ConfigureAwait(false);
+                break;
             case TelemetryWorkItem.BackgroundStackerSample(_, var payload):
                 await HandleBackgroundStackerSampleAsync(repository, payload, cancellationToken).ConfigureAwait(false);
                 break;
@@ -108,6 +111,31 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
         };
 
         return repository.SaveRemoteDispatchAttemptAsync(entity, cancellationToken);
+    }
+
+    private static Task HandleFrameExportAttemptAsync(ISkyMonitorTelemetryRepository repository, FrameExportAttemptPayload payload, CancellationToken cancellationToken)
+    {
+        var entity = new FrameExportAttemptEntity
+        {
+            AttemptedAtUtc = payload.AttemptedAtUtc,
+            AttemptedAtLocal = payload.AttemptedAtLocal,
+            FrameId = payload.FrameId,
+            Stage = (int)payload.Stage,
+            SinkName = Truncate(payload.SinkName, 128)!,
+            Success = payload.Success,
+            LatencyMilliseconds = payload.LatencyMilliseconds,
+            PayloadBytes = payload.PayloadBytes,
+            PayloadContentType = Truncate(payload.PayloadContentType, 128),
+            PayloadExtension = Truncate(payload.PayloadExtension, 16),
+            QueueLatencyMilliseconds = payload.QueueLatencyMilliseconds,
+            ProcessingMilliseconds = payload.ProcessingMilliseconds,
+            FullPipelineMilliseconds = payload.FullPipelineMilliseconds,
+            FramesStacked = payload.FramesStacked,
+            IntegrationMilliseconds = payload.IntegrationMilliseconds,
+            ErrorMessage = Truncate(payload.ErrorMessage, 1024)
+        };
+
+        return repository.SaveFrameExportAttemptAsync(entity, cancellationToken);
     }
 
     private static Task HandleBackgroundStackerSampleAsync(ISkyMonitorTelemetryRepository repository, BackgroundStackerSamplePayload payload, CancellationToken cancellationToken)

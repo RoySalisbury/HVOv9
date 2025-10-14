@@ -23,6 +23,9 @@ public sealed class SkyMonitorTelemetryRepository : ISkyMonitorTelemetryReposito
     public Task SaveRemoteDispatchAttemptAsync(RemoteDispatchAttemptEntity entity, CancellationToken cancellationToken = default)
         => SaveAsync(entity, context => context.RemoteDispatchAttempts, cancellationToken);
 
+    public Task SaveFrameExportAttemptAsync(FrameExportAttemptEntity entity, CancellationToken cancellationToken = default)
+        => SaveAsync(entity, context => context.FrameExportAttempts, cancellationToken);
+
     public Task SaveBackgroundStackerSampleAsync(BackgroundStackerSampleEntity entity, CancellationToken cancellationToken = default)
         => SaveAsync(entity, context => context.BackgroundStackerSamples, cancellationToken);
 
