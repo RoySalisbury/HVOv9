@@ -21,6 +21,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -453,6 +454,9 @@ public static class Program
                 return new ZwoCameraAdapter(
                     rigSpec,
                     observatoryClock,
+                    sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
+                    sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
+                    loggerFactory,
                     sp.GetService<ILogger<ZwoCameraAdapter>>());
             }
 

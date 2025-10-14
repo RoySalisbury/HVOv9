@@ -108,9 +108,11 @@ public sealed class SimulatedCpuLoadFrameStackerTests
     private static void DisposeFrameResult(FrameStackResult result)
     {
         result.StackedImage.Dispose();
+        result.StackedImmutableImage?.Dispose();
         if (!ReferenceEquals(result.StackedImage, result.OriginalImage))
         {
             result.OriginalImage.Dispose();
         }
+        result.OriginalImmutableImage?.Dispose();
     }
 }

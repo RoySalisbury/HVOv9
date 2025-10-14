@@ -15,4 +15,8 @@ public sealed record FrameStackResult(
 	ExposureSettings Exposure,
 	FrameContext? Context,
 	int FramesStacked,
-	int IntegrationMilliseconds);
+	int IntegrationMilliseconds)
+{
+	public SKImage? StackedImmutableImage { get; init; }
+	public SKImage? OriginalImmutableImage { get; init; }
+}

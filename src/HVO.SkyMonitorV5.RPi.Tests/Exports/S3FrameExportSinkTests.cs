@@ -68,6 +68,18 @@ public sealed class S3FrameExportSinkTests
 
         var frameId = Guid.NewGuid();
         var timestamp = new DateTimeOffset(2025, 10, 13, 12, 34, 56, TimeSpan.Zero);
+        var descriptor = new FrameExportImageDescriptor(
+            Width: 1920,
+            Height: 1080,
+            RowBytes: 1920 * 8,
+            BytesPerPixel: 8,
+            ColorType: "RgbaF16",
+            AlphaType: "Premul",
+            GammaIsLinear: true,
+            IsSrgb: false,
+            HasNumericalTransferFunction: true,
+            ColorSpaceDescription: "Linear SRGB");
+
         var metadata = new FrameExportMetadata(
             frameId,
             timestamp,
@@ -86,7 +98,8 @@ public sealed class S3FrameExportSinkTests
             AppliedFilters: new List<string> { "FilterA", "FilterB" },
             QueueLatencyMilliseconds: 5.5,
             ProcessingMilliseconds: 10.1,
-            FullPipelineMilliseconds: 1615.6);
+            FullPipelineMilliseconds: 1615.6,
+            RawImageDescriptor: descriptor);
 
         var payload = new ReadOnlyMemory<byte>(new byte[] { 5, 4, 3, 2, 1 });
         var envelope = new FrameExportEnvelope(
@@ -94,8 +107,8 @@ public sealed class S3FrameExportSinkTests
             FrameExportStage.Raw,
             metadata,
             payload,
-            "image/png",
-            "png");
+            "application/vnd.hvo.skia.raw",
+            "skimg");
 
         var result = await sink.ExportAsync(envelope, CancellationToken.None);
 

@@ -74,6 +74,7 @@ internal static class BenchmarkDataFactory
     {
         capture.Context?.Dispose();
         capture.Image.Dispose();
+        capture.ImmutableImage?.Dispose();
     }
 
     public static void DisposeFrameResult(FrameStackResult result)
@@ -82,9 +83,11 @@ internal static class BenchmarkDataFactory
         if (!ReferenceEquals(result.StackedImage, result.OriginalImage))
         {
             result.StackedImage.Dispose();
+            result.StackedImmutableImage?.Dispose();
         }
 
         result.OriginalImage.Dispose();
+        result.OriginalImmutableImage?.Dispose();
     }
 
     private static void DrawSyntheticGradient(SKBitmap bitmap)

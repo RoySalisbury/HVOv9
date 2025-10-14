@@ -43,6 +43,18 @@ public sealed class FilesystemFrameExportSinkTests
 
             var frameId = Guid.NewGuid();
             var timestamp = new DateTimeOffset(2025, 10, 13, 12, 34, 56, TimeSpan.Zero);
+            var descriptor = new FrameExportImageDescriptor(
+                Width: 1920,
+                Height: 1080,
+                RowBytes: 1920 * 8,
+                BytesPerPixel: 8,
+                ColorType: "RgbaF16",
+                AlphaType: "Premul",
+                GammaIsLinear: true,
+                IsSrgb: false,
+                HasNumericalTransferFunction: true,
+                ColorSpaceDescription: "Linear SRGB");
+
             var metadata = new FrameExportMetadata(
                 frameId,
                 timestamp,
@@ -61,16 +73,17 @@ public sealed class FilesystemFrameExportSinkTests
                 AppliedFilters: new List<string> { "MockFilter" },
                 QueueLatencyMilliseconds: 12.3,
                 ProcessingMilliseconds: 45.6,
-                FullPipelineMilliseconds: 1057.9);
+                FullPipelineMilliseconds: 1057.9,
+        RawImageDescriptor: descriptor);
 
             var payload = new ReadOnlyMemory<byte>(new byte[] { 1, 2, 3, 4 });
             var envelope = new FrameExportEnvelope(
                 frameId,
                 FrameExportStage.Raw,
                 metadata,
-                payload,
-                "image/png",
-                "png");
+        payload,
+        "application/vnd.hvo.skia.raw",
+        "skimg");
 
             var result = await sink.ExportAsync(envelope, CancellationToken.None);
 
@@ -80,7 +93,7 @@ public sealed class FilesystemFrameExportSinkTests
             var stageDirectory = Path.Combine(rootPath, "raw", "2025", "10", "13");
             Assert.IsTrue(Directory.Exists(stageDirectory), "Expected stage directory to be created.");
 
-            var imageFiles = Directory.GetFiles(stageDirectory, "*.png");
+            var imageFiles = Directory.GetFiles(stageDirectory, "*.skimg");
             Assert.AreEqual(1, imageFiles.Length, "Expected exactly one image to be written.");
             CollectionAssert.AreEqual(payload.ToArray(), await File.ReadAllBytesAsync(imageFiles[0]));
 
@@ -91,6 +104,10 @@ public sealed class FilesystemFrameExportSinkTests
             using var document = JsonDocument.Parse(manifestJson);
             Assert.AreEqual(frameId.ToString("D"), document.RootElement.GetProperty("frameId").GetString());
             Assert.AreEqual(1057.9, document.RootElement.GetProperty("fullPipelineMilliseconds").GetDouble(), 0.0001, "Manifest should include full pipeline duration.");
+            var rawDescriptor = document.RootElement.GetProperty("rawImageDescriptor");
+            Assert.AreEqual(1920, rawDescriptor.GetProperty("width").GetInt32(), "Raw descriptor width should persist.");
+            Assert.AreEqual(1080, rawDescriptor.GetProperty("height").GetInt32(), "Raw descriptor height should persist.");
+            Assert.AreEqual("RgbaF16", rawDescriptor.GetProperty("colorType").GetString(), "Raw descriptor color type should persist.");
         }
         finally
         {

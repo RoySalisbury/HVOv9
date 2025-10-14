@@ -10,6 +10,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Exports;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -410,11 +411,12 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
 
             var filterStopwatch = Stopwatch.StartNew();
             var frameStored = false;
+            ProcessedFrame? processedFrame = null;
             double filterMilliseconds = 0;
 
             try
             {
-                var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, workItem.ConfigurationSnapshot, stoppingToken).ConfigureAwait(false);
+                processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, workItem.ConfigurationSnapshot, stoppingToken).ConfigureAwait(false);
                 filterStopwatch.Stop();
                 filterMilliseconds = filterStopwatch.Elapsed.TotalMilliseconds;
 
@@ -429,7 +431,17 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                     ProcessingMilliseconds = (int)processingMillisecondsRounded
                 };
 
-                var rawSnapshot = new RawFrameSnapshot(stackResult.FrameId, stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure);
+                var rawDescriptor = stackResult.OriginalImmutableImage is { } immutableImage
+                    ? SkiaRawFrameHelper.TryCreateDescriptor(immutableImage)
+                    : null;
+
+                rawDescriptor ??= SkiaRawFrameHelper.TryCreateDescriptor(stackResult.OriginalImage);
+
+                var rawSnapshot = new RawFrameSnapshot(stackResult.FrameId, stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure)
+                {
+                    ImmutableImage = stackResult.OriginalImmutableImage,
+                    ImageDescriptor = rawDescriptor
+                };
                 _frameStateStore.UpdateFrame(rawSnapshot, processedFrame);
                 _frameStateStore.SetLastError(null);
                 frameStored = true;
@@ -467,6 +479,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 {
                     stackResult.StackedImage.Dispose();
                 }
+                stackResult.StackedImmutableImage?.Dispose();
 
                 RecordProcessingTelemetry(workItem, enqueueLatencyMs, stackMilliseconds, filterMilliseconds);
             }
@@ -476,10 +489,13 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 {
                     stackResult.StackedImage.Dispose();
                 }
+                stackResult.StackedImmutableImage?.Dispose();
 
                 if (!frameStored)
                 {
                     stackResult.OriginalImage.Dispose();
+                    stackResult.OriginalImmutableImage?.Dispose();
+                    processedFrame?.ImmutableImage?.Dispose();
                 }
 
                 throw;
@@ -493,10 +509,13 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 {
                     stackResult.StackedImage.Dispose();
                 }
+                stackResult.StackedImmutableImage?.Dispose();
 
                 if (!frameStored)
                 {
                     stackResult.OriginalImage.Dispose();
+                    stackResult.OriginalImmutableImage?.Dispose();
+                    processedFrame?.ImmutableImage?.Dispose();
                 }
 
                 RecordDroppedFrames(1, "filter pipeline failure");
@@ -572,6 +591,7 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         if (disposeImage)
         {
             workItem.Capture.Image?.Dispose();
+            workItem.Capture.ImmutableImage?.Dispose();
         }
 
         workItem.Capture.Context?.Dispose();

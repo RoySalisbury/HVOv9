@@ -81,15 +81,16 @@ public sealed class FrameExportDispatcherTests
             new List<string> { "Filter" },
             5.0,
             10.0,
-            1015.0);
+            1015.0,
+            RawImageDescriptor: null);
 
         var envelope = new FrameExportEnvelope(
             frameId,
             FrameExportStage.Raw,
             metadata,
             new ReadOnlyMemory<byte>(new byte[] { 1, 2, 3 }),
-            "image/png",
-            "png");
+            "application/vnd.hvo.skia.raw",
+            "skimg");
 
         await dispatcher.EnqueueAsync(envelope, CancellationToken.None).ConfigureAwait(false);
 

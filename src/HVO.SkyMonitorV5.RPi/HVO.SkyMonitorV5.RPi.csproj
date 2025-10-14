@@ -38,6 +38,7 @@
   <ItemGroup>
     <ProjectReference Include="../HVO/HVO.csproj" />
     <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
+    <ProjectReference Include="../HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
   </ItemGroup>
 
   <ItemGroup>

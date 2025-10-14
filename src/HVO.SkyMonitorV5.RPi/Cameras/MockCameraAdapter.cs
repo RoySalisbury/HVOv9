@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
@@ -48,6 +49,7 @@ public class MockCameraAdapter : CameraAdapterBase
     private const string DisableSensorNoiseVariable = "HVO_DISABLE_SENSOR_NOISE";
     private static bool _sensorNoiseDisabledLogged;
     private static readonly object SensorNoiseLogLock = new();
+    private static readonly SKColorSpace LinearSrgbColorSpace = SKColorSpace.CreateSrgbLinear();
 
     protected readonly record struct SensorResponseProfile(
         double BrightnessScale,
@@ -99,7 +101,8 @@ public class MockCameraAdapter : CameraAdapterBase
 
     protected override async Task<Result<AdapterFrame>> AcquireImageAsync(ExposureSettings exposure, CancellationToken cancellationToken)
     {
-        SKBitmap? starfield = null;
+    SKSurface? starfieldSurface = null;
+    SKBitmap? starfield = null;
         StarFieldEngine? engine = null;
         try
         {
@@ -193,7 +196,17 @@ public class MockCameraAdapter : CameraAdapterBase
                 }
             }
 
-            starfield = engine.Render(
+            var imageInfo = new SKImageInfo(frameWidth, frameHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+            starfield = new SKBitmap(imageInfo);
+            if (starfield.GetPixels() == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("Failed to allocate starfield bitmap pixels.");
+            }
+
+            starfieldSurface = CreateCaptureSurface(imageInfo, starfield);
+
+            engine.RenderOntoSurface(
+                starfieldSurface,
                 catalogStars,
                 planets: planetMarks,
                 randomFillerCount: RandomFillerStars,
@@ -203,9 +216,13 @@ public class MockCameraAdapter : CameraAdapterBase
                 out _,
                 out _);
 
+            starfieldSurface.Canvas?.Flush();
+
             var frameTimestamp = captureInstant;
             var adapterFrame = new AdapterFrame(
                 starfield,
+                ImmutableImage: null,
+                starfieldSurface,
                 engine,
                 frameTimestamp,
                 location.LatitudeDegrees,
@@ -220,12 +237,14 @@ public class MockCameraAdapter : CameraAdapterBase
             // Transfer ownership to the adapter frame
             starfield = null;
             engine = null;
+            starfieldSurface = null;
 
             return Result<AdapterFrame>.Success(adapterFrame);
         }
         catch (OperationCanceledException ex)
         {
             starfield?.Dispose();
+            starfieldSurface?.Dispose();
             engine?.Dispose();
             Logger.LogDebug(ex, "Mock camera capture cancelled.");
             return Result<AdapterFrame>.Failure(ex);
@@ -233,26 +252,52 @@ public class MockCameraAdapter : CameraAdapterBase
         catch (Exception)
         {
             starfield?.Dispose();
+            starfieldSurface?.Dispose();
             throw;
         }
         finally
         {
             engine?.Dispose();
             starfield?.Dispose();
+            starfieldSurface?.Dispose();
         }
     }
 
     protected override Task<Result<AdapterFrame>> PostprocessFrameAsync(AdapterFrame frame, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        AdapterFrame workingFrame = frame;
+
         if (IsSensorNoiseDisabled())
         {
             LogSensorNoiseDisabledOnce();
-            return Task.FromResult(Result<AdapterFrame>.Success(frame));
+        }
+        else
+        {
+            ApplySensorNoise(workingFrame.Bitmap, workingFrame.Exposure);
         }
 
-        ApplySensorNoise(frame.Bitmap, frame.Exposure);
-        return Task.FromResult(Result<AdapterFrame>.Success(frame));
+        var updatedFrame = UpdateImmutableSnapshot(workingFrame);
+        workingFrame.Surface?.Dispose();
+        updatedFrame = updatedFrame with { Surface = null };
+        return Task.FromResult(Result<AdapterFrame>.Success(updatedFrame));
+    }
+
+    private static SKSurface CreateCaptureSurface(SKImageInfo info, SKBitmap bitmap)
+    {
+        var pixels = bitmap.GetPixels();
+        if (pixels == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Bitmap does not expose pixel memory for capture surface creation.");
+        }
+
+        var surface = SKSurface.Create(info, pixels, bitmap.RowBytes);
+        if (surface is null)
+        {
+            throw new InvalidOperationException($"Failed to allocate capture surface for dimensions {info.Width}x{info.Height}.");
+        }
+
+        return surface;
     }
 
     private static bool IsSensorNoiseDisabled()
@@ -329,6 +374,27 @@ public class MockCameraAdapter : CameraAdapterBase
             exposure.Gain,
             profile.BrightnessScale,
             profile.LuminanceNoise);
+    }
+
+    private static AdapterFrame UpdateImmutableSnapshot(AdapterFrame frame)
+    {
+        frame.ImmutableImage?.Dispose();
+
+        var immutable = CreateImmutableSnapshot(frame.Bitmap);
+        return frame with { ImmutableImage = immutable };
+    }
+
+    private static SKImage? CreateImmutableSnapshot(SKBitmap bitmap)
+    {
+        using var pixmap = bitmap.PeekPixels();
+        if (pixmap is null)
+        {
+            return null;
+        }
+
+        var info = pixmap.Info.WithColorSpace(LinearSrgbColorSpace);
+        using var linearPixmap = new SKPixmap(info, pixmap.GetPixels(), pixmap.RowBytes);
+        return SKImage.FromPixels(linearPixmap);
     }
 
     protected SensorResponseProfile BuildSensorResponseProfile(ExposureSettings exposure)

@@ -42,6 +42,8 @@ public abstract class CameraAdapterBase : ICameraAdapter
     /// </summary>
     protected sealed record AdapterFrame(
         SKBitmap Bitmap,
+        SKImage? ImmutableImage,
+        SKSurface? Surface,
         StarFieldEngine Engine,
         DateTimeOffset Timestamp,
         double LatitudeDeg,
@@ -162,6 +164,8 @@ public abstract class CameraAdapterBase : ICameraAdapter
             }
 
             frame = postProcessResult.Value;
+
+            frame = EnsureImmutableImage(frame);
 
             var frameId = Guid.CreateVersion7();
 
@@ -291,7 +295,10 @@ public abstract class CameraAdapterBase : ICameraAdapter
     /// </summary>
     protected virtual Task<Result<CapturedImage>> CreateCapturedImageAsync(AdapterFrame frame, Guid frameId, ExposureSettings exposure, FrameContext frameContext, CancellationToken cancellationToken)
     {
-        var capturedImage = new CapturedImage(frameId, frame.Bitmap, frame.Timestamp, exposure, frameContext);
+        var capturedImage = new CapturedImage(frameId, frame.Bitmap, frame.Timestamp, exposure, frameContext)
+        {
+            ImmutableImage = frame.ImmutableImage
+        };
         return Task.FromResult(Result<CapturedImage>.Success(capturedImage));
     }
 
@@ -338,11 +345,47 @@ public abstract class CameraAdapterBase : ICameraAdapter
 
         try
         {
+            frame.ImmutableImage?.Dispose();
+        }
+        catch
+        {
+            // Ignore dispose failures
+        }
+
+        try
+        {
+            frame.Surface?.Dispose();
+        }
+        catch
+        {
+            // Ignore dispose failures
+        }
+
+        try
+        {
             frame.Engine.Dispose();
         }
         catch
         {
             // Ignore dispose failures
         }
+    }
+
+    private static AdapterFrame EnsureImmutableImage(AdapterFrame frame)
+    {
+        if (frame.ImmutableImage is not null)
+        {
+            return frame;
+        }
+
+        if (frame.Surface is SKSurface surface)
+        {
+            var snapshot = surface.Snapshot();
+            surface.Dispose();
+            return frame with { ImmutableImage = snapshot, Surface = null };
+        }
+
+        var fallback = SKImage.FromBitmap(frame.Bitmap);
+        return frame with { ImmutableImage = fallback };
     }
 }

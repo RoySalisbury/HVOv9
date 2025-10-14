@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Exports;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
 
@@ -79,7 +80,8 @@ public sealed record RawFrameSummary(
     int Width,
     int Height,
     int ExposureMilliseconds,
-    int Gain
+    int Gain,
+    FrameExportImageDescriptor? ImageDescriptor
 );
 
 public sealed record ExposureAnalysisSummary(

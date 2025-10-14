@@ -11,4 +11,7 @@ public sealed record CapturedImage(
     SKBitmap Image,
     DateTimeOffset Timestamp,
     ExposureSettings Exposure,
-    FrameContext? Context);
+    FrameContext? Context)
+{
+    public SKImage? ImmutableImage { get; init; }
+}

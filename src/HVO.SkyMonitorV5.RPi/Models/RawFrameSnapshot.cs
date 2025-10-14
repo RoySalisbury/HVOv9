@@ -1,4 +1,5 @@
 using System;
+using HVO.SkyMonitorV5.RPi.Exports;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
@@ -12,4 +13,8 @@ public sealed record RawFrameSnapshot(
     Guid FrameId,
     SKBitmap Image,
     DateTimeOffset Timestamp,
-    ExposureSettings Exposure);
+    ExposureSettings Exposure)
+{
+    public SKImage? ImmutableImage { get; init; }
+    public FrameExportImageDescriptor? ImageDescriptor { get; init; }
+}

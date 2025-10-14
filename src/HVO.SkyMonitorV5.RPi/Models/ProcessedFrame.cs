@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
 
@@ -15,4 +16,5 @@ public sealed record ProcessedFrame(
     int FramesStacked,
     int IntegrationMilliseconds,
     IReadOnlyList<string> AppliedFilters,
-    int ProcessingMilliseconds);
+    int ProcessingMilliseconds,
+    SKImage? ImmutableImage = null);

@@ -42,6 +42,8 @@ public sealed class FrameFilterPipelineTests
         Assert.AreEqual("TestFilter", entry.FilterName);
         Assert.AreEqual(1, entry.AppliedCount);
         Assert.IsTrue(entry.LastDurationMilliseconds >= 0);
+
+    processed.ImmutableImage?.Dispose();
     }
 
     [TestMethod]
@@ -56,12 +58,14 @@ public sealed class FrameFilterPipelineTests
 
         using (var stack1 = CreateStackResult())
         {
-            await pipeline.ProcessAsync(stack1.Result, configuration, CancellationToken.None);
+            var processed = await pipeline.ProcessAsync(stack1.Result, configuration, CancellationToken.None);
+            processed.ImmutableImage?.Dispose();
         }
 
         using (var stack2 = CreateStackResult())
         {
-            await pipeline.ProcessAsync(stack2.Result, configuration, CancellationToken.None);
+            var processed = await pipeline.ProcessAsync(stack2.Result, configuration, CancellationToken.None);
+            processed.ImmutableImage?.Dispose();
         }
 
         var metrics = pipeline.GetMetricsSnapshot();
@@ -170,10 +174,12 @@ public sealed class FrameFilterPipelineTests
         public void Dispose()
         {
             Result.StackedImage.Dispose();
+            Result.StackedImmutableImage?.Dispose();
             if (!ReferenceEquals(_stacked, _original))
             {
                 Result.OriginalImage.Dispose();
             }
+            Result.OriginalImmutableImage?.Dispose();
         }
     }
 }

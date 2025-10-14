@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Net.Mime;
 using Asp.Versioning;
+using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
@@ -14,7 +17,7 @@ namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 [Route("api/v{version:apiVersion}/all-sky")]
 public sealed class AllSkyController : ControllerBase
 {
-    private const string RawImageContentType = "image/png";
+    private const string RawPngContentType = "image/png";
 
     private readonly IFrameStateStore _frameStateStore;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
@@ -52,9 +55,39 @@ public sealed class AllSkyController : ControllerBase
                 return NotFound();
             }
 
-            using var image = SKImage.FromBitmap(frame.Image);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
-            return File(data.ToArray(), RawImageContentType);
+            SKImage? temporary = null;
+            try
+            {
+                var sourceImage = frame.ImmutableImage ?? (temporary = SKImage.FromBitmap(frame.Image));
+                if (sourceImage is null)
+                {
+                    return NotFound();
+                }
+
+                var descriptorForHeaders = frame.ImageDescriptor;
+                if (SkiaRawFrameHelper.TryCreateRawPayload(sourceImage, out var payload, out var computedDescriptor))
+                {
+                    descriptorForHeaders ??= computedDescriptor;
+                    if (descriptorForHeaders is not null)
+                    {
+                        WriteRawDescriptorHeaders(frame, descriptorForHeaders);
+                    }
+
+                    return File(payload, SkiaRawFrameHelper.RawContentType);
+                }
+
+                using var data = sourceImage.Encode(SKEncodedImageFormat.Png, 90);
+                if (descriptorForHeaders is not null)
+                {
+                    WriteRawDescriptorHeaders(frame, descriptorForHeaders);
+                }
+
+                return File(data.ToArray(), RawPngContentType);
+            }
+            finally
+            {
+                temporary?.Dispose();
+            }
         }
         else
         {
@@ -137,5 +170,27 @@ public sealed class AllSkyController : ControllerBase
 
         problemDetails = null;
         return true;
+    }
+
+    private void WriteRawDescriptorHeaders(RawFrameSnapshot frame, FrameExportImageDescriptor descriptor)
+    {
+        var headers = Response.Headers;
+        headers["X-HVO-Raw-FrameId"] = frame.FrameId.ToString("D", CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-TimestampUtc"] = frame.Timestamp.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-Width"] = descriptor.Width.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-Height"] = descriptor.Height.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-RowBytes"] = descriptor.RowBytes.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-BytesPerPixel"] = descriptor.BytesPerPixel.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-ColorType"] = descriptor.ColorType;
+        headers["X-HVO-Raw-AlphaType"] = descriptor.AlphaType;
+        headers["X-HVO-Raw-GammaLinear"] = descriptor.GammaIsLinear.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-IsSrgb"] = descriptor.IsSrgb.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-TransferNumeric"] = descriptor.HasNumericalTransferFunction.ToString(CultureInfo.InvariantCulture);
+        headers["X-HVO-Raw-PixelFormat"] = descriptor.PixelFormatHint;
+
+        if (!string.IsNullOrWhiteSpace(descriptor.ColorSpaceDescription))
+        {
+            headers["X-HVO-Raw-ColorSpace"] = descriptor.ColorSpaceDescription;
+        }
     }
 }

@@ -65,6 +65,18 @@ public sealed class S3FrameExportSinkIntegrationTests
 
         var frameId = Guid.CreateVersion7();
         var timestampUtc = DateTimeOffset.UtcNow;
+        var descriptor = new FrameExportImageDescriptor(
+            Width: 640,
+            Height: 480,
+            RowBytes: 640 * 8,
+            BytesPerPixel: 8,
+            ColorType: "RgbaF16",
+            AlphaType: "Premul",
+            GammaIsLinear: true,
+            IsSrgb: false,
+            HasNumericalTransferFunction: true,
+            ColorSpaceDescription: "Linear SRGB");
+
         var metadata = new FrameExportMetadata(
             frameId,
             timestampUtc,
@@ -83,7 +95,8 @@ public sealed class S3FrameExportSinkIntegrationTests
             null,
             null,
             null,
-            null);
+            null,
+            RawImageDescriptor: descriptor);
 
         var payload = new byte[] { 0x01, 0x02, 0x03, 0x04 };
         var envelope = new FrameExportEnvelope(
@@ -91,12 +104,12 @@ public sealed class S3FrameExportSinkIntegrationTests
             FrameExportStage.Raw,
             metadata,
             payload.AsMemory(),
-            "application/octet-stream",
-            "bin");
+            "application/vnd.hvo.skia.raw",
+            "skimg");
 
         var prefixPath = options.Raw.S3[0].BuildObjectPrefix(FrameExportStage.Raw, timestampUtc);
         var baseFileName = FormattableString.Invariant($"{timestampUtc:HHmmssfff}-{frameId:N}");
-        var payloadKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.bin");
+        var payloadKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.skimg");
         var manifestKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.json");
 
         var client = provider.GetClient(endpoint!, accessKey!, secretKey!, useSsl);

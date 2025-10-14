@@ -357,6 +357,24 @@ public sealed class S3FrameExportSink : IFrameExportSink
             headers["applied-filters"] = SanitizeMetadataValue(string.Join(';', filters));
         }
 
+        if (envelope.Metadata.RawImageDescriptor is { } descriptor)
+        {
+            headers["raw-width"] = descriptor.Width.ToString(CultureInfo.InvariantCulture);
+            headers["raw-height"] = descriptor.Height.ToString(CultureInfo.InvariantCulture);
+            headers["raw-rowbytes"] = descriptor.RowBytes.ToString(CultureInfo.InvariantCulture);
+            headers["raw-bytes-per-pixel"] = descriptor.BytesPerPixel.ToString(CultureInfo.InvariantCulture);
+            headers["raw-color-type"] = SanitizeMetadataValue(descriptor.ColorType);
+            headers["raw-alpha-type"] = SanitizeMetadataValue(descriptor.AlphaType);
+            headers["raw-gamma-linear"] = descriptor.GammaIsLinear.ToString(CultureInfo.InvariantCulture);
+            headers["raw-is-srgb"] = descriptor.IsSrgb.ToString(CultureInfo.InvariantCulture);
+            headers["raw-transfer-numeric"] = descriptor.HasNumericalTransferFunction.ToString(CultureInfo.InvariantCulture);
+
+            if (!string.IsNullOrWhiteSpace(descriptor.ColorSpaceDescription))
+            {
+                headers["raw-color-space"] = SanitizeMetadataValue(descriptor.ColorSpaceDescription);
+            }
+        }
+
         return headers;
     }
 

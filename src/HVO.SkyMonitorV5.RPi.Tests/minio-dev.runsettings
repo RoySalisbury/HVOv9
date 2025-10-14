@@ -3,6 +3,9 @@
   <RunConfiguration>
     <ResultsDirectory>TestResults/MinioDev</ResultsDirectory>
     <EnvironmentVariables>
+      <HVO_MINIO_DEV_ENDPOINT>192.168.2.104:9000</HVO_MINIO_DEV_ENDPOINT>
+      <HVO_MINIO_DEV_ACCESS_KEY>admin</HVO_MINIO_DEV_ACCESS_KEY>
+      <HVO_MINIO_DEV_SECRET_KEY>change-me-now-32chars</HVO_MINIO_DEV_SECRET_KEY>
       <HVO_MINIO_DEV_USE_SSL>false</HVO_MINIO_DEV_USE_SSL>
     </EnvironmentVariables>
   </RunConfiguration>

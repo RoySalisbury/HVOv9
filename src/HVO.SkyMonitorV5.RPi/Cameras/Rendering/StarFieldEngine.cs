@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using SkiaSharp;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
@@ -45,7 +46,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
     /// </summary>
     public sealed class StarFieldEngine : IDisposable
     {
-    private readonly IImageProjector _projector;
+        private readonly IImageProjector _projector;
         private readonly double _latitudeDeg;
         private readonly double _longitudeDeg;
         private readonly DateTime _utc;
@@ -150,24 +151,63 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
             out List<StarProjection> projectedStars,
             out List<PlanetProjection> projectedPlanets)
         {
-            static bool ShouldMicroDot(double mag, float radius) =>
-                (mag >= 5.2) || (radius < 1.05f);
-
-            projectedStars = new List<StarProjection>(stars.Count + randomFillerCount);
-            projectedPlanets = planets.Count == 0 ? new List<PlanetProjection>() : new List<PlanetProjection>(planets.Count);
-
             var bitmap = new SKBitmap(Width, Height, true);
             using var canvas = new SKCanvas(bitmap);
+            var results = RenderCore(canvas, stars, planets, randomFillerCount, randomSeed, dimFaintStars, planetOptions);
+            projectedStars = results.Stars;
+            projectedPlanets = results.Planets;
+            return bitmap;
+        }
+
+        public void RenderOntoSurface(
+            SKSurface surface,
+            IReadOnlyList<Star> stars,
+            IReadOnlyList<PlanetMark> planets,
+            int randomFillerCount,
+            int? randomSeed,
+            bool dimFaintStars,
+            PlanetRenderOptions planetOptions,
+            out List<StarProjection> projectedStars,
+            out List<PlanetProjection> projectedPlanets)
+        {
+            if (surface is null)
+            {
+                throw new ArgumentNullException(nameof(surface));
+            }
+
+            var canvas = surface.Canvas ?? throw new InvalidOperationException("Surface does not expose a canvas.");
+            var results = RenderCore(canvas, stars, planets, randomFillerCount, randomSeed, dimFaintStars, planetOptions);
+            canvas.Flush();
+            projectedStars = results.Stars;
+            projectedPlanets = results.Planets;
+        }
+
+        private RenderOutputs RenderCore(
+            SKCanvas canvas,
+            IReadOnlyList<Star> stars,
+            IReadOnlyList<PlanetMark> planets,
+            int randomFillerCount,
+            int? randomSeed,
+            bool dimFaintStars,
+            PlanetRenderOptions planetOptions)
+        {
+            if (canvas is null)
+            {
+                throw new ArgumentNullException(nameof(canvas));
+            }
+
             canvas.Clear(SKColors.Transparent);
+
+            var projectedStars = new List<StarProjection>(stars.Count + randomFillerCount);
+            var projectedPlanets = planets.Count == 0 ? new List<PlanetProjection>() : new List<PlanetProjection>(planets.Count);
 
             using var paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
             var lstHours = LocalSiderealTime(_utc, _longitudeDeg);
             var latitudeRad = DegreesToRadians(_latitudeDeg);
 
-            var scaleRatio = (float)(Math.Min(Width, Height) * 0.5 / 480.0); // baseline 480 px “fisheye radius”
+            var scaleRatio = (float)(Math.Min(Width, Height) * 0.5 / 480.0);
 
-            // ---- Stars ----
             for (var i = 0; i < stars.Count; i++)
             {
                 var s = stars[i];
@@ -178,7 +218,6 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
 
                 var (X, Y, Z) = AltAzToCameraRay(altDeg, azDeg, _flipHorizontal);
 
-                // NOTE: In your codebase TryProjectRay appears to be 'void'. Call and then bounds-check.
                 _projector.TryProjectRay(X, Y, Z, out var px, out var py);
                 if (px < 0 || px >= Width || py < 0 || py >= Height) continue;
 
@@ -192,8 +231,8 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                     color = new SKColor(color.Red, color.Green, color.Blue, a);
                 }
 
-                bool micro2x2 = magnitude >= 6.0;
-                bool micro1x1 = (magnitude >= 5.2) || (radius < 1.05f);
+                var micro2x2 = magnitude >= 6.0;
+                var micro1x1 = ShouldPlotAsMicroDot(magnitude, radius);
 
                 if (micro2x2)
                 {
@@ -224,7 +263,6 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                 projectedStars.Add(new StarProjection(i, px, py, magnitude));
             }
 
-            // ---- Optional random filler ----
             if (randomFillerCount > 0)
             {
                 var rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
@@ -251,7 +289,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                         ? new SKColor(170, 170, 170, a)
                         : new SKColor(210, 210, 210, a);
 
-                    if (ShouldMicroDot(mag, radius))
+                    if (ShouldPlotAsMicroDot(mag, radius))
                     {
                         var pxI = (int)Math.Round(px);
                         var pyI = (int)Math.Round(py);
@@ -271,7 +309,6 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                 }
             }
 
-            // ---- Planets ----
             if (planets.Count > 0)
             {
                 foreach (var p in planets)
@@ -299,8 +336,13 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
                 }
             }
 
-            return bitmap;
+            return new RenderOutputs(projectedStars, projectedPlanets);
         }
+
+        private static bool ShouldPlotAsMicroDot(double magnitude, float radius) =>
+            (magnitude >= 5.2) || (radius < 1.05f);
+
+        private readonly record struct RenderOutputs(List<StarProjection> Stars, List<PlanetProjection> Planets);
 
         public bool ProjectStar(Star star, out float x, out float y)
         {

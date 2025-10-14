@@ -12,7 +12,8 @@ internal static class FrameExportMetadataBuilder
         RigSpec rig,
         DateTimeOffset stageTimestampUtc,
         double? queueLatencyMilliseconds,
-        double? processingMilliseconds)
+        double? processingMilliseconds,
+        FrameExportImageDescriptor? rawImageDescriptor)
     {
         var context = capture.Context;
         var rigInfo = ResolveRigInfo(context?.Rig ?? rig);
@@ -44,7 +45,8 @@ internal static class FrameExportMetadataBuilder
             AppliedFilters: null,
             QueueLatencyMilliseconds: normalizedQueueLatency,
             ProcessingMilliseconds: normalizedProcessing,
-            FullPipelineMilliseconds: fullPipelineMilliseconds);
+            FullPipelineMilliseconds: fullPipelineMilliseconds,
+            RawImageDescriptor: rawImageDescriptor);
     }
 
     public static FrameExportMetadata FromProcessed(
@@ -88,7 +90,8 @@ internal static class FrameExportMetadataBuilder
             filters,
             QueueLatencyMilliseconds: normalizedQueueLatency,
             ProcessingMilliseconds: effectiveProcessing,
-            FullPipelineMilliseconds: fullPipelineMilliseconds);
+        FullPipelineMilliseconds: fullPipelineMilliseconds,
+        RawImageDescriptor: null);
     }
 
     private static double? NormalizeDuration(double? value)

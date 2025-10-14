@@ -16,7 +16,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 /// </summary>
 public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurationListener
 {
-    private sealed record BufferedFrame(SKBitmap Image, ExposureSettings Exposure, FrameMetadata? Metadata);
+    private sealed record BufferedFrame(SKBitmap Image, SKImage? ImmutableImage, ExposureSettings Exposure, FrameMetadata? Metadata);
 
     private sealed record FrameMetadata(
         RigSpec Rig,
@@ -54,6 +54,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         if (!configuration.EnableStacking || configuration.StackingFrameCount <= 1)
         {
             DrainBuffer();
+            var stackedImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
+            var originalImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
             return new FrameStackResult(
                 capture.FrameId,
                 capture.Image,
@@ -62,11 +64,16 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 capture.Exposure,
                 frameContext,
                 1,
-                capture.Exposure.ExposureMilliseconds);
+                capture.Exposure.ExposureMilliseconds)
+            {
+                StackedImmutableImage = stackedImmutableSingle,
+                OriginalImmutableImage = originalImmutableSingle
+            };
         }
 
-        var bufferedBitmap = capture.Image.Copy() ?? throw new InvalidOperationException("Failed to copy captured bitmap for buffering.");
-        _buffer.Enqueue(new BufferedFrame(bufferedBitmap, capture.Exposure, frameMetadata));
+    var bufferedBitmap = capture.Image.Copy() ?? throw new InvalidOperationException("Failed to copy captured bitmap for buffering.");
+    var bufferedImmutable = CreateImmutableSnapshot(capture.ImmutableImage, bufferedBitmap);
+    _buffer.Enqueue(new BufferedFrame(bufferedBitmap, bufferedImmutable, capture.Exposure, frameMetadata));
         _bufferedIntegrationMilliseconds += capture.Exposure.ExposureMilliseconds;
 
         TrimBuffer(configuration);
@@ -76,6 +83,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             var framesForStackCount = Math.Min(configuration.StackingFrameCount, _buffer.Count);
             if (framesForStackCount <= 0)
             {
+                var stackedImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
+                var originalImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
                 return new FrameStackResult(
                     capture.FrameId,
                     capture.Image,
@@ -84,7 +93,11 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                     capture.Exposure,
                     frameContext,
                     1,
-                    capture.Exposure.ExposureMilliseconds);
+                    capture.Exposure.ExposureMilliseconds)
+                {
+                    StackedImmutableImage = stackedImmutableSingle,
+                    OriginalImmutableImage = originalImmutableSingle
+                };
             }
 
             var framesForStack = GetFramesForStack(framesForStackCount);
@@ -111,6 +124,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         }
         catch
         {
+            var stackedImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
+            var originalImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
             return new FrameStackResult(
                 capture.FrameId,
                 capture.Image,
@@ -119,7 +134,11 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 capture.Exposure,
                 frameContext,
                 1,
-                capture.Exposure.ExposureMilliseconds);
+                capture.Exposure.ExposureMilliseconds)
+            {
+                StackedImmutableImage = stackedImmutableSingle,
+                OriginalImmutableImage = originalImmutableSingle
+            };
         }
     }
 
@@ -150,6 +169,9 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
     {
         if (frames.Count == 0)
         {
+            var stackedImmutableSingle = CreateImmutableSnapshot(latestFrame.ImmutableImage, latestFrame.Image);
+            var originalImmutableSingle = CreateImmutableSnapshot(latestFrame.ImmutableImage, latestFrame.Image);
+
             return new FrameStackResult(
                 latestFrame.FrameId,
                 latestFrame.Image,
@@ -158,7 +180,11 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 latestFrame.Exposure,
                 context,
                 1,
-                latestFrame.Exposure.ExposureMilliseconds);
+                latestFrame.Exposure.ExposureMilliseconds)
+            {
+                StackedImmutableImage = stackedImmutableSingle,
+                OriginalImmutableImage = originalImmutableSingle
+            };
         }
 
         var firstBitmap = frames[0].Image;
@@ -215,12 +241,21 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 latestFrame.Exposure,
                 context,
                 1,
-                latestFrame.Exposure.ExposureMilliseconds);
+                latestFrame.Exposure.ExposureMilliseconds)
+            {
+                StackedImmutableImage = latestFrame.ImmutableImage,
+                OriginalImmutableImage = latestFrame.ImmutableImage
+            };
         }
+
         var stackedImage = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
         WriteAverageFromLinear(accR, accG, accB, accA, stackedImage);
+        var stackedImmutable = CreateStackedImmutable(stackedImage);
 
         var integrationMilliseconds = CalculateIntegrationMilliseconds(framesIncluded);
+        var latestBuffered = framesIncluded[^1];
+        var originalImmutable = CreateImmutableSnapshot(latestBuffered.ImmutableImage, latestBuffered.Image)
+            ?? CreateImmutableSnapshot(latestFrame.ImmutableImage, latestFrame.Image);
 
         return new FrameStackResult(
             latestFrame.FrameId,
@@ -230,7 +265,11 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             latestFrame.Exposure,
             context,
             framesIncluded.Count,
-            integrationMilliseconds);
+            integrationMilliseconds)
+        {
+            StackedImmutableImage = stackedImmutable,
+            OriginalImmutableImage = originalImmutable
+        };
     }
 
     private static void AccumulateLinear(Span<double> accR, Span<double> accG, Span<double> accB, Span<double> accA, SKBitmap bitmap)
@@ -304,6 +343,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         int drained = 0;
         while (_buffer.TryDequeue(out var frame))
         {
+            frame.ImmutableImage?.Dispose();
             frame.Image.Dispose();
             drained++;
         }
@@ -325,6 +365,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         return total;
     }
 
+    private static SKImage? CreateStackedImmutable(SKBitmap stackedImage) => SKImage.FromBitmap(stackedImage);
+
     private void TrimBuffer(CameraConfiguration configuration)
     {
         int requiredFrames = Math.Max(configuration.StackingBufferMinimumFrames, configuration.StackingFrameCount);
@@ -340,6 +382,7 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             if (newCount >= requiredFrames && integrationSatisfied)
             {
                 var removed = _buffer.Dequeue();
+                removed.ImmutableImage?.Dispose();
                 removed.Image.Dispose();
                 _bufferedIntegrationMilliseconds = newIntegration;
 
@@ -480,6 +523,30 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         var result = new BufferedFrame[stackCount];
         Array.Copy(array, startIndex, result, 0, stackCount);
         return result;
+    }
+
+    private static SKImage? CreateImmutableSnapshot(SKImage? sourceImage, SKBitmap bitmap)
+    {
+        if (sourceImage is { } immutableFromCapture)
+        {
+            var rasterized = immutableFromCapture.ToRasterImage();
+            if (rasterized is not null)
+            {
+                return rasterized;
+            }
+        }
+
+        using var pixmap = bitmap.PeekPixels();
+        if (pixmap is not null)
+        {
+            var fromPixels = SKImage.FromPixels(pixmap);
+            if (fromPixels is not null)
+            {
+                return fromPixels;
+            }
+        }
+
+        return SKImage.FromBitmap(bitmap);
     }
 
     private static double SrgbToLinear(byte v) => SrgbToLinearLut[v];

@@ -3,6 +3,7 @@ using System;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -59,7 +60,7 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
         var colorMode = rig.Camera.Capabilities.ColorMode;
-    if (colorMode is CameraColorMode.Color or CameraColorMode.Switchable)
+        if (colorMode is CameraColorMode.Color or CameraColorMode.Switchable)
         {
             return new MockColorCameraAdapter(
                 locationOptions,
@@ -85,9 +86,15 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
     private ICameraAdapter CreateZwoAdapter(RigSpec rig)
     {
         var clock = _serviceProvider.GetRequiredService<IObservatoryClock>();
+        var locationOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>();
+        var cardinalOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>();
+        var loggerFactory = _serviceProvider.GetService<ILoggerFactory>();
         return new ZwoCameraAdapter(
             rig,
             clock,
+            locationOptions,
+            cardinalOptions,
+            loggerFactory,
             _serviceProvider.GetService<ILogger<ZwoCameraAdapter>>());
     }
 }

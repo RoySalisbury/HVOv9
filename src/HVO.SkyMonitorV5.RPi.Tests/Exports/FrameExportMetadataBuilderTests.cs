@@ -29,7 +29,8 @@ public sealed class FrameExportMetadataBuilderTests
             rig,
             now,
             queueLatencyMilliseconds: 12.5,
-            processingMilliseconds: null);
+            processingMilliseconds: null,
+            rawImageDescriptor: null);
 
         Assert.AreEqual(1, metadata.FramesStacked, "Raw exports should report single frame stack.");
     Assert.AreEqual(exposure.ExposureMilliseconds, metadata.IntegrationMilliseconds, "Integration should match exposure duration.");

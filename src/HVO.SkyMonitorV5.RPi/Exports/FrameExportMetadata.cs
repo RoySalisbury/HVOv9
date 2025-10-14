@@ -25,4 +25,5 @@ public sealed record FrameExportMetadata(
     IReadOnlyList<string>? AppliedFilters,
     double? QueueLatencyMilliseconds,
     double? ProcessingMilliseconds,
-    double? FullPipelineMilliseconds);
+    double? FullPipelineMilliseconds,
+    FrameExportImageDescriptor? RawImageDescriptor);

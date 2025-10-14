@@ -5,6 +5,7 @@ using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -422,11 +423,12 @@ public sealed class AllSkyCaptureService : BackgroundService
         var stackMs = stackStopwatch.Elapsed.TotalMilliseconds;
 
         var frameStored = false;
+        ProcessedFrame? processedFrame = null;
 
         try
         {
             var filterStopwatch = Stopwatch.StartNew();
-            var processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
+            processedFrame = await _frameFilterPipeline.ProcessAsync(stackResult, configuration, stoppingToken);
             filterStopwatch.Stop();
             var filterMs = filterStopwatch.Elapsed.TotalMilliseconds;
 
@@ -444,8 +446,18 @@ public sealed class AllSkyCaptureService : BackgroundService
                 processingMilliseconds: filterMs,
                 stageTimestampUtc: _clock.UtcNow);
 
+            var rawDescriptor = stackResult.OriginalImmutableImage is { } immutableImage
+                ? SkiaRawFrameHelper.TryCreateDescriptor(immutableImage)
+                : null;
+
+            rawDescriptor ??= SkiaRawFrameHelper.TryCreateDescriptor(stackResult.OriginalImage);
+
             _frameStateStore.UpdateFrame(
-                new RawFrameSnapshot(stackResult.FrameId, stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure),
+                new RawFrameSnapshot(stackResult.FrameId, stackResult.OriginalImage, stackResult.Timestamp, stackResult.Exposure)
+                {
+                    ImmutableImage = stackResult.OriginalImmutableImage,
+                    ImageDescriptor = rawDescriptor
+                },
                 processedFrame);
             _frameStateStore.SetLastError(null);
             frameStored = true;
@@ -454,6 +466,7 @@ public sealed class AllSkyCaptureService : BackgroundService
             {
                 stackResult.StackedImage.Dispose();
             }
+            stackResult.StackedImmutableImage?.Dispose();
 
             return (stackMs, filterMs);
         }
@@ -463,10 +476,13 @@ public sealed class AllSkyCaptureService : BackgroundService
             {
                 stackResult.StackedImage.Dispose();
             }
+            stackResult.StackedImmutableImage?.Dispose();
 
             if (!frameStored)
             {
                 stackResult.OriginalImage.Dispose();
+                stackResult.OriginalImmutableImage?.Dispose();
+                processedFrame?.ImmutableImage?.Dispose();
             }
             throw;
         }
@@ -479,10 +495,13 @@ public sealed class AllSkyCaptureService : BackgroundService
             {
                 stackResult.StackedImage.Dispose();
             }
+            stackResult.StackedImmutableImage?.Dispose();
 
             if (!frameStored)
             {
                 stackResult.OriginalImage.Dispose();
+                stackResult.OriginalImmutableImage?.Dispose();
+                processedFrame?.ImmutableImage?.Dispose();
             }
 
             return (stackMs, 0);

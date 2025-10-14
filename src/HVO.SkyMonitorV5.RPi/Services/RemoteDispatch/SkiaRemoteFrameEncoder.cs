@@ -27,21 +27,32 @@ public sealed class SkiaRemoteFrameEncoder : IRemoteFrameEncoder
             throw new ArgumentNullException(nameof(options));
         }
 
-        var image = envelope.CapturedFrame.Image;
-        if (image is null)
+        var bitmap = envelope.CapturedFrame.Image;
+        if (bitmap is null)
         {
             throw new InvalidOperationException("Remote frame encoder received an envelope without an image.");
         }
 
         var (format, contentType, extension, quality) = ResolveEncoding(options.ImageFormat);
 
-        using var encoded = image.Encode(format, quality);
+        SKImage? temporary = null;
+        var sourceImage = envelope.CapturedFrame.ImmutableImage;
+        var imageForEncode = sourceImage ?? (temporary = SKImage.FromBitmap(bitmap));
+
+        using var encoded = imageForEncode.Encode(format, quality);
         if (encoded is null)
         {
             throw new InvalidOperationException($"Failed to encode frame using {format}.");
         }
 
-        return new RemoteFramePayload(encoded.ToArray(), contentType, extension);
+        try
+        {
+            return new RemoteFramePayload(encoded.ToArray(), contentType, extension);
+        }
+        finally
+        {
+            temporary?.Dispose();
+        }
     }
 
     private (SKEncodedImageFormat Format, string ContentType, string Extension, int Quality) ResolveEncoding(RemoteDispatchImageFormat format)

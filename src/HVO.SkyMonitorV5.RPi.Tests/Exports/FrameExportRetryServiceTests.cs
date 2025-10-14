@@ -98,7 +98,8 @@ public sealed class FrameExportRetryServiceTests
             new List<string> { "FilterA", "FilterB" },
             12.5,
             27.8,
-            6040.3);
+            6040.3,
+            RawImageDescriptor: null);
 
         var envelope = new FrameExportEnvelope(
             frameId,

@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Exports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Threading;
@@ -283,6 +284,12 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             if (_latestRawFrame is not null && !ReferenceEquals(_latestRawFrame, rawFrame))
             {
                 _latestRawFrame.Image.Dispose();
+                _latestRawFrame.ImmutableImage?.Dispose();
+            }
+
+            if (_latestProcessedFrame is not null && !ReferenceEquals(_latestProcessedFrame, processedFrame))
+            {
+                _latestProcessedFrame.ImmutableImage?.Dispose();
             }
             var localizedRaw = rawFrame with { Timestamp = _clock.ToLocal(rawFrame.Timestamp) };
             var localizedProcessed = processedFrame with { Timestamp = _clock.ToLocal(processedFrame.Timestamp) };
@@ -590,6 +597,22 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
 
     public void Dispose()
     {
+        lock (_sync)
+        {
+            if (_latestRawFrame is not null)
+            {
+                _latestRawFrame.Image.Dispose();
+                _latestRawFrame.ImmutableImage?.Dispose();
+                _latestRawFrame = null;
+            }
+
+            if (_latestProcessedFrame is not null)
+            {
+                _latestProcessedFrame.ImmutableImage?.Dispose();
+                _latestProcessedFrame = null;
+            }
+        }
+
         _optionsReloadSubscription?.Dispose();
     }
 
@@ -1018,14 +1041,16 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             return null;
         }
 
-        var width = frame.Image?.Width ?? 0;
-        var height = frame.Image?.Height ?? 0;
+        var descriptor = frame.ImageDescriptor;
+        var width = descriptor?.Width ?? frame.Image?.Width ?? 0;
+        var height = descriptor?.Height ?? frame.Image?.Height ?? 0;
         return new RawFrameSummary(
             Timestamp: frame.Timestamp,
             Width: width,
             Height: height,
             ExposureMilliseconds: frame.Exposure.ExposureMilliseconds,
-            Gain: frame.Exposure.Gain);
+            Gain: frame.Exposure.Gain,
+            ImageDescriptor: descriptor);
     }
 
     private static AllSkyCameraSummary CreateCameraSummary(

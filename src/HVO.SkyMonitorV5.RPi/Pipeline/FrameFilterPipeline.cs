@@ -131,12 +131,30 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
 
                 var encodeStopwatch = Stopwatch.StartNew();
                 // Encode the updated bitmap into the processed frame payload
-                using var image = SKImage.FromBitmap(bitmap);
                 var encodingSettings = configuration.ProcessedImageEncoding ?? new ImageEncodingSettings();
                 var skiaFormat = ToSkiaFormat(encodingSettings.Format);
                 var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
-                using var data = image.Encode(skiaFormat, quality);
-                var bytes = data.ToArray();
+
+                SKImage? processedImage = null;
+                byte[] bytes;
+
+                try
+                {
+                    processedImage = SKImage.FromBitmap(bitmap) ?? throw new InvalidOperationException("Unable to snapshot processed bitmap.");
+                    using var data = processedImage.Encode(skiaFormat, quality);
+                    if (data is null)
+                    {
+                        throw new InvalidOperationException($"Failed to encode processed frame using format {skiaFormat}.");
+                    }
+
+                    bytes = data.ToArray();
+                }
+                catch
+                {
+                    processedImage?.Dispose();
+                    throw;
+                }
+
                 encodeStopwatch.Stop();
 
                 pipelineStopwatch.Stop();
@@ -164,7 +182,8 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     stackResult.FramesStacked,
                     stackResult.IntegrationMilliseconds,
                     appliedFilters,
-                    ProcessingMilliseconds: 0);
+                    ProcessingMilliseconds: 0,
+                    ImmutableImage: processedImage);
             }
             finally
             {

@@ -239,8 +239,8 @@ public sealed class DiagnosticsServiceTests
                     ProcessingMilliseconds = 40,
                     FullPipelineMilliseconds = 5120,
                     PayloadBytes = 512_000,
-                    PayloadContentType = "image/png",
-                    PayloadExtension = ".png",
+                    PayloadContentType = "application/vnd.hvo.skia.raw",
+                    PayloadExtension = ".skimg",
                     FramesStacked = 1,
                     IntegrationMilliseconds = 5000
                 },
@@ -257,8 +257,8 @@ public sealed class DiagnosticsServiceTests
                     ProcessingMilliseconds = 55,
                     FullPipelineMilliseconds = 5500,
                     PayloadBytes = 480_000,
-                    PayloadContentType = "image/png",
-                    PayloadExtension = "png",
+                    PayloadContentType = "application/vnd.hvo.skia.raw",
+                    PayloadExtension = "skimg",
                     ErrorMessage = "Upload failed"
                 },
                 new FrameExportAttemptEntity
