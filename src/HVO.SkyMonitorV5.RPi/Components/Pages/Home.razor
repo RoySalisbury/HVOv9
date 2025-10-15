@@ -74,7 +74,7 @@ else
                         <i class="bi bi-camera"></i>
                         <span>Raw Frame</span>
                     </header>
-                    @if (RawImageUrl is null)
+                    @if (RawImageDisplayUrl is null)
                     {
                         <div class="frame-card__placeholder">
                             <i class="bi bi-images"></i>
@@ -83,14 +83,21 @@ else
                     }
                     else
                     {
-                        <a href="@RawImageUrl" target="_blank" rel="noopener noreferrer" class="frame-card__image-link">
-                            <img src="@RawImageUrl" alt="Latest raw frame" class="frame-card__image" />
+                        <a href="@RawImageDisplayUrl" target="_blank" rel="noopener noreferrer" class="frame-card__image-link">
+                            <img src="@RawImageDisplayUrl" alt="Latest raw frame" class="frame-card__image" />
                         </a>
                         <div class="frame-card__actions">
-                            <a href="@RawImageUrl" target="_blank" rel="noopener noreferrer" class="frame-card__action-link">
+                            <a href="@RawImageDisplayUrl" target="_blank" rel="noopener noreferrer" class="frame-card__action-link">
                                 <i class="bi bi-box-arrow-up-right"></i>
                                 <span>View full resolution</span>
                             </a>
+                            @if (RawImageDownloadUrl is not null)
+                            {
+                                <a href="@RawImageDownloadUrl" download class="frame-card__action-link">
+                                    <i class="bi bi-download"></i>
+                                    <span>Download raw (.skimg)</span>
+                                </a>
+                            }
                         </div>
                     }
                     <footer class="frame-card__meta">

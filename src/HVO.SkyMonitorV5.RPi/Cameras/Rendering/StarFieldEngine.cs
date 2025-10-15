@@ -23,8 +23,8 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering
     /// BrightBoostPerMag adds a small linear boost for extremely bright stars (mag &lt; -1).
     /// </summary>
     public sealed record StarSizeCurve(
-        double RMinPx = 0.8,
-        double RMaxPx = 2.9,
+        double RMinPx = 0.3,
+        double RMaxPx = 2.1,
         double MMid = 5.6,
         double Slope = 1.40,
         double BrightBoostPerMag = 0.18

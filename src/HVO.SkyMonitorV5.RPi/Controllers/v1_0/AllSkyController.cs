@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.Net.Mime;
 using Asp.Versioning;
@@ -45,7 +46,7 @@ public sealed class AllSkyController : ControllerBase
     [Produces(MediaTypeNames.Image.Jpeg)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult GetLatestFrame([FromQuery] bool raw = false)
+    public IActionResult GetLatestFrame([FromQuery] bool raw = false, [FromQuery(Name = "rawFormat")] string? rawFormat = null)
     {
         if (raw)
         {
@@ -64,16 +65,42 @@ public sealed class AllSkyController : ControllerBase
                     return NotFound();
                 }
 
+                var formatPreference = ResolveRawFrameFormat(rawFormat);
+
                 var descriptorForHeaders = frame.ImageDescriptor;
-                if (SkiaRawFrameHelper.TryCreateRawPayload(sourceImage, out var payload, out var computedDescriptor))
+                byte[]? rawPayload = null;
+                FrameExportImageDescriptor? computedDescriptor = null;
+
+                if (formatPreference != RawFrameFormatPreference.Png
+                    && SkiaRawFrameHelper.TryCreateRawPayload(sourceImage, out var payload, out var extractedDescriptor))
                 {
-                    descriptorForHeaders ??= computedDescriptor;
+                    rawPayload = payload;
+                    computedDescriptor = extractedDescriptor;
+                }
+
+                descriptorForHeaders ??= computedDescriptor ?? SkiaRawFrameHelper.TryCreateDescriptor(sourceImage);
+
+                if (rawPayload is not null)
+                {
                     if (descriptorForHeaders is not null)
                     {
                         WriteRawDescriptorHeaders(frame, descriptorForHeaders);
                     }
 
-                    return File(payload, SkiaRawFrameHelper.RawContentType);
+                    return File(rawPayload, SkiaRawFrameHelper.RawContentType);
+                }
+
+                if (formatPreference == RawFrameFormatPreference.Raw)
+                {
+                    _logger.LogWarning("Raw frame requested in raw format but payload extraction failed. Returning PNG fallback for FrameId {FrameId}.", frame.FrameId);
+                }
+                else if (formatPreference == RawFrameFormatPreference.Png)
+                {
+                    _logger.LogDebug("Raw frame requested with PNG format. Returning encoded payload for FrameId {FrameId}.", frame.FrameId);
+                }
+                else
+                {
+                    _logger.LogDebug("Raw frame payload unavailable. Returning PNG fallback for FrameId {FrameId}.", frame.FrameId);
                 }
 
                 using var data = sourceImage.Encode(SKEncodedImageFormat.Png, 90);
@@ -192,5 +219,35 @@ public sealed class AllSkyController : ControllerBase
         {
             headers["X-HVO-Raw-ColorSpace"] = descriptor.ColorSpaceDescription;
         }
+    }
+
+    private static RawFrameFormatPreference ResolveRawFrameFormat(string? rawFormat)
+    {
+        if (string.IsNullOrWhiteSpace(rawFormat))
+        {
+            return RawFrameFormatPreference.Auto;
+        }
+
+        if (rawFormat.Equals("png", StringComparison.OrdinalIgnoreCase)
+            || rawFormat.Equals("image/png", StringComparison.OrdinalIgnoreCase))
+        {
+            return RawFrameFormatPreference.Png;
+        }
+
+        if (rawFormat.Equals("raw", StringComparison.OrdinalIgnoreCase)
+            || rawFormat.Equals("skimg", StringComparison.OrdinalIgnoreCase)
+            || rawFormat.Equals(SkiaRawFrameHelper.RawContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            return RawFrameFormatPreference.Raw;
+        }
+
+        return RawFrameFormatPreference.Auto;
+    }
+
+    private enum RawFrameFormatPreference
+    {
+        Auto,
+        Raw,
+        Png
     }
 }

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -46,9 +47,10 @@ public class MockCameraAdapter : CameraAdapterBase
     private const double ReadoutOverheadBaseMilliseconds = 18.0;
     private const double ReadoutOverheadGainScaleMilliseconds = 12.0;
     private const double ExposureJitterFraction = 0.018; // keep small so delays stay stable frame-to-frame
-    private const double SensorNoiseScale = 0.25; // reduce synthetic noise amplitude for less aggressive grain
+    private const double DefaultSensorNoiseScale = 0.06; // baseline synthetic noise amplitude (lowered for less aggressive grain)
 
     private const string DisableSensorNoiseVariable = "HVO_DISABLE_SENSOR_NOISE";
+    private const string SensorNoiseScaleVariable = "HVO_SENSOR_NOISE_SCALE";
     private static bool _sensorNoiseDisabledLogged;
     private static readonly object SensorNoiseLogLock = new();
     private static readonly SKColorSpace LinearSrgbColorSpace = SKColorSpace.CreateSrgbLinear();
@@ -222,6 +224,7 @@ public class MockCameraAdapter : CameraAdapterBase
                 out _);
 
             starfieldSurface.Canvas?.Flush();
+            starfieldSurface.Canvas?.DrawColor(SKColors.Black, SKBlendMode.DstOver);
 
             var frameTimestamp = captureInstant;
             pixelLease = SkiaPixelLease.FromBitmap(starfield, disposeBitmap: false);
@@ -356,34 +359,220 @@ public class MockCameraAdapter : CameraAdapterBase
     {
         var profile = BuildSensorResponseProfile(exposure);
 
+        const double BlueWeight = 0.0722d;
+        const double GreenWeight = 0.7152d;
+        const double RedWeight = 0.2126d;
+    const double StarLuminanceThreshold = 32d;
+    const int MaskDilationRadius = 1;
+
+    var width = bitmap.Width;
+    var height = bitmap.Height;
+    var halfWidth = width / 2;
+        var noiseEnabledWidth = width;
+
         var span = bitmap.GetPixelSpan();
-        for (var i = 0; i < span.Length; i += 4)
+        var originalBuffer = ArrayPool<byte>.Shared.Rent(span.Length);
+        var original = originalBuffer.AsSpan(0, span.Length);
+        span.CopyTo(original);
+
+        var pixelCount = width * height;
+
+        var starMaskBuffer = ArrayPool<byte>.Shared.Rent(pixelCount);
+        var starMask = starMaskBuffer.AsSpan(0, pixelCount);
+        starMask.Clear();
+
+        try
         {
-            var alpha = span[i + 3];
-            var baseline = span[i + 2];
-
-            var scaled = Math.Clamp(baseline * profile.BrightnessScale, 0d, 255d);
-            var noise = (Random.NextDouble() - 0.5d) * 512d * profile.LuminanceNoise;
-
-            var twinkleBoost = 0d;
-            if (scaled >= profile.TwinkleThreshold && Random.NextDouble() < profile.TwinkleProbability)
+            // First pass: classify bright pixels as stars.
+            for (var y = 0; y < height; y++)
             {
-                twinkleBoost = Random.Next(profile.TwinkleBoostMin, profile.TwinkleBoostMax + 1);
+                var rowOffset = y * width;
+                for (var x = 0; x < width; x++)
+                {
+                    var pixelIndex = rowOffset + x;
+                    var spanIndex = pixelIndex * 4;
+
+                    var red = original[spanIndex + 2];
+                    var green = original[spanIndex + 1];
+                    var blue = original[spanIndex];
+
+                    var luminance = (RedWeight * red) + (GreenWeight * green) + (BlueWeight * blue);
+                    if (luminance >= StarLuminanceThreshold)
+                    {
+                        starMask[pixelIndex] = 1;
+                    }
+                }
             }
 
-            var value = (byte)Math.Clamp(scaled + noise + twinkleBoost, 0d, 255d);
-            span[i] = value;
-            span[i + 1] = value;
-            span[i + 2] = value;
-            span[i + 3] = alpha;
+            // Dilate star mask slightly so noise stays away from star halos.
+            if (MaskDilationRadius > 0)
+            {
+                var dilatedBuffer = ArrayPool<byte>.Shared.Rent(pixelCount);
+                var dilated = dilatedBuffer.AsSpan(0, pixelCount);
+                starMask.CopyTo(dilated);
+
+                for (var y = 0; y < height; y++)
+                {
+                    var rowOffset = y * width;
+                    for (var x = 0; x < width; x++)
+                    {
+                        var pixelIndex = rowOffset + x;
+                        if (starMask[pixelIndex] == 0)
+                        {
+                            continue;
+                        }
+
+                        for (var dy = -MaskDilationRadius; dy <= MaskDilationRadius; dy++)
+                        {
+                            var ny = y + dy;
+                            if (ny < 0 || ny >= height)
+                            {
+                                continue;
+                            }
+
+                            var neighborRowOffset = ny * width;
+                            for (var dx = -MaskDilationRadius; dx <= MaskDilationRadius; dx++)
+                            {
+                                var nx = x + dx;
+                                if (nx < 0 || nx >= width)
+                                {
+                                    continue;
+                                }
+
+                                dilated[neighborRowOffset + nx] = 1;
+                            }
+                        }
+                    }
+                }
+
+                ArrayPool<byte>.Shared.Return(starMaskBuffer);
+                starMaskBuffer = dilatedBuffer;
+                starMask = dilated;
+            }
+
+            // Second pass: apply noise or preserve stars based on the mask.
+            for (var y = 0; y < height; y++)
+            {
+                var rowOffset = y * width;
+                for (var x = 0; x < width; x++)
+                {
+                    var pixelIndex = rowOffset + x;
+                    var spanIndex = pixelIndex * 4;
+
+                    if (x >= noiseEnabledWidth)
+                    {
+                        span[spanIndex] = original[spanIndex];
+                        span[spanIndex + 1] = original[spanIndex + 1];
+                        span[spanIndex + 2] = original[spanIndex + 2];
+                        span[spanIndex + 3] = original[spanIndex + 3];
+                        continue;
+                    }
+
+                    var alpha = original[spanIndex + 3];
+                    if (alpha == 0)
+                    {
+                        span[spanIndex] = span[spanIndex + 1] = span[spanIndex + 2] = 0;
+                        span[spanIndex + 3] = 0;
+                        continue;
+                    }
+
+                    var originalBlue = (double)original[spanIndex];
+                    var originalGreen = (double)original[spanIndex + 1];
+                    var originalRed = (double)original[spanIndex + 2];
+
+                    if (starMask[pixelIndex] != 0)
+                    {
+                        var originalLuminance = (RedWeight * originalRed) + (GreenWeight * originalGreen) + (BlueWeight * originalBlue);
+                        var twinkleScale = 1d;
+
+                        if (originalLuminance >= profile.TwinkleThreshold && Random.NextDouble() < profile.TwinkleProbability)
+                        {
+                            var boost = Random.Next(profile.TwinkleBoostMin, profile.TwinkleBoostMax + 1);
+                            twinkleScale += boost / 255d;
+                        }
+
+                        var scaledBlue = originalBlue * twinkleScale;
+                        var scaledGreen = originalGreen * twinkleScale;
+                        var scaledRed = originalRed * twinkleScale;
+
+                        var luminanceNoise = (Random.NextDouble() - 0.5d) * profile.LuminanceNoise * 24d;
+                        scaledBlue += luminanceNoise;
+                        scaledGreen += luminanceNoise;
+                        scaledRed += luminanceNoise;
+
+                        var maxChannel = Math.Max(scaledBlue, Math.Max(scaledGreen, scaledRed));
+                        if (maxChannel > 255d && maxChannel > 0d)
+                        {
+                            var compress = 255d / maxChannel;
+                            scaledBlue *= compress;
+                            scaledGreen *= compress;
+                            scaledRed *= compress;
+                        }
+
+                        span[spanIndex] = (byte)Math.Clamp(Math.Round(scaledBlue), 0d, 255d);
+                        span[spanIndex + 1] = (byte)Math.Clamp(Math.Round(scaledGreen), 0d, 255d);
+                        span[spanIndex + 2] = (byte)Math.Clamp(Math.Round(scaledRed), 0d, 255d);
+                        span[spanIndex + 3] = alpha;
+                        continue;
+                    }
+
+                    ApplyBackgroundNoise(
+                        profile,
+                        span,
+                        spanIndex,
+                        alpha,
+                        originalBlue,
+                        originalGreen,
+                        originalRed);
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(originalBuffer);
+            ArrayPool<byte>.Shared.Return(starMaskBuffer);
         }
 
         Logger.LogTrace(
-            "Applied synthetic mono sensor response (exposure {ExposureMs} ms, gain {Gain}, brightness x{Brightness:0.00}, noise {Noise:0.000}).",
+            "Applied synthetic sensor response (exposure {ExposureMs} ms, gain {Gain}, brightness x{Brightness:0.00}, noise {Noise:0.000}).",
             exposure.ExposureMilliseconds,
             exposure.Gain,
             profile.BrightnessScale,
             profile.LuminanceNoise);
+    }
+
+    protected virtual void ApplyBackgroundNoise(
+        in SensorResponseProfile profile,
+        Span<byte> span,
+        int spanIndex,
+        byte alpha,
+        double originalBlue,
+        double originalGreen,
+        double originalRed)
+    {
+        var baseLift = profile.LuminanceNoise * 14d;
+        var noiseAmplitude = profile.LuminanceNoise * 44d;
+
+        var blueNoise = baseLift + (Random.NextDouble() - 0.5d) * noiseAmplitude;
+        var greenNoise = baseLift * 0.85d + (Random.NextDouble() - 0.5d) * noiseAmplitude * 0.6d;
+        var redNoise = baseLift * 0.7d + (Random.NextDouble() - 0.5d) * noiseAmplitude * 0.5d;
+
+        if (profile.ChrominanceNoise > 0d)
+        {
+            var chromaAmplitude = profile.ChrominanceNoise * 20d;
+            blueNoise += (Random.NextDouble() - 0.5d) * chromaAmplitude;
+            greenNoise += (Random.NextDouble() - 0.5d) * chromaAmplitude * 0.7d;
+            redNoise += (Random.NextDouble() - 0.5d) * chromaAmplitude;
+        }
+
+        var newBlue = Math.Clamp(originalBlue + blueNoise, 0d, 90d);
+        var newGreen = Math.Clamp(originalGreen + greenNoise, 0d, 75d);
+        var newRed = Math.Clamp(originalRed + redNoise, 0d, 70d);
+
+        span[spanIndex] = (byte)Math.Round(newBlue);
+        span[spanIndex + 1] = (byte)Math.Round(newGreen);
+        span[spanIndex + 2] = (byte)Math.Round(newRed);
+        span[spanIndex + 3] = alpha;
     }
 
     private static AdapterFrame UpdateImmutableSnapshot(AdapterFrame frame)
@@ -442,7 +631,7 @@ public class MockCameraAdapter : CameraAdapterBase
             _ => 1.0d
         };
 
-        luminanceNoise *= SensorNoiseScale;
+        luminanceNoise *= ResolveSensorNoiseScale();
 
         var chromaNoise = Rig.Capabilities.ColorMode == CameraColorMode.Color
             ? luminanceNoise * 0.42d
@@ -469,6 +658,17 @@ public class MockCameraAdapter : CameraAdapterBase
             TwinkleThreshold: twinkleThreshold,
             TwinkleBoostMin: twinkleBoostMin,
             TwinkleBoostMax: twinkleBoostMax);
+    }
+
+    protected virtual double ResolveSensorNoiseScale()
+    {
+        var raw = Environment.GetEnvironmentVariable(SensorNoiseScaleVariable);
+        if (!string.IsNullOrWhiteSpace(raw) && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return Math.Clamp(parsed, 0d, 2d);
+        }
+
+        return DefaultSensorNoiseScale;
     }
 
     private TimeSpan ComputeSimulatedExposureDuration(ExposureSettings exposure)

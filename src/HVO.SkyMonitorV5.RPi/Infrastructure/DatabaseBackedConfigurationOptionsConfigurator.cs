@@ -453,6 +453,13 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
             _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", "DisableSensorNoise", disableSensorNoise);
         }
 
+        if (TryGetFloat(section, "SensorNoiseScale", out var sensorNoiseScale) && sensorNoiseScale >= 0f)
+        {
+            var clamped = Math.Clamp(sensorNoiseScale, 0f, 2f);
+            Environment.SetEnvironmentVariable("HVO_SENSOR_NOISE_SCALE", clamped.ToString(CultureInfo.InvariantCulture));
+            _logger?.LogDebug("Camera pipeline override applied for {Option}: {Value}", "SensorNoiseScale", clamped);
+        }
+
         if (!options.EnableStacking && !hasBackgroundOverride)
         {
             options.BackgroundStacker.Enabled = false;

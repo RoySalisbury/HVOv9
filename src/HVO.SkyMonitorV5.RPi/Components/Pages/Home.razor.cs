@@ -992,11 +992,16 @@ public sealed partial class Home : ComponentBase, IDisposable
 
     private string ConfigurationVersion => _configurationVersion > 0 ? $"#{_configurationVersion}" : "—";
 
+    private const string RawFrameFormatPng = "png";
+    private const string RawFrameFormatRaw = "raw";
+
     private string? ProcessedImageUrl => BuildImageUrl(raw: false);
 
-    private string? RawImageUrl => BuildImageUrl(raw: true);
+    private string? RawImageDisplayUrl => BuildImageUrl(raw: true, rawFormat: RawFrameFormatPng);
 
-    private string? BuildImageUrl(bool raw)
+    private string? RawImageDownloadUrl => BuildImageUrl(raw: true, rawFormat: RawFrameFormatRaw);
+
+    private string? BuildImageUrl(bool raw, string? rawFormat = null)
     {
         if (_status?.LastFrameTimestamp is null)
         {
@@ -1007,7 +1012,11 @@ public sealed partial class Home : ComponentBase, IDisposable
             ? ObservatoryClock.LocalNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)
             : _cacheBuster;
 
-        return FormattableString.Invariant($"api/v1.0/all-sky/frame/latest?raw={(raw ? "true" : "false")}&cacheBust={cacheKey}");
+        var rawFormatSegment = string.IsNullOrWhiteSpace(rawFormat)
+            ? string.Empty
+            : FormattableString.Invariant($"&rawFormat={rawFormat}");
+
+        return FormattableString.Invariant($"api/v1.0/all-sky/frame/latest?raw={(raw ? "true" : "false")}&cacheBust={cacheKey}{rawFormatSegment}");
     }
 
     private static string FormatDurationText(int milliseconds)
