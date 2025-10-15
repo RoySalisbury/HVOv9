@@ -110,7 +110,7 @@ _Last updated: 2025-10-15_
 - Added monochrome luminance regression coverage for preprocessing and stacking to confirm RGB channels remain aligned (`FramePreprocessingOrchestratorTests`, `RollingFrameStackerTests`).
 - Next: evaluate overlay asset caching and GPU-backed surface benchmarks ahead of Phase 3 filter refactor.
 
-## Phase 3 – In Progress Notes
+## Phase 3 – Completed (2025-10-15)
 
 - Introduced `IImageFrameFilter` alongside `FilterFrame` so filters can draw against pooled linear `SKSurface` instances while legacy bitmap filters continue to function.
 - Refactored `FrameFilterPipeline` to rent `SkiaSurfacePool` surfaces, execute both image and bitmap filters, and return immutable `SKImage` snapshots plus telemetry updates in a single pass.
@@ -120,5 +120,12 @@ _Last updated: 2025-10-15_
 - Migrated `DiagnosticsOverlayFilter` to the surface pipeline with updated placement assertions and pooled-surface coverage in `DiagnosticsOverlayFilterTests`.
 - Migrated `CardinalDirectionsFilter` to `IImageFrameFilter`, reusing the shared renderer for pooled surfaces and adding a FilterFrame regression in `CardinalDirectionsFilterTests` to verify projector-aligned markers.
 - Rolling stacker weighting now leverages per-frame gain via `SKPaint.ColorF` to maintain precise averages across F16, RGBA8888, and BGRA8888 inputs.
-- Next up: migrate the remaining overlay/diagnostics filters to `IImageFrameFilter`, cache overlay assets, and explore concurrency/telemetry refinements before enabling parallel execution.
+- Added surface-focused regressions for constellation figures, celestial annotations, and the circular aperture mask so every overlay filter now exercises the pooled pipeline path.
+
+## Phase 4 – In Progress Notes
+
+- Identify candidate overlays (cardinal, text, diagnostics, constellation figures) to prototype as cached `SKPicture` assets; document invalidation triggers in options monitors.
+- Sketch instrumentation to compare per-frame allocations before/after caching (consider hooking existing diagnostics overlay to display surface pool hit rates).
+- Draft test scaffolding for asset caching (e.g., verifying updated options rebuild cached pictures and new snapshots render correctly on pooled surfaces).
+- Build a backlog of assets that should pre-rasterize to `SKImage` (e.g., static logos) and note where scoping in the pipeline should live (likely shared cache service injected into filters).
 
