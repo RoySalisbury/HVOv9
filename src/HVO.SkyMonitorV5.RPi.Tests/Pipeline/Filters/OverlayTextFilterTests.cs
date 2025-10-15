@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SkiaSharp;
@@ -37,25 +38,56 @@ public sealed class OverlayTextFilterTests
         const int width = 256;
         const int height = 192;
         using var colorSpace = SKColorSpace.CreateSrgbLinear();
-        using var bitmap = SkiaTestImageFactory.CreateLinearGradientBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul, colorSpace, redScale: 0.75f, greenScale: 0.45f, blueValue: 0.32f);
+        using var stackedBitmap = SkiaTestImageFactory.CreateLinearGradientBitmap(
+            width,
+            height,
+            SKColorType.Bgra8888,
+            SKAlphaType.Premul,
+            colorSpace,
+            redScale: 0.75f,
+            greenScale: 0.45f,
+            blueValue: 0.32f);
 
-        var baseline = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(bitmap);
+        using var gradientImage = SkiaTestImageFactory.CreateLinearGradientImage(
+            width,
+            height,
+            SKColorType.Bgra8888,
+            SKAlphaType.Premul,
+            colorSpace,
+            redScale: 0.75f,
+            greenScale: 0.45f,
+            blueValue: 0.32f);
+
+        using var surfacePool = new SkiaSurfacePool();
+        var surfaceLease = surfacePool.RentLinearSurface(width, height);
+        var surface = surfaceLease.Surface;
+        surface.Canvas.Clear(SKColors.Transparent);
+        surface.Canvas.DrawImage(gradientImage, 0, 0);
+        surface.Canvas.Flush();
+
+        var filterFrame = new FilterFrame(surfaceLease);
 
         var stackResult = new FrameStackResult(
             Guid.NewGuid(),
-            bitmap,
-            bitmap,
+            stackedBitmap,
+            stackedBitmap,
             DateTimeOffset.Parse("2025-03-01T08:30:00Z", CultureInfo.InvariantCulture),
             new ExposureSettings(1200, 240, false, false),
             Context: null,
             FramesStacked: 3,
             IntegrationMilliseconds: 3600);
 
-        await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext: null, CancellationToken.None);
+    using var baselineImage = filterFrame.SnapshotImage();
+    var baseline = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(baselineImage, SKColorType.Bgra8888);
 
-        var processed = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(bitmap);
+        await filter.ApplyAsync(filterFrame, stackResult, configuration, renderContext: null, CancellationToken.None);
 
-        var channels = bitmap.Info.BytesPerPixel;
+    using var processedImage = filterFrame.SnapshotImage();
+    var processed = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(processedImage, SKColorType.Bgra8888);
+
+        filterFrame.Dispose();
+
+        var channels = 4;
         var rowStride = width * channels;
         var tolerance = 2f / 255f;
 

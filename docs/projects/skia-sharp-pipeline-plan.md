@@ -31,9 +31,9 @@
 ## Phase 3 – Filter Pipeline Refactor
 
 - [x] Define filter interface accepting `SKImage` and emitting `SKImage`, with helpers for safe pixel mutation. (`IImageFrameFilter`, `FilterFrame`, and pooled `SkiaSurfacePool` integration in `FrameFilterPipeline`.)
-- [ ] Move filter implementations to dedicated `SKSurface` workflows, sharing cached shader state. (Pipeline scaffolding is in place; need to migrate individual filters.)
-- [ ] Enable configuration-driven parallel execution with bounded schedulers and thread-safe resource handling. Big question here is if the shared StarFieldEngine and projector can be utilized safely or if we need to stick with synchronous filter execution.
-- [ ] Add per-filter unit tests comparing output to legacy expectations.
+- [x] Move filter implementations to dedicated `SKSurface` workflows, sharing cached shader state. (OverlayTextFilter, DiagnosticsOverlayFilter, CardinalDirectionsFilter, ConstellationFigureFilter, CelestialAnnotationsFilter, and CircularApertureMaskFilter now target `FilterFrame`; legacy helpers audited for `SKBitmap` dependencies.)
+- [ ] DEFER THIS ACTION TO PHASE 8. Enable configuration-driven parallel execution with bounded schedulers and thread-safe resource handling. Big question here is if the shared StarFieldEngine and projector can be utilized safely or if we need to stick with synchronous filter execution.
+- [x] Add per-filter unit tests comparing output to legacy expectations. (OverlayText, Diagnostics, Cardinal Directions, Constellation Figures, Celestial Annotations, and Circular Mask filters now have surface-path regressions under `HVO.SkyMonitorV5.RPi.Tests`.)
 
 ## Phase 4 – Overlay Asset Strategy
 

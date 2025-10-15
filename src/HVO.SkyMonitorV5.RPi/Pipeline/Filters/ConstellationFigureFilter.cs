@@ -20,7 +20,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 /// <summary>
 /// Draws constellation line figures by connecting the catalog stars for each configured constellation.
 /// </summary>
-public sealed class ConstellationFigureFilter : IFrameFilter
+public sealed class ConstellationFigureFilter : IImageFrameFilter
 {
     private static readonly SKColor DefaultLineColor = new(127, 178, 255, 180);
     private static readonly float[] DashedPattern = { 8f, 6f };
@@ -60,10 +60,57 @@ public sealed class ConstellationFigureFilter : IFrameFilter
     public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
         => ApplyAsync(bitmap, stackResult, configuration, renderContext: null, cancellationToken);
 
-    public async ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, FrameRenderContext? renderContext, CancellationToken cancellationToken)
+    public async ValueTask ApplyAsync(
+        SKBitmap bitmap,
+        FrameStackResult stackResult,
+        CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var canvas = new SKCanvas(bitmap);
+        await DrawConstellationsAsync(canvas, bitmap.Width, bitmap.Height, renderContext, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask ApplyAsync(
+        FilterFrame frame,
+        FrameStackResult stackResult,
+        CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var canvas = frame.Surface.Canvas;
+        var engine = renderContext?.Engine;
+
+        var width = engine?.Width
+            ?? stackResult.StackedImmutableImage?.Width
+            ?? stackResult.StackedImage?.Width
+            ?? canvas.DeviceClipBounds.Width;
+        var height = engine?.Height
+            ?? stackResult.StackedImmutableImage?.Height
+            ?? stackResult.StackedImage?.Height
+            ?? canvas.DeviceClipBounds.Height;
+
+        if (width <= 0 || height <= 0)
+        {
+            var bounds = canvas.DeviceClipBounds;
+            width = bounds.Width;
+            height = bounds.Height;
+        }
+
+        await DrawConstellationsAsync(canvas, width, height, renderContext, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask DrawConstellationsAsync(
+        SKCanvas canvas,
+        int width,
+        int height,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
         var engine = renderContext?.Engine;
         if (engine is null)
         {
@@ -77,7 +124,11 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             return;
         }
 
-        var context = renderContext!;
+        var context = renderContext;
+        if (context is null)
+        {
+            return;
+        }
 
         if (!double.IsFinite(context.LatitudeDeg) || !double.IsFinite(context.LongitudeDeg))
         {
@@ -103,8 +154,8 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             timestampUtc,
             catalogOptions,
             engine,
-            bitmap.Width,
-            bitmap.Height,
+            width,
+            height,
             cancellationToken).ConfigureAwait(false);
 
         if (visibleFigures.Count == 0)
@@ -112,7 +163,6 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             return;
         }
 
-        using var canvas = new SKCanvas(bitmap);
         using var paint = new SKPaint
         {
             IsAntialias = true,
@@ -127,27 +177,34 @@ public sealed class ConstellationFigureFilter : IFrameFilter
             paint.PathEffect = pathEffect;
         }
 
-        foreach (var figure in visibleFigures)
+        canvas.Save();
+        try
         {
-            foreach (var segment in figure.Segments)
+            foreach (var figure in visibleFigures)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!engine.ProjectStar(segment.Start, out var startX, out var startY))
+                foreach (var segment in figure.Segments)
                 {
-                    continue;
-                }
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                if (!engine.ProjectStar(segment.End, out var endX, out var endY))
-                {
-                    continue;
-                }
+                    if (!engine.ProjectStar(segment.Start, out var startX, out var startY))
+                    {
+                        continue;
+                    }
 
-                canvas.DrawLine(startX, startY, endX, endY, paint);
+                    if (!engine.ProjectStar(segment.End, out var endX, out var endY))
+                    {
+                        continue;
+                    }
+
+                    canvas.DrawLine(startX, startY, endX, endY, paint);
+                }
             }
         }
-
-        return;
+        finally
+        {
+            canvas.Restore();
+            canvas.Flush();
+        }
     }
 
     private ConstellationFigureCache BuildCache(ConstellationFigureOptions? options)

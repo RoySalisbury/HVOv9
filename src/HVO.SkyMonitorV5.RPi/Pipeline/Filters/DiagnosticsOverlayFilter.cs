@@ -16,7 +16,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 /// <summary>
 /// Renders a lightweight diagnostics block containing stacking metrics, rig details, and projector geometry.
 /// </summary>
-public sealed class DiagnosticsOverlayFilter : IFrameFilter
+public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
 {
     private readonly IOptionsMonitor<DiagnosticsOverlayOptions> _optionsMonitor;
     private readonly ILogger<DiagnosticsOverlayFilter> _logger;
@@ -70,67 +70,63 @@ public sealed class DiagnosticsOverlayFilter : IFrameFilter
         }
 
         using var canvas = new SKCanvas(bitmap);
-        using var titleTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.SemiBold);
-        using var bodyTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
-        using var titleFont = new SKFont(titleTypeface, options.TitleFontSize);
-        using var bodyFont = new SKFont(bodyTypeface, options.BodyFontSize);
-        using var titlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(200, 225, 255, 235) };
-        using var bodyPaint = new SKPaint { IsAntialias = true, Color = new SKColor(240, 240, 240, 220) };
-        using var backgroundPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 170) };
+    RenderOverlay(canvas, bitmap.Width, bitmap.Height, lines, options, cancellationToken);
 
-        var measuredLines = MeasureLines(lines, titleFont, bodyFont, titlePaint, bodyPaint, cancellationToken);
-        if (measuredLines.Count == 0)
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask ApplyAsync(
+        FilterFrame frame,
+        FrameStackResult stackResult,
+        CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var options = _optionsMonitor.CurrentValue;
+        if (!options.Enabled)
         {
             return ValueTask.CompletedTask;
         }
 
-        var margin = options.Margin;
-        var lineSpacing = options.LineSpacing;
-
-        var contentWidth = 0f;
-        var contentHeight = 0f;
-
-        for (var i = 0; i < measuredLines.Count; i++)
+        if (renderContext is null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var line = measuredLines[i];
-            contentWidth = Math.Max(contentWidth, line.Width);
-            contentHeight += line.Height;
+            _logger.LogWarning("Diagnostics overlay skipped; FrameRenderContext unavailable.");
+            return ValueTask.CompletedTask;
         }
 
-        if (measuredLines.Count > 1)
+        var lines = BuildLines(stackResult, renderContext, options);
+        if (lines.Count == 0)
         {
-            contentHeight += lineSpacing * (measuredLines.Count - 1);
+            return ValueTask.CompletedTask;
         }
 
-        var boxWidth = contentWidth + margin * 2f;
-        var boxHeight = contentHeight + margin * 2f;
+        var canvas = frame.Surface.Canvas;
 
-        var rect = CalculateRect(bitmap.Width, bitmap.Height, boxWidth, boxHeight, margin, options.Corner);
+        var width = stackResult.StackedImmutableImage?.Width
+            ?? stackResult.StackedImage?.Width
+            ?? canvas.DeviceClipBounds.Width;
+        var height = stackResult.StackedImmutableImage?.Height
+            ?? stackResult.StackedImage?.Height
+            ?? canvas.DeviceClipBounds.Height;
 
-        using (var path = new SKPath())
+        if (width <= 0 || height <= 0)
         {
-            path.AddRoundRect(rect, 12f, 12f);
-            canvas.DrawPath(path, backgroundPaint);
+            var bounds = canvas.DeviceClipBounds;
+            width = bounds.Width;
+            height = bounds.Height;
         }
 
-        var baseline = rect.Top + margin;
-
-        for (var i = 0; i < measuredLines.Count; i++)
+        canvas.Save();
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var line = measuredLines[i];
-            var paint = line.IsTitle ? titlePaint : bodyPaint;
-            var font = line.IsTitle ? titleFont : bodyFont;
-
-            var textBaseline = baseline - line.Metrics.Ascent;
-            canvas.DrawText(line.Text, rect.Left + margin, textBaseline, SKTextAlign.Left, font, paint);
-
-            baseline += line.Height;
-            if (i < measuredLines.Count - 1)
-            {
-                baseline += lineSpacing;
-            }
+            RenderOverlay(canvas, width, height, lines, options, cancellationToken);
+        }
+        finally
+        {
+            canvas.Restore();
+            canvas.Flush();
         }
 
         return ValueTask.CompletedTask;
@@ -243,4 +239,76 @@ public sealed class DiagnosticsOverlayFilter : IFrameFilter
     }
 
     private readonly record struct MeasuredLine(string Text, bool IsTitle, float Width, float Height, SKFontMetrics Metrics);
+
+    private void RenderOverlay(
+        SKCanvas canvas,
+        int width,
+        int height,
+    List<(string Text, bool IsTitle)> lines,
+    DiagnosticsOverlayOptions options,
+        CancellationToken cancellationToken)
+    {
+        using var titleTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.SemiBold);
+        using var bodyTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
+        using var titleFont = new SKFont(titleTypeface, options.TitleFontSize);
+        using var bodyFont = new SKFont(bodyTypeface, options.BodyFontSize);
+        using var titlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(200, 225, 255, 235) };
+        using var bodyPaint = new SKPaint { IsAntialias = true, Color = new SKColor(240, 240, 240, 220) };
+        using var backgroundPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 170) };
+
+        var measuredLines = MeasureLines(lines, titleFont, bodyFont, titlePaint, bodyPaint, cancellationToken);
+        if (measuredLines.Count == 0)
+        {
+            return;
+        }
+
+        var margin = options.Margin;
+        var lineSpacing = options.LineSpacing;
+
+        var contentWidth = 0f;
+        var contentHeight = 0f;
+
+        for (var i = 0; i < measuredLines.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = measuredLines[i];
+            contentWidth = Math.Max(contentWidth, line.Width);
+            contentHeight += line.Height;
+        }
+
+        if (measuredLines.Count > 1)
+        {
+            contentHeight += lineSpacing * (measuredLines.Count - 1);
+        }
+
+        var boxWidth = contentWidth + margin * 2f;
+        var boxHeight = contentHeight + margin * 2f;
+
+        var rect = CalculateRect(width, height, boxWidth, boxHeight, margin, options.Corner);
+
+        using (var path = new SKPath())
+        {
+            path.AddRoundRect(rect, 12f, 12f);
+            canvas.DrawPath(path, backgroundPaint);
+        }
+
+        var baseline = rect.Top + margin;
+
+        for (var i = 0; i < measuredLines.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = measuredLines[i];
+            var paint = line.IsTitle ? titlePaint : bodyPaint;
+            var font = line.IsTitle ? titleFont : bodyFont;
+
+            var textBaseline = baseline - line.Metrics.Ascent;
+            canvas.DrawText(line.Text, rect.Left + margin, textBaseline, SKTextAlign.Left, font, paint);
+
+            baseline += line.Height;
+            if (i < measuredLines.Count - 1)
+            {
+                baseline += lineSpacing;
+            }
+        }
+    }
 }

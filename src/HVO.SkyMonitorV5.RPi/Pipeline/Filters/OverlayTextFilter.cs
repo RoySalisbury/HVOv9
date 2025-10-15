@@ -14,7 +14,7 @@ using TimeZoneConverter;
 
 namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 
-public sealed class OverlayTextFilter : IFrameFilter
+public sealed class OverlayTextFilter : IImageFrameFilter
 {
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
@@ -47,6 +47,62 @@ public sealed class OverlayTextFilter : IFrameFilter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var canvas = new SKCanvas(bitmap);
+        DrawOverlay(canvas, bitmap.Width, bitmap.Height, stackResult, renderContext, cancellationToken);
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask ApplyAsync(
+        FilterFrame frame,
+        FrameStackResult stackResult,
+        CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var canvas = frame.Surface.Canvas;
+        var width = stackResult.StackedImage.Width;
+        var height = stackResult.StackedImage.Height;
+
+        if (width <= 0 || height <= 0)
+        {
+            var bounds = canvas.DeviceClipBounds;
+            width = bounds.Width;
+            height = bounds.Height;
+        }
+
+        canvas.Save();
+        try
+        {
+            DrawOverlay(canvas, width, height, stackResult, renderContext, cancellationToken);
+        }
+        finally
+        {
+            canvas.Restore();
+            canvas.Flush();
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    private void InvalidateTimeZoneCache()
+    {
+        lock (_timeZoneSync)
+        {
+            _cachedTimeZone = null;
+        }
+    }
+
+    private void DrawOverlay(
+        SKCanvas canvas,
+        int width,
+        int height,
+        FrameStackResult stackResult,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
         var options = _optionsMonitor.CurrentValue;
         var location = _locationMonitor.CurrentValue;
 
@@ -57,7 +113,6 @@ public sealed class OverlayTextFilter : IFrameFilter
         var timestamp = renderContext?.Timestamp ?? stackResult.Timestamp;
         var localTimestamp = TimeZoneInfo.ConvertTime(timestamp, timeZone.TimeZone);
 
-        using var canvas = new SKCanvas(bitmap);
         using var boldTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
         using var regularTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
         using var titleFont = new SKFont(boldTypeface, 24);
@@ -113,8 +168,8 @@ public sealed class OverlayTextFilter : IFrameFilter
             cancellationToken.ThrowIfCancellationRequested();
 
             var metrics = line.Metrics;
-            var height = metrics.Descent - metrics.Ascent;
-            contentHeight += height;
+            var lineHeight = metrics.Descent - metrics.Ascent;
+            contentHeight += lineHeight;
             maxWidth = Math.Max(maxWidth, line.Font.MeasureText(line.Text, line.Paint));
         }
 
@@ -122,7 +177,7 @@ public sealed class OverlayTextFilter : IFrameFilter
 
         var boxWidth = maxWidth + margin * 2f;
         var boxHeight = contentHeight + margin * 2f;
-        var rect = new SKRect(margin, bitmap.Height - boxHeight - margin, margin + boxWidth, bitmap.Height - margin);
+        var rect = new SKRect(margin, height - boxHeight - margin, margin + boxWidth, height - margin);
 
         using (var path = new SKPath())
         {
@@ -139,22 +194,12 @@ public sealed class OverlayTextFilter : IFrameFilter
 
             var line = lines[i];
             canvas.DrawText(line.Text, rect.Left + margin, baseline, SKTextAlign.Left, line.Font, line.Paint);
-            var height = line.Metrics.Descent - line.Metrics.Ascent;
-            baseline += height;
+            var lineHeight = line.Metrics.Descent - line.Metrics.Ascent;
+            baseline += lineHeight;
             if (i < lines.Count - 1)
             {
                 baseline += lineSpacing;
             }
-        }
-
-        return ValueTask.CompletedTask;
-    }
-
-    private void InvalidateTimeZoneCache()
-    {
-        lock (_timeZoneSync)
-        {
-            _cachedTimeZone = null;
         }
     }
 

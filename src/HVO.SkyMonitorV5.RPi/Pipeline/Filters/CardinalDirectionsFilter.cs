@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.Logging;
@@ -15,7 +14,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
     /// <summary>
     /// Draws simple N/E/S/W markers using the shared StarFieldEngine provided by the pipeline.
     /// </summary>
-    public sealed class CardinalDirectionsFilter : IFrameFilter
+    public sealed class CardinalDirectionsFilter : IImageFrameFilter
     {
         private readonly IOptionsMonitor<CardinalDirectionsOptions> _opts;
         private readonly ILogger<CardinalDirectionsFilter> _logger;
@@ -50,10 +49,64 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
 
             var options = _opts.CurrentValue;
 
+            using var canvas = new SKCanvas(bitmap);
+            RenderOverlay(canvas, bitmap.Width, bitmap.Height, renderContext, options, cancellationToken);
+
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask ApplyAsync(
+            FilterFrame frame,
+            FrameStackResult stack,
+            CameraConfiguration configuration,
+            FrameRenderContext? renderContext,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var options = _opts.CurrentValue;
+            var canvas = frame.Surface.Canvas;
+
+            var width = stack.StackedImmutableImage?.Width
+                ?? stack.StackedImage?.Width
+                ?? canvas.DeviceClipBounds.Width;
+            var height = stack.StackedImmutableImage?.Height
+                ?? stack.StackedImage?.Height
+                ?? canvas.DeviceClipBounds.Height;
+
+            if (width <= 0 || height <= 0)
+            {
+                var bounds = canvas.DeviceClipBounds;
+                width = bounds.Width;
+                height = bounds.Height;
+            }
+
+            canvas.Save();
+            try
+            {
+                RenderOverlay(canvas, width, height, renderContext, options, cancellationToken);
+            }
+            finally
+            {
+                canvas.Restore();
+                canvas.Flush();
+            }
+
+            return ValueTask.CompletedTask;
+        }
+
+        private void RenderOverlay(
+            SKCanvas canvas,
+            int width,
+            int height,
+            FrameRenderContext? renderContext,
+            CardinalDirectionsOptions options,
+            CancellationToken cancellationToken)
+        {
             var projector = renderContext?.Projector;
             var center = projector is not null
                 ? new SKPoint((float)projector.Cx, (float)projector.Cy)
-                : new SKPoint(bitmap.Width / 2f, bitmap.Height / 2f);
+                : new SKPoint(width / 2f, height / 2f);
 
             var swapEastWest = options.SwapEastWest;
             var rotationDegrees = options.RotationDegrees;
@@ -72,110 +125,115 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters
                 }
             }
 
-            using var canvas = new SKCanvas(bitmap);
             canvas.Save();
-
-            center.Offset(options.OffsetXPixels, options.OffsetYPixels);
-
-            var radiusBase = Math.Min(bitmap.Width, bitmap.Height) / 2f;
-            var radius = Math.Max(8f, radiusBase + options.RadiusOffsetPixels);
-
-            var circleColor = ResolveColor(options.CircleColor, new SKColor(200, 213, 230));
-            var circlePaint = new SKPaint
+            try
             {
-                IsAntialias = true,
-                Color = circleColor.WithAlpha((byte)Math.Clamp(options.CircleOpacity, 0, 255)),
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = Math.Max(0.5f, options.CircleThickness)
-            };
+                center.Offset(options.OffsetXPixels, options.OffsetYPixels);
 
-            using var dashEffect = ResolveCircleDashEffect(options.CircleLineStyle, circlePaint.StrokeWidth);
-            circlePaint.PathEffect = dashEffect;
+                var radiusBase = Math.Min(width, height) / 2f;
+                var radius = Math.Max(8f, radiusBase + options.RadiusOffsetPixels);
 
-            canvas.DrawCircle(center, radius, circlePaint);
-
-            _logger.LogTrace("Rendering cardinal directions overlay at ({CenterX},{CenterY}) with radius {Radius}px and rotation {RotationDegrees}°", center.X, center.Y, radius, options.RotationDegrees);
-
-            using var typeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
-            using var font = new SKFont(typeface, options.LabelFontSize);
-            using var textPaint = new SKPaint
-            {
-                IsAntialias = true,
-                Color = SKColors.White
-            };
-
-            var labelBgColor = new SKColor(0, 0, 0).WithAlpha((byte)Math.Clamp(options.LabelFillOpacity, 0, 255));
-            using var labelBgPaint = new SKPaint
-            {
-                IsAntialias = true,
-                Color = labelBgColor,
-                Style = SKPaintStyle.Fill
-            };
-            using var labelBorderPaint = new SKPaint
-            {
-                IsAntialias = true,
-                Color = circleColor.WithAlpha(circlePaint.Color.Alpha),
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = Math.Max(0.5f, options.CircleThickness)
-            };
-
-            var labels = BuildLabelMap(options, swapEastWest);
-
-            var metrics = font.Metrics;
-            var textHeight = metrics.Descent - metrics.Ascent;
-            var labelRadius = Math.Max(0f, radius - options.LabelPadding - textHeight * 0.5f - circlePaint.StrokeWidth);
-            var rotationOffset = DegreesToRadians(rotationDegrees);
-
-            foreach (var entry in labels)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var angleDeg = entry.AngleDegrees;
-                var angle = DegreesToRadians(angleDeg) + rotationOffset;
-
-                var position = new SKPoint(
-                    center.X + labelRadius * (float)Math.Cos(angle),
-                    center.Y + labelRadius * (float)Math.Sin(angle));
-
-                var label = entry.Label ?? string.Empty;
-                var textWidth = font.MeasureText(label, textPaint);
-
-                var padding = options.LabelPadding;
-                var rect = new SKRect(
-                    position.X - textWidth / 2f - padding,
-                    position.Y - textHeight / 2f - padding,
-                    position.X + textWidth / 2f + padding,
-                    position.Y + textHeight / 2f + padding);
-
-                if (labelBgPaint.Color.Alpha > 0)
+                var circleColor = ResolveColor(options.CircleColor, new SKColor(200, 213, 230));
+                using var circlePaint = new SKPaint
                 {
+                    IsAntialias = true,
+                    Color = circleColor.WithAlpha((byte)Math.Clamp(options.CircleOpacity, 0, 255)),
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = Math.Max(0.5f, options.CircleThickness)
+                };
+
+                using var dashEffect = ResolveCircleDashEffect(options.CircleLineStyle, circlePaint.StrokeWidth);
+                circlePaint.PathEffect = dashEffect;
+
+                canvas.DrawCircle(center, radius, circlePaint);
+
+                _logger.LogTrace(
+                    "Rendering cardinal directions overlay at ({CenterX},{CenterY}) with radius {Radius}px and rotation {RotationDegrees}°",
+                    center.X,
+                    center.Y,
+                    radius,
+                    rotationDegrees);
+
+                using var typeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
+                using var font = new SKFont(typeface, options.LabelFontSize);
+                using var textPaint = new SKPaint
+                {
+                    IsAntialias = true,
+                    Color = SKColors.White
+                };
+
+                var labelBgColor = new SKColor(0, 0, 0).WithAlpha((byte)Math.Clamp(options.LabelFillOpacity, 0, 255));
+                using var labelBgPaint = new SKPaint
+                {
+                    IsAntialias = true,
+                    Color = labelBgColor,
+                    Style = SKPaintStyle.Fill
+                };
+                using var labelBorderPaint = new SKPaint
+                {
+                    IsAntialias = true,
+                    Color = circleColor.WithAlpha(circlePaint.Color.Alpha),
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = Math.Max(0.5f, options.CircleThickness)
+                };
+
+                var labels = BuildLabelMap(options, swapEastWest);
+
+                var metrics = font.Metrics;
+                var textHeight = metrics.Descent - metrics.Ascent;
+                var labelRadius = Math.Max(0f, radius - options.LabelPadding - textHeight * 0.5f - circlePaint.StrokeWidth);
+                var rotationOffset = DegreesToRadians(rotationDegrees);
+
+                foreach (var entry in labels)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var angle = DegreesToRadians(entry.AngleDegrees) + rotationOffset;
+
+                    var position = new SKPoint(
+                        center.X + labelRadius * (float)Math.Cos(angle),
+                        center.Y + labelRadius * (float)Math.Sin(angle));
+
+                    var label = entry.Label ?? string.Empty;
+                    var textWidth = font.MeasureText(label, textPaint);
+
+                    var padding = options.LabelPadding;
+                    var rect = new SKRect(
+                        position.X - textWidth / 2f - padding,
+                        position.Y - textHeight / 2f - padding,
+                        position.X + textWidth / 2f + padding,
+                        position.Y + textHeight / 2f + padding);
+
+                    if (labelBgPaint.Color.Alpha > 0)
+                    {
+                        if (options.LabelCornerRadius <= 0f)
+                        {
+                            canvas.DrawRect(rect, labelBgPaint);
+                        }
+                        else
+                        {
+                            canvas.DrawRoundRect(rect, options.LabelCornerRadius, options.LabelCornerRadius, labelBgPaint);
+                        }
+                    }
+
                     if (options.LabelCornerRadius <= 0f)
                     {
-                        canvas.DrawRect(rect, labelBgPaint);
+                        canvas.DrawRect(rect, labelBorderPaint);
                     }
                     else
                     {
-                        canvas.DrawRoundRect(rect, options.LabelCornerRadius, options.LabelCornerRadius, labelBgPaint);
+                        canvas.DrawRoundRect(rect, options.LabelCornerRadius, options.LabelCornerRadius, labelBorderPaint);
                     }
-                }
 
-                if (options.LabelCornerRadius <= 0f)
-                {
-                    canvas.DrawRect(rect, labelBorderPaint);
+                    var textX = rect.MidX - textWidth / 2f;
+                    var textY = rect.MidY - (metrics.Ascent + metrics.Descent) / 2f;
+                    canvas.DrawText(label, textX, textY, font, textPaint);
                 }
-                else
-                {
-                    canvas.DrawRoundRect(rect, options.LabelCornerRadius, options.LabelCornerRadius, labelBorderPaint);
-                }
-
-                var textX = rect.MidX - textWidth / 2f;
-                var textY = rect.MidY - (metrics.Ascent + metrics.Descent) / 2f;
-                canvas.DrawText(label, textX, textY, font, textPaint);
             }
-
-            canvas.Restore();
-
-            return ValueTask.CompletedTask;
+            finally
+            {
+                canvas.Restore();
+            }
         }
 
         private static SKPathEffect? ResolveCircleDashEffect(CardinalLineStyle style, float strokeWidth)

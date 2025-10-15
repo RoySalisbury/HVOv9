@@ -23,7 +23,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 /// Draws star / DSO rings and planet labels using the same StarFieldEngine instance
 /// that rendered the frame (supplied via FrameRenderContext).
 /// </summary>
-public sealed class CelestialAnnotationsFilter : IFrameFilter
+public sealed class CelestialAnnotationsFilter : IImageFrameFilter
 {
     private const float DefaultStarRingRadius = 3.0f;
     private const float DefaultDeepSkyRingRadius = 4.0f;
@@ -98,6 +98,50 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
         SKBitmap bitmap,
         FrameStackResult stackResult,
         CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var canvas = new SKCanvas(bitmap);
+        await DrawAnnotationsAsync(canvas, bitmap.Width, bitmap.Height, renderContext, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask ApplyAsync(
+        FilterFrame frame,
+        FrameStackResult stackResult,
+        CameraConfiguration configuration,
+        FrameRenderContext? renderContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var canvas = frame.Surface.Canvas;
+        var engine = renderContext?.Engine;
+
+        var width = engine?.Width
+            ?? stackResult.StackedImmutableImage?.Width
+            ?? stackResult.StackedImage?.Width
+            ?? canvas.DeviceClipBounds.Width;
+        var height = engine?.Height
+            ?? stackResult.StackedImmutableImage?.Height
+            ?? stackResult.StackedImage?.Height
+            ?? canvas.DeviceClipBounds.Height;
+
+        if (width <= 0 || height <= 0)
+        {
+            var bounds = canvas.DeviceClipBounds;
+            width = bounds.Width;
+            height = bounds.Height;
+        }
+
+        await DrawAnnotationsAsync(canvas, width, height, renderContext, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask DrawAnnotationsAsync(
+        SKCanvas canvas,
+        int canvasWidth,
+        int canvasHeight,
         FrameRenderContext? renderContext,
         CancellationToken cancellationToken)
     {
@@ -221,7 +265,6 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         var labelFontSize = Math.Max(4f, cache.LabelFontSize);
 
-        using var canvas = new SKCanvas(bitmap);
         using var textTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
         using var textFont = new SKFont(textTypeface, labelFontSize);
         using var labelPaint = new SKPaint { IsAntialias = true, Color = cache.StarLabelColor };
@@ -269,8 +312,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             haloPaint,
             labelFont,
             labelPaint,
-            bitmap.Width,
-            bitmap.Height,
+            canvasWidth,
+            canvasHeight,
             cancellationToken,
             _logger);
 
@@ -282,8 +325,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
             haloPaint,
             labelFont,
             labelPaint,
-            bitmap.Width,
-            bitmap.Height,
+            canvasWidth,
+            canvasHeight,
             cancellationToken,
             _logger);
 
@@ -318,8 +361,8 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
                     labelFont,
                     labelPaint,
                     haloPaint,
-                    bitmap.Width,
-                    bitmap.Height,
+                    canvasWidth,
+                    canvasHeight,
                     cache.PlanetLabelColor,
                     useFaintRing: false);
             }
@@ -327,6 +370,7 @@ public sealed class CelestialAnnotationsFilter : IFrameFilter
 
         fallbackFont?.Dispose();
         fallbackTypeface?.Dispose();
+        canvas.Flush();
     }
 
     // ------- helpers (unchanged from your previous version, trimmed where possible) -------

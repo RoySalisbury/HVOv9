@@ -1,6 +1,6 @@
 # SkiaSharp Pipeline Notes
 
-_Last updated: 2025-10-16_
+_Last updated: 2025-10-15_
 
 ## Phase 0 – Baseline Inventory
 
@@ -116,6 +116,9 @@ _Last updated: 2025-10-16_
 - Refactored `FrameFilterPipeline` to rent `SkiaSurfacePool` surfaces, execute both image and bitmap filters, and return immutable `SKImage` snapshots plus telemetry updates in a single pass.
 - Expanded `FrameFilterPipelineTests` with a surface-based regression to ensure `IImageFrameFilter` implementations receive the pooled surface and produce immutable output snapshots.
 - Updated diagnostics tests and benchmark harnesses to construct pipelines with a shared `SkiaSurfacePool`, aligning test infrastructure with the new constructor contract.
+- Migrated `OverlayTextFilter` to `IImageFrameFilter`, drawing overlays on pooled linear surfaces while keeping legacy bitmap fallback; regression test now validates the FilterFrame path.
+- Migrated `DiagnosticsOverlayFilter` to the surface pipeline with updated placement assertions and pooled-surface coverage in `DiagnosticsOverlayFilterTests`.
+- Migrated `CardinalDirectionsFilter` to `IImageFrameFilter`, reusing the shared renderer for pooled surfaces and adding a FilterFrame regression in `CardinalDirectionsFilterTests` to verify projector-aligned markers.
 - Rolling stacker weighting now leverages per-frame gain via `SKPaint.ColorF` to maintain precise averages across F16, RGBA8888, and BGRA8888 inputs.
-- Next up: migrate production overlay filters to `IImageFrameFilter`, cache overlay assets, and explore concurrency/telemetry refinements before enabling parallel execution.
+- Next up: migrate the remaining overlay/diagnostics filters to `IImageFrameFilter`, cache overlay assets, and explore concurrency/telemetry refinements before enabling parallel execution.
 

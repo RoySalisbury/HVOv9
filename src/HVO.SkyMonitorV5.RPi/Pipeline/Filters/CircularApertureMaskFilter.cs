@@ -12,7 +12,7 @@ using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 
-public sealed class CircularApertureMaskFilter : IFrameFilter
+public sealed class CircularApertureMaskFilter : IImageFrameFilter
 {
 	private readonly IOptionsMonitor<CircularApertureMaskOptions> _optionsMonitor;
 
@@ -37,13 +37,62 @@ public sealed class CircularApertureMaskFilter : IFrameFilter
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 
+		using var canvas = new SKCanvas(bitmap);
+		DrawMask(canvas, bitmap.Width, bitmap.Height, renderContext, cancellationToken);
+		return ValueTask.CompletedTask;
+	}
+
+	public ValueTask ApplyAsync(
+		FilterFrame frame,
+		FrameStackResult stackResult,
+		CameraConfiguration configuration,
+		FrameRenderContext? renderContext,
+		CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		var canvas = frame.Surface.Canvas;
+		var projector = renderContext?.Projector;
+
+		var width = projector?.WidthPx
+			?? stackResult.StackedImmutableImage?.Width
+			?? stackResult.StackedImage?.Width
+			?? (int)MathF.Round(canvas.DeviceClipBounds.Width);
+		var height = projector?.HeightPx
+			?? stackResult.StackedImmutableImage?.Height
+			?? stackResult.StackedImage?.Height
+			?? (int)MathF.Round(canvas.DeviceClipBounds.Height);
+
+		if (width <= 0 || height <= 0)
+		{
+			var bounds = canvas.DeviceClipBounds;
+			width = (int)MathF.Round(bounds.Width);
+			height = (int)MathF.Round(bounds.Height);
+		}
+
+		DrawMask(canvas, width, height, renderContext, cancellationToken);
+		return ValueTask.CompletedTask;
+	}
+
+	private void DrawMask(
+		SKCanvas canvas,
+		int canvasWidth,
+		int canvasHeight,
+		FrameRenderContext? renderContext,
+		CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		if (canvasWidth <= 0 || canvasHeight <= 0)
+		{
+			return;
+		}
+
 		var options = _optionsMonitor.CurrentValue;
 
-		using var canvas = new SKCanvas(bitmap);
-
 		var projector = renderContext?.Projector;
-		var referenceWidth = projector?.WidthPx ?? bitmap.Width;
-		var referenceHeight = projector?.HeightPx ?? bitmap.Height;
+		var referenceWidth = projector?.WidthPx ?? canvasWidth;
+		var referenceHeight = projector?.HeightPx ?? canvasHeight;
 		var horizonPadding = (float)(renderContext?.HorizonPadding ?? 0.95);
 		horizonPadding = Math.Clamp(horizonPadding, 0.1f, 1.2f);
 
@@ -52,7 +101,7 @@ public sealed class CircularApertureMaskFilter : IFrameFilter
 
 		var center = projector is not null
 			? new SKPoint((float)projector.Cx, (float)projector.Cy)
-			: new SKPoint(bitmap.Width / 2f, bitmap.Height / 2f);
+			: new SKPoint(canvasWidth / 2f, canvasHeight / 2f);
 
 		center.Offset(options.OffsetXPixels, options.OffsetYPixels);
 
@@ -63,7 +112,7 @@ public sealed class CircularApertureMaskFilter : IFrameFilter
 			center.Y + radius);
 
 		using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
-		path.AddRect(new SKRect(0, 0, bitmap.Width, bitmap.Height));
+		path.AddRect(new SKRect(0, 0, canvasWidth, canvasHeight));
 		path.AddOval(circleRect);
 
 		var maskBaseColor = ResolveColor(options.MaskColor, new SKColor(0, 0, 0));
@@ -71,8 +120,7 @@ public sealed class CircularApertureMaskFilter : IFrameFilter
 
 		using var overlayPaint = new SKPaint { IsAntialias = true, Color = overlayColor };
 		canvas.DrawPath(path, overlayPaint);
-
-		return ValueTask.CompletedTask;
+		canvas.Flush();
 	}
 
 	private static SKColor ResolveColor(string? color, SKColor fallback)
