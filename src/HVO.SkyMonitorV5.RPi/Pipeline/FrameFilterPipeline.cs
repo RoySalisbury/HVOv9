@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Telemetry;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
@@ -23,16 +24,19 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
     {
         private readonly IEnumerable<IFrameFilter> _filters;
         private readonly ILogger<FrameFilterPipeline> _logger;
+        private readonly SkiaSurfacePool _surfacePool;
         private readonly FilterTelemetryStore _telemetryStore = new();
         private readonly ISkyMonitorTelemetryRecorder? _telemetryRecorder;
 
         public FrameFilterPipeline(
             IEnumerable<IFrameFilter> filters,
+            SkiaSurfacePool surfacePool,
             ILogger<FrameFilterPipeline> logger,
             ISkyMonitorTelemetryRecorder? telemetryRecorder = null)
         {
             _filters = filters ?? throw new ArgumentNullException(nameof(filters));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _surfacePool = surfacePool ?? throw new ArgumentNullException(nameof(surfacePool));
             _telemetryRecorder = telemetryRecorder;
         }
 
@@ -48,18 +52,31 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
 
             var frameContext = stackResult.Context;
 
+            FilterFrame? filterFrame = null;
+            SKBitmap? legacyBitmap = null;
+            SKImage? disposableSourceImage = null;
+
             try
             {
                 var pipelineStopwatch = Stopwatch.StartNew();
-                var copyStopwatch = Stopwatch.StartNew();
-                var copy = stackResult.StackedImage.Copy();
-                copyStopwatch.Stop();
-                if (copy is null)
+
+                var sourceImage = stackResult.StackedImmutableImage;
+                if (sourceImage is null)
                 {
-                    throw new InvalidOperationException("Unable to copy raw frame image for filter processing.");
+                    disposableSourceImage = SkiaImageUtilities.SnapshotToImmutable(null, stackResult.StackedImage)
+                        ?? throw new InvalidOperationException("Unable to snapshot stacked image for filter processing.");
+                    sourceImage = disposableSourceImage;
                 }
 
-                using var bitmap = copy;
+                var surfaceStopwatch = Stopwatch.StartNew();
+                var surfaceLease = _surfacePool.RentLinearSurface(sourceImage.Width, sourceImage.Height);
+                var surface = surfaceLease.Surface;
+                surface.Canvas.Clear(SKColors.Transparent);
+                surface.Canvas.DrawImage(sourceImage, 0, 0);
+                surface.Canvas.Flush();
+                surfaceStopwatch.Stop();
+
+                filterFrame = new FilterFrame(surfaceLease);
                 var renderContext = frameContext is not null ? new FrameRenderContext(frameContext) : null;
 
                 var appliedFilters = new List<string>();
@@ -68,6 +85,8 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 {
                     filterTimings = new List<FilterTiming>();
                 }
+
+                var legacyBitmapStale = true;
 
                 foreach (var filter in _filters)
                 {
@@ -99,7 +118,24 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     try
                     {
                         appliedFilters.Add(filter.Name);
-                        await filter.ApplyAsync(bitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
+
+                        if (filter is IImageFrameFilter imageFilter)
+                        {
+                            await imageFilter.ApplyAsync(filterFrame, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
+                            legacyBitmapStale = true;
+                        }
+                        else
+                        {
+                            if (legacyBitmap is null || legacyBitmapStale)
+                            {
+                                legacyBitmap?.Dispose();
+                                legacyBitmap = filterFrame.CreateBitmapView();
+                                legacyBitmapStale = false;
+                            }
+
+                            await filter.ApplyAsync(legacyBitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
+                            filterFrame.BlitBitmap(legacyBitmap);
+                        }
 
                         filterStopwatch.Stop();
                         var duration = filterStopwatch.Elapsed.TotalMilliseconds;
@@ -135,12 +171,11 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 var skiaFormat = ToSkiaFormat(encodingSettings.Format);
                 var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
 
-                SKImage? processedImage = null;
+                var processedImage = filterFrame.SnapshotImage();
                 byte[] bytes;
 
                 try
                 {
-                    processedImage = SKImage.FromBitmap(bitmap) ?? throw new InvalidOperationException("Unable to snapshot processed bitmap.");
                     using var data = processedImage.Encode(skiaFormat, quality);
                     if (data is null)
                     {
@@ -149,10 +184,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
 
                     bytes = data.ToArray();
                 }
-                catch
+                finally
                 {
-                    processedImage?.Dispose();
-                    throw;
+                    // filterFrame resources are released below in finally block
                 }
 
                 encodeStopwatch.Stop();
@@ -166,9 +200,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         : string.Join(", ", filterTimings.Select(t => $"{t.Filter}:{t.DurationMs:F1}ms"));
 
                     _logger.LogDebug(
-                        "Filter pipeline completed in {TotalMs}ms (copy {CopyMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
+                        "Filter pipeline completed in {TotalMs}ms (surface {SurfaceMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
                         pipelineStopwatch.Elapsed.TotalMilliseconds,
-                        copyStopwatch.Elapsed.TotalMilliseconds,
+                        surfaceStopwatch.Elapsed.TotalMilliseconds,
                         encodeStopwatch.Elapsed.TotalMilliseconds,
                         filterBreakdown);
                 }
@@ -187,6 +221,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
             }
             finally
             {
+                filterFrame?.Dispose();
+                legacyBitmap?.Dispose();
+                disposableSourceImage?.Dispose();
                 frameContext?.Dispose();
             }
         }

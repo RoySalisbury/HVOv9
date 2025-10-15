@@ -48,7 +48,8 @@ public class MockCameraCaptureBenchmarks
             scopeFactory,
             RigPresets.MockAsi174_Fujinon,
             observatoryClock,
-            NullLogger<MockCameraAdapter>.Instance);
+            NullLogger<MockCameraAdapter>.Instance,
+            preprocessingOrchestrator: null);
 
         _exposure = new ExposureSettings(ExposureMilliseconds: 1_500, Gain: 220, AutoExposure: false, AutoGain: false);
 

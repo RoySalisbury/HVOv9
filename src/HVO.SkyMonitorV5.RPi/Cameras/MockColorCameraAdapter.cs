@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras;
 
@@ -20,6 +21,7 @@ namespace HVO.SkyMonitorV5.RPi.Cameras;
 public sealed class MockColorCameraAdapter : MockCameraAdapter
 {
     private readonly ILogger<MockColorCameraAdapter>? _logger;
+    private readonly MockColorNoiseProfile _noiseProfile;
 
     public MockColorCameraAdapter(
         IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
@@ -29,7 +31,9 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
         RigSpec rigSpec,
         IObservatoryClock observatoryClock,
         ILoggerFactory? loggerFactory = null,
-        ILogger<MockColorCameraAdapter>? logger = null)
+        ILogger<MockColorCameraAdapter>? logger = null,
+        MockColorNoiseProfile? noiseProfile = null,
+        IFramePreprocessingOrchestrator? preprocessingOrchestrator = null)
         : base(
             locationMonitor,
             catalogOptions,
@@ -37,9 +41,11 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
             scopeFactory,
             rigSpec,
             observatoryClock,
-            loggerFactory?.CreateLogger<MockCameraAdapter>() ?? NullLogger<MockCameraAdapter>.Instance)
+            loggerFactory?.CreateLogger<MockCameraAdapter>() ?? NullLogger<MockCameraAdapter>.Instance,
+            preprocessingOrchestrator)
     {
         _logger = logger ?? loggerFactory?.CreateLogger<MockColorCameraAdapter>();
+        _noiseProfile = noiseProfile ?? MockColorNoiseProfile.Default;
     }
 
     protected override void ApplySensorNoise(SKBitmap bitmap, ExposureSettings exposure)
@@ -60,8 +66,9 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
             var scaledRed = Math.Clamp(red * profile.BrightnessScale, 0d, 255d);
 
             var luminanceNoise = (Random.NextDouble() - 0.5d) * 512d * profile.LuminanceNoise;
-            var chromaNoiseBlue = (Random.NextDouble() - 0.5d) * 512d * profile.ChrominanceNoise;
-            var chromaNoiseRed = (Random.NextDouble() - 0.5d) * 512d * profile.ChrominanceNoise;
+            var chromaNoiseScale = _noiseProfile.ChromaNoiseScale;
+            var chromaNoiseBlue = (Random.NextDouble() - 0.5d) * 512d * profile.ChrominanceNoise * chromaNoiseScale;
+            var chromaNoiseRed = (Random.NextDouble() - 0.5d) * 512d * profile.ChrominanceNoise * chromaNoiseScale;
 
             var twinkleBoost = 0d;
             var maxChannel = Math.Max(scaledRed, Math.Max(scaledGreen, scaledBlue));
@@ -72,8 +79,8 @@ public sealed class MockColorCameraAdapter : MockCameraAdapter
 
             var boostedBlue = (byte)Math.Clamp(scaledBlue + luminanceNoise + chromaNoiseBlue + twinkleBoost, 0d, 255d);
             var boostedRed = (byte)Math.Clamp(scaledRed + luminanceNoise + chromaNoiseRed + twinkleBoost, 0d, 255d);
-            var greenChromaCompensation = (chromaNoiseBlue + chromaNoiseRed) * 0.35d;
-            var boostedGreen = (byte)Math.Clamp(scaledGreen + luminanceNoise - greenChromaCompensation + twinkleBoost / 2d, 0d, 255d);
+            var greenChromaCompensation = (chromaNoiseBlue + chromaNoiseRed) * _noiseProfile.GreenChromaCompensationFactor;
+            var boostedGreen = (byte)Math.Clamp(scaledGreen + luminanceNoise - greenChromaCompensation + twinkleBoost * _noiseProfile.GreenTwinkleScale, 0d, 255d);
 
             span[i] = boostedBlue;
             span[i + 1] = boostedGreen;

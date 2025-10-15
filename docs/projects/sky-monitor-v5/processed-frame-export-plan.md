@@ -175,7 +175,7 @@ sequenceDiagram
 	- `FrameExportDispatcher` fan-outs to active sinks concurrently but reports aggregate success/failure per envelope.
 	- Raw and processed pipeline stages share the same configuration schema, so new sinks inherit the same option set when added.
 
-- Development S3 credentials (available via existing secret provisioning) will drive Phase 2 testing.
+- Development S3 credentials (available via existing secret provisioning) will drive Phase 2 testing. The dev MinIO profile currently lives at `192.168.2.104:9000` (no TLS); credentials remain the default `admin` / `change-me-now-32chars`.
 - Add new secrets/option keys to `docs/TODO.md` and `scripts/setup-user-secrets.sh` if extra env vars are required for exporters.
 - Provide `HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY` and `HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY` environment variables (the setup script maps them into user secrets for the raw S3 sink credentials).
 - Ensure filesystem sink default root respects container deployments (`/var/hvo/exports/frames`) and dev hosts (`artifacts/exports`).
@@ -183,7 +183,7 @@ sequenceDiagram
 
 ## Notes / Follow-Ups
 
-- Export publisher currently encodes raw frames as PNG eager snapshots; revisit once sinks can stream or reuse existing buffers.
+- Raw exports now persist immutable SKImage payloads (`*.skimg`) with metadata descriptors; PNG fallback only triggers if pixel data cannot be materialized losslessly.
 - Need concrete sink implementations and telemetry wiring in Phases 2/3 before enabling exports in production configs.
 - Diagnostics includes telemetry visualizations; add retry backlog indicators once retry channel is implemented.
 - Retry queue service is active (options, persistence, metrics); retry integration tests cover transient failure replay (`FrameExportRetryServiceTests`).

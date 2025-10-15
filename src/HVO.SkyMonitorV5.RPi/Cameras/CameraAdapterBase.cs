@@ -7,6 +7,8 @@ using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
@@ -21,15 +23,18 @@ public abstract class CameraAdapterBase : ICameraAdapter
 {
     private bool _initialized;
     private readonly IObservatoryClock? _observatoryClock;
+    private readonly IFramePreprocessingOrchestrator? _preprocessingOrchestrator;
 
     protected CameraAdapterBase(
         RigSpec rig,
         IObservatoryClock? observatoryClock = null,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        IFramePreprocessingOrchestrator? preprocessingOrchestrator = null)
     {
         Rig = rig ?? throw new ArgumentNullException(nameof(rig));
         _observatoryClock = observatoryClock;
         Logger = logger ?? NullLogger.Instance;
+        _preprocessingOrchestrator = preprocessingOrchestrator;
     }
 
     public RigSpec Rig { get; }
@@ -40,8 +45,9 @@ public abstract class CameraAdapterBase : ICameraAdapter
     /// Internal transport payload passed between pipeline stages. Subclasses can attach
     /// additional context via optional fields or the <see cref="DisposeAction"/> callback.
     /// </summary>
-    protected sealed record AdapterFrame(
+    public sealed record AdapterFrame(
         SKBitmap Bitmap,
+        SkiaPixelLease? PixelLease,
         SKImage? ImmutableImage,
         SKSurface? Surface,
         StarFieldEngine Engine,
@@ -254,7 +260,14 @@ public abstract class CameraAdapterBase : ICameraAdapter
     /// or asynchronous fan-out is required, prefer queueing that work and returning promptly.
     /// </remarks>
     protected virtual Task<Result<AdapterFrame>> PreprocessFrameAsync(AdapterFrame frame, CancellationToken cancellationToken)
-        => Task.FromResult(Result<AdapterFrame>.Success(frame));
+    {
+        if (_preprocessingOrchestrator is null)
+        {
+            return Task.FromResult(Result<AdapterFrame>.Success(frame));
+        }
+
+        return _preprocessingOrchestrator.ProcessAsync(frame, cancellationToken);
+    }
 
     /// <summary>
     /// Finalizes image adjustments before packaging. This is the common hook for stacking contributions, filter application,
@@ -297,7 +310,8 @@ public abstract class CameraAdapterBase : ICameraAdapter
     {
         var capturedImage = new CapturedImage(frameId, frame.Bitmap, frame.Timestamp, exposure, frameContext)
         {
-            ImmutableImage = frame.ImmutableImage
+            ImmutableImage = frame.ImmutableImage,
+            PixelLease = frame.PixelLease
         };
         return Task.FromResult(Result<CapturedImage>.Success(capturedImage));
     }
@@ -337,6 +351,15 @@ public abstract class CameraAdapterBase : ICameraAdapter
         try
         {
             frame.Bitmap.Dispose();
+        }
+        catch
+        {
+            // Ignore dispose failures
+        }
+
+        try
+        {
+            frame.PixelLease?.Dispose();
         }
         catch
         {

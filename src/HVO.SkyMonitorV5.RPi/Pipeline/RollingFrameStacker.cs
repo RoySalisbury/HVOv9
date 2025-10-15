@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
@@ -16,7 +17,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 /// </summary>
 public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurationListener
 {
-    private sealed record BufferedFrame(SKBitmap Image, SKImage? ImmutableImage, ExposureSettings Exposure, FrameMetadata? Metadata);
+    private sealed record BufferedFrame(SKImage Image, ExposureSettings Exposure, FrameMetadata? Metadata);
 
     private sealed record FrameMetadata(
         RigSpec Rig,
@@ -26,21 +27,14 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         double? HorizonPadding,
         bool ApplyRefraction);
 
-    private static readonly double[] SrgbToLinearLut = CreateSrgbToLinearLut();
-
     private readonly Queue<BufferedFrame> _buffer = new();
     private int _bufferedIntegrationMilliseconds;
     private readonly ILogger<RollingFrameStacker>? _logger;
+    private readonly SkiaSurfacePool _surfacePool;
 
-    private double[] _accumulatorR = Array.Empty<double>();
-    private double[] _accumulatorG = Array.Empty<double>();
-    private double[] _accumulatorB = Array.Empty<double>();
-    private double[] _accumulatorA = Array.Empty<double>();
-    private int _accumulatorWidth;
-    private int _accumulatorHeight;
-
-    public RollingFrameStacker(ILogger<RollingFrameStacker>? logger = null)
+    public RollingFrameStacker(SkiaSurfacePool surfacePool, ILogger<RollingFrameStacker>? logger = null)
     {
+        _surfacePool = surfacePool ?? throw new ArgumentNullException(nameof(surfacePool));
         _logger = logger;
     }
 
@@ -54,8 +48,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         if (!configuration.EnableStacking || configuration.StackingFrameCount <= 1)
         {
             DrainBuffer();
-            var stackedImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
-            var originalImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
+            var stackedImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image);
+            var originalImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image);
             return new FrameStackResult(
                 capture.FrameId,
                 capture.Image,
@@ -71,9 +65,9 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             };
         }
 
-    var bufferedBitmap = capture.Image.Copy() ?? throw new InvalidOperationException("Failed to copy captured bitmap for buffering.");
-    var bufferedImmutable = CreateImmutableSnapshot(capture.ImmutableImage, bufferedBitmap);
-    _buffer.Enqueue(new BufferedFrame(bufferedBitmap, bufferedImmutable, capture.Exposure, frameMetadata));
+        var bufferedImage = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image)
+            ?? throw new InvalidOperationException("Failed to create buffered immutable image snapshot.");
+        _buffer.Enqueue(new BufferedFrame(bufferedImage, capture.Exposure, frameMetadata));
         _bufferedIntegrationMilliseconds += capture.Exposure.ExposureMilliseconds;
 
         TrimBuffer(configuration);
@@ -83,8 +77,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             var framesForStackCount = Math.Min(configuration.StackingFrameCount, _buffer.Count);
             if (framesForStackCount <= 0)
             {
-                var stackedImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
-                var originalImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
+                var stackedImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image);
+                var originalImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image);
                 return new FrameStackResult(
                     capture.FrameId,
                     capture.Image,
@@ -124,8 +118,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         }
         catch
         {
-            var stackedImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
-            var originalImmutableSingle = CreateImmutableSnapshot(capture.ImmutableImage, capture.Image);
+            var stackedImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image);
+            var originalImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(capture.ImmutableImage, capture.Image);
             return new FrameStackResult(
                 capture.FrameId,
                 capture.Image,
@@ -169,8 +163,8 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
     {
         if (frames.Count == 0)
         {
-            var stackedImmutableSingle = CreateImmutableSnapshot(latestFrame.ImmutableImage, latestFrame.Image);
-            var originalImmutableSingle = CreateImmutableSnapshot(latestFrame.ImmutableImage, latestFrame.Image);
+            var stackedImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(latestFrame.ImmutableImage, latestFrame.Image);
+            var originalImmutableSingle = SkiaImageUtilities.SnapshotToImmutable(latestFrame.ImmutableImage, latestFrame.Image);
 
             return new FrameStackResult(
                 latestFrame.FrameId,
@@ -187,11 +181,11 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             };
         }
 
-        var firstBitmap = frames[0].Image;
-        int width = firstBitmap.Width;
-        int height = firstBitmap.Height;
+        var referenceImage = frames[0].Image;
+        var width = referenceImage.Width;
+        var height = referenceImage.Height;
 
-        if (width == 0 || height == 0)
+        if (width <= 0 || height <= 0)
         {
             return new FrameStackResult(
                 latestFrame.FrameId,
@@ -204,35 +198,26 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 latestFrame.Exposure.ExposureMilliseconds);
         }
 
-    EnsureAccumulatorCapacity(width, height);
-    int pixelCount = width * height;
-
-    var accR = _accumulatorR.AsSpan(0, pixelCount);
-    var accG = _accumulatorG.AsSpan(0, pixelCount);
-    var accB = _accumulatorB.AsSpan(0, pixelCount);
-    var accA = _accumulatorA.AsSpan(0, pixelCount);
-
-    accR.Clear();
-    accG.Clear();
-    accB.Clear();
-    accA.Clear();
+        using var surfaceLease = _surfacePool.RentLinearSurface(width, height);
+        var surface = surfaceLease.Surface;
+        surface.Canvas.Clear(SKColors.Transparent);
 
         var framesIncluded = new List<BufferedFrame>(frames.Count);
 
         foreach (var frame in frames)
         {
-            var bitmap = frame.Image;
-            if (bitmap.Width != width || bitmap.Height != height)
+            var image = frame.Image;
+            if (image.Width != width || image.Height != height)
             {
                 continue;
             }
 
-            AccumulateLinear(accR, accG, accB, accA, bitmap);
             framesIncluded.Add(frame);
         }
 
         if (framesIncluded.Count == 0)
         {
+            var fallbackImmutable = SkiaImageUtilities.SnapshotToImmutable(latestFrame.ImmutableImage, latestFrame.Image);
             return new FrameStackResult(
                 latestFrame.FrameId,
                 latestFrame.Image,
@@ -243,23 +228,36 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
                 1,
                 latestFrame.Exposure.ExposureMilliseconds)
             {
-                StackedImmutableImage = latestFrame.ImmutableImage,
-                OriginalImmutableImage = latestFrame.ImmutableImage
+                StackedImmutableImage = fallbackImmutable,
+                OriginalImmutableImage = fallbackImmutable
             };
         }
 
-        var stackedImage = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
-        WriteAverageFromLinear(accR, accG, accB, accA, stackedImage);
-        var stackedImmutable = CreateStackedImmutable(stackedImage);
+        using var paint = CreateWeightedPaint(framesIncluded.Count);
+
+        foreach (var buffered in framesIncluded)
+        {
+            surface.Canvas.DrawImage(buffered.Image, 0, 0, paint);
+        }
+
+        surface.Canvas.Flush();
+
+        var stackedLinearImage = surface.Snapshot()
+            ?? throw new InvalidOperationException("Failed to snapshot accumulated surface.");
+        var stackedImmutable = SkiaImageUtilities.CloneToRaster(stackedLinearImage)
+            ?? throw new InvalidOperationException("Failed to produce raster snapshot for stacked image.");
+        stackedLinearImage.Dispose();
+
+        var stackedBitmap = SkiaImageUtilities.CreateBitmapCopy(stackedImmutable);
 
         var integrationMilliseconds = CalculateIntegrationMilliseconds(framesIncluded);
         var latestBuffered = framesIncluded[^1];
-        var originalImmutable = CreateImmutableSnapshot(latestBuffered.ImmutableImage, latestBuffered.Image)
-            ?? CreateImmutableSnapshot(latestFrame.ImmutableImage, latestFrame.Image);
+        var originalImmutable = SkiaImageUtilities.CloneToRaster(latestBuffered.Image)
+            ?? SkiaImageUtilities.SnapshotToImmutable(latestFrame.ImmutableImage, latestFrame.Image);
 
         return new FrameStackResult(
             latestFrame.FrameId,
-            stackedImage,
+            stackedBitmap,
             latestFrame.Image,
             latestFrame.Timestamp,
             latestFrame.Exposure,
@@ -272,70 +270,21 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         };
     }
 
-    private static void AccumulateLinear(Span<double> accR, Span<double> accG, Span<double> accB, Span<double> accA, SKBitmap bitmap)
+    private static SKPaint CreateWeightedPaint(int frameCount)
     {
-        var bytes = bitmap.GetPixelSpan();
-        int width = bitmap.Width;
-        int height = bitmap.Height;
-        int rowBytes = bitmap.RowBytes;
-        int bpp = bitmap.BytesPerPixel;
-
-        for (int y = 0; y < height; y++)
+        if (frameCount <= 0)
         {
-            int rowOffset = y * rowBytes;
-            for (int x = 0; x < width; x++)
-            {
-                int pixelOffset = rowOffset + x * bpp;
-
-                byte b = bytes[pixelOffset + 0];
-                byte g = bytes[pixelOffset + 1];
-                byte r = bytes[pixelOffset + 2];
-                int index = y * width + x;
-
-                accR[index] += SrgbToLinear(r);
-                accG[index] += SrgbToLinear(g);
-                accB[index] += SrgbToLinear(b);
-                accA[index] += 1.0;
-            }
-        }
-    }
-
-    private static void WriteAverageFromLinear(Span<double> accR, Span<double> accG, Span<double> accB, Span<double> accA, SKBitmap bitmap)
-    {
-        var span = bitmap.GetPixelSpan();
-        int pixelCount = bitmap.Width * bitmap.Height;
-
-        for (int p = 0, i = 0; p < pixelCount; p++, i += 4)
-        {
-            double rl = accA[p] > 0 ? accR[p] / accA[p] : 0;
-            double gl = accA[p] > 0 ? accG[p] / accA[p] : 0;
-            double bl = accA[p] > 0 ? accB[p] / accA[p] : 0;
-
-            span[i + 0] = LinearToSrgb(bl);
-            span[i + 1] = LinearToSrgb(gl);
-            span[i + 2] = LinearToSrgb(rl);
-            span[i + 3] = 255;
-        }
-    }
-
-    private void EnsureAccumulatorCapacity(int width, int height)
-    {
-        if (width == _accumulatorWidth && height == _accumulatorHeight &&
-            _accumulatorR.Length >= width * height &&
-            _accumulatorG.Length >= width * height &&
-            _accumulatorB.Length >= width * height &&
-            _accumulatorA.Length >= width * height)
-        {
-            return;
+            throw new ArgumentOutOfRangeException(nameof(frameCount));
         }
 
-        int required = width * height;
-        _accumulatorR = new double[required];
-        _accumulatorG = new double[required];
-        _accumulatorB = new double[required];
-        _accumulatorA = new double[required];
-        _accumulatorWidth = width;
-        _accumulatorHeight = height;
+        var weight = 1f / frameCount;
+
+        return new SKPaint
+        {
+            BlendMode = SKBlendMode.Plus,
+            IsAntialias = false,
+            ColorF = new SKColorF(weight, weight, weight, weight)
+        };
     }
 
     private void DrainBuffer()
@@ -343,7 +292,6 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         int drained = 0;
         while (_buffer.TryDequeue(out var frame))
         {
-            frame.ImmutableImage?.Dispose();
             frame.Image.Dispose();
             drained++;
         }
@@ -365,8 +313,6 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         return total;
     }
 
-    private static SKImage? CreateStackedImmutable(SKBitmap stackedImage) => SKImage.FromBitmap(stackedImage);
-
     private void TrimBuffer(CameraConfiguration configuration)
     {
         int requiredFrames = Math.Max(configuration.StackingBufferMinimumFrames, configuration.StackingFrameCount);
@@ -382,7 +328,6 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
             if (newCount >= requiredFrames && integrationSatisfied)
             {
                 var removed = _buffer.Dequeue();
-                removed.ImmutableImage?.Dispose();
                 removed.Image.Dispose();
                 _bufferedIntegrationMilliseconds = newIntegration;
 
@@ -523,51 +468,6 @@ public sealed class RollingFrameStacker : IFrameStacker, IFrameStackerConfigurat
         var result = new BufferedFrame[stackCount];
         Array.Copy(array, startIndex, result, 0, stackCount);
         return result;
-    }
-
-    private static SKImage? CreateImmutableSnapshot(SKImage? sourceImage, SKBitmap bitmap)
-    {
-        if (sourceImage is { } immutableFromCapture)
-        {
-            var rasterized = immutableFromCapture.ToRasterImage();
-            if (rasterized is not null)
-            {
-                return rasterized;
-            }
-        }
-
-        using var pixmap = bitmap.PeekPixels();
-        if (pixmap is not null)
-        {
-            var fromPixels = SKImage.FromPixels(pixmap);
-            if (fromPixels is not null)
-            {
-                return fromPixels;
-            }
-        }
-
-        return SKImage.FromBitmap(bitmap);
-    }
-
-    private static double SrgbToLinear(byte v) => SrgbToLinearLut[v];
-
-    private static byte LinearToSrgb(double l)
-    {
-        l = Math.Clamp(l, 0.0, 1.0);
-        double c = l <= 0.0031308 ? 12.92 * l : 1.055 * Math.Pow(l, 1.0 / 2.4) - 0.055;
-        return (byte)Math.Clamp(Math.Round(c * 255.0), 0, 255);
-    }
-
-    private static double[] CreateSrgbToLinearLut()
-    {
-        var lut = new double[256];
-        for (int i = 0; i < lut.Length; i++)
-        {
-            double c = i / 255.0;
-            lut[i] = c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
-        }
-
-        return lut;
     }
 
     public void Dispose()

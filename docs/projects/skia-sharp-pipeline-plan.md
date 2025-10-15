@@ -13,22 +13,26 @@
 
 ## Phase 1 – Acquisition & Raw Frame Capture
 
-- [ ] Update real camera ingestion to wrap native buffers with `SKPixmap` → `SKImage` (`RgbaF16`, linear).
-- [ ] Render synthetic/starfield frames on linear `SKSurface` and snapshot to `SKImage` with noise applied.
-- [ ] Normalize capture abstractions to expose immutable `SKImage` plus metadata to downstream consumers.
-- [ ] Update raw-frame S3 uploader to persist high-bit `SKImage` masters without premature 8-bit conversion.
+- [x] Update real camera ingestion to wrap native buffers with `SKPixmap` → `SKImage` (`RgbaF16`, linear).
+- [x] Render synthetic/starfield frames on linear `SKSurface` and snapshot to `SKImage` with noise applied.
+- [x] Normalize capture abstractions to expose immutable `SKImage` plus metadata to downstream consumers.
+- [x] Update raw-frame S3 uploader to persist high-bit `SKImage` masters without premature 8-bit conversion.
+
+> Status: ✅ Completed 2025-10-14. All follow-up work rolls into Phase 2.
 
 ## Phase 2 – Preprocessing & Calibration
 
-- [ ] Introduce preprocessing orchestrator that pulls `SKImage` into pooled `SKSurface` instances for demosaic/calibration.
-- [ ] Reserve `SKBitmap` for CPU-only steps; convert back to `SKImage` immediately after mutation.
-- [ ] Expand calibration tests to verify scientific accuracy and bit-depth preservation post-refactor.
+- [x] Convert capture adapters to expose zero-copy `SKPixmap` leases, eliminating transient `SKBitmap` clones.
+- [x] Promote `RollingFrameStacker` (and supporting helpers) to accumulate on pooled linear `SKSurface` instances.
+- [x] Introduce preprocessing orchestrator that pulls `SKImage` into pooled `SKSurface` instances for demosaic/calibration.
+- [x] Reserve `SKBitmap` for CPU-only steps; convert back to `SKImage` immediately after mutation.
+- [x] Expand calibration tests to verify scientific accuracy and bit-depth preservation post-refactor (added F16 + linear 8-bit color-preservation coverage in `FramePreprocessingOrchestratorTests` and `RollingFrameStackerTests`).
 
 ## Phase 3 – Filter Pipeline Refactor
 
-- [ ] Define filter interface accepting `SKImage` and emitting `SKImage`, with helpers for safe pixel mutation.
-- [ ] Move filter implementations to dedicated `SKSurface` workflows, sharing cached shader state.
-- [ ] Enable configuration-driven parallel execution with bounded schedulers and thread-safe resource handling.
+- [x] Define filter interface accepting `SKImage` and emitting `SKImage`, with helpers for safe pixel mutation. (`IImageFrameFilter`, `FilterFrame`, and pooled `SkiaSurfacePool` integration in `FrameFilterPipeline`.)
+- [ ] Move filter implementations to dedicated `SKSurface` workflows, sharing cached shader state. (Pipeline scaffolding is in place; need to migrate individual filters.)
+- [ ] Enable configuration-driven parallel execution with bounded schedulers and thread-safe resource handling. Big question here is if the shared StarFieldEngine and projector can be utilized safely or if we need to stick with synchronous filter execution.
 - [ ] Add per-filter unit tests comparing output to legacy expectations.
 
 ## Phase 4 – Overlay Asset Strategy
@@ -62,3 +66,6 @@
 - [ ] Benchmark GPU-backed surfaces vs CPU-only for overlays (if applicable).
 - [ ] Evaluate memory pressure of storing high-bit `SKImage` masters in queues at target frame rates.
 - [ ] Confirm third-party consumers (e.g., analytics jobs) can ingest new SKImage-based outputs without modification.
+- [x] Add overlay filter colour-preservation regression (e.g., `OverlayTextFilter` on pooled linear surfaces) (`OverlayTextFilterTests`).
+- [x] Validate gamma correctness for sRGB capture inputs by comparing linear vs legacy pipelines (`FramePreprocessingOrchestratorTests`, `RollingFrameStackerTests`).
+- [x] Cover monochrome sensor stacking with luminance-only gradient fixtures to confirm weighting mirrors colour path (`FramePreprocessingOrchestratorTests`, `RollingFrameStackerTests`).

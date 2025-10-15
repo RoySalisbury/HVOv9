@@ -1,4 +1,5 @@
 using System;
+using HVO.SkyMonitorV5.RPi.Skia;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
@@ -14,4 +15,5 @@ public sealed record CapturedImage(
     FrameContext? Context)
 {
     public SKImage? ImmutableImage { get; init; }
+    public SkiaPixelLease? PixelLease { get; init; }
 }

@@ -18,6 +18,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
+using HVO.SkyMonitorV5.RPi.Skia;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras;
 
@@ -69,11 +71,13 @@ public class MockCameraAdapter : CameraAdapterBase
         IServiceScopeFactory scopeFactory,
         RigSpec rigSpec,
         IObservatoryClock observatoryClock,
-        ILogger<MockCameraAdapter>? logger = null)
+        ILogger<MockCameraAdapter>? logger = null,
+        IFramePreprocessingOrchestrator? preprocessingOrchestrator = null)
         : base(
             EnsureRigDescriptor(rigSpec),
             observatoryClock,
-            logger ?? NullLogger<MockCameraAdapter>.Instance)
+            logger ?? NullLogger<MockCameraAdapter>.Instance,
+            preprocessingOrchestrator)
     {
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _catalogOptions = catalogOptions ?? throw new ArgumentNullException(nameof(catalogOptions));
@@ -101,8 +105,9 @@ public class MockCameraAdapter : CameraAdapterBase
 
     protected override async Task<Result<AdapterFrame>> AcquireImageAsync(ExposureSettings exposure, CancellationToken cancellationToken)
     {
-    SKSurface? starfieldSurface = null;
-    SKBitmap? starfield = null;
+        SKSurface? starfieldSurface = null;
+        SKBitmap? starfield = null;
+        SkiaPixelLease? pixelLease = null;
         StarFieldEngine? engine = null;
         try
         {
@@ -219,8 +224,11 @@ public class MockCameraAdapter : CameraAdapterBase
             starfieldSurface.Canvas?.Flush();
 
             var frameTimestamp = captureInstant;
+            pixelLease = SkiaPixelLease.FromBitmap(starfield, disposeBitmap: false);
+
             var adapterFrame = new AdapterFrame(
                 starfield,
+                PixelLease: pixelLease,
                 ImmutableImage: null,
                 starfieldSurface,
                 engine,
@@ -238,6 +246,7 @@ public class MockCameraAdapter : CameraAdapterBase
             starfield = null;
             engine = null;
             starfieldSurface = null;
+            pixelLease = null;
 
             return Result<AdapterFrame>.Success(adapterFrame);
         }
@@ -260,6 +269,7 @@ public class MockCameraAdapter : CameraAdapterBase
             engine?.Dispose();
             starfield?.Dispose();
             starfieldSurface?.Dispose();
+            pixelLease?.Dispose();
         }
     }
 

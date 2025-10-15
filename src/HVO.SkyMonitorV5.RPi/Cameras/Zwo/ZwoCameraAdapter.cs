@@ -14,6 +14,8 @@ using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Skia;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using HVO.ZWOOptical.ASISDK;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -60,11 +62,13 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         IOptionsMonitor<ObservatoryLocationOptions> locationMonitor,
         IOptionsMonitor<CardinalDirectionsOptions> cardinalMonitor,
         ILoggerFactory? loggerFactory,
-        ILogger<ZwoCameraAdapter>? logger = null)
+        ILogger<ZwoCameraAdapter>? logger = null,
+        IFramePreprocessingOrchestrator? preprocessingOrchestrator = null)
         : base(
             EnsureRigDescriptor(rig),
             clock,
-            logger ?? loggerFactory?.CreateLogger<ZwoCameraAdapter>() ?? NullLogger<ZwoCameraAdapter>.Instance)
+            logger ?? loggerFactory?.CreateLogger<ZwoCameraAdapter>() ?? NullLogger<ZwoCameraAdapter>.Instance,
+            preprocessingOrchestrator)
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
@@ -190,11 +194,12 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
             return Task.FromResult(Result<AdapterFrame>.Failure(error));
         }
 
-    FrameBufferLease? lease = null;
-    SKBitmap? bitmap = null;
-    SKImage? immutableImage = null;
-    StarFieldEngine? engine = null;
-    var captureSucceeded = false;
+        FrameBufferLease? lease = null;
+        SKBitmap? bitmap = null;
+        SkiaPixelLease? pixelLease = null;
+        SKImage? immutableImage = null;
+        StarFieldEngine? engine = null;
+        var captureSucceeded = false;
 
         try
         {
@@ -210,6 +215,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
             }
 
             bitmap = CreateBitmapFromCapture(lease, captureArea);
+            pixelLease = SkiaPixelLease.FromBitmap(bitmap, disposeBitmap: false);
 
             if (lease is not null && lease.IsAllocated)
             {
@@ -236,6 +242,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
 
             var frame = new AdapterFrame(
                 Bitmap: bitmap,
+                PixelLease: pixelLease,
                 ImmutableImage: immutableImage,
                 Surface: null,
                 Engine: engine,
@@ -249,6 +256,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
 
             bitmap = null;
             immutableImage = null;
+            pixelLease = null;
             engine = null;
             captureSucceeded = true;
 
@@ -271,6 +279,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
                 lease?.Dispose();
                 bitmap?.Dispose();
                 immutableImage?.Dispose();
+                pixelLease?.Dispose();
                 engine?.Dispose();
             }
         }

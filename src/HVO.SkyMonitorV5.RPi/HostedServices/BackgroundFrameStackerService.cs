@@ -590,8 +590,13 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
     {
         if (disposeImage)
         {
+            workItem.Capture.PixelLease?.Dispose();
             workItem.Capture.Image?.Dispose();
             workItem.Capture.ImmutableImage?.Dispose();
+        }
+        else
+        {
+            workItem.Capture.PixelLease?.Dispose();
         }
 
         workItem.Capture.Context?.Dispose();

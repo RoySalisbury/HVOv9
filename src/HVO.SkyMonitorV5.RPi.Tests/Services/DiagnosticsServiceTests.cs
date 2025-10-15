@@ -9,6 +9,7 @@ using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Telemetry;
 using HVO.SkyMonitorV5.RPi.Exports;
@@ -165,9 +166,11 @@ public sealed class DiagnosticsServiceTests
     public async Task GetFilterMetricsAsync_UsesPipelineTelemetrySnapshot()
     {
         var frameStateStore = new Mock<IFrameStateStore>();
+        using var surfacePool = new SkiaSurfacePool();
 
         var pipeline = new FrameFilterPipeline(
             Array.Empty<HVO.SkyMonitorV5.RPi.Pipeline.Filters.IFrameFilter>(),
+            surfacePool,
             NullLogger<FrameFilterPipeline>.Instance);
 
         var service = CreateService(frameStateStore.Object, pipeline);

@@ -634,9 +634,16 @@ public sealed class AllSkyCaptureService : BackgroundService
 
         if (!usingBackgroundStacker || !enqueued)
         {
-            var (stack, filter) = await ProcessFrameSynchronouslyAsync(frameNumber, capturedFrame, configuration, stoppingToken).ConfigureAwait(false);
-            stackMs = stack;
-            filterMs = filter;
+            try
+            {
+                var (stack, filter) = await ProcessFrameSynchronouslyAsync(frameNumber, capturedFrame, configuration, stoppingToken).ConfigureAwait(false);
+                stackMs = stack;
+                filterMs = filter;
+            }
+            finally
+            {
+                capturedFrame.PixelLease?.Dispose();
+            }
         }
 
         return new ProcessingResult(usingBackgroundStacker, enqueued, stackMs, filterMs, enqueueMs, capturedAtLocal);

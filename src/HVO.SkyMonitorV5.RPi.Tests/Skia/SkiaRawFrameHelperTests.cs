@@ -41,4 +41,60 @@ public sealed class SkiaRawFrameHelperTests
         Assert.AreEqual(info.Height, descriptor.Height, "Descriptor height should match bitmap.");
         Assert.AreEqual(info.BytesPerPixel, descriptor.BytesPerPixel, "Bytes-per-pixel should map to bitmap info.");
     }
+
+    [TestMethod]
+    public void CloneToRaster_ReturnsIndependentImageAfterSourceDisposed()
+    {
+        var info = new SKImageInfo(8, 8, SKColorType.RgbaF16, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info) ?? throw new AssertFailedException("Failed to allocate test surface.");
+        surface.Canvas.Clear(new SKColorF(0.25f, 0.5f, 0.75f, 1f));
+
+        using var snapshot = surface.Snapshot() ?? throw new AssertFailedException("Failed to snapshot surface.");
+        var clone = SkiaImageUtilities.CloneToRaster(snapshot);
+
+        Assert.IsNotNull(clone, "Clone should succeed for a simple snapshot.");
+
+        snapshot.Dispose();
+
+        Assert.AreNotEqual(IntPtr.Zero, clone!.Handle, "Cloned image should expose a valid native handle after source disposal.");
+        Assert.AreEqual(info.Width, clone.Width, "Clone should retain the original width.");
+        Assert.AreEqual(info.Height, clone.Height, "Clone should retain the original height.");
+
+        using var pixmap = clone.PeekPixels();
+        Assert.IsNotNull(pixmap, "Cloned image should provide raster pixels.");
+
+        clone.Dispose();
+    }
+
+    [TestMethod]
+    public void CloneToRaster_FromPreprocessingSurfaceProducesStableImage()
+    {
+        var sourceInfo = new SKImageInfo(8, 6, SKColorType.RgbaF16, SKAlphaType.Premul);
+        using var sourceSurface = SKSurface.Create(sourceInfo) ?? throw new AssertFailedException("Failed to create source surface.");
+        sourceSurface.Canvas.Clear(new SKColorF(0.3f, 0.4f, 0.5f, 1f));
+
+        using var sourceSnapshot = sourceSurface.Snapshot() ?? throw new AssertFailedException("Failed to snapshot source surface.");
+        var immutable = SkiaImageUtilities.CloneToRaster(sourceSnapshot) ?? throw new AssertFailedException("Clone from source surface failed.");
+
+        using var preprocessingSurface = SKSurface.Create(sourceInfo) ?? throw new AssertFailedException("Failed to create preprocessing surface.");
+        preprocessingSurface.Canvas.Clear(SKColors.Transparent);
+        preprocessingSurface.Canvas.DrawImage(immutable, 0, 0);
+        preprocessingSurface.Canvas.Flush();
+
+        using var processedSnapshot = preprocessingSurface.Snapshot() ?? throw new AssertFailedException("Failed to snapshot preprocessing surface.");
+        var processedClone = SkiaImageUtilities.CloneToRaster(processedSnapshot);
+
+        Assert.IsNotNull(processedClone, "Processed clone should be produced.");
+
+        processedSnapshot.Dispose();
+        immutable.Dispose();
+
+        Assert.AreEqual(sourceInfo.Width, processedClone!.Width, "Processed clone should retain width after source disposal.");
+        Assert.AreEqual(sourceInfo.Height, processedClone.Height, "Processed clone should retain height after source disposal.");
+
+        using var processedPixmap = processedClone.PeekPixels();
+        Assert.IsNotNull(processedPixmap, "Processed clone should expose pixels.");
+
+        processedClone.Dispose();
+    }
 }

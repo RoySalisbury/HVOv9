@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SkiaSharp;
@@ -22,7 +23,8 @@ public sealed class FrameFilterPipelineTests
         using var stackResult = CreateStackResult();
 
         var filter = new CapturingTestFilter("TestFilter");
-        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, NullLogger<FrameFilterPipeline>.Instance);
+        using var surfacePool = new SkiaSurfacePool();
+        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, surfacePool, NullLogger<FrameFilterPipeline>.Instance);
 
         var processed = await pipeline.ProcessAsync(stackResult.Result, configuration, CancellationToken.None);
 
@@ -43,7 +45,7 @@ public sealed class FrameFilterPipelineTests
         Assert.AreEqual(1, entry.AppliedCount);
         Assert.IsTrue(entry.LastDurationMilliseconds >= 0);
 
-    processed.ImmutableImage?.Dispose();
+        processed.ImmutableImage?.Dispose();
     }
 
     [TestMethod]
@@ -54,7 +56,8 @@ public sealed class FrameFilterPipelineTests
         {
             await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken).ConfigureAwait(false);
         });
-        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, NullLogger<FrameFilterPipeline>.Instance);
+        using var surfacePool = new SkiaSurfacePool();
+        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, surfacePool, NullLogger<FrameFilterPipeline>.Instance);
 
         using (var stack1 = CreateStackResult())
         {
@@ -73,7 +76,36 @@ public sealed class FrameFilterPipelineTests
         var entry = metrics.Filters[0];
         Assert.AreEqual(2, entry.AppliedCount, "Running the pipeline twice should increment applied count.");
         Assert.IsTrue(entry.LastDurationMilliseconds is >= 0, "Last duration should be populated.");
-    Assert.IsTrue(entry.AverageDurationMilliseconds is >= 0, "Average duration should be calculated.");
+        Assert.IsTrue(entry.AverageDurationMilliseconds is >= 0, "Average duration should be calculated.");
+    }
+
+    [TestMethod]
+    public async Task ProcessAsync_InvokesImageFrameFilter()
+    {
+        var configuration = CreateConfiguration("SurfaceFilter");
+        var filter = new SurfaceFillFilter();
+        using var surfacePool = new SkiaSurfacePool();
+        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, surfacePool, NullLogger<FrameFilterPipeline>.Instance);
+
+        using var stack = CreateStackResult();
+        var processed = await pipeline.ProcessAsync(stack.Result, configuration, CancellationToken.None);
+
+        Assert.AreEqual(1, processed.AppliedFilters.Count, "Surface filter should be recorded as applied.");
+        Assert.AreEqual("SurfaceFilter", processed.AppliedFilters[0]);
+        Assert.AreEqual(1, filter.InvocationCount, "Image-based filter should be invoked exactly once.");
+
+        Assert.IsNotNull(processed.ImmutableImage, "Pipeline should materialize an immutable output image.");
+        var snapshot = processed.ImmutableImage!;
+        var info = new SKImageInfo(snapshot.Width, snapshot.Height, SKColorType.Rgba8888);
+        using var bitmap = new SKBitmap(info);
+        Assert.IsTrue(snapshot.ReadPixels(info, bitmap.GetPixels(), bitmap.RowBytes), "Processed immutable image should be readable.");
+
+        var pixel = bitmap.GetPixel(0, 0);
+    Assert.IsTrue(pixel.Red >= 200, "Surface filter should produce a strong red component.");
+    Assert.IsTrue(pixel.Green <= 10, "Surface filter should suppress the green channel.");
+    Assert.IsTrue(pixel.Blue <= 10, "Surface filter should suppress the blue channel.");
+
+        snapshot.Dispose();
     }
 
     private static CameraConfiguration CreateConfiguration(string filterName)
@@ -114,7 +146,13 @@ public sealed class FrameFilterPipelineTests
         var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
         var stacked = new SKBitmap(width: 8, height: 8);
         var original = new SKBitmap(width: 8, height: 8);
-        var stackResult = new FrameStackResult(frameId, stacked, original, timestamp, exposure, frameContext, FramesStacked: 1, IntegrationMilliseconds: exposure.ExposureMilliseconds);
+        var stackedImage = SKImage.FromBitmap(stacked) ?? throw new InvalidOperationException("Unable to snapshot stacked bitmap for test harness.");
+        var originalImage = SKImage.FromBitmap(original) ?? throw new InvalidOperationException("Unable to snapshot original bitmap for test harness.");
+        var stackResult = new FrameStackResult(frameId, stacked, original, timestamp, exposure, frameContext, FramesStacked: 1, IntegrationMilliseconds: exposure.ExposureMilliseconds)
+        {
+            StackedImmutableImage = stackedImage,
+            OriginalImmutableImage = originalImage
+        };
 
         return new StackResultHarness(stackResult, () => disposed, stacked, original);
     }
@@ -150,6 +188,29 @@ public sealed class FrameFilterPipelineTests
             {
                 await _onApplyAsync.Invoke(cancellationToken).ConfigureAwait(false);
             }
+        }
+    }
+
+    private sealed class SurfaceFillFilter : IImageFrameFilter
+    {
+        public string Name => "SurfaceFilter";
+
+        public int InvocationCount { get; private set; }
+
+        public bool ShouldApply(CameraConfiguration configuration) => true;
+
+        public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken)
+            => ValueTask.CompletedTask;
+
+        public async ValueTask ApplyAsync(FilterFrame frame, FrameStackResult stackResult, CameraConfiguration configuration, FrameRenderContext? renderContext, CancellationToken cancellationToken)
+        {
+            InvocationCount++;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var paint = new SKPaint { Color = new SKColor(255, 32, 32, 255), IsAntialias = false };
+            frame.Surface.Canvas.DrawRect(new SKRect(0, 0, frame.Surface.Canvas.DeviceClipBounds.Width, frame.Surface.Canvas.DeviceClipBounds.Height), paint);
+            frame.Surface.Canvas.Flush();
+            await ValueTask.CompletedTask.ConfigureAwait(false);
         }
     }
 

@@ -6,6 +6,7 @@ using BenchmarkDotNet.Attributes;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
 
@@ -17,6 +18,7 @@ public class FrameFilterPipelineBenchmarks
     private FrameFilterPipeline _pipeline = default!;
     private CameraConfiguration _configuration = default!;
     private SyntheticFilter[] _filters = Array.Empty<SyntheticFilter>();
+    private SkiaSurfacePool _surfacePool = default!;
 
     [Params(1, 3, 5)]
     public int FilterCount { get; set; }
@@ -31,7 +33,8 @@ public class FrameFilterPipelineBenchmarks
             .Select(index => new SyntheticFilter($"Synthetic_{index}", strokes: 16 + index * 8))
             .ToArray();
 
-        _pipeline = new FrameFilterPipeline(_filters, NullLogger<FrameFilterPipeline>.Instance);
+        _surfacePool = new SkiaSurfacePool();
+        _pipeline = new FrameFilterPipeline(_filters, _surfacePool, NullLogger<FrameFilterPipeline>.Instance);
 
         _configuration = new CameraConfiguration(
             EnableStacking: true,
@@ -42,6 +45,12 @@ public class FrameFilterPipelineBenchmarks
             StackingBufferIntegrationSeconds: 10,
             FrameFilters: _filters.Select(filter => filter.Name).ToArray(),
             ProcessedImageEncoding: new ImageEncodingSettings());
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        _surfacePool.Dispose();
     }
 
     [Benchmark(Description = "Process stacked frame with synthetic filters")]

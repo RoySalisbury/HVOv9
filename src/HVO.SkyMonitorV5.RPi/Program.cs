@@ -18,12 +18,14 @@ using HVO.SkyMonitorV5.RPi.HostedServices;
 using HVO.SkyMonitorV5.RPi.Middleware;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
+using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Infrastructure.Resilience;
@@ -260,9 +262,11 @@ public static class Program
 
         services.AddSingleton<IFrameStateStore, FrameStateStore>();
 
-        services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
-        services.AddSingleton<IExposureController, AdaptiveExposureController>();
-        services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+    services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
+    services.AddSingleton<IExposureController, AdaptiveExposureController>();
+    services.AddSingleton<SkiaSurfacePool>();
+    services.AddSingleton<IFramePreprocessingOrchestrator, FramePreprocessingOrchestrator>();
+    services.AddSingleton<IFrameStacker, RollingFrameStacker>();
         services.AddSingleton<IMinioClientProvider, MinioClientProvider>();
         services.AddSingleton<IRemoteFrameEncoder, SkiaRemoteFrameEncoder>();
         services.AddSingleton<IRemoteFramePublisher, RemoteFramePublisher>();
@@ -434,7 +438,9 @@ public static class Program
                     rigSpec,
                     observatoryClock,
                     loggerFactory,
-                    sp.GetService<ILogger<MockColorCameraAdapter>>());
+                    sp.GetService<ILogger<MockColorCameraAdapter>>(),
+                    noiseProfile: null,
+                    preprocessingOrchestrator: sp.GetService<IFramePreprocessingOrchestrator>());
             }
 
             if (CameraAdapterTypes.IsMock(adapterOptions.Adapter))
@@ -446,7 +452,8 @@ public static class Program
                     sp.GetRequiredService<IServiceScopeFactory>(),
                     rigSpec,
                     observatoryClock,
-                    sp.GetService<ILogger<MockCameraAdapter>>());
+                    sp.GetService<ILogger<MockCameraAdapter>>(),
+                    preprocessingOrchestrator: sp.GetService<IFramePreprocessingOrchestrator>());
             }
 
             if (CameraAdapterTypes.IsZwo(adapterOptions.Adapter))
@@ -457,7 +464,8 @@ public static class Program
                     sp.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>(),
                     sp.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>(),
                     loggerFactory,
-                    sp.GetService<ILogger<ZwoCameraAdapter>>());
+                    sp.GetService<ILogger<ZwoCameraAdapter>>(),
+                    sp.GetService<IFramePreprocessingOrchestrator>());
             }
 
             throw new InvalidOperationException($"Unsupported camera adapter type '{adapterOptions.Adapter}'.");

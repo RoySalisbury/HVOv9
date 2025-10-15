@@ -7,6 +7,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -58,6 +59,7 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
         var starCatalogOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>();
         var cardinalOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>();
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
+            var preprocessor = _serviceProvider.GetService<IFramePreprocessingOrchestrator>();
 
         var colorMode = rig.Camera.Capabilities.ColorMode;
         if (colorMode is CameraColorMode.Color or CameraColorMode.Switchable)
@@ -70,7 +72,9 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
                 rig,
                 clock,
                 _serviceProvider.GetService<ILoggerFactory>(),
-                _serviceProvider.GetService<ILogger<MockColorCameraAdapter>>());
+                    _serviceProvider.GetService<ILogger<MockColorCameraAdapter>>(),
+                    noiseProfile: null,
+                    preprocessingOrchestrator: preprocessor);
         }
 
         return new MockCameraAdapter(
@@ -80,7 +84,8 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
             scopeFactory,
             rig,
             clock,
-            _serviceProvider.GetService<ILogger<MockCameraAdapter>>());
+                _serviceProvider.GetService<ILogger<MockCameraAdapter>>(),
+                preprocessingOrchestrator: preprocessor);
     }
 
     private ICameraAdapter CreateZwoAdapter(RigSpec rig)
@@ -95,6 +100,7 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
             locationOptions,
             cardinalOptions,
             loggerFactory,
-            _serviceProvider.GetService<ILogger<ZwoCameraAdapter>>());
+                _serviceProvider.GetService<ILogger<ZwoCameraAdapter>>(),
+                _serviceProvider.GetService<IFramePreprocessingOrchestrator>());
     }
 }
