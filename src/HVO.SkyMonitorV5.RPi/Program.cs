@@ -20,6 +20,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Pipeline.Overlays;
 using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
@@ -266,6 +267,7 @@ public static class Program
     services.AddSingleton<IExposureController, AdaptiveExposureController>();
     services.AddSingleton<SkiaSurfacePool>();
     services.AddSingleton<IFramePreprocessingOrchestrator, FramePreprocessingOrchestrator>();
+    services.AddSingleton<OverlayAssetCache>();
     services.AddSingleton<IFrameStacker, RollingFrameStacker>();
         services.AddSingleton<IMinioClientProvider, MinioClientProvider>();
         services.AddSingleton<IRemoteFrameEncoder, SkiaRemoteFrameEncoder>();

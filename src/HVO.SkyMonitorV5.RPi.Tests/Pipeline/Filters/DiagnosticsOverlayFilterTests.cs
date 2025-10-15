@@ -32,8 +32,8 @@ public sealed class DiagnosticsOverlayFilterTests
             ShowContextFlags = true
         });
 
-    var filter = new DiagnosticsOverlayFilter(optionsMonitor, NullLogger<DiagnosticsOverlayFilter>.Instance);
-    var options = optionsMonitor.CurrentValue;
+        using var filter = new DiagnosticsOverlayFilter(optionsMonitor, NullLogger<DiagnosticsOverlayFilter>.Instance);
+        var options = optionsMonitor.CurrentValue;
 
         const int width = 320;
         const int height = 240;
@@ -88,6 +88,7 @@ public sealed class DiagnosticsOverlayFilterTests
         var minY = height;
         var maxX = -1;
         var maxY = -1;
+        var partiallyBlendedEdgePixels = 0;
 
         for (var y = 0; y < height; y++)
         {
@@ -109,6 +110,10 @@ public sealed class DiagnosticsOverlayFilterTests
                         minY = Math.Min(minY, y);
                         maxX = Math.Max(maxX, x);
                         maxY = Math.Max(maxY, y);
+                        if (delta < 0.6f)
+                        {
+                            partiallyBlendedEdgePixels++;
+                        }
                         break;
                     }
                 }
@@ -120,13 +125,14 @@ public sealed class DiagnosticsOverlayFilterTests
             }
         }
 
-    Assert.IsTrue(changeDetected, "Diagnostics overlay should modify pixels within the overlay bounds.");
-    var centerX = (minX + maxX) / 2.0f;
-    var overlayHeight = maxY - minY;
-    Assert.IsTrue(centerX > width / 2f, "Diagnostics overlay should be anchored on the right half for TopRight corner.");
-    Assert.IsTrue(maxX > width * 0.75f, "Diagnostics overlay should reach near the right edge for TopRight corner.");
-    Assert.IsTrue(minY <= options.Margin + 6f, $"Diagnostics overlay should start near the configured margin; observed top {minY} with margin {options.Margin}.");
-    Assert.IsTrue(overlayHeight < height - options.Margin, $"Diagnostics overlay height {overlayHeight} should leave space below the block for TopRight corner.");
+        Assert.IsTrue(changeDetected, "Diagnostics overlay should modify pixels within the overlay bounds.");
+        var centerX = (minX + maxX) / 2.0f;
+        var overlayHeight = maxY - minY;
+        Assert.IsTrue(centerX > width / 2f, "Diagnostics overlay should be anchored on the right half for TopRight corner.");
+        Assert.IsTrue(maxX > width * 0.75f, "Diagnostics overlay should reach near the right edge for TopRight corner.");
+        Assert.IsTrue(minY <= options.Margin + 6f, $"Diagnostics overlay should start near the configured margin; observed top {minY} with margin {options.Margin}.");
+        Assert.IsTrue(overlayHeight < height - options.Margin, $"Diagnostics overlay height {overlayHeight} should leave space below the block for TopRight corner.");
+        Assert.IsTrue(partiallyBlendedEdgePixels > 0, "Expected partially blended edge pixels validating antialiasing on linear surfaces.");
 
         for (var y = 0; y < height; y++)
         {
@@ -155,7 +161,7 @@ public sealed class DiagnosticsOverlayFilterTests
     public async Task ApplyAsync_FilterFrame_SkipsWhenRenderContextMissing()
     {
         using var optionsMonitor = new TestOptionsMonitor<DiagnosticsOverlayOptions>(new DiagnosticsOverlayOptions { Enabled = true });
-        var filter = new DiagnosticsOverlayFilter(optionsMonitor, NullLogger<DiagnosticsOverlayFilter>.Instance);
+        using var filter = new DiagnosticsOverlayFilter(optionsMonitor, NullLogger<DiagnosticsOverlayFilter>.Instance);
 
         const int width = 240;
         const int height = 180;

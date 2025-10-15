@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using GeoTimeZone;
@@ -14,12 +15,17 @@ using TimeZoneConverter;
 
 namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 
-public sealed class OverlayTextFilter : IImageFrameFilter
+public sealed class OverlayTextFilter : IImageFrameFilter, IDisposable
 {
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
     private readonly object _timeZoneSync = new();
+    private readonly object _overlaySync = new();
+    private readonly IDisposable? _optionsReload;
     private CachedTimeZone? _cachedTimeZone;
+    private CachedOverlayImage? _cachedOverlay;
+
+    private static readonly SKColorSpace LinearSrgbColorSpace = SKColorSpace.CreateSrgbLinear();
 
     public OverlayTextFilter(
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
@@ -28,7 +34,12 @@ public sealed class OverlayTextFilter : IImageFrameFilter
         _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
 
-        _locationMonitor.OnChange(_ => InvalidateTimeZoneCache());
+        _locationMonitor.OnChange(_ =>
+        {
+            InvalidateTimeZoneCache();
+            InvalidateOverlayCache();
+        });
+        _optionsReload = _optionsMonitor.OnChange(_ => InvalidateOverlayCache());
     }
 
     public string Name => FrameFilterNames.OverlayText;
@@ -47,8 +58,8 @@ public sealed class OverlayTextFilter : IImageFrameFilter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        using var canvas = new SKCanvas(bitmap);
-        DrawOverlay(canvas, bitmap.Width, bitmap.Height, stackResult, renderContext, cancellationToken);
+    using var canvas = new SKCanvas(bitmap);
+    DrawOverlay(canvas, bitmap.Width, bitmap.Height, stackResult, renderContext, cancellationToken);
 
         return ValueTask.CompletedTask;
     }
@@ -73,16 +84,7 @@ public sealed class OverlayTextFilter : IImageFrameFilter
             height = bounds.Height;
         }
 
-        canvas.Save();
-        try
-        {
-            DrawOverlay(canvas, width, height, stackResult, renderContext, cancellationToken);
-        }
-        finally
-        {
-            canvas.Restore();
-            canvas.Flush();
-        }
+        DrawOverlay(canvas, width, height, stackResult, renderContext, cancellationToken);
 
         return ValueTask.CompletedTask;
     }
@@ -93,6 +95,7 @@ public sealed class OverlayTextFilter : IImageFrameFilter
         {
             _cachedTimeZone = null;
         }
+        InvalidateOverlayCache();
     }
 
     private void DrawOverlay(
@@ -113,14 +116,6 @@ public sealed class OverlayTextFilter : IImageFrameFilter
         var timestamp = renderContext?.Timestamp ?? stackResult.Timestamp;
         var localTimestamp = TimeZoneInfo.ConvertTime(timestamp, timeZone.TimeZone);
 
-        using var boldTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
-        using var regularTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
-        using var titleFont = new SKFont(boldTypeface, 24);
-        using var subtitleFont = new SKFont(regularTypeface, 18);
-        using var titlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(173, 216, 230, 235) };
-        using var subtitlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(211, 211, 211, 230) };
-        using var backgroundPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 160) };
-
         var locationText = $"Lat: {FormatLatitude(latitude)} | Lon: {FormatLongitude(longitude)}";
         var timestampText = $"Local Time ({timeZone.DisplayId}): {localTimestamp.ToString(options.OverlayTextFormat)}";
         var exposureText = $"Exposure: {stackResult.Exposure.ExposureMilliseconds} ms | Gain: {stackResult.Exposure.Gain}";
@@ -137,70 +132,30 @@ public sealed class OverlayTextFilter : IImageFrameFilter
             rigText = $"Rig: {rig.Name} | Lens: {lensLabel} ({lens.FocalLengthMm:0.0} mm)";
         }
 
-        var titleMetrics = titleFont.Metrics;
-        var subtitleMetrics = subtitleFont.Metrics;
-
-        var lines = new List<(string Text, SKFont Font, SKPaint Paint, SKFontMetrics Metrics)>
+        var lines = new List<OverlayLine>
         {
-            (locationText, titleFont, titlePaint, titleMetrics),
-            (timestampText, subtitleFont, subtitlePaint, subtitleMetrics),
-            (exposureText, subtitleFont, subtitlePaint, subtitleMetrics)
+            new OverlayLine(locationText, true),
+            new OverlayLine(timestampText, false),
+            new OverlayLine(exposureText, false)
         };
 
         if (!string.IsNullOrWhiteSpace(rigText))
         {
-            lines.Add((rigText!, subtitleFont, subtitlePaint, subtitleMetrics));
+            lines.Add(new OverlayLine(rigText!, false));
         }
 
         if (!string.IsNullOrWhiteSpace(integrationText))
         {
-            lines.Add((integrationText!, subtitleFont, subtitlePaint, subtitleMetrics));
+            lines.Add(new OverlayLine(integrationText!, false));
         }
 
-        var margin = 18f;
-        var lineSpacing = 6f;
-
-        var maxWidth = 0f;
-        var contentHeight = 0f;
-
-        foreach (var line in lines)
+        if (lines.Count == 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var metrics = line.Metrics;
-            var lineHeight = metrics.Descent - metrics.Ascent;
-            contentHeight += lineHeight;
-            maxWidth = Math.Max(maxWidth, line.Font.MeasureText(line.Text, line.Paint));
+            return;
         }
 
-        contentHeight += lineSpacing * (lines.Count - 1);
-
-        var boxWidth = maxWidth + margin * 2f;
-        var boxHeight = contentHeight + margin * 2f;
-        var rect = new SKRect(margin, height - boxHeight - margin, margin + boxWidth, height - margin);
-
-        using (var path = new SKPath())
-        {
-            var radius = 16f;
-            path.AddRoundRect(rect, radius, radius);
-            canvas.DrawPath(path, backgroundPaint);
-        }
-
-        var baseline = rect.Top + margin - lines[0].Metrics.Ascent;
-
-        for (var i = 0; i < lines.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var line = lines[i];
-            canvas.DrawText(line.Text, rect.Left + margin, baseline, SKTextAlign.Left, line.Font, line.Paint);
-            var lineHeight = line.Metrics.Descent - line.Metrics.Ascent;
-            baseline += lineHeight;
-            if (i < lines.Count - 1)
-            {
-                baseline += lineSpacing;
-            }
-        }
+        var cachedOverlay = GetOrCreateOverlayImage(width, height, lines, options, cancellationToken);
+        canvas.DrawImage(cachedOverlay.Image, cachedOverlay.DrawPoint);
     }
 
     private CachedTimeZone GetTimeZoneForLocation(double latitude, double longitude)
@@ -266,6 +221,203 @@ public sealed class OverlayTextFilter : IImageFrameFilter
         return TimeZoneInfo.Utc;
     }
 
+    private CachedOverlayImage GetOrCreateOverlayImage(
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyList<OverlayLine> lines,
+        CameraPipelineOptions options,
+        CancellationToken cancellationToken)
+    {
+        var fingerprint = ComputeFingerprint(canvasWidth, canvasHeight, lines, options);
+
+        lock (_overlaySync)
+        {
+            if (_cachedOverlay is { } cached && cached.Fingerprint == fingerprint)
+            {
+                return cached;
+            }
+        }
+
+        var rendered = RenderOverlayImage(canvasWidth, canvasHeight, lines, options, cancellationToken, fingerprint);
+
+        lock (_overlaySync)
+        {
+            _cachedOverlay?.Dispose();
+            _cachedOverlay = rendered;
+            return _cachedOverlay;
+        }
+    }
+
+    private CachedOverlayImage RenderOverlayImage(
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyList<OverlayLine> lines,
+        CameraPipelineOptions options,
+        CancellationToken cancellationToken,
+        string fingerprint)
+    {
+        using var boldTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Bold);
+        using var regularTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
+        using var titleFont = new SKFont(boldTypeface, 24);
+        using var subtitleFont = new SKFont(regularTypeface, 18);
+        using var titlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(173, 216, 230, 235) };
+        using var subtitlePaint = new SKPaint { IsAntialias = true, Color = new SKColor(211, 211, 211, 230) };
+        using var backgroundPaint = new SKPaint { IsAntialias = true, Color = new SKColor(0, 0, 0, 160) };
+
+        var measuredLines = MeasureLines(lines, titleFont, subtitleFont, titlePaint, subtitlePaint, cancellationToken);
+        if (measuredLines.Count == 0)
+        {
+            throw new InvalidOperationException("OverlayTextFilter attempted to render without any lines.");
+        }
+
+        var margin = 18f;
+        var lineSpacing = 6f;
+
+        var contentWidth = 0f;
+        var contentHeight = 0f;
+
+        for (var i = 0; i < measuredLines.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = measuredLines[i];
+            contentWidth = Math.Max(contentWidth, line.Width);
+            contentHeight += line.Height;
+        }
+
+        if (measuredLines.Count > 1)
+        {
+            contentHeight += lineSpacing * (measuredLines.Count - 1);
+        }
+
+    var boxWidth = contentWidth + margin * 2f;
+    var boxHeight = contentHeight + margin * 2f;
+    var rect = new SKRect(margin, canvasHeight - boxHeight - margin, margin + boxWidth, canvasHeight - margin);
+
+        var overlayWidth = Math.Max(1, (int)Math.Ceiling(rect.Width));
+        var overlayHeight = Math.Max(1, (int)Math.Ceiling(rect.Height));
+
+        var info = new SKImageInfo(overlayWidth, overlayHeight, SKColorType.RgbaF16, SKAlphaType.Premul, LinearSrgbColorSpace);
+        using var surface = SKSurface.Create(info) ?? throw new InvalidOperationException("Failed to allocate overlay surface.");
+        var overlayCanvas = surface.Canvas;
+        overlayCanvas.Clear(SKColors.Transparent);
+
+        var localRect = new SKRect(0f, 0f, rect.Width, rect.Height);
+
+        using (var path = new SKPath())
+        {
+            const float radius = 16f;
+            path.AddRoundRect(localRect, radius, radius);
+            overlayCanvas.DrawPath(path, backgroundPaint);
+        }
+
+        var baseline = margin;
+
+        for (var i = 0; i < measuredLines.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = measuredLines[i];
+            var paint = line.IsTitle ? titlePaint : subtitlePaint;
+            var font = line.IsTitle ? titleFont : subtitleFont;
+
+            var textBaseline = baseline - line.Metrics.Ascent;
+            overlayCanvas.DrawText(line.Text, margin, textBaseline, SKTextAlign.Left, font, paint);
+
+            baseline += line.Height;
+            if (i < measuredLines.Count - 1)
+            {
+                baseline += lineSpacing;
+            }
+        }
+
+        overlayCanvas.Flush();
+
+        var image = surface.Snapshot();
+        var drawPoint = new SKPoint(rect.Left, rect.Top);
+        return new CachedOverlayImage(fingerprint, image, drawPoint);
+    }
+
+    private static string ComputeFingerprint(
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyList<OverlayLine> lines,
+        CameraPipelineOptions options)
+    {
+        var hash = new HashCode();
+        hash.Add(canvasWidth);
+        hash.Add(canvasHeight);
+        hash.Add(options.OverlayTextFormat, StringComparer.Ordinal);
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            hash.Add(lines[i].IsTitle);
+            hash.Add(lines[i].Text, StringComparer.Ordinal);
+        }
+
+        return hash.ToHashCode().ToString("X8", CultureInfo.InvariantCulture);
+    }
+
+    private void InvalidateOverlayCache()
+    {
+        lock (_overlaySync)
+        {
+            _cachedOverlay?.Dispose();
+            _cachedOverlay = null;
+        }
+    }
+
+    private static List<MeasuredLine> MeasureLines(
+        IReadOnlyList<OverlayLine> lines,
+        SKFont titleFont,
+        SKFont bodyFont,
+        SKPaint titlePaint,
+        SKPaint bodyPaint,
+        CancellationToken cancellationToken)
+    {
+        var measured = new List<MeasuredLine>(lines.Count);
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var entry = lines[i];
+
+            if (string.IsNullOrWhiteSpace(entry.Text))
+            {
+                continue;
+            }
+
+            var font = entry.IsTitle ? titleFont : bodyFont;
+            var paint = entry.IsTitle ? titlePaint : bodyPaint;
+            var width = font.MeasureText(entry.Text, paint);
+            var metrics = font.Metrics;
+            var height = metrics.Descent - metrics.Ascent;
+            measured.Add(new MeasuredLine(entry.Text, entry.IsTitle, width, height, metrics));
+        }
+
+        return measured;
+    }
+
+    private sealed class CachedOverlayImage : IDisposable
+    {
+        public CachedOverlayImage(string fingerprint, SKImage image, SKPoint drawPoint)
+        {
+            Fingerprint = fingerprint;
+            Image = image ?? throw new ArgumentNullException(nameof(image));
+            DrawPoint = drawPoint;
+        }
+
+        public string Fingerprint { get; }
+        public SKImage Image { get; }
+        public SKPoint DrawPoint { get; }
+
+        public void Dispose()
+        {
+            Image.Dispose();
+        }
+    }
+
+    private readonly record struct OverlayLine(string Text, bool IsTitle);
+    private readonly record struct MeasuredLine(string Text, bool IsTitle, float Width, float Height, SKFontMetrics Metrics);
+
     private static bool CoordinatesMatch(double a, double b)
         => Math.Abs(a - b) < 1e-6;
 
@@ -282,4 +434,10 @@ public sealed class OverlayTextFilter : IImageFrameFilter
     }
 
     private readonly record struct CachedTimeZone(double Latitude, double Longitude, string DisplayId, TimeZoneInfo TimeZone);
+
+    public void Dispose()
+    {
+        _optionsReload?.Dispose();
+        InvalidateOverlayCache();
+    }
 }

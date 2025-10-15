@@ -8,9 +8,9 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Pipeline.Overlays;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SkiaSharp;
 
@@ -35,7 +35,8 @@ public sealed class CircularApertureMaskFilterTests
             MaskOpacity = 220
         });
 
-        var filter = new CircularApertureMaskFilter(optionsMonitor);
+    using var assetCache = new OverlayAssetCache();
+    using var filter = new CircularApertureMaskFilter(optionsMonitor, assetCache);
 
         var (frameContext, renderContext) = CreateRenderContext(latitude, longitude, timestamp);
         var projector = renderContext.Projector;

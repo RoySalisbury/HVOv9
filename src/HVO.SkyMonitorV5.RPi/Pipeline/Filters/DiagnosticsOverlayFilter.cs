@@ -16,15 +16,21 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 /// <summary>
 /// Renders a lightweight diagnostics block containing stacking metrics, rig details, and projector geometry.
 /// </summary>
-public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
+public sealed class DiagnosticsOverlayFilter : IImageFrameFilter, IDisposable
 {
     private readonly IOptionsMonitor<DiagnosticsOverlayOptions> _optionsMonitor;
     private readonly ILogger<DiagnosticsOverlayFilter> _logger;
+    private readonly object _overlaySync = new();
+    private readonly IDisposable? _optionsReload;
+    private CachedOverlayImage? _cachedOverlay;
+
+    private static readonly SKColorSpace LinearSrgbColorSpace = SKColorSpace.CreateSrgbLinear();
 
     public DiagnosticsOverlayFilter(IOptionsMonitor<DiagnosticsOverlayOptions> optionsMonitor, ILogger<DiagnosticsOverlayFilter> logger)
     {
         _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _optionsReload = _optionsMonitor.OnChange(_ => InvalidateOverlayCache());
     }
 
     public string Name => FrameFilterNames.DiagnosticsOverlay;
@@ -70,7 +76,7 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
         }
 
         using var canvas = new SKCanvas(bitmap);
-    RenderOverlay(canvas, bitmap.Width, bitmap.Height, lines, options, cancellationToken);
+        RenderOverlay(canvas, bitmap.Width, bitmap.Height, lines, options, cancellationToken);
 
         return ValueTask.CompletedTask;
     }
@@ -118,16 +124,7 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
             height = bounds.Height;
         }
 
-        canvas.Save();
-        try
-        {
-            RenderOverlay(canvas, width, height, lines, options, cancellationToken);
-        }
-        finally
-        {
-            canvas.Restore();
-            canvas.Flush();
-        }
+        RenderOverlay(canvas, width, height, lines, options, cancellationToken);
 
         return ValueTask.CompletedTask;
     }
@@ -177,7 +174,7 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
     }
 
     private static List<MeasuredLine> MeasureLines(
-        List<(string Text, bool IsTitle)> lines,
+        IReadOnlyList<(string Text, bool IsTitle)> lines,
         SKFont titleFont,
         SKFont bodyFont,
         SKPaint titlePaint,
@@ -244,9 +241,48 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
         SKCanvas canvas,
         int width,
         int height,
-    List<(string Text, bool IsTitle)> lines,
-    DiagnosticsOverlayOptions options,
+        List<(string Text, bool IsTitle)> lines,
+        DiagnosticsOverlayOptions options,
         CancellationToken cancellationToken)
+    {
+        var overlay = GetOrCreateOverlayImage(width, height, lines, options, cancellationToken);
+        canvas.DrawImage(overlay.Image, overlay.DrawPoint);
+    }
+
+    private CachedOverlayImage GetOrCreateOverlayImage(
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyList<(string Text, bool IsTitle)> lines,
+        DiagnosticsOverlayOptions options,
+        CancellationToken cancellationToken)
+    {
+        var fingerprint = ComputeFingerprint(canvasWidth, canvasHeight, lines, options);
+
+        lock (_overlaySync)
+        {
+            if (_cachedOverlay is { } cached && cached.Fingerprint == fingerprint)
+            {
+                return cached;
+            }
+        }
+
+        var rendered = RenderOverlayImage(canvasWidth, canvasHeight, lines, options, cancellationToken, fingerprint);
+
+        lock (_overlaySync)
+        {
+            _cachedOverlay?.Dispose();
+            _cachedOverlay = rendered;
+            return _cachedOverlay;
+        }
+    }
+
+    private CachedOverlayImage RenderOverlayImage(
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyList<(string Text, bool IsTitle)> lines,
+        DiagnosticsOverlayOptions options,
+        CancellationToken cancellationToken,
+        string fingerprint)
     {
         using var titleTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.SemiBold);
         using var bodyTypeface = PipelineFontUtilities.ResolveTypeface(SKFontStyleWeight.Normal);
@@ -259,7 +295,7 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
         var measuredLines = MeasureLines(lines, titleFont, bodyFont, titlePaint, bodyPaint, cancellationToken);
         if (measuredLines.Count == 0)
         {
-            return;
+            throw new InvalidOperationException("Diagnostics overlay attempted to render without content.");
         }
 
         var margin = options.Margin;
@@ -283,16 +319,23 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
 
         var boxWidth = contentWidth + margin * 2f;
         var boxHeight = contentHeight + margin * 2f;
+        var rect = CalculateRect(canvasWidth, canvasHeight, boxWidth, boxHeight, margin, options.Corner);
 
-        var rect = CalculateRect(width, height, boxWidth, boxHeight, margin, options.Corner);
+        var overlayWidth = Math.Max(1, (int)Math.Ceiling(rect.Width));
+        var overlayHeight = Math.Max(1, (int)Math.Ceiling(rect.Height));
+
+        var info = new SKImageInfo(overlayWidth, overlayHeight, SKColorType.RgbaF16, SKAlphaType.Premul, LinearSrgbColorSpace);
+        using var surface = SKSurface.Create(info) ?? throw new InvalidOperationException("Failed to allocate diagnostics overlay surface.");
+        var overlayCanvas = surface.Canvas;
+        overlayCanvas.Clear(SKColors.Transparent);
 
         using (var path = new SKPath())
         {
-            path.AddRoundRect(rect, 12f, 12f);
-            canvas.DrawPath(path, backgroundPaint);
+            path.AddRoundRect(new SKRect(0f, 0f, rect.Width, rect.Height), 12f, 12f);
+            overlayCanvas.DrawPath(path, backgroundPaint);
         }
 
-        var baseline = rect.Top + margin;
+        var baseline = margin;
 
         for (var i = 0; i < measuredLines.Count; i++)
         {
@@ -302,13 +345,81 @@ public sealed class DiagnosticsOverlayFilter : IImageFrameFilter
             var font = line.IsTitle ? titleFont : bodyFont;
 
             var textBaseline = baseline - line.Metrics.Ascent;
-            canvas.DrawText(line.Text, rect.Left + margin, textBaseline, SKTextAlign.Left, font, paint);
+            overlayCanvas.DrawText(line.Text, margin, textBaseline, SKTextAlign.Left, font, paint);
 
             baseline += line.Height;
             if (i < measuredLines.Count - 1)
             {
                 baseline += lineSpacing;
             }
+        }
+
+        overlayCanvas.Flush();
+
+        var image = surface.Snapshot();
+        var drawPoint = new SKPoint(rect.Left, rect.Top);
+        return new CachedOverlayImage(fingerprint, image, drawPoint);
+    }
+
+    private static string ComputeFingerprint(
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyList<(string Text, bool IsTitle)> lines,
+        DiagnosticsOverlayOptions options)
+    {
+        var hash = new HashCode();
+        hash.Add(canvasWidth);
+        hash.Add(canvasHeight);
+        hash.Add(options.Corner);
+        hash.Add((int)Math.Round(options.TitleFontSize * 100f));
+        hash.Add((int)Math.Round(options.BodyFontSize * 100f));
+        hash.Add((int)Math.Round(options.Margin * 100f));
+        hash.Add((int)Math.Round(options.LineSpacing * 100f));
+        hash.Add(options.ShowRigDetails);
+        hash.Add(options.ShowProjectorDetails);
+        hash.Add(options.ShowStackingMetrics);
+        hash.Add(options.ShowContextFlags);
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            hash.Add(lines[i].IsTitle);
+            hash.Add(lines[i].Text, StringComparer.Ordinal);
+        }
+
+    return hash.ToHashCode().ToString("X8", CultureInfo.InvariantCulture);
+    }
+
+    private void InvalidateOverlayCache()
+    {
+        lock (_overlaySync)
+        {
+            _cachedOverlay?.Dispose();
+            _cachedOverlay = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        _optionsReload?.Dispose();
+        InvalidateOverlayCache();
+    }
+
+    private sealed class CachedOverlayImage : IDisposable
+    {
+        public CachedOverlayImage(string fingerprint, SKImage image, SKPoint drawPoint)
+        {
+            Fingerprint = fingerprint;
+            Image = image ?? throw new ArgumentNullException(nameof(image));
+            DrawPoint = drawPoint;
+        }
+
+        public string Fingerprint { get; }
+        public SKImage Image { get; }
+        public SKPoint DrawPoint { get; }
+
+        public void Dispose()
+        {
+            Image.Dispose();
         }
     }
 }

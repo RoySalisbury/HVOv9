@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Pipeline.Overlays;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,8 +23,9 @@ public sealed class CardinalDirectionsFilterTests
     [TestMethod]
     public async Task ApplyAsync_FilterFrame_DrawsCardinalMarkersAroundProjectedCenter()
     {
-    using var optionsMonitor = new TestOptionsMonitor<CardinalDirectionsOptions>(new CardinalDirectionsOptions());
-        var filter = new CardinalDirectionsFilter(optionsMonitor, NullLogger<CardinalDirectionsFilter>.Instance);
+        using var optionsMonitor = new TestOptionsMonitor<CardinalDirectionsOptions>(new CardinalDirectionsOptions());
+        using var assetCache = new OverlayAssetCache();
+        using var filter = new CardinalDirectionsFilter(optionsMonitor, NullLogger<CardinalDirectionsFilter>.Instance, assetCache);
 
         const int width = 320;
         const int height = 240;
@@ -57,10 +59,10 @@ public sealed class CardinalDirectionsFilterTests
 
         using var filterFrame = new FilterFrame(surfaceLease);
 
-    var (frameContext, renderContext) = CreateRenderContext();
-    var options = optionsMonitor.CurrentValue;
-    options.OffsetXPixels = (float)(width / 2f - renderContext.Projector.Cx);
-    options.OffsetYPixels = (float)(height / 2f - renderContext.Projector.Cy);
+        var (frameContext, renderContext) = CreateRenderContext();
+        var options = optionsMonitor.CurrentValue;
+        options.OffsetXPixels = (float)(width / 2f - renderContext.Projector.Cx);
+        options.OffsetYPixels = (float)(height / 2f - renderContext.Projector.Cy);
         var stackResult = CreateStackResult(stackedBitmap, frameContext);
         var configuration = CreateConfiguration();
 

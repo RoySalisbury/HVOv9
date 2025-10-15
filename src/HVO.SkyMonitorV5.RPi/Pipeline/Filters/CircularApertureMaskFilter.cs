@@ -7,18 +7,25 @@ using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Overlays;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 
-public sealed class CircularApertureMaskFilter : IImageFrameFilter
+public sealed class CircularApertureMaskFilter : IImageFrameFilter, IDisposable
 {
 	private readonly IOptionsMonitor<CircularApertureMaskOptions> _optionsMonitor;
+    private readonly OverlayAssetCache _assetCache;
+    private readonly IDisposable? _optionsReload;
 
-	public CircularApertureMaskFilter(IOptionsMonitor<CircularApertureMaskOptions> optionsMonitor)
+    private const string CacheGroup = "CircularApertureMask";
+
+	public CircularApertureMaskFilter(IOptionsMonitor<CircularApertureMaskOptions> optionsMonitor, OverlayAssetCache assetCache)
 	{
 		_optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
+        _assetCache = assetCache ?? throw new ArgumentNullException(nameof(assetCache));
+        _optionsReload = _optionsMonitor.OnChange(_ => _assetCache.InvalidateGroup(CacheGroup));
 	}
 
 	public string Name => FrameFilterNames.CircularApertureMask;
@@ -90,6 +97,24 @@ public sealed class CircularApertureMaskFilter : IImageFrameFilter
 
 		var options = _optionsMonitor.CurrentValue;
 
+		var parameters = ComputeParameters(canvasWidth, canvasHeight, renderContext, options);
+		if (!parameters.IsValid)
+		{
+			return;
+		}
+
+		var cacheKey = BuildCacheKey(parameters, options);
+		var picture = _assetCache.GetOrCreatePicture(cacheKey, () => CreatePicture(parameters));
+		canvas.DrawPicture(picture);
+		canvas.Flush();
+	}
+
+	private MaskRenderParameters ComputeParameters(
+		int canvasWidth,
+		int canvasHeight,
+		FrameRenderContext? renderContext,
+		CircularApertureMaskOptions options)
+	{
 		var projector = renderContext?.Projector;
 		var referenceWidth = projector?.WidthPx ?? canvasWidth;
 		var referenceHeight = projector?.HeightPx ?? canvasHeight;
@@ -105,22 +130,53 @@ public sealed class CircularApertureMaskFilter : IImageFrameFilter
 
 		center.Offset(options.OffsetXPixels, options.OffsetYPixels);
 
-		var circleRect = new SKRect(
-			center.X - radius,
-			center.Y - radius,
-			center.X + radius,
-			center.Y + radius);
-
-		using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
-		path.AddRect(new SKRect(0, 0, canvasWidth, canvasHeight));
-		path.AddOval(circleRect);
-
 		var maskBaseColor = ResolveColor(options.MaskColor, new SKColor(0, 0, 0));
 		var overlayColor = maskBaseColor.WithAlpha((byte)Math.Clamp(options.MaskOpacity, 0, 255));
 
-		using var overlayPaint = new SKPaint { IsAntialias = true, Color = overlayColor };
-		canvas.DrawPath(path, overlayPaint);
-		canvas.Flush();
+		return new MaskRenderParameters(canvasWidth, canvasHeight, center, radius, overlayColor, true);
+	}
+
+	private string BuildCacheKey(MaskRenderParameters parameters, CircularApertureMaskOptions options)
+	{
+		var hash = new HashCode();
+		hash.Add(parameters.Width);
+		hash.Add(parameters.Height);
+		hash.Add(BitConverter.SingleToInt32Bits(parameters.Center.X));
+		hash.Add(BitConverter.SingleToInt32Bits(parameters.Center.Y));
+		hash.Add(BitConverter.SingleToInt32Bits(parameters.Radius));
+		hash.Add(parameters.Color.Red);
+		hash.Add(parameters.Color.Green);
+		hash.Add(parameters.Color.Blue);
+		hash.Add(parameters.Color.Alpha);
+		hash.Add(options.RadiusOffsetPixels);
+		hash.Add(options.OffsetXPixels);
+		hash.Add(options.OffsetYPixels);
+		hash.Add(options.MaskOpacity);
+		hash.Add(options.MaskColor, StringComparer.Ordinal);
+
+		return FormattableString.Invariant($"{CacheGroup}:{hash.ToHashCode():X8}");
+	}
+
+	private SKPicture CreatePicture(MaskRenderParameters parameters)
+	{
+		using var recorder = new SKPictureRecorder();
+		var bounds = SKRect.Create(parameters.Width, parameters.Height);
+		var recordingCanvas = recorder.BeginRecording(bounds);
+
+		var circleRect = new SKRect(
+			parameters.Center.X - parameters.Radius,
+			parameters.Center.Y - parameters.Radius,
+			parameters.Center.X + parameters.Radius,
+			parameters.Center.Y + parameters.Radius);
+
+		using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+		path.AddRect(bounds);
+		path.AddOval(circleRect);
+
+		using var paint = new SKPaint { IsAntialias = true, Color = parameters.Color };
+		recordingCanvas.DrawPath(path, paint);
+
+		return recorder.EndRecording();
 	}
 
 	private static SKColor ResolveColor(string? color, SKColor fallback)
@@ -155,5 +211,21 @@ public sealed class CircularApertureMaskFilter : IImageFrameFilter
 		}
 
 		return fallback;
+	}
+
+	private readonly record struct MaskRenderParameters(
+		int Width,
+		int Height,
+		SKPoint Center,
+		float Radius,
+		SKColor Color,
+		bool IsValid)
+	{
+		public static MaskRenderParameters Invalid { get; } = new(0, 0, SKPoint.Empty, 0f, SKColors.Transparent, false);
+	}
+
+	public void Dispose()
+	{
+		_optionsReload?.Dispose();
 	}
 }

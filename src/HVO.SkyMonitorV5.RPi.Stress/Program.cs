@@ -13,6 +13,7 @@ using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -263,7 +264,8 @@ internal static class Program
             {
                 services.Replace(ServiceDescriptor.Singleton<IFrameStacker>(sp =>
                 {
-                    var inner = new RollingFrameStacker(sp.GetService<ILogger<RollingFrameStacker>>());
+                    var surfacePool = sp.GetRequiredService<SkiaSurfacePool>();
+                    var inner = new RollingFrameStacker(surfacePool, sp.GetService<ILogger<RollingFrameStacker>>());
                     return new SimulatedCpuLoadFrameStacker(
                         inner,
                         scenario.CpuLoad,

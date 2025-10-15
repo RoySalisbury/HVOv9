@@ -37,9 +37,9 @@
 
 ## Phase 4 – Overlay Asset Strategy
 
-- [ ] Record reusable vector overlays as cached `SKPicture` instances.
-- [ ] Pre-rasterize expensive/textual overlays to `SKImage` with invalidation hooks for configuration changes.
-- [ ] Add diagnostics to verify overlay alignment and antialiasing on high-bit surfaces.
+- [x] Record reusable vector overlays as cached `SKPicture` instances. (OverlayAssetCache now backs Cardinal Directions and Circular Aperture filters.)
+- [x] Pre-rasterize expensive/textual overlays to `SKImage` with invalidation hooks for configuration changes. (OverlayText and Diagnostics overlays cache per-fingerprint raster images.)
+- [x] Add diagnostics to verify overlay alignment and antialiasing on high-bit surfaces. (Expanded `DiagnosticsOverlayFilterTests` to assert alignment and blended edge pixels on linear RGBA F16 surfaces.)
 
 ## Phase 5 – Composition & Frame Queues
 
