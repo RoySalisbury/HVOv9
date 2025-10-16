@@ -296,16 +296,28 @@ public sealed class S3FrameExportSinkTests
         Assert.IsTrue(result.IsSuccessful && result.Value, "Expected export to succeed when dual scope configured.");
         Assert.AreEqual(4, capturedCalls.Count, "Dual scope should upload two payloads and two manifests.");
 
-        var archivePayload = capturedCalls[0];
-        var archiveManifest = capturedCalls[1];
-        var deliveryPayload = capturedCalls[2];
-        var deliveryManifest = capturedCalls[3];
+    var archivePayload = capturedCalls[0];
+    var archiveManifest = capturedCalls[1];
+    var deliveryPayload = capturedCalls[2];
+    var deliveryManifest = capturedCalls[3];
 
         StringAssert.Contains(GetObjectName(archivePayload.Args), "/archive/", "First payload should target archive prefix.");
         StringAssert.Contains(GetObjectName(deliveryPayload.Args), "/delivery/", "Second payload should target delivery prefix.");
 
         CollectionAssert.AreEqual(payload.ToArray(), archivePayload.Body, "Archive payload contents should match source payload.");
         CollectionAssert.AreEqual(payload.ToArray(), deliveryPayload.Body, "Delivery payload contents should match source payload.");
+
+    var archiveHeaders = GetPropertyValue<IDictionary<string, string>>(archivePayload.Args, "Headers");
+    Assert.IsNotNull(archiveHeaders, "Archive payload should include metadata headers.");
+    Assert.AreEqual("archive", GetHeaderValue(archiveHeaders!, "payload-role"), "Archive payload header should note role.");
+    Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(archiveHeaders!, "payload-content-type"), "Archive payload should carry content type header.");
+    Assert.AreEqual("skimg", GetHeaderValue(archiveHeaders!, "payload-extension"), "Archive payload should carry extension header.");
+
+    var deliveryHeaders = GetPropertyValue<IDictionary<string, string>>(deliveryPayload.Args, "Headers");
+    Assert.IsNotNull(deliveryHeaders, "Delivery payload should include metadata headers.");
+    Assert.AreEqual("delivery", GetHeaderValue(deliveryHeaders!, "payload-role"), "Delivery payload header should note role.");
+    Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(deliveryHeaders!, "payload-content-type"), "Delivery payload should carry content type header.");
+    Assert.AreEqual("skimg", GetHeaderValue(deliveryHeaders!, "payload-extension"), "Delivery payload should carry extension header.");
 
         Assert.AreEqual("application/json", GetContentType(archiveManifest.Args), "Archive manifest should be JSON.");
         Assert.AreEqual("application/json", GetContentType(deliveryManifest.Args), "Delivery manifest should be JSON.");

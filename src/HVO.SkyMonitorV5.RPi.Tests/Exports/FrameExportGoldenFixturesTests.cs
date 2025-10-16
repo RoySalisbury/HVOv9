@@ -15,6 +15,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
+using HVO.SkyMonitorV5.RPi.Telemetry;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -270,7 +271,16 @@ public sealed class FrameExportGoldenFixturesTests
                 OriginalImmutableImage = immutableImage
             };
 
-            var publisher = new FrameExportPublisher(dispatcher, encoder, NullLogger<FrameExportPublisher>.Instance);
+            var featureOptions = new Mock<IOptionsMonitor<SkiaPipelineFeatureOptions>>();
+            featureOptions.SetupGet(o => o.CurrentValue).Returns(new SkiaPipelineFeatureOptions());
+            var featureMonitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
+
+            var publisher = new FrameExportPublisher(
+                dispatcher,
+                encoder,
+                NullLogger<FrameExportPublisher>.Instance,
+                featureOptions.Object,
+                featureMonitor.Object);
 
             publisher.PublishRawFrame(
                 frameNumber: 1,

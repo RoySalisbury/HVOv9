@@ -175,6 +175,149 @@ public sealed class S3FrameExportSinkIntegrationTests
         }
     }
 
+    [TestMethod]
+    [TestCategory("MinioDev")]
+    public async Task ExportAsync_WithArchiveAndDeliveryScope_PersistsDualPayloads_OnMinioDev()
+    {
+        var endpoint = Environment.GetEnvironmentVariable("HVO_MINIO_DEV_ENDPOINT");
+        var accessKey = Environment.GetEnvironmentVariable("HVO_MINIO_DEV_ACCESS_KEY");
+        var secretKey = Environment.GetEnvironmentVariable("HVO_MINIO_DEV_SECRET_KEY");
+        var useSsl = string.Equals(Environment.GetEnvironmentVariable("HVO_MINIO_DEV_USE_SSL"), "true", StringComparison.OrdinalIgnoreCase);
+
+        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(accessKey) || string.IsNullOrWhiteSpace(secretKey))
+        {
+            Assert.Inconclusive("Set HVO_MINIO_DEV_ENDPOINT/ACCESS_KEY/SECRET_KEY to run MinIO integration tests.");
+        }
+
+        var bucket = FormattableString.Invariant($"hvo-fixtures-{Guid.NewGuid():N}");
+        var prefix = "fixtures/raw";
+
+        var options = new FrameExportOptions();
+        options.Raw.Enabled = true;
+        options.Raw.PayloadScope = FrameExportPayloadScope.ArchiveAndDelivery;
+        options.Raw.S3.Add(new S3FrameExportSinkOptions
+        {
+            Enabled = true,
+            Bucket = bucket,
+            Prefix = prefix,
+            Endpoint = endpoint,
+            AccessKey = accessKey,
+            SecretKey = secretKey,
+            UseSsl = useSsl,
+            EmitJsonManifest = true,
+            EmitMetadataHeaders = true
+        });
+        options.Normalize();
+
+        using var provider = new MinioClientProvider(NullLogger<MinioClientProvider>.Instance);
+        using var optionsMonitor = new TestOptionsMonitor<FrameExportOptions>(options);
+        var resilienceProvider = new TestResiliencePolicyProvider();
+        var sink = new S3FrameExportSink(
+            FrameExportStage.Raw,
+            optionsMonitor,
+            provider,
+            resilienceProvider,
+            NullLogger<S3FrameExportSink>.Instance);
+
+        var frameId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeffffffff");
+        var timestampUtc = new DateTimeOffset(2025, 10, 16, 0, 1, 0, TimeSpan.Zero);
+        var descriptor = new FrameExportImageDescriptor(
+            Width: 4,
+            Height: 4,
+            RowBytes: 16,
+            BytesPerPixel: 4,
+            ColorType: "Rgba8888",
+            AlphaType: "Premul",
+            GammaIsLinear: true,
+            IsSrgb: false,
+            HasNumericalTransferFunction: true,
+            ColorSpaceDescription: "Linear");
+
+        var metadata = new FrameExportMetadata(
+            frameId,
+            timestampUtc,
+            timestampUtc,
+            new ExposureSettings(1000, 200, false, false),
+            "FixtureRig",
+            "FixtureCamera",
+            "FixtureLens",
+            35.0,
+            -114.0,
+            false,
+            null,
+            false,
+            1,
+            1000,
+            AppliedFilters: Array.Empty<string>(),
+            QueueLatencyMilliseconds: 5.0,
+            ProcessingMilliseconds: null,
+            FullPipelineMilliseconds: null,
+            RawImageDescriptor: descriptor,
+            PayloadContentType: "application/vnd.hvo.skia.raw",
+            PayloadExtension: "skimg");
+
+        var payload = new byte[] { 0x0A, 0x0B, 0x0C, 0x0D };
+        var envelope = new FrameExportEnvelope(
+            frameId,
+            FrameExportStage.Raw,
+            metadata,
+            payload.AsMemory(),
+            "application/vnd.hvo.skia.raw",
+            "skimg");
+
+        var archivePrefix = options.Raw.S3[0].BuildObjectPrefix(FrameExportPayloadRole.Archive, timestampUtc);
+        var deliveryPrefix = options.Raw.S3[0].BuildObjectPrefix(FrameExportPayloadRole.Delivery, timestampUtc);
+        var baseFileName = FormattableString.Invariant($"{timestampUtc:HHmmssfff}-{frameId:N}");
+
+        var archivePayloadKey = FormattableString.Invariant($"{archivePrefix}/{baseFileName}.skimg");
+        var archiveManifestKey = FormattableString.Invariant($"{archivePrefix}/{baseFileName}.json");
+        var deliveryPayloadKey = FormattableString.Invariant($"{deliveryPrefix}/{baseFileName}.skimg");
+        var deliveryManifestKey = FormattableString.Invariant($"{deliveryPrefix}/{baseFileName}.json");
+
+        var client = provider.GetClient(endpoint!, accessKey!, secretKey!, useSsl);
+
+        try
+        {
+            var result = await sink.ExportAsync(envelope, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.IsTrue(result.IsSuccessful && result.Value, "Expected S3 export to succeed for dual scope.");
+
+            var archiveStat = await client.StatObjectAsync(new StatObjectArgs().WithBucket(bucket).WithObject(archivePayloadKey), CancellationToken.None).ConfigureAwait(false);
+            var deliveryStat = await client.StatObjectAsync(new StatObjectArgs().WithBucket(bucket).WithObject(deliveryPayloadKey), CancellationToken.None).ConfigureAwait(false);
+
+            var archiveHeaders = GetPropertyValue<IDictionary<string, string>>(archiveStat, "MetaData");
+            var deliveryHeaders = GetPropertyValue<IDictionary<string, string>>(deliveryStat, "MetaData");
+
+            Assert.AreEqual("archive", GetHeaderValue(archiveHeaders, "payload-role"), "Archive payload header should indicate archive role.");
+            Assert.AreEqual("delivery", GetHeaderValue(deliveryHeaders, "payload-role"), "Delivery payload header should indicate delivery role.");
+            Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(archiveHeaders, "payload-content-type"));
+            Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(deliveryHeaders, "payload-content-type"));
+            Assert.AreEqual("skimg", GetHeaderValue(archiveHeaders, "payload-extension"));
+            Assert.AreEqual("skimg", GetHeaderValue(deliveryHeaders, "payload-extension"));
+
+            var archivePayloadBytes = await GetObjectBytesAsync(client, bucket, archivePayloadKey).ConfigureAwait(false);
+            var deliveryPayloadBytes = await GetObjectBytesAsync(client, bucket, deliveryPayloadKey).ConfigureAwait(false);
+
+            CollectionAssert.AreEqual(payload, archivePayloadBytes, "Archive payload should mirror exported bytes.");
+            CollectionAssert.AreEqual(payload, deliveryPayloadBytes, "Delivery payload should mirror exported bytes.");
+
+            var archiveManifestJson = await GetObjectStringAsync(client, bucket, archiveManifestKey).ConfigureAwait(false);
+            var deliveryManifestJson = await GetObjectStringAsync(client, bucket, deliveryManifestKey).ConfigureAwait(false);
+
+            var expectedJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.AreEqual(expectedJson, archiveManifestJson, "Archive manifest should match serialized metadata.");
+            Assert.AreEqual(expectedJson, deliveryManifestJson, "Delivery manifest should match serialized metadata.");
+        }
+        finally
+        {
+            await CleanupObjectAsync(client, bucket, archivePayloadKey).ConfigureAwait(false);
+            await CleanupObjectAsync(client, bucket, archiveManifestKey).ConfigureAwait(false);
+            await CleanupObjectAsync(client, bucket, deliveryPayloadKey).ConfigureAwait(false);
+            await CleanupObjectAsync(client, bucket, deliveryManifestKey).ConfigureAwait(false);
+            await CleanupBucketAsync(client, bucket).ConfigureAwait(false);
+        }
+    }
+
     private async Task CleanupObjectAsync(IMinioClient client, string bucket, string objectKey)
     {
         try
@@ -238,4 +381,28 @@ public sealed class S3FrameExportSinkIntegrationTests
 
         return null;
     }
+
+    private static async Task<byte[]> GetObjectBytesAsync(IMinioClient client, string bucket, string objectKey)
+    {
+        using var buffer = new MemoryStream();
+        var getArgs = new GetObjectArgs()
+            .WithBucket(bucket)
+            .WithObject(objectKey)
+            .WithCallbackStream(async (stream, token) =>
+            {
+                if (stream.CanSeek)
+                {
+                    stream.Position = 0;
+                }
+
+                await stream.CopyToAsync(buffer, token).ConfigureAwait(false);
+                buffer.Position = 0;
+            });
+
+        await client.GetObjectAsync(getArgs, CancellationToken.None).ConfigureAwait(false);
+        return buffer.ToArray();
+    }
+
+    private static async Task<string> GetObjectStringAsync(IMinioClient client, string bucket, string objectKey)
+        => Encoding.UTF8.GetString(await GetObjectBytesAsync(client, bucket, objectKey).ConfigureAwait(false));
 }

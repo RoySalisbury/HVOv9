@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
@@ -22,6 +23,7 @@ public class EndToEndPipelineBenchmarks
     private FrameFilterPipeline _pipeline = default!;
     private CameraConfiguration _configuration = default!;
     private SkiaSurfacePool _surfacePool = default!;
+    private ProcessedFrameEncoder _encoder = default!;
 
     [Params(1, 4)]
     public int StackingFrameCount { get; set; }
@@ -41,10 +43,11 @@ public class EndToEndPipelineBenchmarks
             filters[i] = new SyntheticOverlayFilter($"SyntheticOverlay_{i}", 12 + i * 4);
         }
 
-    _surfacePool = new SkiaSurfacePool();
-    _frameComposer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
-    _stacker = new RollingFrameStacker(_surfacePool, NullLogger<RollingFrameStacker>.Instance);
-    _pipeline = new FrameFilterPipeline(filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
+        _surfacePool = new SkiaSurfacePool();
+        _frameComposer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
+        _stacker = new RollingFrameStacker(_surfacePool, NullLogger<RollingFrameStacker>.Instance);
+        _pipeline = new FrameFilterPipeline(filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
+        _encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
 
         var bufferMinimum = Math.Max(24, StackingFrameCount);
 
@@ -75,7 +78,9 @@ public class EndToEndPipelineBenchmarks
             try
             {
                 var processed = await _pipeline.ProcessAsync(stackResult, _configuration, CancellationToken.None).ConfigureAwait(false);
-                return processed.ImageBytes.Length;
+                var delivery = _encoder.Encode(processed);
+                processed.ImmutableImage.Dispose();
+                return delivery.Payload.Length;
             }
             finally
             {

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks.RollingFrameStackerBenchmarks-20251016-220137</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.13.11, Debian GNU/Linux 12 (bookworm) (container)
+Unknown processor
+.NET SDK 9.0.304
+  [Host]           : .NET 9.0.8 (9.0.825.36511), Arm64 RyuJIT AdvSIMD
+  EnvConfiguredJob : .NET 9.0.8 (9.0.825.36511), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>Job=EnvConfiguredJob  IterationCount=2  LaunchCount=1  
+WarmupCount=1  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                                 </th><th>StackingFrameCount</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Gen1</th><th>Gen2</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>&#39;Accumulate single frame into rolling buffer&#39;</td><td>1</td><td>23.43 ms</td><td>NA</td><td>0.806 ms</td><td>1000.0000</td><td>1000.0000</td><td>1000.0000</td><td>15.82 MB</td>
+</tr><tr><td>&#39;Accumulate single frame into rolling buffer&#39;</td><td>4</td><td>30.51 ms</td><td>NA</td><td>0.675 ms</td><td>1312.5000</td><td>1312.5000</td><td>1312.5000</td><td>31.64 MB</td>
+</tr><tr><td>&#39;Accumulate single frame into rolling buffer&#39;</td><td>8</td><td>42.78 ms</td><td>NA</td><td>4.147 ms</td><td>1272.7273</td><td>1272.7273</td><td>1272.7273</td><td>31.64 MB</td>
+</tr></tbody></table>
+</body>
+</html>

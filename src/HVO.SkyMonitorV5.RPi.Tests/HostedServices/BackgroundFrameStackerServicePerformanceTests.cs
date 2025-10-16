@@ -12,6 +12,7 @@ using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.Telemetry;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -66,7 +67,7 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
     var dispatcher = new Mock<IFrameExportDispatcher>();
     dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
     var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var exportPublisher = new FrameExportPublisher(dispatcher.Object, encoder, NullLogger<FrameExportPublisher>.Instance);
+    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder);
 
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
@@ -182,7 +183,7 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
     var dispatcher = new Mock<IFrameExportDispatcher>();
     dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
     var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var exportPublisher = new FrameExportPublisher(dispatcher.Object, encoder, NullLogger<FrameExportPublisher>.Instance);
+    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder);
 
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
@@ -271,7 +272,7 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
     var dispatcher = new Mock<IFrameExportDispatcher>();
     dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
     var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var exportPublisher = new FrameExportPublisher(dispatcher.Object, encoder, NullLogger<FrameExportPublisher>.Instance);
+    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder);
 
         var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
@@ -357,5 +358,19 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         {
             DrainChannel(currentChannel);
         }
+    }
+
+    private static FrameExportPublisher CreateExportPublisher(IFrameExportDispatcher dispatcher, IProcessedFrameEncoder encoder)
+    {
+        var optionsMonitor = new Mock<IOptionsMonitor<SkiaPipelineFeatureOptions>>();
+        optionsMonitor.SetupGet(o => o.CurrentValue).Returns(new SkiaPipelineFeatureOptions());
+        var featureMonitor = new Mock<ISkiaPipelineFeatureToggleMonitor>();
+
+        return new FrameExportPublisher(
+            dispatcher,
+            encoder,
+            NullLogger<FrameExportPublisher>.Instance,
+            optionsMonitor.Object,
+            featureMonitor.Object);
     }
 }

@@ -289,6 +289,11 @@ public static class Program
             .ValidateDataAnnotations()
             .PostConfigure(options => options.Normalize());
 
+        services.AddOptions<SkiaPipelineFeatureOptions>()
+            .Bind(configuration.GetSection(SkiaPipelineFeatureOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddSingleton<IFrameExportResiliencePolicyProvider, FrameExportResiliencePolicyProvider>();
 
         services.AddSingleton<IFrameExportSink>(sp =>
@@ -339,6 +344,7 @@ public static class Program
     services.AddSingleton<IFrameExportDispatcher>(sp => sp.GetRequiredService<FrameExportDispatcher>());
     services.AddHostedService(sp => sp.GetRequiredService<FrameExportDispatcher>());
         services.AddSingleton<IProcessedFrameEncoder, ProcessedFrameEncoder>();
+    services.AddSingleton<ISkiaPipelineFeatureToggleMonitor, SkiaPipelineFeatureToggleMonitor>();
         services.AddSingleton<FrameExportPublisher>();
         services.AddSingleton<BackgroundFrameStackerService>();
         services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());

@@ -7,6 +7,7 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
@@ -21,6 +22,7 @@ public class FrameFilterPipelineBenchmarks
     private CameraConfiguration _configuration = default!;
     private SyntheticFilter[] _filters = Array.Empty<SyntheticFilter>();
     private SkiaSurfacePool _surfacePool = default!;
+    private ProcessedFrameEncoder _encoder = default!;
 
     [Params(1, 3, 5)]
     public int FilterCount { get; set; }
@@ -35,9 +37,10 @@ public class FrameFilterPipelineBenchmarks
             .Select(index => new SyntheticFilter($"Synthetic_{index}", strokes: 16 + index * 8))
             .ToArray();
 
-    _surfacePool = new SkiaSurfacePool();
-    _frameComposer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
-    _pipeline = new FrameFilterPipeline(_filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
+        _surfacePool = new SkiaSurfacePool();
+        _frameComposer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
+        _pipeline = new FrameFilterPipeline(_filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
+        _encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
 
         _configuration = new CameraConfiguration(
             EnableStacking: true,
@@ -63,7 +66,9 @@ public class FrameFilterPipelineBenchmarks
         try
         {
             var processed = await _pipeline.ProcessAsync(stackResult, _configuration, CancellationToken.None).ConfigureAwait(false);
-            return processed.ImageBytes.Length;
+            var delivery = _encoder.Encode(processed);
+            processed.ImmutableImage.Dispose();
+            return delivery.Payload.Length;
         }
         finally
         {

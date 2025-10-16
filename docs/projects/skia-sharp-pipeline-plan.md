@@ -51,7 +51,7 @@
 
 ## Phase 6 – Export & Post-Processing Handoff
 
-> Status: In progress (kickoff 2025-10-16). Capturing encoder requirements and integration plan.
+> Status: ✅ Completed 2025-10-16. Encoder integration, dual-scope exports, and golden fixtures validated end-to-end.
 
 - [x] Provide encoders that convert high-bit `SKImage` to delivery formats (PNG/JPEG) only at export time. (`ProcessedFrameEncoder` registered in DI; `ProcessedFrameEncoderTests` + new `FrameExportPublisherTests` cover delivery metadata.)
 - [x] Feed encoder-derived content metadata into manifests/telemetry (FrameExport metadata now carries payload type/extension; dispatcher + diagnostics telemetry surface the new fields and tests exercise UI/manifest coverage.)
@@ -60,10 +60,12 @@
 
 ## Phase 7 – Validation, Tooling & Rollout
 
-- [ ] Broaden automated coverage (unit, integration, end-to-end) to stress the new pipeline.
-- [ ] Re-run benchmark suite, publish results in `docs/performance-benchmarks.md`.
-- [ ] Add feature toggles/fallbacks with monitoring to allow staged rollout.
-- [ ] Prepare operational runbook updates covering cache warm-up and resource expectations.
+> Status: ✅ Completed 2025-10-16. Coverage, benchmarks, feature toggles, and runbook updates finalized.
+
+- [x] Broaden automated coverage (unit, integration, end-to-end) to stress the new pipeline. (Dispatcher telemetry + retry resilience covered; dual-scope S3 unit tests assert headers; MinIO fixture now validates archive/delivery payloads and manifests.)
+- [x] Re-run benchmark suite, publish results in `docs/performance-benchmarks.md` (Rolling stacker snapshots captured 2025-10-16 under `benchmarks/rpi-20251016/rolling-frame-stacker/`).
+- [x] Add feature toggles/fallbacks with monitoring to allow staged rollout. (`SkiaPipelineFeatures` options gate raw linear payloads and processed encoder; metrics surface `feature_fallbacks` counter plus per-feature gauges and fall back to PNG encoding when disabled.)
+- [x] Prepare operational runbook updates covering cache warm-up and resource expectations (runbook now documents `SkiaPipelineFeatures`, warm-up sequence, and resource baselines dated 2025-10-16).
 
 ## Appendix – Open Questions / Follow-Ups
 

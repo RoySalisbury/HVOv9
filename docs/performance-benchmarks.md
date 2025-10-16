@@ -146,6 +146,13 @@ Running `dotnet run -c Release --project src/HVO.SkyMonitorV5.RPi.Benchmarks -- 
 - 512x512 workloads stay within **13.33 ms** even with five overlays, confirming deterministic filters avoid extra surface allocations.
 - Full CSV/HTML summaries live in `benchmarks/rpi-20251016/results/`, with the raw runner log stored at `benchmarks/rpi-20251016/HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks.FrameFilterPipelineBenchmarks-20251016-160710.log`.
 
+## Phase 7 rolling stacker snapshot (2025-10-16)
+
+- Command: `DOTNET_ENVIRONMENT=Benchmark HVO_BENCH_WARMUP_COUNT=1 HVO_BENCH_ITERATION_COUNT=2 HVO_BENCH_LAUNCH_COUNT=1 dotnet run --project src/HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj -c Release -- --filter "*Stacker*"` (Processor encoder path enabled).
+- Mean accumulation latency (1936×1216 frames): 1 frame → **23.43 ms**, 4 frames → **30.51 ms**, 8 frames → **42.78 ms**. Standard deviation stayed ≤ 4.15 ms across the series despite the new delivery payload encoding.
+- Managed allocations remained stable (≈15.8 MB for single-frame flow, ≈31.6 MB when buffering 4–8 frames) indicating the encoder integration did not regress pool usage.
+- Artifacts copied to `benchmarks/rpi-20251016/rolling-frame-stacker/` (CSV, HTML, GitHub markdown, and runner log `HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks.RollingFrameStackerBenchmarks-20251016-220132.log`).
+
 ## Next steps
 
 - Profile on-device with `dotnet-counters` or `dotnet-trace` to observe CPU/concurrency behaviour under load.
