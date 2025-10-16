@@ -26,4 +26,6 @@ public sealed record FrameExportMetadata(
     double? QueueLatencyMilliseconds,
     double? ProcessingMilliseconds,
     double? FullPipelineMilliseconds,
-    FrameExportImageDescriptor? RawImageDescriptor);
+    FrameExportImageDescriptor? RawImageDescriptor,
+    string? PayloadContentType,
+    string? PayloadExtension);

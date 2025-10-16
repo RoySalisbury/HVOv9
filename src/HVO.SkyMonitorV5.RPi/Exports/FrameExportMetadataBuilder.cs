@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Skia;
 
 namespace HVO.SkyMonitorV5.RPi.Exports;
 
@@ -13,11 +14,16 @@ internal static class FrameExportMetadataBuilder
         DateTimeOffset stageTimestampUtc,
         double? queueLatencyMilliseconds,
         double? processingMilliseconds,
-        FrameExportImageDescriptor? rawImageDescriptor)
+        FrameExportImageDescriptor? rawImageDescriptor,
+        string? payloadContentType = null,
+        string? payloadExtension = null)
     {
         var context = capture.Context;
         var rigInfo = ResolveRigInfo(context?.Rig ?? rig);
         var exposure = capture.Exposure ?? new ExposureSettings(0, 0, false, false);
+
+        payloadContentType ??= SkiaRawFrameHelper.RawContentType;
+        payloadExtension ??= SkiaRawFrameHelper.RawFileExtension;
 
         var normalizedQueueLatency = NormalizeDuration(queueLatencyMilliseconds);
         var normalizedProcessing = NormalizeDuration(processingMilliseconds);
@@ -46,7 +52,9 @@ internal static class FrameExportMetadataBuilder
             QueueLatencyMilliseconds: normalizedQueueLatency,
             ProcessingMilliseconds: normalizedProcessing,
             FullPipelineMilliseconds: fullPipelineMilliseconds,
-            RawImageDescriptor: rawImageDescriptor);
+            RawImageDescriptor: rawImageDescriptor,
+            PayloadContentType: payloadContentType,
+            PayloadExtension: payloadExtension);
     }
 
     public static FrameExportMetadata FromProcessed(
@@ -55,10 +63,15 @@ internal static class FrameExportMetadataBuilder
         RigSpec rig,
         DateTimeOffset stageTimestampUtc,
         double? queueLatencyMilliseconds,
-        double? processingMilliseconds)
+        double? processingMilliseconds,
+        string? payloadContentType = null,
+        string? payloadExtension = null)
     {
         var rigInfo = ResolveRigInfo(context?.Rig ?? rig);
         var exposure = processed.Exposure ?? new ExposureSettings(0, 0, false, false);
+
+        payloadContentType ??= processed.ContentType;
+        payloadExtension ??= processed.FileExtension;
 
         var normalizedQueueLatency = NormalizeDuration(queueLatencyMilliseconds);
         var effectiveProcessing = NormalizeDuration(processingMilliseconds ?? processed.ProcessingMilliseconds);
@@ -91,7 +104,9 @@ internal static class FrameExportMetadataBuilder
             QueueLatencyMilliseconds: normalizedQueueLatency,
             ProcessingMilliseconds: effectiveProcessing,
         FullPipelineMilliseconds: fullPipelineMilliseconds,
-        RawImageDescriptor: null);
+        RawImageDescriptor: null,
+        PayloadContentType: payloadContentType,
+        PayloadExtension: payloadExtension);
     }
 
     private static double? NormalizeDuration(double? value)

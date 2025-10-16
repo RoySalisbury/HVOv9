@@ -92,31 +92,7 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     }
                 }
 
-                var encodeStopwatch = Stopwatch.StartNew();
-                // Encode the updated bitmap into the processed frame payload
-                var encodingSettings = configuration.ProcessedImageEncoding ?? new ImageEncodingSettings();
-                var skiaFormat = ToSkiaFormat(encodingSettings.Format);
-                var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
-
-                byte[] bytes;
-
-                try
-                {
-                    using var data = compositionImage.Encode(skiaFormat, quality);
-                    if (data is null)
-                    {
-                        throw new InvalidOperationException($"Failed to encode processed frame using format {skiaFormat}.");
-                    }
-
-                    bytes = data.ToArray();
-                }
-                finally
-                {
-                    // filterFrame resources are released below in finally block
-                }
-
-                encodeStopwatch.Stop();
-
+                var encodingSettings = ImageEncodingUtilities.Normalize(configuration.ProcessedImageEncoding);
                 pipelineStopwatch.Stop();
 
                 if (_logger.IsEnabled(LogLevel.Debug))
@@ -126,10 +102,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                         : string.Join(", ", composition.FilterExecutions.Select(t => $"{t.FilterName}:{t.DurationMilliseconds:F1}ms"));
 
                     _logger.LogDebug(
-                        "Filter pipeline completed in {TotalMs}ms (surface {SurfaceMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
+                        "Filter pipeline completed in {TotalMs}ms (surface {SurfaceMs}ms). Filters: {Breakdown}.",
                         pipelineStopwatch.Elapsed.TotalMilliseconds,
                         composition.SurfaceMilliseconds,
-                        encodeStopwatch.Elapsed.TotalMilliseconds,
                         filterBreakdown);
                 }
 
@@ -137,8 +112,9 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     stackResult.FrameId,
                     stackResult.Timestamp,
                     stackResult.Exposure,
-                    bytes,
-                    ToContentType(encodingSettings.Format),
+                    encodingSettings,
+                    ImageEncodingUtilities.ToContentType(encodingSettings.Format),
+                    ImageEncodingUtilities.ToFileExtension(encodingSettings.Format),
                     stackResult.FramesStacked,
                     stackResult.IntegrationMilliseconds,
                     composition.AppliedFilters,
@@ -163,19 +139,5 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
         }
 
         public FilterMetricsSnapshot GetMetricsSnapshot() => _telemetryStore.Snapshot();
-
-        private static SKEncodedImageFormat ToSkiaFormat(ImageEncodingFormat format) => format switch
-        {
-            ImageEncodingFormat.Jpeg => SKEncodedImageFormat.Jpeg,
-            ImageEncodingFormat.Png => SKEncodedImageFormat.Png,
-            _ => SKEncodedImageFormat.Png
-        };
-
-        private static string ToContentType(ImageEncodingFormat format) => format switch
-        {
-            ImageEncodingFormat.Jpeg => "image/jpeg",
-            ImageEncodingFormat.Png => "image/png",
-            _ => "application/octet-stream"
-        };
     }
 }

@@ -67,6 +67,12 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
             .Where(static option => option is { Enabled: true, RootPathLength: > 0 })
             .ToArray();
 
+        var roles = options.EnumerateRoles().ToArray();
+        if (roles.Length == 0)
+        {
+            return Result<bool>.Success(false);
+        }
+
         if (configurations.Length == 0)
         {
             return Result<bool>.Success(false);
@@ -75,26 +81,31 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
         Exception? firstError = null;
         foreach (var configuration in configurations)
         {
-            try
+            foreach (var role in roles)
             {
-                await PersistAsync(configuration, envelope, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (firstError is null)
-            {
-                firstError = ex;
-                _logger.LogError(ex,
-                    "Filesystem export sink failed for frame {FrameId} ({Stage}) at root {Root}.",
-                    envelope.FrameId,
-                    envelope.Stage,
-                    configuration.RootPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Filesystem export sink encountered an additional failure for frame {FrameId} ({Stage}) at root {Root}.",
-                    envelope.FrameId,
-                    envelope.Stage,
-                    configuration.RootPath);
+                try
+                {
+                    await PersistAsync(configuration, envelope, role, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (firstError is null)
+                {
+                    firstError = ex;
+                    _logger.LogError(ex,
+                        "Filesystem export sink failed for frame {FrameId} ({Stage}) [{Role}] at root {Root}.",
+                        envelope.FrameId,
+                        envelope.Stage,
+                        role,
+                        configuration.RootPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Filesystem export sink encountered an additional failure for frame {FrameId} ({Stage}) [{Role}] at root {Root}.",
+                        envelope.FrameId,
+                        envelope.Stage,
+                        role,
+                        configuration.RootPath);
+                }
             }
         }
 
@@ -108,7 +119,11 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
 
     private FrameExportStageOptions StageOptions => _optionsMonitor.CurrentValue.GetStageOptions(_stage);
 
-    private async Task PersistAsync(FilesystemFrameExportSinkOptions configuration, FrameExportEnvelope envelope, CancellationToken cancellationToken)
+    private async Task PersistAsync(
+        FilesystemFrameExportSinkOptions configuration,
+        FrameExportEnvelope envelope,
+        FrameExportPayloadRole role,
+        CancellationToken cancellationToken)
     {
         var timestampUtc = envelope.Metadata.StageTimestampUtc;
         if (timestampUtc == default)
@@ -116,8 +131,8 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
             timestampUtc = DateTimeOffset.UtcNow;
         }
 
-    var stageDirectory = GetStageDirectoryName(_stage);
-    var pathSegments = BuildPathSegments(configuration, stageDirectory, timestampUtc);
+        var stageDirectory = GetRoleDirectoryName(role);
+        var pathSegments = BuildPathSegments(configuration, stageDirectory, timestampUtc);
         var directory = Path.Combine(pathSegments);
         Directory.CreateDirectory(directory);
 
@@ -143,7 +158,7 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
         }
     }
 
-    private static string[] BuildPathSegments(FilesystemFrameExportSinkOptions configuration, string stageDirectory, DateTimeOffset timestampUtc)
+    private static string[] BuildPathSegments(FilesystemFrameExportSinkOptions configuration, string scopeDirectory, DateTimeOffset timestampUtc)
     {
         var segments = new List<string>(8)
         {
@@ -153,9 +168,9 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
         var prefixSegments = configuration.EnumeratePrefixSegments().ToArray();
         segments.AddRange(prefixSegments);
 
-        if (prefixSegments.Length == 0 || !string.Equals(prefixSegments[^1], stageDirectory, StringComparison.OrdinalIgnoreCase))
+        if (prefixSegments.Length == 0 || !string.Equals(prefixSegments[^1], scopeDirectory, StringComparison.OrdinalIgnoreCase))
         {
-            segments.Add(stageDirectory);
+            segments.Add(scopeDirectory);
         }
         segments.Add(timestampUtc.ToString("yyyy", CultureInfo.InvariantCulture));
         segments.Add(timestampUtc.ToString("MM", CultureInfo.InvariantCulture));
@@ -212,10 +227,10 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
         }
     }
 
-    private static string GetStageDirectoryName(FrameExportStage stage) => stage switch
+    private static string GetRoleDirectoryName(FrameExportPayloadRole role) => role switch
     {
-        FrameExportStage.Raw => "raw",
-        FrameExportStage.Processed => "processed",
+        FrameExportPayloadRole.Archive => "archive",
+        FrameExportPayloadRole.Delivery => "delivery",
         _ => "unknown"
     };
 }

@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -22,15 +23,18 @@ public sealed class AllSkyController : ControllerBase
 
     private readonly IFrameStateStore _frameStateStore;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
+    private readonly IProcessedFrameEncoder _processedFrameEncoder;
     private readonly ILogger<AllSkyController> _logger;
 
     public AllSkyController(
         IFrameStateStore frameStateStore,
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
+        IProcessedFrameEncoder processedFrameEncoder,
         ILogger<AllSkyController> logger)
     {
         _frameStateStore = frameStateStore;
         _optionsMonitor = optionsMonitor;
+        _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
         _logger = logger;
     }
 
@@ -124,7 +128,8 @@ public sealed class AllSkyController : ControllerBase
                 return NotFound();
             }
 
-            return File(processed.ImageBytes, processed.ContentType);
+            var delivery = _processedFrameEncoder.Encode(processed);
+            return File(delivery.Payload.ToArray(), delivery.ContentType);
         }
     }
 

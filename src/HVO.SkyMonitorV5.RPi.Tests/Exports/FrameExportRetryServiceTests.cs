@@ -99,7 +99,9 @@ public sealed class FrameExportRetryServiceTests
             12.5,
             27.8,
             6040.3,
-            RawImageDescriptor: null);
+            RawImageDescriptor: null,
+            PayloadContentType: "image/jpeg",
+            PayloadExtension: "jpg");
 
         var envelope = new FrameExportEnvelope(
             frameId,

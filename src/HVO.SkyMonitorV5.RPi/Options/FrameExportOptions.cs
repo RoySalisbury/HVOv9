@@ -28,10 +28,10 @@ public sealed class FrameExportOptions
     public void Normalize()
     {
         Raw ??= new FrameExportStageOptions();
-        Raw.Normalize();
+        Raw.Normalize(FrameExportStage.Raw);
 
         Processed ??= new FrameExportStageOptions();
-        Processed.Normalize();
+        Processed.Normalize(FrameExportStage.Processed);
     }
 }
 
@@ -46,7 +46,9 @@ public sealed class FrameExportStageOptions
 
     public IList<S3FrameExportSinkOptions> S3 { get; } = new List<S3FrameExportSinkOptions>();
 
-    internal void Normalize()
+    public FrameExportPayloadScope PayloadScope { get; set; } = FrameExportPayloadScope.Unspecified;
+
+    internal void Normalize(FrameExportStage stage)
     {
         foreach (var filesystem in Filesystem)
         {
@@ -57,11 +59,33 @@ public sealed class FrameExportStageOptions
         {
             s3?.Normalize();
         }
+
+        if (PayloadScope == FrameExportPayloadScope.Unspecified)
+        {
+            PayloadScope = stage == FrameExportStage.Raw
+                ? FrameExportPayloadScope.ArchiveOnly
+                : FrameExportPayloadScope.DeliveryOnly;
+        }
     }
 
     internal bool HasActiveFilesystemSink() => Enabled && Filesystem.Any(static option => option is { Enabled: true, RootPathLength: > 0 });
 
     internal bool HasActiveS3Sink() => Enabled && S3.Any(static option => option is { Enabled: true } && option.HasValidConfiguration);
+
+    internal IEnumerable<FrameExportPayloadRole> EnumerateRoles()
+    {
+        var scope = PayloadScope;
+
+        if ((scope & FrameExportPayloadScope.ArchiveOnly) == FrameExportPayloadScope.ArchiveOnly)
+        {
+            yield return FrameExportPayloadRole.Archive;
+        }
+
+        if ((scope & FrameExportPayloadScope.DeliveryOnly) == FrameExportPayloadScope.DeliveryOnly)
+        {
+            yield return FrameExportPayloadRole.Delivery;
+        }
+    }
 }
 
 /// <summary>
@@ -111,6 +135,15 @@ public sealed class FilesystemFrameExportSinkOptions
             yield return segment;
         }
     }
+}
+
+[Flags]
+public enum FrameExportPayloadScope
+{
+    Unspecified = 0,
+    ArchiveOnly = 1,
+    DeliveryOnly = 2,
+    ArchiveAndDelivery = 3
 }
 
 /// <summary>
@@ -189,9 +222,9 @@ public sealed class S3FrameExportSinkOptions
         Region = _region;
     }
 
-    internal string BuildObjectPrefix(FrameExportStage stage, DateTimeOffset timestamp)
+    internal string BuildObjectPrefix(FrameExportPayloadRole role, DateTimeOffset timestamp)
     {
-        var stageSegment = stage.ToString().ToLowerInvariant();
+        var scopeSegment = role == FrameExportPayloadRole.Archive ? "archive" : "delivery";
 
         var segments = new List<string>(6);
 
@@ -201,9 +234,9 @@ public sealed class S3FrameExportSinkOptions
             segments.AddRange(prefixSegments);
         }
 
-        if (segments.Count == 0 || !string.Equals(segments[^1], stageSegment, StringComparison.OrdinalIgnoreCase))
+        if (segments.Count == 0 || !string.Equals(segments[^1], scopeSegment, StringComparison.OrdinalIgnoreCase))
         {
-            segments.Add(stageSegment);
+            segments.Add(scopeSegment);
         }
 
         segments.Add(timestamp.ToString("yyyy", CultureInfo.InvariantCulture));

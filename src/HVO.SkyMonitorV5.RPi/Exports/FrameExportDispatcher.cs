@@ -327,6 +327,9 @@ public sealed class FrameExportDispatcher : BackgroundService, IFrameExportDispa
 
         var latencyMilliseconds = Math.Max(0d, latency.TotalMilliseconds);
         var payloadBytes = envelope.Payload.Length;
+        var metadata = envelope.Metadata;
+        var payloadContentType = metadata.PayloadContentType ?? envelope.ContentType;
+        var payloadExtension = metadata.PayloadExtension ?? envelope.FileExtension;
 
         _telemetryRecorder.RecordFrameExportAttempt(
             attemptedAtUtc,
@@ -337,13 +340,13 @@ public sealed class FrameExportDispatcher : BackgroundService, IFrameExportDispa
             success,
             latencyMilliseconds,
             payloadBytes,
-            envelope.ContentType,
-            envelope.FileExtension,
-            envelope.Metadata.QueueLatencyMilliseconds,
-            envelope.Metadata.ProcessingMilliseconds,
-            envelope.Metadata.FullPipelineMilliseconds,
-            envelope.Metadata.FramesStacked,
-            envelope.Metadata.IntegrationMilliseconds,
+            payloadContentType,
+            payloadExtension,
+            metadata.QueueLatencyMilliseconds,
+            metadata.ProcessingMilliseconds,
+            metadata.FullPipelineMilliseconds,
+            metadata.FramesStacked,
+            metadata.IntegrationMilliseconds,
             errorMessage);
     }
 

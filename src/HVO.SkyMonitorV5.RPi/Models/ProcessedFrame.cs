@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using SkiaSharp;
 
@@ -12,13 +13,14 @@ public sealed record ProcessedFrame(
     Guid FrameId,
     DateTimeOffset Timestamp,
     ExposureSettings Exposure,
-    byte[] ImageBytes,
+    ImageEncodingSettings Encoding,
     string ContentType,
+    string? FileExtension,
     int FramesStacked,
     int IntegrationMilliseconds,
     IReadOnlyList<string> AppliedFilters,
     int ProcessingMilliseconds,
-    SKImage? ImmutableImage = null)
+    SKImage ImmutableImage)
 {
     /// <summary>
     /// Detailed execution timings for each filter applied during composition.

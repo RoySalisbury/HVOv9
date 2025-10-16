@@ -2,6 +2,7 @@ using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
@@ -17,11 +18,13 @@ public sealed class FrameExportPublisher
     private const string LegacyRawExtension = "png";
 
     private readonly IFrameExportDispatcher _dispatcher;
+    private readonly IProcessedFrameEncoder _processedFrameEncoder;
     private readonly ILogger<FrameExportPublisher> _logger;
 
-    public FrameExportPublisher(IFrameExportDispatcher dispatcher, ILogger<FrameExportPublisher> logger)
+    public FrameExportPublisher(IFrameExportDispatcher dispatcher, IProcessedFrameEncoder processedFrameEncoder, ILogger<FrameExportPublisher> logger)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -56,7 +59,9 @@ public sealed class FrameExportPublisher
                     stageTimestampUtc,
                     queueLatencyMilliseconds: captureMilliseconds,
                     processingMilliseconds: null,
-                    rawImageDescriptor: descriptor);
+                    rawImageDescriptor: descriptor,
+                    payloadContentType: SkiaRawFrameHelper.RawContentType,
+                    payloadExtension: SkiaRawFrameHelper.RawFileExtension);
 
                 var envelope = new FrameExportEnvelope(
                     capture.FrameId,
@@ -98,7 +103,9 @@ public sealed class FrameExportPublisher
                 stageTimestampUtc,
                 queueLatencyMilliseconds: captureMilliseconds,
                 processingMilliseconds: null,
-                rawImageDescriptor: null);
+                rawImageDescriptor: null,
+                payloadContentType: LegacyRawContentType,
+                payloadExtension: LegacyRawExtension);
 
             var fallbackEnvelope = new FrameExportEnvelope(
                 capture.FrameId,
@@ -141,22 +148,28 @@ public sealed class FrameExportPublisher
     {
         try
         {
+            var delivery = _processedFrameEncoder.Encode(processedFrame);
+            var contentType = delivery.ContentType;
+            var fileExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(contentType);
+
             var metadata = FrameExportMetadataBuilder.FromProcessed(
                 processedFrame,
                 stackResult.Context,
                 rig,
                 stageTimestampUtc,
                 queueLatencyMilliseconds,
-                processingMilliseconds);
+                processingMilliseconds,
+                payloadContentType: contentType,
+                payloadExtension: fileExtension);
 
-            var payload = new ReadOnlyMemory<byte>(processedFrame.ImageBytes);
+            var payload = delivery.Payload;
             var envelope = new FrameExportEnvelope(
                 processedFrame.FrameId,
                 FrameExportStage.Processed,
                 metadata,
                 payload,
-                processedFrame.ContentType,
-                TryGetFileExtension(processedFrame.ContentType));
+                contentType,
+                fileExtension);
 
             if (!_dispatcher.TryEnqueue(envelope))
             {

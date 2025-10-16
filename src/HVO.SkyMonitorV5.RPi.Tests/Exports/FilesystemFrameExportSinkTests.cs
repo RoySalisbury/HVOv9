@@ -73,24 +73,26 @@ public sealed class FilesystemFrameExportSinkTests
                 AppliedFilters: new List<string> { "MockFilter" },
                 QueueLatencyMilliseconds: 12.3,
                 ProcessingMilliseconds: 45.6,
-                FullPipelineMilliseconds: 1057.9,
-        RawImageDescriptor: descriptor);
+        FullPipelineMilliseconds: 1057.9,
+    RawImageDescriptor: descriptor,
+    PayloadContentType: "application/vnd.hvo.skia.raw",
+    PayloadExtension: "skimg");
 
             var payload = new ReadOnlyMemory<byte>(new byte[] { 1, 2, 3, 4 });
             var envelope = new FrameExportEnvelope(
                 frameId,
                 FrameExportStage.Raw,
                 metadata,
-        payload,
-        "application/vnd.hvo.skia.raw",
-        "skimg");
+    payload,
+    "application/vnd.hvo.skia.raw",
+    "skimg");
 
             var result = await sink.ExportAsync(envelope, CancellationToken.None);
 
             Assert.IsTrue(result.IsSuccessful, "Expected successful export result.");
             Assert.IsTrue(result.Value, "Expected sink to report payload persisted.");
 
-            var stageDirectory = Path.Combine(rootPath, "raw", "2025", "10", "13");
+            var stageDirectory = Path.Combine(rootPath, "archive", "2025", "10", "13");
             Assert.IsTrue(Directory.Exists(stageDirectory), "Expected stage directory to be created.");
 
             var imageFiles = Directory.GetFiles(stageDirectory, "*.skimg");
@@ -104,10 +106,101 @@ public sealed class FilesystemFrameExportSinkTests
             using var document = JsonDocument.Parse(manifestJson);
             Assert.AreEqual(frameId.ToString("D"), document.RootElement.GetProperty("frameId").GetString());
             Assert.AreEqual(1057.9, document.RootElement.GetProperty("fullPipelineMilliseconds").GetDouble(), 0.0001, "Manifest should include full pipeline duration.");
+            Assert.AreEqual("application/vnd.hvo.skia.raw", document.RootElement.GetProperty("payloadContentType").GetString(), "Manifest should note payload content type.");
+            Assert.AreEqual("skimg", document.RootElement.GetProperty("payloadExtension").GetString(), "Manifest should note payload extension.");
             var rawDescriptor = document.RootElement.GetProperty("rawImageDescriptor");
             Assert.AreEqual(1920, rawDescriptor.GetProperty("width").GetInt32(), "Raw descriptor width should persist.");
             Assert.AreEqual(1080, rawDescriptor.GetProperty("height").GetInt32(), "Raw descriptor height should persist.");
             Assert.AreEqual("RgbaF16", rawDescriptor.GetProperty("colorType").GetString(), "Raw descriptor color type should persist.");
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                Directory.Delete(rootPath, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task ExportAsync_WithArchiveAndDeliveryScope_WritesToBothTargets()
+    {
+        var rootPath = Path.Combine(Path.GetTempPath(), FormattableString.Invariant($"hvo-fsexport-dual-{Guid.NewGuid():N}"));
+        Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            var options = new FrameExportOptions();
+            options.Raw.Enabled = true;
+            options.Raw.PayloadScope = FrameExportPayloadScope.ArchiveAndDelivery;
+            options.Raw.Filesystem.Add(new FilesystemFrameExportSinkOptions
+            {
+                Enabled = true,
+                RootPath = rootPath,
+                IncludeMetadataManifest = false
+            });
+            options.Normalize();
+
+            using var optionsMonitor = new TestOptionsMonitor<FrameExportOptions>(options);
+            var sink = new FilesystemFrameExportSink(
+                FrameExportStage.Raw,
+                optionsMonitor,
+                NullLogger<FilesystemFrameExportSink>.Instance);
+
+            var frameId = Guid.NewGuid();
+            var timestamp = new DateTimeOffset(2025, 10, 13, 8, 15, 42, TimeSpan.Zero);
+            var descriptor = new FrameExportImageDescriptor(8, 8, 64, 8, "RgbaF16", "Premul", true, false, true, "Linear");
+
+            var metadata = new FrameExportMetadata(
+                frameId,
+                timestamp,
+                timestamp,
+                new ExposureSettings(250, 100, false, false),
+                "Rig",
+                "Camera",
+                "Lens",
+                35.0,
+                -114.0,
+                false,
+                null,
+                false,
+                1,
+                250,
+                AppliedFilters: Array.Empty<string>(),
+                QueueLatencyMilliseconds: null,
+                ProcessingMilliseconds: null,
+                FullPipelineMilliseconds: null,
+                RawImageDescriptor: descriptor,
+                PayloadContentType: "application/vnd.hvo.skia.raw",
+                PayloadExtension: "skimg");
+
+            var payload = new ReadOnlyMemory<byte>(new byte[] { 5, 6, 7, 8 });
+            var envelope = new FrameExportEnvelope(
+                frameId,
+                FrameExportStage.Raw,
+                metadata,
+                payload,
+                "application/vnd.hvo.skia.raw",
+                "skimg");
+
+            var result = await sink.ExportAsync(envelope, CancellationToken.None);
+
+            Assert.IsTrue(result.IsSuccessful && result.Value, "Expected dual-scope export to succeed.");
+
+            var archivePath = Path.Combine(rootPath, "archive", "2025", "10", "13");
+            var deliveryPath = Path.Combine(rootPath, "delivery", "2025", "10", "13");
+
+            Assert.IsTrue(Directory.Exists(archivePath), "Archive directory should exist.");
+            Assert.IsTrue(Directory.Exists(deliveryPath), "Delivery directory should exist.");
+
+            var archiveFiles = Directory.GetFiles(archivePath, "*.skimg");
+            var deliveryFiles = Directory.GetFiles(deliveryPath, "*.skimg");
+
+            Assert.AreEqual(1, archiveFiles.Length, "Archive scope should produce one file.");
+            Assert.AreEqual(1, deliveryFiles.Length, "Delivery scope should produce one file.");
+
+            CollectionAssert.AreEqual(payload.ToArray(), await File.ReadAllBytesAsync(archiveFiles[0]));
+            CollectionAssert.AreEqual(payload.ToArray(), await File.ReadAllBytesAsync(deliveryFiles[0]));
         }
         finally
         {

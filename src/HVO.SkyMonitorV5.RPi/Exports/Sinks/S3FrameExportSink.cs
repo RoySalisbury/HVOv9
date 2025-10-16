@@ -82,6 +82,12 @@ public sealed class S3FrameExportSink : IFrameExportSink
             .Where(static option => option is { Enabled: true } && option.HasValidConfiguration)
             .ToArray();
 
+        var roles = options.EnumerateRoles().ToArray();
+        if (roles.Length == 0)
+        {
+            return Result<bool>.Success(false);
+        }
+
         if (configurations.Length == 0)
         {
             return Result<bool>.Success(false);
@@ -90,26 +96,31 @@ public sealed class S3FrameExportSink : IFrameExportSink
         Exception? firstError = null;
         foreach (var configuration in configurations)
         {
-            try
+            foreach (var role in roles)
             {
-                await UploadAsync(configuration, envelope, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (firstError is null)
-            {
-                firstError = ex;
-                _logger.LogError(ex,
-                    "S3 export sink failed for frame {FrameId} ({Stage}) targeting bucket {Bucket}.",
-                    envelope.FrameId,
-                    envelope.Stage,
-                    configuration.Bucket);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "S3 export sink encountered an additional failure for frame {FrameId} ({Stage}) targeting bucket {Bucket}.",
-                    envelope.FrameId,
-                    envelope.Stage,
-                    configuration.Bucket);
+                try
+                {
+                    await UploadAsync(configuration, envelope, role, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (firstError is null)
+                {
+                    firstError = ex;
+                    _logger.LogError(ex,
+                        "S3 export sink failed for frame {FrameId} ({Stage}) [{Role}] targeting bucket {Bucket}.",
+                        envelope.FrameId,
+                        envelope.Stage,
+                        role,
+                        configuration.Bucket);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "S3 export sink encountered an additional failure for frame {FrameId} ({Stage}) [{Role}] targeting bucket {Bucket}.",
+                        envelope.FrameId,
+                        envelope.Stage,
+                        role,
+                        configuration.Bucket);
+                }
             }
         }
 
@@ -123,7 +134,11 @@ public sealed class S3FrameExportSink : IFrameExportSink
 
     private FrameExportStageOptions StageOptions => _optionsMonitor.CurrentValue.GetStageOptions(_stage);
 
-    private async Task UploadAsync(S3FrameExportSinkOptions configuration, FrameExportEnvelope envelope, CancellationToken cancellationToken)
+    private async Task UploadAsync(
+        S3FrameExportSinkOptions configuration,
+        FrameExportEnvelope envelope,
+        FrameExportPayloadRole role,
+        CancellationToken cancellationToken)
     {
         var bucket = configuration.Bucket;
         if (string.IsNullOrWhiteSpace(bucket))
@@ -139,9 +154,9 @@ public sealed class S3FrameExportSink : IFrameExportSink
             throw new InvalidOperationException("S3 credentials and endpoint must be configured for frame export.");
         }
 
-    var client = _clientProvider.GetClient(endpoint, accessKey, secretKey, configuration.UseSsl);
+        var client = _clientProvider.GetClient(endpoint, accessKey, secretKey, configuration.UseSsl);
 
-    await EnsureBucketExistsAsync(client, bucket, configuration, cancellationToken).ConfigureAwait(false);
+        await EnsureBucketExistsAsync(client, bucket, configuration, cancellationToken).ConfigureAwait(false);
 
         var timestampUtc = envelope.Metadata.StageTimestampUtc;
         if (timestampUtc == default)
@@ -149,13 +164,17 @@ public sealed class S3FrameExportSink : IFrameExportSink
             timestampUtc = DateTimeOffset.UtcNow;
         }
 
-        var prefix = configuration.BuildObjectPrefix(_stage, timestampUtc);
+        var prefix = configuration.BuildObjectPrefix(role, timestampUtc);
         var baseName = BuildBaseFileName(timestampUtc, envelope.FrameId);
-        var extension = ResolveExtension(envelope.FileExtension);
+        var metadataExtension = envelope.Metadata.PayloadExtension;
+        var extension = ResolveExtension(string.IsNullOrWhiteSpace(metadataExtension) ? envelope.FileExtension : metadataExtension);
         var objectKey = FormattableString.Invariant($"{prefix}/{baseName}.{extension}");
-        var contentType = string.IsNullOrWhiteSpace(envelope.ContentType) ? "application/octet-stream" : envelope.ContentType;
+        var metadataContentType = envelope.Metadata.PayloadContentType;
+        var contentType = string.IsNullOrWhiteSpace(metadataContentType)
+            ? string.IsNullOrWhiteSpace(envelope.ContentType) ? "application/octet-stream" : envelope.ContentType
+            : metadataContentType;
 
-        await UploadObjectAsync(client, bucket, objectKey, contentType, configuration, envelope, cancellationToken).ConfigureAwait(false);
+        await UploadObjectAsync(client, bucket, objectKey, contentType, configuration, envelope, role, cancellationToken).ConfigureAwait(false);
 
         if (configuration.EmitJsonManifest)
         {
@@ -166,9 +185,10 @@ public sealed class S3FrameExportSink : IFrameExportSink
         if (_logger.IsEnabled(LogLevel.Trace))
         {
             _logger.LogTrace(
-                "Uploaded frame export {FrameId} ({Stage}) to s3://{Bucket}/{Key}.",
+                "Uploaded frame export {FrameId} ({Stage}) [{Role}] to s3://{Bucket}/{Key}.",
                 envelope.FrameId,
                 envelope.Stage,
+                role,
                 bucket,
                 objectKey);
         }
@@ -181,6 +201,7 @@ public sealed class S3FrameExportSink : IFrameExportSink
         string contentType,
         S3FrameExportSinkOptions configuration,
         FrameExportEnvelope envelope,
+        FrameExportPayloadRole role,
         CancellationToken cancellationToken)
     {
         await using var payloadStream = new MemoryStream(envelope.Payload.ToArray(), writable: false);
@@ -195,6 +216,7 @@ public sealed class S3FrameExportSink : IFrameExportSink
         if (configuration.EmitMetadataHeaders)
         {
             var headers = BuildMetadataHeaders(envelope);
+            headers["payload-role"] = role.ToString().ToLowerInvariant();
             if (headers.Count > 0)
             {
                 putArgs = putArgs.WithHeaders(headers);
@@ -350,6 +372,16 @@ public sealed class S3FrameExportSink : IFrameExportSink
         if (envelope.Metadata.FullPipelineMilliseconds is double fullPipeline)
         {
             headers["full-pipeline-ms"] = fullPipeline.ToString("F3", CultureInfo.InvariantCulture);
+        }
+
+        if (!string.IsNullOrWhiteSpace(envelope.Metadata.PayloadContentType))
+        {
+            headers["payload-content-type"] = SanitizeMetadataValue(envelope.Metadata.PayloadContentType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(envelope.Metadata.PayloadExtension))
+        {
+            headers["payload-extension"] = SanitizeMetadataValue(envelope.Metadata.PayloadExtension);
         }
 
         if (envelope.Metadata.AppliedFilters is { Count: > 0 } filters)

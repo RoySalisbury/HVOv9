@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Exports;
@@ -96,7 +100,9 @@ public sealed class S3FrameExportSinkIntegrationTests
             null,
             null,
             null,
-            RawImageDescriptor: descriptor);
+            RawImageDescriptor: descriptor,
+            PayloadContentType: "application/vnd.hvo.skia.raw",
+            PayloadExtension: "skimg");
 
         var payload = new byte[] { 0x01, 0x02, 0x03, 0x04 };
         var envelope = new FrameExportEnvelope(
@@ -107,12 +113,12 @@ public sealed class S3FrameExportSinkIntegrationTests
             "application/vnd.hvo.skia.raw",
             "skimg");
 
-        var prefixPath = options.Raw.S3[0].BuildObjectPrefix(FrameExportStage.Raw, timestampUtc);
+    var prefixPath = options.Raw.S3[0].BuildObjectPrefix(FrameExportPayloadRole.Archive, timestampUtc);
         var baseFileName = FormattableString.Invariant($"{timestampUtc:HHmmssfff}-{frameId:N}");
-        var payloadKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.skimg");
-        var manifestKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.json");
+            var payloadKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.skimg");
+            var manifestKey = FormattableString.Invariant($"{prefixPath}/{baseFileName}.json");
 
-        var client = provider.GetClient(endpoint!, accessKey!, secretKey!, useSsl);
+    var client = provider.GetClient(endpoint!, accessKey!, secretKey!, useSsl);
 
         try
         {
@@ -124,8 +130,42 @@ public sealed class S3FrameExportSinkIntegrationTests
             var exists = await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucket), CancellationToken.None).ConfigureAwait(false);
             Assert.IsTrue(exists, "Expected bucket to exist after export.");
 
-            await client.StatObjectAsync(new StatObjectArgs().WithBucket(bucket).WithObject(payloadKey), CancellationToken.None).ConfigureAwait(false);
-            await client.StatObjectAsync(new StatObjectArgs().WithBucket(bucket).WithObject(manifestKey), CancellationToken.None).ConfigureAwait(false);
+            var payloadStat = await client.StatObjectAsync(new StatObjectArgs().WithBucket(bucket).WithObject(payloadKey), CancellationToken.None).ConfigureAwait(false);
+            var manifestStat = await client.StatObjectAsync(new StatObjectArgs().WithBucket(bucket).WithObject(manifestKey), CancellationToken.None).ConfigureAwait(false);
+
+            var contentTypeProperty = payloadStat.GetType().GetProperty("ContentType", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            var contentTypeValue = (string?)contentTypeProperty?.GetValue(payloadStat);
+            Assert.AreEqual("application/vnd.hvo.skia.raw", contentTypeValue, "Payload object should advertise metadata-derived content type.");
+
+            var metadataDictionary = GetPropertyValue<IDictionary<string, string>>(payloadStat, "MetaData");
+            Assert.IsNotNull(metadataDictionary, "Expected metadata dictionary on payload stat response.");
+            var headerContentType = GetHeaderValue(metadataDictionary, "payload-content-type");
+            Assert.AreEqual("application/vnd.hvo.skia.raw", headerContentType, "Expected payload metadata header to propagate content type.");
+            var headerExtension = GetHeaderValue(metadataDictionary, "payload-extension");
+            Assert.AreEqual("skimg", headerExtension, "Expected payload metadata header to propagate file extension.");
+            var headerRole = GetHeaderValue(metadataDictionary, "payload-role");
+            Assert.AreEqual("archive", headerRole, "Expected payload metadata header to propagate role scope.");
+
+            var manifestBuffer = new MemoryStream();
+            var getArgs = new GetObjectArgs()
+                .WithBucket(bucket)
+                .WithObject(manifestKey)
+                .WithCallbackStream(async (stream, token) =>
+                {
+                    if (stream.CanSeek)
+                    {
+                        stream.Position = 0;
+                    }
+
+                    await stream.CopyToAsync(manifestBuffer, token).ConfigureAwait(false);
+                    manifestBuffer.Position = 0;
+                });
+
+            await client.GetObjectAsync(getArgs, CancellationToken.None).ConfigureAwait(false);
+
+            var manifestJson = Encoding.UTF8.GetString(manifestBuffer.ToArray());
+            var expectedJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.AreEqual(expectedJson, manifestJson, "Manifest JSON retrieved from MinIO should match serialized metadata.");
         }
         finally
         {
@@ -157,5 +197,45 @@ public sealed class S3FrameExportSinkIntegrationTests
         {
             TestContext?.WriteLine($"[cleanup] remove bucket {bucket} failed: {ex.Message}");
         }
+    }
+
+    private static T? GetPropertyValue<T>(object target, string propertyName)
+    {
+        if (target is null)
+        {
+            throw new ArgumentNullException(nameof(target));
+        }
+
+        var property = target.GetType().GetProperty(propertyName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+        if (property is null)
+        {
+            return default;
+        }
+
+        var value = property.GetValue(target);
+        if (value is null)
+        {
+            return default;
+        }
+
+        return (T)value;
+    }
+
+    private static string? GetHeaderValue(IDictionary<string, string>? headers, string suffix)
+    {
+        if (headers is null)
+        {
+            return null;
+        }
+
+        foreach (var (key, value) in headers)
+        {
+            if (key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 }

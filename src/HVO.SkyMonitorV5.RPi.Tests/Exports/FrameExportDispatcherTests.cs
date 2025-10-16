@@ -82,7 +82,9 @@ public sealed class FrameExportDispatcherTests
             5.0,
             10.0,
             1015.0,
-            RawImageDescriptor: null);
+            RawImageDescriptor: null,
+            PayloadContentType: "application/vnd.hvo.skia.raw",
+            PayloadExtension: "skimg");
 
         var envelope = new FrameExportEnvelope(
             frameId,

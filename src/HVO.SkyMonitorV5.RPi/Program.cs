@@ -338,6 +338,7 @@ public static class Program
         services.AddSingleton<FrameExportDispatcher>();
     services.AddSingleton<IFrameExportDispatcher>(sp => sp.GetRequiredService<FrameExportDispatcher>());
     services.AddHostedService(sp => sp.GetRequiredService<FrameExportDispatcher>());
+        services.AddSingleton<IProcessedFrameEncoder, ProcessedFrameEncoder>();
         services.AddSingleton<FrameExportPublisher>();
         services.AddSingleton<BackgroundFrameStackerService>();
         services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());

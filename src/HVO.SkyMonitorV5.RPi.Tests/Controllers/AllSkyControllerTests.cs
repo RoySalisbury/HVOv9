@@ -5,6 +5,7 @@ using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Skia;
+using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -75,7 +76,9 @@ public sealed class AllSkyControllerTests
         var optionsMonitor = new Mock<IOptionsMonitor<CameraPipelineOptions>>();
         optionsMonitor.SetupGet(options => options.CurrentValue).Returns(new CameraPipelineOptions());
 
-        var controller = new AllSkyController(frameStateStore.Object, optionsMonitor.Object, NullLogger<AllSkyController>.Instance)
+    var encoder = new Mock<IProcessedFrameEncoder>();
+
+    var controller = new AllSkyController(frameStateStore.Object, optionsMonitor.Object, encoder.Object, NullLogger<AllSkyController>.Instance)
         {
             ControllerContext = new ControllerContext
             {

@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -278,6 +279,7 @@ public sealed class FrameFilterPipelineTests
         };
 
         var pipeline = new FrameFilterPipeline(filters, composer, NullLogger<FrameFilterPipeline>.Instance);
+        var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
 
         byte[]? referencePayload = null;
         var expectedFilters = new[]
@@ -293,7 +295,8 @@ public sealed class FrameFilterPipelineTests
 
             try
             {
-                var payload = processed.ImageBytes.ToArray();
+                var delivery = encoder.Encode(processed);
+                var payload = delivery.Payload.ToArray();
                 if (referencePayload is null)
                 {
                     referencePayload = payload;
@@ -313,7 +316,7 @@ public sealed class FrameFilterPipelineTests
 
                 Assert.IsTrue(processed.SurfaceMilliseconds >= 0, "Surface preparation timing must be non-negative.");
 
-                using var data = SKData.CreateCopy(processed.ImageBytes);
+                using var data = SKData.CreateCopy(payload);
                 using var encodedImage = SKImage.FromEncodedData(data);
                 var info = new SKImageInfo(encodedImage.Width, encodedImage.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
                 using var decodedBitmap = new SKBitmap(info);

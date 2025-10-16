@@ -2,6 +2,7 @@ using System;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
@@ -43,12 +44,14 @@ public sealed class FrameStateStoreTests
 
         var processedBitmap = new SKBitmap(width: 4, height: 4);
         var processedImage = SKImage.FromBitmap(processedBitmap);
+        var encoding = new ImageEncodingSettings(ImageEncodingFormat.Png, 90);
         var processedFrame = new ProcessedFrame(
             frameId,
             now,
             exposure,
-            Array.Empty<byte>(),
-            "image/png",
+            encoding,
+            ImageEncodingUtilities.ToContentType(encoding.Format),
+            ImageEncodingUtilities.ToFileExtension(encoding.Format),
             FramesStacked: 1,
             IntegrationMilliseconds: exposure.ExposureMilliseconds,
             AppliedFilters: new[] { "TestFilter" },

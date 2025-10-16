@@ -1,3 +1,5 @@
+using System;
+using System.Security.Cryptography;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SkiaSharp;
@@ -96,5 +98,40 @@ public sealed class SkiaRawFrameHelperTests
         Assert.IsNotNull(processedPixmap, "Processed clone should expose pixels.");
 
         processedClone.Dispose();
+    }
+
+    [TestMethod]
+    public void TryCreateRawPayload_GeneratesDeterministicHashForSampleBitmap()
+    {
+        var info = new SKImageInfo(4, 4, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var bitmap = new SKBitmap(info);
+
+        for (var y = 0; y < info.Height; y++)
+        {
+            for (var x = 0; x < info.Width; x++)
+            {
+                var red = (byte)((x + 1) * 32);
+                var green = (byte)((y + 1) * 48);
+                var blue = (byte)(((x + y) + 1) * 40);
+                bitmap.SetPixel(x, y, new SKColor(red, green, blue, 255));
+            }
+        }
+
+        using var image = SKImage.FromBitmap(bitmap);
+
+        var success = SkiaRawFrameHelper.TryCreateRawPayload(image, out var payload, out var descriptor);
+
+        Assert.IsTrue(success, "Expected raw payload creation to succeed.");
+        Assert.IsNotNull(payload, "Payload should be populated.");
+        Assert.IsNotNull(descriptor, "Descriptor should accompany raw payload.");
+
+        var expectedLength = descriptor.RowBytes * descriptor.Height;
+        Assert.AreEqual(expectedLength, payload.Length, "Payload length should match descriptor row bytes.");
+
+        var hash = SHA256.HashData(payload);
+        var hashHex = Convert.ToHexString(hash);
+
+    const string expectedHash = "062DBE6DC896E8CD19F3B6C3EAD6B5FA12D86860AED68ED2D8E412A85B8C6C89";
+    Assert.AreEqual(expectedHash, hashHex, "Raw payload hash should remain stable.");
     }
 }
