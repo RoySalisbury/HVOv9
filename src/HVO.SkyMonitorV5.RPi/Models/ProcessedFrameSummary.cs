@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 
 namespace HVO.SkyMonitorV5.RPi.Models;
 
@@ -9,4 +11,8 @@ public sealed record ProcessedFrameSummary(
 	int FramesStacked,
 	int IntegrationMilliseconds,
 	IReadOnlyList<string> AppliedFilters,
-	int ProcessingMilliseconds);
+	int ProcessingMilliseconds)
+{
+	public double SurfaceMilliseconds { get; init; }
+	public IReadOnlyList<FilterExecution> FilterExecutions { get; init; } = Array.Empty<FilterExecution>();
+}

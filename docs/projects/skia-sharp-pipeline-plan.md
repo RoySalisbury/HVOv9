@@ -43,12 +43,15 @@
 
 ## Phase 5 – Composition & Frame Queues
 
-- [ ] Centralize composition on linear `SKSurface` drawing base `SKImage`, overlays, and masks deterministically.
-- [ ] Update frame buffers/queues to store only `SKImage` references plus metadata.
-- [ ] Implement regression tests ensuring deterministic blends and expected performance characteristics.
-- [ ] Capture profiling metrics before/after to validate improvements.
+- [x] Centralize composition on linear `SKSurface` drawing base `SKImage`, overlays, and masks deterministically.
+- [x] Update frame buffers/queues to store only `SKImage` references plus metadata.
+- [x] Surface composed frame history via diagnostics API for tooling and regression capture.
+- [x] Implement regression tests ensuring deterministic blends and expected performance characteristics. (See `FrameFilterPipelineTests.ProcessAsync_ProducesDeterministicOutputAcrossRuns` for the PNG baseline.)
+- [x] Capture profiling metrics before/after to validate improvements. (2025-10-16 BenchmarkDotNet run saved under `benchmarks/rpi-20251016`.)
 
 ## Phase 6 – Export & Post-Processing Handoff
+
+> Status: In progress (kickoff 2025-10-16). Capturing encoder requirements and integration plan.
 
 - [ ] Provide encoders that convert high-bit `SKImage` to delivery formats (PNG/JPEG) only at export time.
 - [ ] Update post-pipeline S3 uploader to choose archive/delivery formats while retaining linear masters when needed.

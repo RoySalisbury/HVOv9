@@ -6,6 +6,7 @@ using BenchmarkDotNet.Attributes;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,6 +18,7 @@ namespace HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks;
 public class EndToEndPipelineBenchmarks
 {
     private RollingFrameStacker _stacker = default!;
+    private FrameComposer _frameComposer = default!;
     private FrameFilterPipeline _pipeline = default!;
     private CameraConfiguration _configuration = default!;
     private SkiaSurfacePool _surfacePool = default!;
@@ -39,9 +41,10 @@ public class EndToEndPipelineBenchmarks
             filters[i] = new SyntheticOverlayFilter($"SyntheticOverlay_{i}", 12 + i * 4);
         }
 
-        _surfacePool = new SkiaSurfacePool();
-        _stacker = new RollingFrameStacker(_surfacePool, NullLogger<RollingFrameStacker>.Instance);
-        _pipeline = new FrameFilterPipeline(filters, _surfacePool, NullLogger<FrameFilterPipeline>.Instance);
+    _surfacePool = new SkiaSurfacePool();
+    _frameComposer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
+    _stacker = new RollingFrameStacker(_surfacePool, NullLogger<RollingFrameStacker>.Instance);
+    _pipeline = new FrameFilterPipeline(filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
 
         var bufferMinimum = Math.Max(24, StackingFrameCount);
 

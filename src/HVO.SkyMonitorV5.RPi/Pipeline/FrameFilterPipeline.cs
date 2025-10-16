@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Telemetry;
@@ -23,20 +24,20 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
     public sealed class FrameFilterPipeline : IFrameFilterPipeline
     {
         private readonly IEnumerable<IFrameFilter> _filters;
+        private readonly FrameComposer _frameComposer;
         private readonly ILogger<FrameFilterPipeline> _logger;
-        private readonly SkiaSurfacePool _surfacePool;
         private readonly FilterTelemetryStore _telemetryStore = new();
         private readonly ISkyMonitorTelemetryRecorder? _telemetryRecorder;
 
         public FrameFilterPipeline(
             IEnumerable<IFrameFilter> filters,
-            SkiaSurfacePool surfacePool,
+            FrameComposer frameComposer,
             ILogger<FrameFilterPipeline> logger,
             ISkyMonitorTelemetryRecorder? telemetryRecorder = null)
         {
             _filters = filters ?? throw new ArgumentNullException(nameof(filters));
+            _frameComposer = frameComposer ?? throw new ArgumentNullException(nameof(frameComposer));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _surfacePool = surfacePool ?? throw new ArgumentNullException(nameof(surfacePool));
             _telemetryRecorder = telemetryRecorder;
         }
 
@@ -52,9 +53,8 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
 
             var frameContext = stackResult.Context;
 
-            FilterFrame? filterFrame = null;
-            SKBitmap? legacyBitmap = null;
             SKImage? disposableSourceImage = null;
+            SKImage? compositionImage = null;
 
             try
             {
@@ -68,100 +68,27 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     sourceImage = disposableSourceImage;
                 }
 
-                var surfaceStopwatch = Stopwatch.StartNew();
-                var surfaceLease = _surfacePool.RentLinearSurface(sourceImage.Width, sourceImage.Height);
-                var surface = surfaceLease.Surface;
-                surface.Canvas.Clear(SKColors.Transparent);
-                surface.Canvas.DrawImage(sourceImage, 0, 0);
-                surface.Canvas.Flush();
-                surfaceStopwatch.Stop();
-
-                filterFrame = new FilterFrame(surfaceLease);
                 var renderContext = frameContext is not null ? new FrameRenderContext(frameContext) : null;
+                var composition = await _frameComposer.ComposeAsync(
+                    sourceImage,
+                    stackResult,
+                    configuration,
+                    renderContext,
+                    _filters,
+                    cancellationToken).ConfigureAwait(false);
 
-                var appliedFilters = new List<string>();
-                List<FilterTiming>? filterTimings = null;
-                if (_logger.IsEnabled(LogLevel.Debug))
+                compositionImage = composition.Image;
+
+                foreach (var execution in composition.FilterExecutions)
                 {
-                    filterTimings = new List<FilterTiming>();
-                }
-
-                var legacyBitmapStale = true;
-
-                foreach (var filter in _filters)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (!IsFilterEnabled(configuration, filter.Name))
+                    var telemetrySnapshot = _telemetryStore.Record(execution.FilterName, execution.DurationMilliseconds);
+                    if (telemetrySnapshot is not null)
                     {
-                        continue;
-                    }
-
-                    bool apply;
-                    try
-                    {
-                        apply = filter.ShouldApply(configuration);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Filter {Filter} ShouldApply() threw.", filter.Name);
-                        continue;
-                    }
-
-                    if (!apply)
-                    {
-                        continue;
-                    }
-
-                    var filterStopwatch = Stopwatch.StartNew();
-
-                    try
-                    {
-                        appliedFilters.Add(filter.Name);
-
-                        if (filter is IImageFrameFilter imageFilter)
-                        {
-                            await imageFilter.ApplyAsync(filterFrame, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
-                            legacyBitmapStale = true;
-                        }
-                        else
-                        {
-                            if (legacyBitmap is null || legacyBitmapStale)
-                            {
-                                legacyBitmap?.Dispose();
-                                legacyBitmap = filterFrame.CreateBitmapView();
-                                legacyBitmapStale = false;
-                            }
-
-                            await filter.ApplyAsync(legacyBitmap, stackResult, configuration, renderContext, cancellationToken).ConfigureAwait(false);
-                            filterFrame.BlitBitmap(legacyBitmap);
-                        }
-
-                        filterStopwatch.Stop();
-                        var duration = filterStopwatch.Elapsed.TotalMilliseconds;
-
-                        if (filterTimings is not null)
-                        {
-                            filterTimings.Add(new FilterTiming(filter.Name, duration));
-                        }
-
-                        var telemetrySnapshot = _telemetryStore.Record(filter.Name, duration);
-                        if (telemetrySnapshot is not null)
-                        {
-                            _telemetryRecorder?.RecordFilterMetricSample(
-                                telemetrySnapshot.FilterName,
-                                telemetrySnapshot.AppliedCount,
-                                telemetrySnapshot.LastDurationMilliseconds,
-                                telemetrySnapshot.AverageDurationMilliseconds);
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Filter {Filter} ApplyAsync() failed; continuing.", filter.Name);
+                        _telemetryRecorder?.RecordFilterMetricSample(
+                            telemetrySnapshot.FilterName,
+                            telemetrySnapshot.AppliedCount,
+                            telemetrySnapshot.LastDurationMilliseconds,
+                            telemetrySnapshot.AverageDurationMilliseconds);
                     }
                 }
 
@@ -171,12 +98,11 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                 var skiaFormat = ToSkiaFormat(encodingSettings.Format);
                 var quality = Math.Clamp(encodingSettings.Quality, 1, 100);
 
-                var processedImage = filterFrame.SnapshotImage();
                 byte[] bytes;
 
                 try
                 {
-                    using var data = processedImage.Encode(skiaFormat, quality);
+                    using var data = compositionImage.Encode(skiaFormat, quality);
                     if (data is null)
                     {
                         throw new InvalidOperationException($"Failed to encode processed frame using format {skiaFormat}.");
@@ -193,21 +119,21 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
 
                 pipelineStopwatch.Stop();
 
-                if (filterTimings is not null)
+                if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    var filterBreakdown = filterTimings.Count == 0
+                    var filterBreakdown = composition.FilterExecutions.Count == 0
                         ? "none"
-                        : string.Join(", ", filterTimings.Select(t => $"{t.Filter}:{t.DurationMs:F1}ms"));
+                        : string.Join(", ", composition.FilterExecutions.Select(t => $"{t.FilterName}:{t.DurationMilliseconds:F1}ms"));
 
                     _logger.LogDebug(
                         "Filter pipeline completed in {TotalMs}ms (surface {SurfaceMs}ms, encode {EncodeMs}ms). Filters: {Breakdown}.",
                         pipelineStopwatch.Elapsed.TotalMilliseconds,
-                        surfaceStopwatch.Elapsed.TotalMilliseconds,
+                        composition.SurfaceMilliseconds,
                         encodeStopwatch.Elapsed.TotalMilliseconds,
                         filterBreakdown);
                 }
 
-                return new ProcessedFrame(
+                var processedFrame = new ProcessedFrame(
                     stackResult.FrameId,
                     stackResult.Timestamp,
                     stackResult.Exposure,
@@ -215,41 +141,28 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
                     ToContentType(encodingSettings.Format),
                     stackResult.FramesStacked,
                     stackResult.IntegrationMilliseconds,
-                    appliedFilters,
+                    composition.AppliedFilters,
                     ProcessingMilliseconds: 0,
-                    ImmutableImage: processedImage);
+                    ImmutableImage: compositionImage);
+
+                processedFrame = processedFrame with
+                {
+                    FilterExecutions = composition.FilterExecutions,
+                    SurfaceMilliseconds = composition.SurfaceMilliseconds
+                };
+
+                compositionImage = null;
+                return processedFrame;
             }
             finally
             {
-                filterFrame?.Dispose();
-                legacyBitmap?.Dispose();
+                compositionImage?.Dispose();
                 disposableSourceImage?.Dispose();
                 frameContext?.Dispose();
             }
         }
 
         public FilterMetricsSnapshot GetMetricsSnapshot() => _telemetryStore.Snapshot();
-
-        private static bool IsFilterEnabled(CameraConfiguration configuration, string filterName)
-        {
-            var filters = configuration.FrameFilters;
-            if (filters is null || filters.Count == 0)
-            {
-                return true;
-            }
-
-            for (var i = 0; i < filters.Count; i++)
-            {
-                if (string.Equals(filters[i], filterName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        // FrameStackResult exposes the raw stacked SKBitmap; filters operate on a copy to avoid mutating shared state.
 
         private static SKEncodedImageFormat ToSkiaFormat(ImageEncodingFormat format) => format switch
         {
@@ -265,6 +178,4 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline
             _ => "application/octet-stream"
         };
     }
-
-    internal readonly record struct FilterTiming(string Filter, double DurationMs);
 }

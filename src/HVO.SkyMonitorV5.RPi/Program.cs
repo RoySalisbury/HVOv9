@@ -18,6 +18,7 @@ using HVO.SkyMonitorV5.RPi.HostedServices;
 using HVO.SkyMonitorV5.RPi.Middleware;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Pipeline.Overlays;
@@ -267,7 +268,8 @@ public static class Program
     services.AddSingleton<IExposureController, AdaptiveExposureController>();
     services.AddSingleton<SkiaSurfacePool>();
     services.AddSingleton<IFramePreprocessingOrchestrator, FramePreprocessingOrchestrator>();
-    services.AddSingleton<OverlayAssetCache>();
+        services.AddSingleton<OverlayAssetCache>();
+        services.AddSingleton<FrameComposer>();
     services.AddSingleton<IFrameStacker, RollingFrameStacker>();
         services.AddSingleton<IMinioClientProvider, MinioClientProvider>();
         services.AddSingleton<IRemoteFrameEncoder, SkiaRemoteFrameEncoder>();
@@ -366,7 +368,14 @@ public static class Program
         services.AddSingleton<ICameraDriverFactory, CameraDriverFactory>();
         services.AddSingleton<IRigAcquisitionAdapter, RigAcquisitionAdapter>();
 
-        services.AddSingleton<FrameFilterPipeline>();
+        services.AddSingleton<FrameFilterPipeline>(sp =>
+        {
+            var filters = sp.GetServices<IFrameFilter>();
+            var composer = sp.GetRequiredService<FrameComposer>();
+            var logger = sp.GetRequiredService<ILogger<FrameFilterPipeline>>();
+            var telemetry = sp.GetService<ISkyMonitorTelemetryRecorder>();
+            return new FrameFilterPipeline(filters, composer, logger, telemetry);
+        });
         services.AddSingleton<IFrameFilterPipeline>(sp => sp.GetRequiredService<FrameFilterPipeline>());
         services.AddSingleton<IDiagnosticsService, DiagnosticsService>();
 

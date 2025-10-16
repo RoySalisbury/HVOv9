@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 
 namespace HVO.SkyMonitorV5.RPi.Storage;
 
@@ -67,6 +68,8 @@ public interface IFrameStateStore
     IReadOnlyList<BackgroundStackerHistorySample> GetBackgroundStackerHistory();
 
     IReadOnlyList<RemoteDispatchHistorySample> GetRemoteDispatchHistory();
+
+    IReadOnlyList<ComposedFrame> GetComposedFrameHistory();
 
     AllSkyStatusResponse GetStatus();
 }

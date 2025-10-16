@@ -1,10 +1,12 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,13 +25,16 @@ public sealed class FrameFilterPipelineTests
         using var stackResult = CreateStackResult();
 
         var filter = new CapturingTestFilter("TestFilter");
-        using var surfacePool = new SkiaSurfacePool();
-        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, surfacePool, NullLogger<FrameFilterPipeline>.Instance);
+    using var surfacePool = new SkiaSurfacePool();
+    var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+    var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
 
         var processed = await pipeline.ProcessAsync(stackResult.Result, configuration, CancellationToken.None);
 
         Assert.AreEqual(1, processed.AppliedFilters.Count, "Pipeline should record applied filters.");
         Assert.AreEqual("TestFilter", processed.AppliedFilters[0]);
+    Assert.AreEqual(1, processed.FilterExecutions.Count, "Pipeline should capture filter execution metadata.");
+    Assert.IsTrue(processed.SurfaceMilliseconds >= 0, "Surface preparation timing should be captured.");
 
         Assert.IsNotNull(filter.LastContext, "Filter should receive a render context instance.");
         Assert.AreEqual(TestLatitude, filter.LastContext!.LatitudeDeg, 1e-6, "Latitude should flow through render context.");
@@ -56,18 +61,21 @@ public sealed class FrameFilterPipelineTests
         {
             await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken).ConfigureAwait(false);
         });
-        using var surfacePool = new SkiaSurfacePool();
-        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, surfacePool, NullLogger<FrameFilterPipeline>.Instance);
+    using var surfacePool = new SkiaSurfacePool();
+    var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+    var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
 
         using (var stack1 = CreateStackResult())
         {
             var processed = await pipeline.ProcessAsync(stack1.Result, configuration, CancellationToken.None);
+            Assert.AreEqual(1, processed.FilterExecutions.Count, "Filter execution timings should be recorded per invocation.");
             processed.ImmutableImage?.Dispose();
         }
 
         using (var stack2 = CreateStackResult())
         {
             var processed = await pipeline.ProcessAsync(stack2.Result, configuration, CancellationToken.None);
+            Assert.AreEqual(1, processed.FilterExecutions.Count, "Filter execution timings should be recorded per invocation.");
             processed.ImmutableImage?.Dispose();
         }
 
@@ -84,8 +92,9 @@ public sealed class FrameFilterPipelineTests
     {
         var configuration = CreateConfiguration("SurfaceFilter");
         var filter = new SurfaceFillFilter();
-        using var surfacePool = new SkiaSurfacePool();
-        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, surfacePool, NullLogger<FrameFilterPipeline>.Instance);
+    using var surfacePool = new SkiaSurfacePool();
+    var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+    var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
 
         using var stack = CreateStackResult();
         var processed = await pipeline.ProcessAsync(stack.Result, configuration, CancellationToken.None);
@@ -93,6 +102,7 @@ public sealed class FrameFilterPipelineTests
         Assert.AreEqual(1, processed.AppliedFilters.Count, "Surface filter should be recorded as applied.");
         Assert.AreEqual("SurfaceFilter", processed.AppliedFilters[0]);
         Assert.AreEqual(1, filter.InvocationCount, "Image-based filter should be invoked exactly once.");
+    Assert.AreEqual(1, processed.FilterExecutions.Count, "Surface filter execution timing should be captured.");
 
         Assert.IsNotNull(processed.ImmutableImage, "Pipeline should materialize an immutable output image.");
         var snapshot = processed.ImmutableImage!;
@@ -108,16 +118,20 @@ public sealed class FrameFilterPipelineTests
         snapshot.Dispose();
     }
 
-    private static CameraConfiguration CreateConfiguration(string filterName)
-        => new(
+    private static CameraConfiguration CreateConfiguration(params string[] filterNames)
+    {
+        var filters = filterNames is { Length: > 0 } ? filterNames : Array.Empty<string>();
+
+        return new CameraConfiguration(
             EnableStacking: true,
             StackingFrameCount: 1,
             EnableImageOverlays: true,
             EnableCircularApertureMask: false,
             StackingBufferMinimumFrames: 1,
             StackingBufferIntegrationSeconds: 0,
-            FrameFilters: new[] { filterName },
+            FrameFilters: filters,
             ProcessedImageEncoding: new ImageEncodingSettings());
+    }
 
     private const double TestLatitude = 35.1987;
     private const double TestLongitude = -114.0539;
@@ -241,6 +255,147 @@ public sealed class FrameFilterPipelineTests
                 Result.OriginalImage.Dispose();
             }
             Result.OriginalImmutableImage?.Dispose();
+        }
+    }
+
+    [TestMethod]
+    public async Task ProcessAsync_ProducesDeterministicOutputAcrossRuns()
+    {
+        var configuration = CreateConfiguration(
+            DeterministicBackgroundFilter.FilterName,
+            DeterministicOverlayFilter.FilterName);
+        configuration = configuration with
+        {
+            ProcessedImageEncoding = new ImageEncodingSettings(ImageEncodingFormat.Png, quality: 100)
+        };
+
+        using var surfacePool = new SkiaSurfacePool();
+        var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+        var filters = new IFrameFilter[]
+        {
+            new DeterministicBackgroundFilter(),
+            new DeterministicOverlayFilter()
+        };
+
+        var pipeline = new FrameFilterPipeline(filters, composer, NullLogger<FrameFilterPipeline>.Instance);
+
+        byte[]? referencePayload = null;
+        var expectedFilters = new[]
+        {
+            DeterministicBackgroundFilter.FilterName,
+            DeterministicOverlayFilter.FilterName
+        };
+
+        for (var i = 0; i < 3; i++)
+        {
+            using var stack = CreateStackResult();
+            var processed = await pipeline.ProcessAsync(stack.Result, configuration, CancellationToken.None);
+
+            try
+            {
+                var payload = processed.ImageBytes.ToArray();
+                if (referencePayload is null)
+                {
+                    referencePayload = payload;
+                }
+                else
+                {
+                    CollectionAssert.AreEqual(referencePayload, payload, "Pipeline should emit identical payloads for equivalent inputs.");
+                }
+
+                CollectionAssert.AreEqual(expectedFilters, processed.AppliedFilters.ToArray(), "Applied filter sequence should remain stable.");
+                CollectionAssert.AreEqual(expectedFilters, processed.FilterExecutions.Select(static execution => execution.FilterName).ToArray(), "Filter execution order should mirror filter registrations.");
+
+                foreach (var execution in processed.FilterExecutions)
+                {
+                    Assert.IsTrue(execution.DurationMilliseconds >= 0, "Filter execution timings must be non-negative.");
+                }
+
+                Assert.IsTrue(processed.SurfaceMilliseconds >= 0, "Surface preparation timing must be non-negative.");
+
+                using var data = SKData.CreateCopy(processed.ImageBytes);
+                using var encodedImage = SKImage.FromEncodedData(data);
+                var info = new SKImageInfo(encodedImage.Width, encodedImage.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                using var decodedBitmap = new SKBitmap(info);
+                Assert.IsTrue(encodedImage.ReadPixels(info, decodedBitmap.GetPixels(), decodedBitmap.RowBytes), "Encoded payload should decode successfully.");
+
+                var centerColor = decodedBitmap.GetPixel(info.Width / 2, info.Height / 2);
+                Assert.IsTrue(centerColor.Red >= 180, "Overlay filter should render a strong red accent in the center pixel.");
+                Assert.IsTrue(centerColor.Green <= 20, "Overlay filter should keep the center pixel's green channel low.");
+                Assert.IsTrue(centerColor.Blue <= 20, "Overlay filter should keep the center pixel's blue channel low.");
+            }
+            finally
+            {
+                processed.ImmutableImage?.Dispose();
+            }
+        }
+    }
+
+    private sealed class DeterministicBackgroundFilter : IImageFrameFilter
+    {
+        public const string FilterName = "DeterministicBackground";
+        private static readonly SKColor BackgroundColor = new(32, 64, 196, 255);
+
+        public string Name => FilterName;
+
+        public bool ShouldApply(CameraConfiguration configuration) => true;
+
+        public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
+        public ValueTask ApplyAsync(FilterFrame frame, FrameStackResult stackResult, CameraConfiguration configuration, FrameRenderContext? renderContext, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var paint = new SKPaint { Color = BackgroundColor, IsAntialias = false, Style = SKPaintStyle.Fill };
+            frame.Surface.Canvas.DrawRect(frame.Surface.Canvas.DeviceClipBounds, paint);
+            frame.Surface.Canvas.Flush();
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class DeterministicOverlayFilter : IImageFrameFilter
+    {
+        public const string FilterName = "DeterministicOverlay";
+        public static readonly SKColor ExpectedCenterColor = new(220, 48, 48, 255);
+
+        public string Name => FilterName;
+
+        public bool ShouldApply(CameraConfiguration configuration) => true;
+
+        public ValueTask ApplyAsync(SKBitmap bitmap, FrameStackResult stackResult, CameraConfiguration configuration, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
+        public ValueTask ApplyAsync(FilterFrame frame, FrameStackResult stackResult, CameraConfiguration configuration, FrameRenderContext? renderContext, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var canvas = frame.Surface.Canvas;
+            var bounds = canvas.DeviceClipBounds;
+
+            using var borderPaint = new SKPaint
+            {
+                Color = new SKColor(240, 240, 240, 255),
+                StrokeWidth = 1f,
+                IsAntialias = false,
+                Style = SKPaintStyle.Stroke
+            };
+
+            canvas.DrawRect(bounds, borderPaint);
+
+            var centerX = (int)bounds.MidX;
+            var centerY = (int)bounds.MidY;
+
+            using var centerPaint = new SKPaint
+            {
+                Color = ExpectedCenterColor,
+                IsAntialias = false,
+                Style = SKPaintStyle.Fill
+            };
+
+            canvas.DrawRect(SKRect.Create(centerX, centerY, 1, 1), centerPaint);
+            canvas.Flush();
+
+            return ValueTask.CompletedTask;
         }
     }
 }

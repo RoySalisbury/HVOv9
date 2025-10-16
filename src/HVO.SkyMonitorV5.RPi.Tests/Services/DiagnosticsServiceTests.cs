@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
+using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Storage;
@@ -23,6 +25,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Tests.Services;
 
@@ -167,10 +170,11 @@ public sealed class DiagnosticsServiceTests
     {
         var frameStateStore = new Mock<IFrameStateStore>();
         using var surfacePool = new SkiaSurfacePool();
+        var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
 
         var pipeline = new FrameFilterPipeline(
             Array.Empty<HVO.SkyMonitorV5.RPi.Pipeline.Filters.IFrameFilter>(),
-            surfacePool,
+            composer,
             NullLogger<FrameFilterPipeline>.Instance);
 
         var service = CreateService(frameStateStore.Object, pipeline);
@@ -193,6 +197,60 @@ public sealed class DiagnosticsServiceTests
 
         Assert.IsTrue(result.IsSuccessful, "Fallback pipeline should still succeed.");
         Assert.AreEqual(0, result.Value.Filters.Count, "Fallback snapshot should be empty.");
+    }
+
+    [TestMethod]
+    public async Task GetComposedFrameHistoryAsync_ReturnsFrameMetadata()
+    {
+        var timestamp = new DateTimeOffset(2025, 10, 15, 3, 45, 0, TimeSpan.Zero);
+
+        using var bitmap = new SKBitmap(width: 6, height: 4);
+        using var image = SKImage.FromBitmap(bitmap);
+
+        var composedFrame = new ComposedFrame(
+            Guid.NewGuid(),
+            timestamp,
+            image,
+            FramesStacked: 3,
+            IntegrationMilliseconds: 1_200,
+            AppliedFilters: new[] { "Overlay", "Diagnostics" },
+            FilterExecutions: new[] { new FilterExecution("Overlay", 1.5), new FilterExecution("Diagnostics", 2.3) },
+            SurfaceMilliseconds: 0.9);
+
+        var frameStateStore = new Mock<IFrameStateStore>();
+        frameStateStore.Setup(store => store.GetComposedFrameHistory()).Returns(new List<ComposedFrame> { composedFrame });
+
+        var pipeline = new Mock<IFrameFilterPipeline>();
+
+        var clock = new Mock<IObservatoryClock>();
+        clock.SetupGet(c => c.UtcNow).Returns(timestamp);
+        clock.SetupGet(c => c.LocalNow).Returns(timestamp);
+        clock.SetupGet(c => c.TimeZone).Returns(TimeZoneInfo.Utc);
+        clock.SetupGet(c => c.TimeZoneDisplayName).Returns("UTC");
+        clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(value => value);
+        clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
+
+        var service = CreateService(frameStateStore.Object, pipeline.Object, clock);
+
+        var result = await service.GetComposedFrameHistoryAsync();
+
+        Assert.IsTrue(result.IsSuccessful, "Diagnostics should return composed frame history.");
+
+        var response = result.Value;
+        Assert.AreEqual(timestamp, response.GeneratedAt, "Snapshot timestamp should match clock local time.");
+        Assert.AreEqual(1, response.Frames.Count, "History should contain the enqueued frame.");
+
+        var sample = response.Frames[0];
+        Assert.AreEqual(composedFrame.FrameId, sample.FrameId);
+        Assert.AreEqual(timestamp, sample.Timestamp);
+        Assert.AreEqual(bitmap.Width, sample.Width);
+        Assert.AreEqual(bitmap.Height, sample.Height);
+        Assert.AreEqual(3, sample.FramesStacked);
+        Assert.AreEqual(1_200, sample.IntegrationMilliseconds);
+    CollectionAssert.AreEquivalent(composedFrame.AppliedFilters.ToArray(), sample.AppliedFilters.ToArray());
+        Assert.AreEqual(0.9, sample.SurfaceMilliseconds, 1e-6);
+        Assert.AreEqual(2, sample.FilterExecutions.Count);
+        Assert.AreEqual("Overlay", sample.FilterExecutions[0].FilterName);
     }
 
     [TestMethod]

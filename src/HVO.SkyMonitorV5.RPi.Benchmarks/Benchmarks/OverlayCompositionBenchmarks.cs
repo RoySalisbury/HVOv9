@@ -68,7 +68,7 @@ public class OverlayCompositionBenchmarks
 
         using var image = SKImage.FromBitmap(working);
         using var data = image.Encode(SKEncodedImageFormat.Png, 90);
-        return data.Size;
+    return checked((int)data.Size);
     }
 
     private sealed class SyntheticOverlayFilter : IFrameFilter

@@ -69,6 +69,30 @@ public sealed class DiagnosticsController : ControllerBase
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
+    [HttpGet("frames/composed")]
+    [ProducesResponseType(typeof(ComposedFrameHistoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ComposedFrameHistoryResponse>> GetComposedFrameHistoryAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetComposedFrameHistoryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve composed frame history.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     [HttpGet("filters")]
     [ProducesResponseType(typeof(FilterMetricsSnapshot), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]

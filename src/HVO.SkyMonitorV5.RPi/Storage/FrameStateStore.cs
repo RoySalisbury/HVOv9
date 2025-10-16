@@ -9,10 +9,13 @@ using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Exports;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Threading;
 using HVO.SkyMonitorV5.RPi.Telemetry;
+using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Storage;
 
@@ -47,6 +50,8 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
     private const int RemoteDispatchHistoryCapacity = 480;
     private readonly Queue<BackgroundStackerHistorySample> _backgroundStackerHistory = new();
     private const int BackgroundStackerHistoryCapacity = 720;
+    private readonly ComposedFrameQueue _composedFrames;
+    private const int ComposedFrameHistoryCapacity = 32;
     private static readonly JsonSerializerOptions TelemetryEventSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = false,
@@ -69,6 +74,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         _configuration = CameraConfiguration.FromOptions(optionsMonitor.CurrentValue);
         _telemetryRecorder = telemetryRecorder;
         UpdateExposureProfiles(optionsMonitor.CurrentValue);
+        _composedFrames = new ComposedFrameQueue(ComposedFrameHistoryCapacity);
 
         _optionsReloadSubscription = optionsMonitor.OnChange(OnPipelineOptionsChanged);
     }
@@ -279,6 +285,8 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
 
     public void UpdateFrame(RawFrameSnapshot rawFrame, ProcessedFrame processedFrame)
     {
+        SKImage? historyImage = SkiaImageUtilities.CloneToRaster(processedFrame.ImmutableImage);
+
         lock (_sync)
         {
             if (_latestRawFrame is not null && !ReferenceEquals(_latestRawFrame, rawFrame))
@@ -297,7 +305,25 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             _latestRawFrame = localizedRaw;
             _latestProcessedFrame = localizedProcessed;
             _lastFrameTimestamp = localizedProcessed.Timestamp;
+
+            if (historyImage is SKImage imageForHistory)
+            {
+                var composedEntry = new ComposedFrame(
+                    localizedProcessed.FrameId,
+                    localizedProcessed.Timestamp,
+                    imageForHistory,
+                    localizedProcessed.FramesStacked,
+                    localizedProcessed.IntegrationMilliseconds,
+                    localizedProcessed.AppliedFilters,
+                    localizedProcessed.FilterExecutions,
+                    localizedProcessed.SurfaceMilliseconds);
+
+                _composedFrames.Enqueue(composedEntry);
+                historyImage = null;
+            }
         }
+
+        historyImage?.Dispose();
     }
 
     public void UpdateRunningState(bool isRunning)
@@ -595,6 +621,9 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
     }
 
+    public IReadOnlyList<ComposedFrame> GetComposedFrameHistory()
+        => _composedFrames.Snapshot();
+
     public void Dispose()
     {
         lock (_sync)
@@ -614,6 +643,7 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
         }
 
         _optionsReloadSubscription?.Dispose();
+        _composedFrames.Dispose();
     }
 
     public AllSkyStatusResponse GetStatus()
@@ -1031,7 +1061,11 @@ public sealed class FrameStateStore : IFrameStateStore, IDisposable
             frame.FramesStacked,
             frame.IntegrationMilliseconds,
             frame.AppliedFilters,
-            frame.ProcessingMilliseconds);
+            frame.ProcessingMilliseconds)
+        {
+            SurfaceMilliseconds = frame.SurfaceMilliseconds,
+            FilterExecutions = frame.FilterExecutions
+        };
     }
 
     private static RawFrameSummary? CreateRawSummary(RawFrameSnapshot? frame)

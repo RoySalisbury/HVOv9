@@ -66,38 +66,85 @@ For repeatable micro-benchmarks, add a dedicated project with [BenchmarkDotNet](
 3. Seed a benchmark that creates a realistic `FrameStackResult` (for example a 1936×1216 `SKBitmap`) and measures the `FrameFilterPipeline`:
 
 ```csharp
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
+using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
+using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
 
 BenchmarkRunner.Run<PipelineBenchmarks>();
 
-public class PipelineBenchmarks
+public class PipelineBenchmarks : IDisposable
 {
+  private readonly SkiaSurfacePool _surfacePool = new();
+  private readonly FrameComposer _composer;
   private readonly FrameFilterPipeline _pipeline;
   private readonly CameraConfiguration _configuration;
   private readonly FrameStackResult _frame;
 
   public PipelineBenchmarks()
   {
-    _pipeline = new FrameFilterPipeline(Array.Empty<IFrameFilter>(), NullLogger<FrameFilterPipeline>.Instance);
-    _configuration = new CameraConfiguration(false, 1, false, false, 1, 0, Array.Empty<string>());
+    _composer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
+    _pipeline = new FrameFilterPipeline(Array.Empty<IFrameFilter>(), _composer, NullLogger<FrameFilterPipeline>.Instance);
+
+    _configuration = new CameraConfiguration(
+      EnableStacking: true,
+      StackingFrameCount: 1,
+      EnableImageOverlays: false,
+      EnableCircularApertureMask: false,
+      StackingBufferMinimumFrames: 1,
+      StackingBufferIntegrationSeconds: 0,
+      FrameFilters: Array.Empty<string>(),
+      ProcessedImageEncoding: new ImageEncodingSettings());
 
     var bitmap = new SKBitmap(1936, 1216);
     var exposure = new ExposureSettings(1000, 200, autoExposure: false, autoGain: false);
-    _frame = new FrameStackResult(bitmap, bitmap, DateTimeOffset.UtcNow, exposure, null, 1, 0);
+
+    var immutable = SKImage.FromBitmap(bitmap);
+    _frame = new FrameStackResult(Guid.NewGuid(), bitmap, bitmap, DateTimeOffset.UtcNow, exposure, Context: null, FramesStacked: 1, IntegrationMilliseconds: exposure.ExposureMilliseconds)
+    {
+      StackedImmutableImage = immutable,
+      OriginalImmutableImage = immutable
+    };
   }
 
   [Benchmark]
   public Task ProcessBaselineAsync()
     => _pipeline.ProcessAsync(_frame, _configuration, CancellationToken.None);
+
+  public void Dispose()
+  {
+    _frame.StackedImage.Dispose();
+    if (!ReferenceEquals(_frame.StackedImage, _frame.OriginalImage))
+    {
+      _frame.OriginalImage.Dispose();
+    }
+
+    _frame.StackedImmutableImage?.Dispose();
+    if (!ReferenceEquals(_frame.StackedImmutableImage, _frame.OriginalImmutableImage))
+    {
+      _frame.OriginalImmutableImage?.Dispose();
+    }
+
+    _surfacePool.Dispose();
+  }
 }
 ```
+Running `dotnet run -c Release --project src/HVO.SkyMonitorV5.RPi.Benchmarks -- --filter *FrameFilterPipeline*` will produce benchmark tables and highlight hot paths. Expand the harness by wiring the real filters through DI when you want full-fidelity measurements.
 
-Running `dotnet run -c Release --project src/HVO.SkyMonitorV5.RPi.Benchmarks` will produce benchmark tables and highlight hot paths. Expand the harness by wiring the real filters through DI when you want full-fidelity measurements.
+## Phase 5 profiling snapshot (2025-10-16)
+
+- Benchmarks collected via `dotnet run -c Release -- --filter *FrameFilterPipeline* --artifacts benchmarks/rpi-20251016` after centralizing composition on `FrameComposer`.
+- 1024x1024 synthetic frame with three overlays averages **33.98 ms** (stddev 0.33 ms); five overlays pushes to **45.59 ms** (stddev 1.26 ms).
+- 512x512 workloads stay within **13.33 ms** even with five overlays, confirming deterministic filters avoid extra surface allocations.
+- Full CSV/HTML summaries live in `benchmarks/rpi-20251016/results/`, with the raw runner log stored at `benchmarks/rpi-20251016/HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks.FrameFilterPipelineBenchmarks-20251016-160710.log`.
 
 ## Next steps
 

@@ -190,6 +190,49 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         }
     }
 
+    public Task<Result<ComposedFrameHistoryResponse>> GetComposedFrameHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var history = _frameStateStore.GetComposedFrameHistory();
+            if (history.Count == 0)
+            {
+                var empty = new ComposedFrameHistoryResponse(_clock.LocalNow, Array.Empty<ComposedFrameHistorySample>());
+                return Task.FromResult(Result<ComposedFrameHistoryResponse>.Success(empty));
+            }
+
+            var samples = new List<ComposedFrameHistorySample>(history.Count);
+            foreach (var frame in history)
+            {
+                var timestampLocal = _clock.ToLocal(frame.Timestamp);
+                samples.Add(new ComposedFrameHistorySample(
+                    frame.FrameId,
+                    timestampLocal,
+                    frame.Image.Width,
+                    frame.Image.Height,
+                    frame.FramesStacked,
+                    frame.IntegrationMilliseconds,
+                    frame.AppliedFilters,
+                    frame.SurfaceMilliseconds,
+                    frame.FilterExecutions));
+            }
+
+            var response = new ComposedFrameHistoryResponse(_clock.LocalNow, samples);
+            return Task.FromResult(Result<ComposedFrameHistoryResponse>.Success(response));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while gathering composed frame history snapshot.");
+            return Task.FromResult<Result<ComposedFrameHistoryResponse>>(ex);
+        }
+    }
+
     public async Task<Result<FrameExportMetricsSnapshot>> GetFrameExportMetricsAsync(CancellationToken cancellationToken = default)
     {
         try
