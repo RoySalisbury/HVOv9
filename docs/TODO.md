@@ -70,3 +70,4 @@
 
 - [ ] Revisit FITS/TIFF encoder support for remote dispatch once the SkyMonitorV5 data store project is underway.
 - [ ] Stand up the SkyMonitorV5 data store: consolidate telemetry + configuration into the shared database, seed default rigs/cameras/filters when empty, provide diagnostics log persistence, and host an interim Deep Sky object catalog we control until a long-term source is selected.
+- [ ] Re-evaluate partial parallel filter execution (Phase 8) after the current freeze; revisit when profiling shows the ~10ms gain matters for upcoming workloads.
