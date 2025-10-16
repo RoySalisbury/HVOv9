@@ -53,9 +53,10 @@
 
 > Status: In progress (kickoff 2025-10-16). Capturing encoder requirements and integration plan.
 
-- [ ] Provide encoders that convert high-bit `SKImage` to delivery formats (PNG/JPEG) only at export time.
-- [ ] Update post-pipeline S3 uploader to choose archive/delivery formats while retaining linear masters when needed.
-- [ ] Validate outputs via golden-image comparisons and confirm metadata fidelity.
+- [x] Provide encoders that convert high-bit `SKImage` to delivery formats (PNG/JPEG) only at export time. (`ProcessedFrameEncoder` registered in DI; `ProcessedFrameEncoderTests` + new `FrameExportPublisherTests` cover delivery metadata.)
+- [x] Feed encoder-derived content metadata into manifests/telemetry (FrameExport metadata now carries payload type/extension; dispatcher + diagnostics telemetry surface the new fields and tests exercise UI/manifest coverage.)
+- [x] Update post-pipeline S3 uploader to choose archive/delivery formats while retaining linear masters when needed. (S3 sink now honors payload metadata for content type/extension and emits headers for downstream archive vs delivery handling.)
+- [x] Validate outputs via golden-image comparisons and confirm metadata fidelity. (`FrameExportGoldenFixturesTests` now drives end-to-end filesystem exports for archive/delivery scopes, asserting payload hashes & manifests alongside existing hash fixtures and MinIO integration coverage.)
 
 ## Phase 7 – Validation, Tooling & Rollout
 
