@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Infrastructure.NativeMemory;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using Microsoft.Extensions.DependencyInjection;
@@ -94,6 +95,7 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
         var locationOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>();
         var cardinalOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>();
         var loggerFactory = _serviceProvider.GetService<ILoggerFactory>();
+        var bufferFactory = _serviceProvider.GetRequiredService<INativeBufferLeaseFactory>();
         return new ZwoCameraAdapter(
             rig,
             clock,
@@ -101,6 +103,7 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
             cardinalOptions,
             loggerFactory,
                 _serviceProvider.GetService<ILogger<ZwoCameraAdapter>>(),
-                _serviceProvider.GetService<IFramePreprocessingOrchestrator>());
+                _serviceProvider.GetService<IFramePreprocessingOrchestrator>(),
+                bufferFactory);
     }
 }

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks.FrameFilterPipelineBenchmarks-20251017-004736</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.13.11, Debian GNU/Linux 12 (bookworm) (container)
+Intel Core i9-14900K, 1 CPU, 32 logical and 24 physical cores
+.NET SDK 9.0.306
+  [Host]           : .NET 9.0.10 (9.0.1025.47515), X64 RyuJIT AVX2
+  EnvConfiguredJob : .NET 9.0.10 (9.0.1025.47515), X64 RyuJIT AVX2
+</code></pre>
+<pre><code>Job=EnvConfiguredJob  IterationCount=10  WarmupCount=1  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                                  </th><th>FilterCount</th><th>FrameWidth</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Gen1</th><th>Gen2</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>&#39;Process stacked frame with synthetic filters&#39;</td><td>1</td><td>512</td><td>7.849 ms</td><td>0.1203 ms</td><td>0.0795 ms</td><td>984.3750</td><td>984.3750</td><td>984.3750</td><td>3.01 MB</td>
+</tr><tr><td>&#39;Process stacked frame with synthetic filters&#39;</td><td>1</td><td>1024</td><td>31.589 ms</td><td>0.9185 ms</td><td>0.6076 ms</td><td>937.5000</td><td>937.5000</td><td>937.5000</td><td>12.02 MB</td>
+</tr><tr><td>&#39;Process stacked frame with synthetic filters&#39;</td><td>3</td><td>512</td><td>12.225 ms</td><td>0.2519 ms</td><td>0.1666 ms</td><td>984.3750</td><td>984.3750</td><td>984.3750</td><td>3.02 MB</td>
+</tr><tr><td>&#39;Process stacked frame with synthetic filters&#39;</td><td>3</td><td>1024</td><td>46.936 ms</td><td>1.4018 ms</td><td>0.9272 ms</td><td>909.0909</td><td>909.0909</td><td>909.0909</td><td>12.03 MB</td>
+</tr><tr><td>&#39;Process stacked frame with synthetic filters&#39;</td><td>5</td><td>512</td><td>16.758 ms</td><td>0.1783 ms</td><td>0.1061 ms</td><td>968.7500</td><td>968.7500</td><td>968.7500</td><td>3.04 MB</td>
+</tr><tr><td>&#39;Process stacked frame with synthetic filters&#39;</td><td>5</td><td>1024</td><td>61.383 ms</td><td>0.8922 ms</td><td>0.5901 ms</td><td>888.8889</td><td>888.8889</td><td>888.8889</td><td>12.04 MB</td>
+</tr></tbody></table>
+</body>
+</html>

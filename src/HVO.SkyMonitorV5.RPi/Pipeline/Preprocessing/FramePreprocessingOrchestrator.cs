@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Skia;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing.Calibration;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
@@ -19,13 +20,16 @@ internal sealed class FramePreprocessingOrchestrator : IFramePreprocessingOrches
 {
     private readonly SkiaSurfacePool _surfacePool;
     private readonly ILogger<FramePreprocessingOrchestrator> _logger;
+    private readonly IFrameCalibrationPipelineFactory _pipelineFactory;
 
     public FramePreprocessingOrchestrator(
         SkiaSurfacePool surfacePool,
-        ILogger<FramePreprocessingOrchestrator> logger)
+        ILogger<FramePreprocessingOrchestrator> logger,
+        IFrameCalibrationPipelineFactory? pipelineFactory = null)
     {
         _surfacePool = surfacePool ?? throw new ArgumentNullException(nameof(surfacePool));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _pipelineFactory = pipelineFactory ?? NullFrameCalibrationPipelineFactory.Instance;
     }
 
     public Task<Result<CameraAdapterBase.AdapterFrame>> ProcessAsync(CameraAdapterBase.AdapterFrame frame, CancellationToken cancellationToken)
@@ -73,7 +77,7 @@ internal sealed class FramePreprocessingOrchestrator : IFramePreprocessingOrches
             surface.Canvas.DrawImage(sourceImage, 0, 0);
             surface.Canvas.Flush();
 
-            ApplyCalibrations(surface, frame);
+            ApplyCalibrations(surfaceLease, frame, cancellationToken);
 
             var processedSurfaceSnapshot = surface.Snapshot()
                 ?? throw new InvalidOperationException("Failed to snapshot preprocessing surface.");
@@ -137,11 +141,40 @@ internal sealed class FramePreprocessingOrchestrator : IFramePreprocessingOrches
         }
     }
 
-    private static void ApplyCalibrations(SKSurface surface, CameraAdapterBase.AdapterFrame frame)
+    private void ApplyCalibrations(SkiaSurfaceLease surfaceLease, CameraAdapterBase.AdapterFrame frame, CancellationToken cancellationToken)
     {
-        // Placeholder for future calibration passes (dark subtraction, flat-field correction, demosaic, etc.).
-        // These operations will operate directly on the pooled surface once implemented.
-        _ = surface;
-        _ = frame;
+        var stages = _pipelineFactory.BuildStages();
+        if (stages.Length == 0)
+        {
+            return;
+        }
+
+    var context = new FrameCalibrationContext(frame, surfaceLease);
+
+        foreach (var stage in stages)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                var task = stage.ApplyAsync(context, cancellationToken);
+                if (!task.IsCompletedSuccessfully)
+                {
+                    task.AsTask().GetAwaiter().GetResult();
+                }
+                else
+                {
+                    task.GetAwaiter().GetResult();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Calibration stage {StageName} failed; continuing with remaining stages.", stage.Name);
+            }
+        }
     }
 }

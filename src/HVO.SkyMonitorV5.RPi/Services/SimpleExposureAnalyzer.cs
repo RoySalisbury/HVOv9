@@ -2,7 +2,6 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Models;
 using Microsoft.Extensions.Logging;
-using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
 
@@ -33,7 +32,7 @@ public sealed class SimpleExposureAnalyzer : IExposureAnalyzer
             throw new ArgumentNullException(nameof(capturedFrame));
         }
 
-        var metrics = ComputeMetrics(capturedFrame.Image);
+    var metrics = ExposureAccumulator.ComputeMetrics(capturedFrame.Image);
         var lighting = ClassifyLighting(metrics.AverageLuminance);
 
         var suggested = ComputeSuggestion(capturedFrame.Exposure, metrics, lighting);
@@ -53,96 +52,6 @@ public sealed class SimpleExposureAnalyzer : IExposureAnalyzer
             lighting,
             metrics,
             notes);
-    }
-
-    private static ExposureMetrics ComputeMetrics(SkiaSharp.SKBitmap bitmap)
-    {
-        if (bitmap is null)
-        {
-            throw new ArgumentNullException(nameof(bitmap));
-        }
-
-        var width = bitmap.Width;
-        var height = bitmap.Height;
-        if (width <= 0 || height <= 0)
-        {
-            return new ExposureMetrics(0, 0, 0, 0);
-        }
-
-        var totalPixels = width * (long)height;
-        var targetSamples = Math.Clamp(totalPixels / 400, 1, 10_000);
-        var step = (int)Math.Max(1, totalPixels / targetSamples);
-
-        var raster = bitmap.PeekPixels();
-        var colorType = bitmap.ColorType;
-
-        double sum = 0;
-        double min = double.MaxValue;
-        double max = double.MinValue;
-        var samples = 0;
-
-        if (raster is null)
-        {
-            return new ExposureMetrics(0, 0, 0, 0);
-        }
-
-        var info = raster.Info;
-        var pixelSpan = raster.GetPixelSpan();
-        if (pixelSpan.Length == 0)
-        {
-            return new ExposureMetrics(0, 0, 0, 0);
-        }
-
-        var pixelStride = info.BytesPerPixel;
-        var totalBytes = pixelSpan.Length;
-
-        for (var index = 0; index <= totalBytes - pixelStride; index += step * pixelStride)
-        {
-            var luminance = ExtractLuminance(pixelSpan, index, colorType);
-            sum += luminance;
-            if (luminance < min)
-            {
-                min = luminance;
-            }
-
-            if (luminance > max)
-            {
-                max = luminance;
-            }
-
-            samples++;
-        }
-
-        if (samples == 0)
-        {
-            return new ExposureMetrics(0, 0, 0, 0);
-        }
-
-        var average = sum / samples;
-        return new ExposureMetrics(average, min, max, samples);
-    }
-
-    private static double ExtractLuminance(ReadOnlySpan<byte> buffer, int index, SKColorType colorType)
-    {
-        // Assume standard 8-bit per channel format.
-        byte r;
-        byte g;
-        byte b;
-
-        switch (colorType)
-        {
-            case SkiaSharp.SKColorType.Gray8:
-                var gray = buffer[index];
-                r = g = b = gray;
-                break;
-            default:
-                b = buffer[index + 0];
-                g = buffer[index + 1];
-                r = buffer[index + 2];
-                break;
-        }
-
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     }
 
     private static ExposureLightingCondition ClassifyLighting(double averageLuminance)

@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -14,6 +13,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Infrastructure.NativeMemory;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
 using HVO.ZWOOptical.ASISDK;
@@ -41,6 +41,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
     private readonly IOptionsMonitor<ObservatoryLocationOptions> _locationMonitor;
     private readonly IOptionsMonitor<CardinalDirectionsOptions> _cardinalMonitor;
     private readonly ILoggerFactory? _loggerFactory;
+    private readonly INativeBufferLeaseFactory _bufferLeaseFactory;
 
     private readonly Dictionary<ASI_CONTROL_TYPE, ControlCapability> _controlCaps = new();
 
@@ -63,7 +64,8 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         IOptionsMonitor<CardinalDirectionsOptions> cardinalMonitor,
         ILoggerFactory? loggerFactory,
         ILogger<ZwoCameraAdapter>? logger = null,
-        IFramePreprocessingOrchestrator? preprocessingOrchestrator = null)
+        IFramePreprocessingOrchestrator? preprocessingOrchestrator = null,
+        INativeBufferLeaseFactory? bufferLeaseFactory = null)
         : base(
             EnsureRigDescriptor(rig),
             clock,
@@ -74,6 +76,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         _locationMonitor = locationMonitor ?? throw new ArgumentNullException(nameof(locationMonitor));
         _cardinalMonitor = cardinalMonitor ?? throw new ArgumentNullException(nameof(cardinalMonitor));
         _loggerFactory = loggerFactory;
+        _bufferLeaseFactory = bufferLeaseFactory ?? HGlobalNativeBufferLeaseFactory.Shared;
     }
 
     protected override Task<Result<bool>> OnInitializeAsync(CancellationToken cancellationToken)
@@ -194,7 +197,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
             return Task.FromResult(Result<AdapterFrame>.Failure(error));
         }
 
-        FrameBufferLease? lease = null;
+    INativeBufferLease? lease = null;
         SKBitmap? bitmap = null;
         SkiaPixelLease? pixelLease = null;
         SKImage? immutableImage = null;
@@ -207,7 +210,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
 
             var captureArea = _captureArea.Value;
             var waitMs = ComputeWaitTime(exposure);
-            lease = FrameBufferLease.Rent(captureArea.CaptureBufferSizeBytes);
+            lease = _bufferLeaseFactory.Rent(captureArea.CaptureBufferSizeBytes);
 
             if (!TryAcquireFrame(lease.Pointer, captureArea.CaptureBufferSizeBytes, waitMs, cancellationToken))
             {
@@ -572,7 +575,7 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         }
     }
 
-    private SKBitmap CreateBitmapFromCapture(FrameBufferLease lease, ZwoCaptureArea captureArea)
+    private SKBitmap CreateBitmapFromCapture(INativeBufferLease lease, ZwoCaptureArea captureArea)
     {
         switch (captureArea.ImageType)
         {
@@ -580,33 +583,33 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
                 return InstallZeroCopyBitmap(lease, captureArea.ImageInfo, captureArea.OutputRowBytes);
             case ASI_IMG_TYPE.ASI_IMG_RGB24:
             {
-                var bitmap = ConvertRgb24ToBgraBitmap(lease.Pointer, captureArea.Size.Width, captureArea.Size.Height, captureArea.CaptureRowBytes);
+                var bitmap = ZwoPixelConverter.CreateBgraBitmapFromRgb24(lease.Pointer, captureArea.Size.Width, captureArea.Size.Height, captureArea.CaptureRowBytes);
                 lease.Dispose();
                 return bitmap;
             }
             case ASI_IMG_TYPE.ASI_IMG_RAW16:
             {
-                var bitmap = ConvertRaw16ToGrayBitmap(lease.Pointer, captureArea.Size.Width, captureArea.Size.Height, captureArea.CaptureRowBytes);
+                var bitmap = ZwoPixelConverter.CreateGrayBitmapFromRaw16(lease.Pointer, captureArea.Size.Width, captureArea.Size.Height, captureArea.CaptureRowBytes);
                 lease.Dispose();
                 return bitmap;
             }
             default:
             {
-                var bitmap = ConvertY8ToBitmap(lease.Pointer, captureArea.Size.Width, captureArea.Size.Height, captureArea.CaptureRowBytes);
+                var bitmap = ZwoPixelConverter.CreateGrayBitmapFromY8(lease.Pointer, captureArea.Size.Width, captureArea.Size.Height, captureArea.CaptureRowBytes);
                 lease.Dispose();
                 return bitmap;
             }
         }
     }
 
-    private static SKImage? CreateImmutableImageFromLease(FrameBufferLease lease, ZwoCaptureArea captureArea)
+    private static SKImage? CreateImmutableImageFromLease(INativeBufferLease lease, ZwoCaptureArea captureArea)
     {
         if (!lease.IsAllocated)
         {
             return null;
         }
 
-        lease.AddRef();
+    lease.AddRef();
 
         var baseInfo = captureArea.ImageInfo;
         var info = new SKImageInfo(
@@ -616,8 +619,8 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
             baseInfo.AlphaType,
             LinearSrgbColorSpace);
 
-        using var pixmap = new SKPixmap(info, lease.Pointer, captureArea.OutputRowBytes);
-        var image = SKImage.FromPixels(pixmap, FrameBufferLease.ReleasePixels, lease);
+    using var pixmap = new SKPixmap(info, lease.Pointer, captureArea.OutputRowBytes);
+    var image = SKImage.FromPixels(pixmap, NativeBufferLeaseSkiaHelpers.ReleasePixels, lease);
         if (image is null)
         {
             lease.Release();
@@ -626,123 +629,16 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         return image;
     }
 
-    private static SKBitmap InstallZeroCopyBitmap(FrameBufferLease lease, SKImageInfo imageInfo, int rowBytes)
+    private static SKBitmap InstallZeroCopyBitmap(INativeBufferLease lease, SKImageInfo imageInfo, int rowBytes)
     {
         var bitmap = new SKBitmap();
-        if (!bitmap.InstallPixels(imageInfo, lease.Pointer, rowBytes, FrameBufferLease.ReleasePixels, lease))
+        if (!bitmap.InstallPixels(imageInfo, lease.Pointer, rowBytes, NativeBufferLeaseSkiaHelpers.ReleasePixels, lease))
         {
             lease.Dispose();
             throw new InvalidOperationException($"Failed to install pixels for captured frame ({imageInfo.Width}x{imageInfo.Height}).");
         }
 
         return bitmap;
-    }
-
-    private static SKBitmap ConvertRgb24ToBgraBitmap(IntPtr sourceBuffer, int width, int height, int captureRowBytes)
-    {
-        var bufferLength = captureRowBytes * height;
-        var rental = ArrayPool<byte>.Shared.Rent(bufferLength);
-        try
-        {
-            Marshal.Copy(sourceBuffer, rental, 0, bufferLength);
-
-            var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
-            var destination = bitmap.GetPixelSpan();
-            for (var row = 0; row < height; row++)
-            {
-                var srcOffset = row * captureRowBytes;
-                var destOffset = row * width * 4;
-                var srcIndex = 0;
-                var destIndex = 0;
-                var srcSpan = rental.AsSpan(srcOffset, captureRowBytes);
-                var destSpan = destination.Slice(destOffset, width * 4);
-
-                for (var col = 0; col < width; col++)
-                {
-                    if (srcIndex + 2 >= srcSpan.Length || destIndex + 3 >= destSpan.Length)
-                    {
-                        break;
-                    }
-
-                    var r = srcSpan[srcIndex++];
-                    var g = srcSpan[srcIndex++];
-                    var b = srcSpan[srcIndex++];
-
-                    destSpan[destIndex++] = b;
-                    destSpan[destIndex++] = g;
-                    destSpan[destIndex++] = r;
-                    destSpan[destIndex++] = 255;
-                }
-            }
-
-            return bitmap;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rental, clearArray: false);
-        }
-    }
-
-    private static SKBitmap ConvertRaw16ToGrayBitmap(IntPtr sourceBuffer, int width, int height, int captureRowBytes)
-    {
-        var bufferLength = captureRowBytes * height;
-        var rental = ArrayPool<byte>.Shared.Rent(bufferLength);
-        try
-        {
-            Marshal.Copy(sourceBuffer, rental, 0, bufferLength);
-
-            var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque));
-            var destination = bitmap.GetPixelSpan();
-            for (var row = 0; row < height; row++)
-            {
-                var srcOffset = row * captureRowBytes;
-                var destOffset = row * width;
-                for (var col = 0; col < width; col++)
-                {
-                    var sampleOffset = srcOffset + (col * 2);
-                    if (sampleOffset + 1 >= rental.Length)
-                    {
-                        break;
-                    }
-
-                    var low = rental[sampleOffset];
-                    var high = rental[sampleOffset + 1];
-                    var value = (ushort)(low | (high << 8));
-                    destination[destOffset + col] = (byte)(value >> 8);
-                }
-            }
-
-            return bitmap;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rental, clearArray: false);
-        }
-    }
-
-    private static SKBitmap ConvertY8ToBitmap(IntPtr sourceBuffer, int width, int height, int captureRowBytes)
-    {
-        var bufferLength = captureRowBytes * height;
-        var rental = ArrayPool<byte>.Shared.Rent(bufferLength);
-        try
-        {
-            Marshal.Copy(sourceBuffer, rental, 0, bufferLength);
-
-            var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque));
-            var destination = bitmap.GetPixelSpan();
-            for (var row = 0; row < height; row++)
-            {
-                var srcOffset = row * captureRowBytes;
-                var destOffset = row * width;
-                var copyLength = Math.Min(width, captureRowBytes);
-                rental.AsSpan(srcOffset, copyLength).CopyTo(destination.Slice(destOffset, copyLength));
-            }
-            return bitmap;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rental, clearArray: false);
-        }
     }
 
     private static RigSpec EnsureRigDescriptor(RigSpec rig)
@@ -779,62 +675,4 @@ public sealed class ZwoCameraAdapter : CameraAdapterBase
         int OutputRowBytes,
         long CaptureBufferSizeBytes);
 
-    private sealed class FrameBufferLease : IDisposable
-    {
-        private IntPtr _pointer;
-        private readonly long _length;
-        private int _refCount;
-
-        private FrameBufferLease(long length)
-        {
-            if (length <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(length));
-            }
-
-            _length = length;
-            _pointer = Marshal.AllocHGlobal(new IntPtr(length));
-            _refCount = 1;
-        }
-
-        public IntPtr Pointer => _pointer;
-
-        public long Length => _length;
-
-        public bool IsAllocated => _pointer != IntPtr.Zero;
-
-        public static FrameBufferLease Rent(long length) => new(length);
-
-        public void AddRef()
-        {
-            if (_pointer == IntPtr.Zero)
-            {
-                throw new ObjectDisposedException(nameof(FrameBufferLease));
-            }
-
-            Interlocked.Increment(ref _refCount);
-        }
-
-        public void Dispose() => Release();
-
-        public void Release()
-        {
-            if (Interlocked.Decrement(ref _refCount) == 0)
-            {
-                var ptr = Interlocked.Exchange(ref _pointer, IntPtr.Zero);
-                if (ptr != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(ptr);
-                }
-            }
-        }
-
-        public static void ReleasePixels(IntPtr address, object context)
-        {
-            if (context is FrameBufferLease lease)
-            {
-                lease.Release();
-            }
-        }
-    }
 }

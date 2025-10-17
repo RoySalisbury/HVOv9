@@ -6,6 +6,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
+using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing.Calibration;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -253,6 +254,31 @@ public sealed class FramePreprocessingOrchestratorTests
         engine.Dispose();
     }
 
+    [TestMethod]
+    public async Task ProcessAsync_InvokesCalibrationStages()
+    {
+        using var surfacePool = new SkiaSurfacePool();
+        var stage = new StubCalibrationStage();
+        var orchestrator = new FramePreprocessingOrchestrator(surfacePool, NullLogger<FramePreprocessingOrchestrator>.Instance, new TestPipelineFactory(stage));
+
+        using var immutableSource = SkiaTestImageFactory.CreateLinearGradientImage(TestWidth, TestHeight, redScale: 0.15f, greenScale: 0.45f, blueValue: 0.75f);
+        var bitmap = SkiaImageUtilities.CreateBitmapCopy(immutableSource, SKColorType.RgbaF16, SKAlphaType.Premul);
+
+        var (frame, engine) = CreateAdapterFrame(bitmap, immutableSource, pixelLease: null, surface: null);
+
+        var result = await orchestrator.ProcessAsync(frame, CancellationToken.None);
+        Assert.IsTrue(result.IsSuccessful, "Preprocessing should succeed when calibration pipeline is registered.");
+        Assert.AreEqual(1, stage.InvocationCount, "Calibration stage should execute exactly once.");
+
+    Assert.IsTrue(stage.SurfacePeeked, "Calibration stage should have accessed surface pixels.");
+
+    var processed = result.Value;
+    processed.PixelLease?.Dispose();
+    processed.ImmutableImage?.Dispose();
+    processed.Bitmap.Dispose();
+    engine.Dispose();
+    }
+
     private static async Task AssertLinear8BitColorRoundTripAsync(SKColorType colorType)
     {
         using var colorSpace = SKColorSpace.CreateSrgbLinear();
@@ -295,6 +321,44 @@ public sealed class FramePreprocessingOrchestratorTests
             {
                 Assert.Fail($"{context}: Difference {difference} at index {i} exceeds tolerance {tolerance}. Expected {expected[i]}, actual {actual[i]}.");
             }
+        }
+    }
+
+    private sealed class TestPipelineFactory : IFrameCalibrationPipelineFactory
+    {
+        private readonly IFrameCalibrationStage[] _stages;
+
+        public TestPipelineFactory(params IFrameCalibrationStage[] stages)
+        {
+            _stages = stages;
+        }
+
+        public IFrameCalibrationStage[] BuildStages() => _stages;
+    }
+
+    private sealed class StubCalibrationStage : IFrameCalibrationStage
+    {
+        public int InvocationCount { get; private set; }
+
+        public bool SurfacePeeked { get; private set; }
+
+        public string Name => "StubCalibration";
+
+        public ValueTask ApplyAsync(FrameCalibrationContext context, CancellationToken cancellationToken)
+        {
+            InvocationCount++;
+
+            using var pixmap = context.Surface.PeekPixels();
+            if (pixmap is not null)
+            {
+                var span = pixmap.GetPixelSpan();
+                if (!span.IsEmpty)
+                {
+                    SurfacePeeked = true;
+                }
+            }
+
+            return ValueTask.CompletedTask;
         }
     }
 
