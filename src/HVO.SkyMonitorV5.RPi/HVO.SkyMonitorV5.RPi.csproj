@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>HVO.SkyMonitorV5.RPi</RootNamespace>
     <AssemblyName>HVO.SkyMonitorV5.RPi</AssemblyName>
-  <RuntimeIdentifiers>linux-arm64;linux-x64;osx-arm64;osx-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>linux-arm64;linux-x64;osx-arm64;osx-x64</RuntimeIdentifiers>
+    <UserSecretsId>hvo-skymonitor-v5-rpi-dev</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

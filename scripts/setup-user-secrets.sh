@@ -13,6 +13,7 @@ apply_secret() {
   local secret_key="$2"
   local env_var="$3"
   local value
+  local output
 
   value="${!env_var-}"
   if [[ -z "${value}" ]]; then
@@ -21,7 +22,15 @@ apply_secret() {
   fi
 
   echo "[user-secrets] Setting ${secret_key} for ${project_rel} from ${env_var}."
-  dotnet user-secrets set "${secret_key}" "${value}" --project "${ROOT_DIR}/${project_rel}" >/dev/null
+  if ! output=$(dotnet user-secrets set "${secret_key}" "${value}" --project "${ROOT_DIR}/${project_rel}" 2>&1); then
+    if [[ "${output}" == *"Could not find the global property 'UserSecretsId'"* ]]; then
+      echo "[user-secrets] Skipping ${project_rel} :: ${secret_key} (UserSecretsId not set in project)."
+      return
+    fi
+
+    echo "${output}" >&2
+    return 1
+  fi
 }
 
 # Expected environment variables (configure via GitHub secrets or export locally):

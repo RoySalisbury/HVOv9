@@ -36,7 +36,8 @@ APT_PACKAGES=(
   lsb-release
   net-tools
   iproute2
-  rg
+  ripgrep
+  iputils-ping
 )
 
 log() {
@@ -100,12 +101,69 @@ install_dotnet_tools() {
   fi
 }
 
+configure_git_identity() {
+  local existing_name existing_email identity_line gh_name gh_login gh_email primary_email
+
+  existing_name="$(git config --global user.name 2>/dev/null || true)"
+  existing_email="$(git config --global user.email 2>/dev/null || true)"
+
+  if [[ -n "${existing_name}" && -n "${existing_email}" ]]; then
+    log "Git identity already configured; skipping."
+    return
+  fi
+
+  if ! command -v gh >/dev/null 2>&1; then
+    log "GitHub CLI not available; skipping git identity configuration."
+    return
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    log "GitHub CLI not authenticated; skipping git identity configuration."
+    return
+  fi
+
+  identity_line="$(gh api user --jq '[.name // "", .login // "", .email // ""] | @tsv' 2>/dev/null || true)"
+  if [[ -n "${identity_line}" ]]; then
+    IFS=$'\t' read -r gh_name gh_login gh_email <<<"${identity_line}"
+  fi
+
+  if [[ -z "${gh_email}" ]]; then
+    primary_email="$(gh api user/emails --jq '.[] | select(.primary == true) | .email' 2>/dev/null | head -n1 || true)"
+    gh_email="${primary_email}";
+  fi
+
+  if [[ -z "${existing_name}" ]]; then
+    if [[ -n "${gh_name}" ]]; then
+      git config --global user.name "${gh_name}"
+      log "Configured git user.name from GitHub profile."
+    elif [[ -n "${gh_login}" ]]; then
+      git config --global user.name "${gh_login}"
+      log "Configured git user.name from GitHub login."
+    else
+      log "Unable to determine git user.name; leaving unset."
+    fi
+  fi
+
+  if [[ -z "${existing_email}" ]]; then
+    if [[ -n "${gh_email}" ]]; then
+      git config --global user.email "${gh_email}"
+      log "Configured git user.email from GitHub profile."
+    elif [[ -n "${GIT_AUTHOR_EMAIL-}" ]]; then
+      git config --global user.email "${GIT_AUTHOR_EMAIL}"
+      log "Configured git user.email from environment."
+    else
+      log "Unable to determine git user.email; leaving unset."
+    fi
+  fi
+}
+
 main() {
   log "Copying catalog data."
   bash "${REPO_ROOT}/scripts/copy-catalog.sh"
 
   add_github_cli_repo
   install_packages
+  configure_git_identity
 
   log "Adding vscode user to i2c group."
   sudo usermod -aG i2c vscode

@@ -22,8 +22,8 @@ ensure_context() {
     --docker "host=${docker_host}" >/dev/null
 }
 
-ensure_context "hvo-local-mac" "Local M2 Desktop Docker for Development" "unix:///Users/roys/.docker/run/docker.sock"
-ensure_context "hvo-proxmox-home" "Docker Desktop" "ssh://roys@192.168.2.104"
+ensure_context "hvo-local-mac" "Local M2 Desktop Docker for Development" "unix:///var/run/docker.sock"
+ensure_context "hvo-proxmox-home" "Remote engine on Home Proxmox" "ssh://roys@192.168.2.104"
 ensure_context "rpi-remote" "Remote engine on Raspberry Pi" "ssh://roys@192.168.2.3"
 
 echo "[docker-contexts] Context setup complete. Use 'docker context use <name>' to switch targets."
