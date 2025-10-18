@@ -122,7 +122,7 @@ Notes
    - GitHub Codespaces: Use the “Rebuild Container” action from the codespace menu
 - Re-run dev cert setup if HTTPS fails to start:
    ```bash
-   bash .devcontainer/setup-dotnet-dev-cert.sh
+   bash scripts/setup-dotnet-dev-cert.sh
    ```
    Then reload the VS Code window.
 - Free ports 5136/7151 if the app can’t bind:

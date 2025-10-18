@@ -36,6 +36,7 @@ APT_PACKAGES=(
   lsb-release
   net-tools
   iproute2
+  rg
 )
 
 log() {
@@ -81,11 +82,27 @@ install_dotnet_tools() {
     log "Installing dotnet-ef global tool."
     dotnet tool install --global dotnet-ef
   fi
+
+  if dotnet tool list -g | grep -q '^dotnet-dump\s'; then
+    log "Updating dotnet-dump global tool."
+    dotnet tool update --global dotnet-dump
+  else
+    log "Installing dotnet-dump global tool."
+    dotnet tool install --global dotnet-dump
+  fi
+
+  if dotnet tool list -g | grep -q '^dotnet-script\s'; then
+    log "Updating dotnet-script global tool."
+    dotnet tool update --global dotnet-script
+  else
+    log "Installing dotnet-script global tool."
+    dotnet tool install --global dotnet-script
+  fi
 }
 
 main() {
   log "Copying catalog data."
-  bash "${REPO_ROOT}/.devcontainer/copy-catalogs.sh"
+  bash "${REPO_ROOT}/scripts/copy-catalog.sh"
 
   add_github_cli_repo
   install_packages

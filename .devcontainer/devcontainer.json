@@ -40,6 +40,6 @@
       "target": "/home/vscode/.dotnet/corefx/cryptography/x509stores"
     }
   ],
-  "onCreateCommand": "bash .devcontainer/setup-dotnet-dev-cert.sh",
-  "postCreateCommand": "bash .devcontainer/post-create.sh"
+  "onCreateCommand": "bash scripts/setup-dotnet-dev-cert.sh",
+  "postCreateCommand": "bash scripts/post-create.sh"
 }
