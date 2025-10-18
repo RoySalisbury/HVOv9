@@ -19,5 +19,6 @@
   <ItemGroup>
     <ProjectReference Include="..\HVO\HVO.csproj" />
     <ProjectReference Include="..\HVO.DataModels\HVO.DataModels.csproj" />
+    <ProjectReference Include="..\HVO.WebSite.Themes\HVO.WebSite.Themes.csproj" />
   </ItemGroup>
 </Project>

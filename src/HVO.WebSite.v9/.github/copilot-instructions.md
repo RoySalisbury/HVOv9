@@ -5,7 +5,7 @@
 This project delivers the main HVO v9 Blazor Server + ASP.NET Core site. It hosts the production UI, versioned REST APIs, health probes, and OpenAPI docs backed by `HVO.DataModels`.
 
 ## Key Reminders
-- Follow the global theme guidance: load `wwwroot/css/themes/hvo-dark.css`, set `data-theme="hvo-dark"`, and reuse theme variables instead of hard-coded colors.
+- Follow the global theme guidance: load `_content/HVO.WebSite.Themes/css/themes/hvo-dark.css`, set `data-theme="hvo-dark"`, and reuse theme variables instead of hard-coded colors.
 - API controllers must use URL-segment versioning (`/api/v1.0/...`) and return `Result<T>`-aware responses. Keep controller logic thin; push business rules into services under `Services/`.
 - Register dependencies in `Program.cs` using extension methods when logic grows. Keep health checks tagged (`roof`, `hardware`, etc.) and update documentation when new tags appear.
 - Maintain parity between the REST contract and any docs living under `docs/projects/roof-controller-v4-rpi` or other project folders when endpoints overlap.

@@ -38,6 +38,19 @@
     --history-chart-color: #60a5fa;
 }
 
+html[data-theme="hvo-dark"] {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: 100%;
+}
+
+body[data-theme="hvo-dark"] {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: 100%;
+    margin: 0;
+}
+
 body[data-theme="hvo-dark"],
 html body[data-theme="hvo-dark"] {
     font-family: var(--hvo-font-family);
@@ -151,15 +164,39 @@ body[data-theme="hvo-dark"] #blazor-error-ui .dismiss {
 
 body[data-theme="hvo-dark"] .app-frame {
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+    min-height: 100dvh;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: 100%;
+    align-content: stretch;
+    overflow: hidden;
     background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 55%), var(--hvo-body-bg);
+}
+
+body[data-theme="hvo-dark"] > .app-frame,
+body[data-theme="hvo-dark"] > div > .app-frame {
+    height: 100vh;
+    height: 100dvh;
+}
+
+body[data-theme="hvo-dark"] .app-frame > header,
+body[data-theme="hvo-dark"] .app-frame > nav {
+    grid-row: 1;
+}
+
+body[data-theme="hvo-dark"] .app-frame > footer,
+body[data-theme="hvo-dark"] .app-frame > .global-footer {
+    grid-row: 3;
 }
 
 body[data-theme="hvo-dark"] .app-navbar {
     background: var(--hvo-navbar-bg) !important;
     border-bottom: 1px solid rgba(148, 163, 184, 0.15);
     backdrop-filter: blur(6px);
+    margin-bottom: 0 !important;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
 }
 
 body[data-theme="hvo-dark"] .navbar-dark .navbar-nav .nav-link {
@@ -176,8 +213,16 @@ body[data-theme="hvo-dark"] .navbar-dark .navbar-brand {
 }
 
 body[data-theme="hvo-dark"] .app-main {
-    flex: 1 0(auto);
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    min-height: 0;
     padding-bottom: 2.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 body[data-theme="hvo-dark"] .global-footer {

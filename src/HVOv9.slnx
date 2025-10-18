@@ -32,6 +32,9 @@
     <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
     <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
   </Folder>
+  <Folder Name="/Themes/">
+    <Project Path="HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
+  </Folder>
   <Folder Name="/Mobile/">
     <Project Path="HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj" />
   </Folder>

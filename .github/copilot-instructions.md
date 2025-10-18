@@ -17,7 +17,7 @@ HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a 
 - Bootstrap 5.3 (via CDN) and Font Awesome/Bootstrap Icons for UI primitives
 
 ## Design System & UI Preferences
-- Default to the **HVO Dark theme** defined in `wwwroot/css/themes/hvo-dark.css`; all new pages should load this stylesheet and ensure the `<html>` and `<body>` elements include `data-theme="hvo-dark"`.
+- Default to the **HVO Dark theme** shipped in `HVO.WebSite.Themes` (`_content/HVO.WebSite.Themes/css/themes/hvo-dark.css`); all new pages should load this stylesheet and ensure the `<html>` and `<body>` elements include `data-theme="hvo-dark"`.
 - Reuse the CSS custom properties declared in the theme (e.g., `--hvo-body-bg`, `--hvo-accent`) instead of hard-coding colors. Add new tokens at the top of the theme file when additional palette values are needed.
 - Use the existing scoped CSS placeholders sparingly—centralize styling in the theme whenever styles apply across multiple components.
 - Prefer our **HistoryLineChart** component in `Components/Shared/HistoryLineChart` for telemetry visualizations; avoid reintroducing Radzen or other heavy UI libraries unless absolutely necessary.

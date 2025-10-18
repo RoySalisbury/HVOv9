@@ -7,19 +7,19 @@
     position: relative;
     border-radius: 12px;
     overflow: hidden;
-    background: #000;
+    background: var(--hvo-body-bg);
     outline: none;
 }
 
 .player-frame:focus-visible {
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.45);
+    box-shadow: 0 0 0 0.1rem var(--hvo-focus-ring-inner), 0 0 0 0.25rem var(--hvo-focus-ring-outer);
 }
 
 .player-frame canvas {
     width: 100%;
     height: auto;
     display: block;
-    background: #000;
+    background: var(--hvo-body-bg);
 }
 
 .player-frame img {
@@ -35,7 +35,11 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.35rem 0.6rem;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 100%);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--hvo-body-bg) 0%, transparent) 0%,
+        color-mix(in srgb, var(--hvo-body-bg) 78%, transparent) 100%
+    );
     backdrop-filter: blur(3px);
     transition: opacity 0.25s ease, transform 0.25s ease;
     opacity: 1;
@@ -55,9 +59,9 @@
     width: 2rem;
     height: 2rem;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
+    border: 1px solid var(--hvo-border-muted);
+    background: var(--hvo-card-glass);
+    color: var(--hvo-body-color);
     transition: background-color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
 }
 
@@ -67,8 +71,8 @@
 }
 
 .control-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.26);
-    border-color: rgba(255, 255, 255, 0.32);
+    background: var(--hvo-surface-hover);
+    border-color: var(--hvo-border-stronger);
     transform: scale(1.05);
 }
 
@@ -82,18 +86,18 @@
 }
 
 .record-btn.is-active {
-    background: rgba(255, 56, 59, 0.9);
-    border-color: rgba(255, 56, 59, 0.95);
+    background: var(--hvo-danger-strong);
+    border-color: var(--hvo-danger-bg);
 }
 
 .record-btn.is-active:hover:not(:disabled) {
-    background: rgba(255, 56, 59, 1);
+    background: var(--hvo-danger-strong);
 }
 
 .status-chip {
     margin-left: auto;
     font-size: 0.72rem;
-    color: #fff;
+    color: var(--hvo-body-color);
     letter-spacing: 0.045em;
     text-transform: uppercase;
     opacity: 0.82;
@@ -105,10 +109,11 @@
     gap: 0.3rem;
     margin-top: 0.35rem;
     font-size: 0.82rem;
-    color: var(--bs-primary, #0d6efd);
+    color: var(--hvo-accent);
     text-decoration: none;
 }
 
 .download-link:hover {
+    color: var(--hvo-accent-strong);
     text-decoration: underline;
 }

@@ -1,10 +1,10 @@
-/* Dark, glassy layout for RoofControlV2 */
+/* Dark, glassy layout for RoofControlV2 aligned to shared theme tokens */
 
 .rc2-shell {
   max-width: 1280px;
   margin: 0 auto;
   padding: 1.25rem;
-  color: #e8eaf0;
+  color: var(--hvo-body-color);
 }
 
 .rc2-top {
@@ -15,11 +15,11 @@
 }
 
 .rc2-intro {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.25));
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--hvo-card-bg);
+  border: 1px solid var(--hvo-border-muted);
   border-radius: 16px;
   padding: 1rem 1.25rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--hvo-panel-shadow);
 }
 
 .rc2-intro-title {
@@ -28,7 +28,7 @@
   letter-spacing: 0.3px;
 }
 
-.rc2-intro-text { color: rgba(255, 255, 255, 0.85); }
+.rc2-intro-text { color: var(--hvo-muted-strong); }
 
 .rc2-status-pill {
   display: flex;
@@ -47,6 +47,8 @@
   gap: 0.4rem;
   line-height: 1;
   min-height: 34px;
+  background: var(--hvo-card-glass);
+  border: 1px solid var(--hvo-border-muted);
 }
 
 .rc2-banner-row { margin-top: 0.75rem; }
@@ -57,29 +59,29 @@
   gap: 0.6rem;
   padding: 0.7rem 0.9rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
+  box-shadow: inset 0 1px 0 var(--hvo-border-stronger);
 }
 
-.rc2-banner-warn { border-left: 3px solid #ffc107; }
-.rc2-banner-danger { border-left: 3px solid #dc3545; }
+.rc2-banner-warn { border-left: 3px solid var(--hvo-warning-strong); }
+.rc2-banner-danger { border-left: 3px solid var(--hvo-danger-strong); }
 
 .rc2-card {
-  color: #e8eaf0;
+  color: var(--hvo-body-color);
   overflow: hidden;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.3));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-bg);
+  box-shadow: var(--hvo-panel-shadow);
 }
 
-.rc2-card--glass { background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.25)); }
+.rc2-card--glass { background: var(--hvo-card-glass); }
 
 .rc2-card-head {
   padding: 0.9rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border-bottom: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
 }
 
 .rc2-card-body { padding: 1rem; }
@@ -89,7 +91,7 @@
 .rc2-camera-body {
   position: relative;
   aspect-ratio: 16 / 9;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--hvo-card-glass);
 }
 
 .rc2-camera-placeholder {
@@ -100,7 +102,7 @@
   text-align: center;
   gap: 0.35rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--hvo-muted-strong);
 }
 
 .rc2-camera-placeholder i {
@@ -138,25 +140,25 @@
 .rc2-kpi {
   padding: 0.85rem 1rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
 }
 
 .rc2-kpi-label {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--hvo-muted);
 }
 
 .rc2-kpi-value {
   font-weight: 600;
   font-size: 1.05rem;
-  color: #fff;
+  color: var(--hvo-body-color);
 }
 
 .rc2-console-section {
   margin-top: 1.25rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--hvo-border-muted);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -169,8 +171,8 @@
   gap: 0.75rem;
   padding: 0.45rem 0.9rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
   color: inherit;
   font-weight: 600;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -188,28 +190,27 @@
 }
 
 .rc2-console-toggle:hover {
-  background: rgba(13, 110, 253, 0.12);
-  border-color: rgba(13, 110, 253, 0.45);
+  background: var(--hvo-surface-hover);
+  border-color: var(--hvo-accent-strong);
 }
 
 .rc2-console-toggle:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.7);
+  outline: 2px solid var(--hvo-accent-strong);
   outline-offset: 2px;
 }
 
 .rc2-console-count {
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--hvo-muted);
 }
-
 
 .rc2-note {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  color: #e8eaf0;
-  border-left: 3px solid #0d6efd;
+  color: var(--hvo-body-color);
+  border-left: 3px solid var(--hvo-accent-strong);
   border-radius: 8px;
-  background: rgba(13, 110, 253, 0.12);
+  background: var(--hvo-accent-soft);
 }
 
 .rc2-badge-button {
@@ -227,19 +228,19 @@
 }
 
 .rc2-badge-button:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.7);
+  outline: 2px solid var(--hvo-accent-strong);
   outline-offset: 2px;
 }
 
 .rc2-badge-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+  box-shadow: 0 4px 12px var(--hvo-accent-soft);
 }
 
 .rc2-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(3, 10, 24, 0.85);
+  background: color-mix(in srgb, var(--hvo-body-bg) 85%, transparent);
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
@@ -254,9 +255,9 @@
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, rgba(12, 18, 32, 0.95), rgba(6, 10, 20, 0.95));
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-bg);
+  box-shadow: var(--hvo-panel-shadow);
 }
 
 .rc2-modal-header {
@@ -264,8 +265,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  border-bottom: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
 }
 
 .rc2-modal-title {
@@ -287,8 +288,8 @@
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 0.9rem 1.2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(0deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border-top: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
 }
 
 .rc2-health-summary {
@@ -301,8 +302,8 @@
 .rc2-health-meta {
   padding: 0.5rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
   font-size: 0.9rem;
 }
 
@@ -315,9 +316,9 @@
 .rc2-health-check {
   padding: 0.9rem 1rem;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hvo-border-muted);
+  background: var(--hvo-card-glass);
+  box-shadow: inset 0 1px 0 var(--hvo-border-stronger);
 }
 
 .rc2-health-check-head {
@@ -334,22 +335,22 @@
 
 .rc2-health-check-duration {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--hvo-muted);
 }
 
 .rc2-health-check-description {
   margin: 0.5rem 0 0;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--hvo-muted-strong);
 }
 
 .rc2-health-check-exception {
   margin-top: 0.6rem;
   padding: 0.6rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid rgba(220, 53, 69, 0.35);
-  background: rgba(220, 53, 69, 0.12);
-  color: #ffc9ce;
+  border: 1px solid var(--hvo-danger-strong);
+  background: var(--hvo-danger-bg);
+  color: var(--hvo-danger-fg);
   display: flex;
   align-items: center;
 }
@@ -358,9 +359,9 @@
   margin: 0.75rem 0 0;
   padding: 0.75rem;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #d7eaff;
+  background: var(--hvo-card-bg);
+  border: 1px solid var(--hvo-border-muted);
+  color: var(--hvo-info-fg);
   font-size: 0.8rem;
   max-height: 220px;
   overflow: auto;
@@ -369,7 +370,7 @@
 .rc2-health-check-tags {
   margin-top: 0.6rem;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--hvo-muted);
   display: flex;
   align-items: center;
   gap: 0.35rem;

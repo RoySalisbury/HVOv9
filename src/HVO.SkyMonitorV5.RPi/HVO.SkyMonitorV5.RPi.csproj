@@ -40,6 +40,7 @@
     <ProjectReference Include="../HVO/HVO.csproj" />
     <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
     <ProjectReference Include="../HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
+    <ProjectReference Include="../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,11 +52,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../HVO.RoofControllerV4.iPad/Resources/Fonts/OpenSans-Semibold.ttf" Link="Resources/Fonts/OpenSans-Semibold.ttf">
+    <Content Include="../HVO.WebSite.Themes/wwwroot/fonts/OpenSans-Semibold.ttf" Link="Resources/Fonts/OpenSans-Semibold.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../HVO.RoofControllerV4.iPad/Resources/Fonts/OpenSans-Regular.ttf" Link="Resources/Fonts/OpenSans-Regular.ttf">
+    <Content Include="../HVO.WebSite.Themes/wwwroot/fonts/OpenSans-Regular.ttf" Link="Resources/Fonts/OpenSans-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
