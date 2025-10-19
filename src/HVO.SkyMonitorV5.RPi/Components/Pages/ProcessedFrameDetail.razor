@@ -1,0 +1,100 @@
+@page "/monitor/processed-frame"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>SkyMonitor v5 · Processed Frame</PageTitle>
+
+<section class="detail-page">
+    <div class="container-fluid detail-container py-5 text-light">
+        @if (_isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-info" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-4 mb-0">Retrieving processed frame…</p>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+            </div>
+        }
+        else if (_viewModel is not null)
+        {
+            <div class="detail-actions">
+                <button type="button" class="btn btn-outline-light detail-actions__back" @onclick="NavigateBack">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Monitor
+                </button>
+                <a class="btn btn-primary detail-actions__download" href="@_viewModel.ImageSource" download="@_viewModel.DownloadFileName">
+                    <i class="bi bi-download me-2"></i>Download Image
+                </a>
+            </div>
+
+            <div class="detail-grid">
+                <div class="detail-grid__image">
+                    <div class="frame-preview">
+                        <img src="@_viewModel.ImageSource" alt="Processed frame preview" class="frame-preview__image" />
+                    </div>
+                </div>
+
+                <div class="detail-grid__meta row g-4">
+                    <div class="col-12 col-xl-6">
+                        <div class="frame-metadata">
+                            <h2 class="h4 fw-semibold mb-3">Frame Details</h2>
+                            <dl class="detail-list">
+                                <div class="detail-item">
+                                    <dt>Frame ID</dt>
+                                    <dd><code>@_viewModel.FrameId.ToString("N")</code></dd>
+                                </div>
+                                <div class="detail-item">
+                                    <dt>Captured</dt>
+                                    <dd>@_viewModel.TimestampDisplay</dd>
+                                </div>
+                                <div class="detail-item">
+                                    <dt>Integration</dt>
+                                    <dd>@_viewModel.IntegrationSummary</dd>
+                                </div>
+                                <div class="detail-item">
+                                    <dt>Stack</dt>
+                                    <dd>@_viewModel.FramesSummary</dd>
+                                </div>
+                                <div class="detail-item">
+                                    <dt>Surface Prep</dt>
+                                    <dd>@_viewModel.SurfaceSummary</dd>
+                                </div>
+                            </dl>
+
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-xl-6">
+                        <div class="frame-metadata">
+                            <h2 class="h4 fw-semibold mb-3">Filters</h2>
+                            @if (!_viewModel.HasFilters)
+                            {
+                                <p class="detail-note">No filters were applied to this frame.</p>
+                            }
+                            else
+                            {
+                                <ul class="filter-list filter-list--timed">
+                                    @foreach (var filter in _viewModel.Filters)
+                                    {
+                                        <li>
+                                            <span class="filter-name">@filter.Name</span>
+                                            @if (!string.IsNullOrEmpty(filter.DurationDisplay))
+                                            {
+                                                <span class="filter-duration">@filter.DurationDisplay</span>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>

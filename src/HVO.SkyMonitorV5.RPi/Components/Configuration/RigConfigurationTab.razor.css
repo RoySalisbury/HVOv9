@@ -1,0 +1,55 @@
+:host {
+    display: block;
+}
+
+.config-card {
+    background: var(--hvo-card-bg);
+    border-color: var(--hvo-border-stronger);
+    box-shadow: var(--hvo-panel-shadow);
+}
+
+.config-card .card-header {
+    background-color: transparent;
+    border-bottom-color: var(--hvo-border-strong);
+}
+
+.config-card .form-label,
+.config-card legend {
+    color: var(--hvo-body-color);
+}
+
+.config-card__title {
+    color: var(--hvo-body-color);
+}
+
+.config-card .form-text {
+    color: var(--hvo-muted);
+}
+
+.config-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.label-tooltip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--hvo-muted);
+    cursor: help;
+    font-size: 0.95rem;
+}
+
+.label-tooltip:hover,
+.label-tooltip:focus {
+    color: var(--hvo-accent);
+}
+
+:deep(.table tbody tr) {
+    cursor: pointer;
+}
+
+:deep(.table tbody tr.table-active) {
+    background-color: var(--hvo-surface-hover, rgba(255, 255, 255, 0.08));
+}

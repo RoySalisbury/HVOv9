@@ -31,7 +31,10 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     IConfigureOptions<CircularApertureMaskOptions>,
     IConfigureOptions<CelestialAnnotationsOptions>,
     IConfigureOptions<ConstellationFigureOptions>,
-    IConfigureOptions<StarCatalogOptions>
+    IConfigureOptions<StarCatalogOptions>,
+    IConfigureOptions<LocalApiClientOptions>,
+    IConfigureOptions<SkyMonitorTelemetryRetentionOptions>,
+    IConfigurationSnapshotInvalidator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.General);
 
@@ -60,6 +63,88 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         options.LatitudeDegrees = snapshot.Observatory.LatitudeDegrees;
         options.LongitudeDegrees = snapshot.Observatory.LongitudeDegrees;
         options.TimeZoneId = snapshot.Observatory.TimeZoneId;
+    }
+
+    public void Configure(LocalApiClientOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var snapshot = GetSnapshot();
+        if (!snapshot.SystemSettings.TryGetValue(SystemSettingKeys.LocalApi, out var payload)
+            || string.IsNullOrWhiteSpace(payload))
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = JsonSerializer.Deserialize<LocalApiClientOptions>(payload, JsonOptions);
+            if (stored is null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(stored.BaseAddress))
+            {
+                options.BaseAddress = stored.BaseAddress;
+            }
+
+            options.ApiKey = stored.ApiKey;
+
+            if (!string.IsNullOrWhiteSpace(stored.ApiKeyHeaderName))
+            {
+                options.ApiKeyHeaderName = stored.ApiKeyHeaderName;
+            }
+
+            if (stored.Timeout > TimeSpan.Zero)
+            {
+                options.Timeout = stored.Timeout;
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger?.LogWarning(ex, "Unable to deserialize local API configuration from system settings.");
+        }
+    }
+
+    public void Configure(SkyMonitorTelemetryRetentionOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var snapshot = GetSnapshot();
+        if (!snapshot.SystemSettings.TryGetValue(SystemSettingKeys.TelemetryRetention, out var payload)
+            || string.IsNullOrWhiteSpace(payload))
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = JsonSerializer.Deserialize<SkyMonitorTelemetryRetentionOptions>(payload, JsonOptions);
+            if (stored is null)
+            {
+                return;
+            }
+
+            if (stored.SweepInterval > TimeSpan.Zero)
+            {
+                options.SweepInterval = stored.SweepInterval;
+            }
+
+            options.VacuumAfterPurge = stored.VacuumAfterPurge;
+
+            options.RemoteDispatch = ClonePolicy(stored.RemoteDispatch, options.RemoteDispatch);
+            options.FrameExports = ClonePolicy(stored.FrameExports, options.FrameExports);
+            options.BackgroundStacker = ClonePolicy(stored.BackgroundStacker, options.BackgroundStacker);
+            options.CapturePacing = ClonePolicy(stored.CapturePacing, options.CapturePacing);
+            options.ProcessingQueue = ClonePolicy(stored.ProcessingQueue, options.ProcessingQueue);
+            options.FilterMetrics = ClonePolicy(stored.FilterMetrics, options.FilterMetrics);
+            options.TelemetryEvents = ClonePolicy(stored.TelemetryEvents, options.TelemetryEvents);
+        }
+        catch (JsonException ex)
+        {
+            _logger?.LogWarning(ex, "Unable to deserialize telemetry retention configuration from system settings.");
+        }
     }
 
     public void Configure(AllSkyCatalogOptions options)
@@ -98,6 +183,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
             rigEntries.Add(new RigCatalogEntryOptions
             {
                 Name = rig.Key,
+                DisplayName = rig.DisplayName,
                 Camera = camera.Key,
                 Lens = lens.Key,
                 BoresightAltDeg = rig.BoresightAltitudeDegrees,
@@ -520,8 +606,24 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
             var starCatalog = context.StarCatalogSettings.AsNoTracking().OrderBy(entry => entry.Id).FirstOrDefault()
                 ?? throw new InvalidOperationException("Star catalog configuration is missing from the SkyMonitor data store.");
 
-            _snapshot = new ConfigurationSnapshot(observatory, cameras, lenses, rigs, adapters, pipeline, starCatalog);
+            var systemSettings = context.SystemSettings.AsNoTracking().OrderBy(setting => setting.Id).ToList();
+            var settingsLookup = systemSettings.Count == 0
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : systemSettings.ToDictionary(
+                    setting => setting.Key,
+                    setting => setting.PayloadJson ?? string.Empty,
+                    StringComparer.OrdinalIgnoreCase);
+
+            _snapshot = new ConfigurationSnapshot(observatory, cameras, lenses, rigs, adapters, pipeline, starCatalog, settingsLookup);
             return _snapshot;
+        }
+    }
+
+    public void InvalidateSnapshot()
+    {
+        lock (_snapshotLock)
+        {
+            _snapshot = null;
         }
     }
 
@@ -756,14 +858,50 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         where TEnum : struct, Enum
         => Enum.TryParse(value, ignoreCase: true, out TEnum parsed) ? parsed : defaultValue;
 
-    private sealed record ConfigurationSnapshot(
-        ObservatorySiteEntity Observatory,
-        IReadOnlyList<CameraCatalogCameraEntity> Cameras,
-        IReadOnlyList<CameraCatalogLensEntity> Lenses,
-        IReadOnlyList<RigCatalogEntryEntity> Rigs,
-        IReadOnlyList<CameraAdapterConfigEntity> Adapters,
-        CameraPipelineConfigEntity Pipeline,
-        StarCatalogSettingsEntity StarCatalog);
+    private static TelemetryRetentionPolicy ClonePolicy(TelemetryRetentionPolicy? source, TelemetryRetentionPolicy? fallback)
+    {
+        var template = source ?? fallback ?? TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), 5_000);
+        return TelemetryRetentionPolicy.Create(template.MaxAge, template.MaxRecords);
+    }
+
+    private sealed class ConfigurationSnapshot
+    {
+        public ConfigurationSnapshot(
+            ObservatorySiteEntity observatory,
+            IReadOnlyList<CameraCatalogCameraEntity> cameras,
+            IReadOnlyList<CameraCatalogLensEntity> lenses,
+            IReadOnlyList<RigCatalogEntryEntity> rigs,
+            IReadOnlyList<CameraAdapterConfigEntity> adapters,
+            CameraPipelineConfigEntity pipeline,
+            StarCatalogSettingsEntity starCatalog,
+            IReadOnlyDictionary<string, string> systemSettings)
+        {
+            Observatory = observatory ?? throw new ArgumentNullException(nameof(observatory));
+            Cameras = cameras ?? throw new ArgumentNullException(nameof(cameras));
+            Lenses = lenses ?? throw new ArgumentNullException(nameof(lenses));
+            Rigs = rigs ?? throw new ArgumentNullException(nameof(rigs));
+            Adapters = adapters ?? throw new ArgumentNullException(nameof(adapters));
+            Pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            StarCatalog = starCatalog ?? throw new ArgumentNullException(nameof(starCatalog));
+            SystemSettings = systemSettings ?? throw new ArgumentNullException(nameof(systemSettings));
+        }
+
+        public ObservatorySiteEntity Observatory { get; }
+
+        public IReadOnlyList<CameraCatalogCameraEntity> Cameras { get; }
+
+        public IReadOnlyList<CameraCatalogLensEntity> Lenses { get; }
+
+        public IReadOnlyList<RigCatalogEntryEntity> Rigs { get; }
+
+        public IReadOnlyList<CameraAdapterConfigEntity> Adapters { get; }
+
+        public CameraPipelineConfigEntity Pipeline { get; }
+
+        public StarCatalogSettingsEntity StarCatalog { get; }
+
+        public IReadOnlyDictionary<string, string> SystemSettings { get; }
+    }
 
     public sealed record CameraAdapterDescriptor(string Name, string AdapterType, string? RigKey);
 }

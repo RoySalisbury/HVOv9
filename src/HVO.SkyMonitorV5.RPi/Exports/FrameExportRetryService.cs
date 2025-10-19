@@ -88,7 +88,6 @@ public sealed class FrameExportRetryService : BackgroundService, IFrameExportRet
     {
         var reader = _scheduleChannel.Reader;
         var currentInterval = NormalizeOptions(_optionsMonitor.CurrentValue).PollInterval;
-        var timer = new PeriodicTimer(currentInterval);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -101,26 +100,29 @@ public sealed class FrameExportRetryService : BackgroundService, IFrameExportRet
 
                 await ProcessDueItemsAsync(stoppingToken).ConfigureAwait(false);
 
-                var waitForRead = reader.WaitToReadAsync(stoppingToken).AsTask();
-                var waitForTick = timer.WaitForNextTickAsync(stoppingToken).AsTask();
-                var completed = await Task.WhenAny(waitForRead, waitForTick).ConfigureAwait(false);
+                var waitForReadTask = CancellationTokenHelpers.WaitToReadWithoutThrowAsync(reader, stoppingToken).AsTask();
+                var delayTask = CancellationTokenHelpers.DelayWithoutThrowAsync(currentInterval, stoppingToken);
+                var completed = await Task.WhenAny(waitForReadTask, delayTask).ConfigureAwait(false);
 
-                if (completed == waitForRead)
+                if (completed == waitForReadTask)
                 {
-                    if (!await waitForRead.ConfigureAwait(false))
+                    if (!await waitForReadTask.ConfigureAwait(false))
                     {
                         break;
                     }
                 }
                 else
                 {
-                    await waitForTick.ConfigureAwait(false);
+                    var delayCompleted = await delayTask.ConfigureAwait(false);
+                    if (!delayCompleted)
+                    {
+                        break;
+                    }
+
                     var latest = NormalizeOptions(_optionsMonitor.CurrentValue).PollInterval;
                     if (latest != currentInterval)
                     {
                         currentInterval = latest;
-                        timer.Dispose();
-                        timer = new PeriodicTimer(currentInterval);
                     }
                 }
             }
@@ -131,11 +133,13 @@ public sealed class FrameExportRetryService : BackgroundService, IFrameExportRet
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unhandled exception in frame export retry loop.");
-                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
+                var delayCompleted = await CancellationTokenHelpers.DelayWithoutThrowAsync(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
+                if (!delayCompleted)
+                {
+                    break;
+                }
             }
         }
-
-        timer.Dispose();
     }
 
     private async Task HandleScheduleAsync(FrameExportRetryRequest request, CancellationToken cancellationToken)

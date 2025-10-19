@@ -378,13 +378,21 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 var delay = GetCurrentLoopInterval();
-                await Task.Delay(delay, cancellationToken);
-                await RefreshAsync(cancellationToken);
+                var delayCompleted = await CancellationTokenHelpers.DelayWithoutThrowAsync(delay, cancellationToken).ConfigureAwait(false);
+                if (!delayCompleted)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected during shutdown.
         }
         catch (Exception ex)
         {

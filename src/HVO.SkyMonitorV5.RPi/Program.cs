@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -52,7 +53,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
+using System.Runtime.ExceptionServices;
+using System.Diagnostics;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using System.Text;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 
@@ -63,6 +69,8 @@ namespace HVO.SkyMonitorV5.RPi;
 /// </summary>
 public static class Program
 {
+    private static readonly ConcurrentDictionary<string, byte> FirstChanceExceptionCallsites = new();
+
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -70,8 +78,9 @@ public static class Program
         ConfigureServices(builder.Services, builder.Configuration);
         ConfigureLogging(builder.Logging);
 
-        var app = builder.Build();
-        Configure(app);
+    var app = builder.Build();
+    ConfigureUnhandledExceptionLogging(app);
+    Configure(app);
 
         app.Run();
     }
@@ -154,6 +163,34 @@ public static class Program
 
         services.AddHttpClient();
         services.AddHttpContextAccessor();
+
+        services.AddOptions<LocalApiClientOptions>()
+            .Bind(configuration.GetSection(LocalApiClientOptions.SectionName))
+            .PostConfigure(options =>
+            {
+                if (options.Timeout <= TimeSpan.Zero)
+                {
+                    options.Timeout = TimeSpan.FromSeconds(10);
+                }
+            });
+
+        services.AddHttpClient<ILocalApiClient, LocalApiClient>((sp, client) =>
+        {
+            // Prefer configuration for base address; switch to IHttpContextAccessor-based per-request inference if future routes demand host negotiation.
+            var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<LocalApiClientOptions>>();
+            var options = optionsMonitor.CurrentValue ?? new LocalApiClientOptions();
+
+            if (!string.IsNullOrWhiteSpace(options.BaseAddress) && Uri.TryCreate(options.BaseAddress, UriKind.Absolute, out var configuredBase))
+            {
+                client.BaseAddress = configuredBase;
+            }
+            else if (client.BaseAddress is null)
+            {
+                client.BaseAddress = new Uri("http://127.0.0.1:5136/", UriKind.Absolute);
+            }
+
+            client.Timeout = options.Timeout > TimeSpan.Zero ? options.Timeout : TimeSpan.FromSeconds(10);
+        });
 
         services.AddExceptionHandler<HvoServiceExceptionHandler>();
 
@@ -245,7 +282,8 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
+    services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
+    services.AddSingleton<IConfigurationSnapshotInvalidator>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
@@ -254,6 +292,11 @@ public static class Program
         services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<LocalApiClientOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+    services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+
+    services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
+    services.AddSingleton<IOpticsConfigurationService, OpticsConfigurationService>();
 
         services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
         services.AddSingleton<SkyMonitorTelemetryMetrics>();
@@ -264,7 +307,8 @@ public static class Program
         services.AddSingleton<SkyMonitorTelemetryRetentionProcessor>();
         services.AddHostedService<SkyMonitorTelemetryRetentionService>();
 
-        services.AddSingleton<IFrameStateStore, FrameStateStore>();
+    services.AddSingleton<IFrameStateStore, FrameStateStore>();
+    services.AddScoped<IFrameMediaProvider, FrameMediaProvider>();
 
     services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
     services.AddSingleton<IExposureController, AdaptiveExposureController>();
@@ -407,6 +451,122 @@ public static class Program
                 builder.AddMeter("HVO.SkyMonitor.FrameExport");
                 builder.AddPrometheusExporter();
             });
+    }
+
+    private static void ConfigureUnhandledExceptionLogging(WebApplication app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+
+        var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("HVO.SkyMonitorV5.UnhandledExceptions");
+        var configuration = app.Configuration;
+    var logFirstChance = configuration.GetValue<bool?>("SkyMonitor:Diagnostics:LogFirstChanceExceptions") ?? false;
+
+        AppDomain.CurrentDomain.UnhandledException += (_, eventArgs) =>
+        {
+            if (eventArgs.ExceptionObject is Exception exception)
+            {
+                logger.LogCritical(exception, "Unhandled exception detected. Terminating: {IsTerminating}", eventArgs.IsTerminating);
+            }
+            else
+            {
+                logger.LogCritical("Unhandled non-exception error detected. Terminating: {IsTerminating}. Payload: {Payload}", eventArgs.IsTerminating, eventArgs.ExceptionObject);
+            }
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, eventArgs) =>
+        {
+            logger.LogError(eventArgs.Exception, "Unobserved task exception captured by scheduler.");
+            eventArgs.SetObserved();
+        };
+
+    if (logFirstChance)
+        {
+            AppDomain.CurrentDomain.FirstChanceException += (_, eventArgs) =>
+            {
+                var exception = eventArgs.Exception;
+                if (exception is OperationCanceledException or ChannelClosedException)
+                {
+                    var callSite = TryGetFirstChanceCallSiteSignature();
+
+                    if (callSite != null && FirstChanceExceptionCallsites.Count >= 512)
+                    {
+                        FirstChanceExceptionCallsites.Clear();
+                    }
+
+                    if (callSite != null && FirstChanceExceptionCallsites.TryAdd(callSite, 0))
+                    {
+                        logger.LogWarning(
+                            exception,
+                            "First-chance {ExceptionType} observed on thread {ThreadId} at {CallSite}.",
+                            exception.GetType().FullName,
+                            Environment.CurrentManagedThreadId,
+                            callSite);
+                        return;
+                    }
+
+                    var logLevel = callSite is null ? LogLevel.Warning : LogLevel.Debug;
+                    logger.Log(logLevel,
+                        exception,
+                        "First-chance {ExceptionType} observed on thread {ThreadId}{CallSiteInformation}.",
+                        exception.GetType().FullName,
+                        Environment.CurrentManagedThreadId,
+                        callSite is null ? string.Empty : $" at {callSite}");
+                }
+            };
+        }
+    }
+
+    private static string? TryGetFirstChanceCallSiteSignature()
+    {
+    var stackTrace = new StackTrace(skipFrames: 2, fNeedFileInfo: false);
+        var frames = stackTrace.GetFrames();
+
+        if (frames is null || frames.Length == 0)
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder();
+        var appended = 0;
+
+        foreach (var frame in frames)
+        {
+            var method = frame.GetMethod();
+            if (method is null)
+            {
+                continue;
+            }
+
+            var declaringType = method.DeclaringType;
+            if (declaringType is null)
+            {
+                continue;
+            }
+
+            var @namespace = declaringType.Namespace ?? string.Empty;
+            if (@namespace.StartsWith("System.", StringComparison.Ordinal) && !@namespace.StartsWith("HVO.", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.Append(" > ");
+            }
+
+            builder.Append(declaringType.FullName);
+            builder.Append('.');
+            builder.Append(method.Name);
+
+            appended++;
+            if (appended >= 4)
+            {
+                break;
+            }
+        }
+
+        return appended == 0 ? null : builder.ToString();
     }
 
     private static void RegisterCameraAdapters(IServiceCollection services)

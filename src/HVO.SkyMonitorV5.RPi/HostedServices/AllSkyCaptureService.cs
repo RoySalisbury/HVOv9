@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace HVO.SkyMonitorV5.RPi.HostedServices;
 
@@ -569,13 +570,31 @@ public sealed class AllSkyCaptureService : BackgroundService
             return;
         }
 
-        try
+        if (!stoppingToken.CanBeCanceled)
         {
-            await Task.Delay(delay, stoppingToken);
+            await Task.Delay(delay).ConfigureAwait(false);
+            return;
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+
+        if (stoppingToken.IsCancellationRequested)
         {
-            // ignore cancellation - caller will respect token
+            return;
+        }
+
+        var cancellation = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var registration = stoppingToken.Register(static state =>
+        {
+            var source = (TaskCompletionSource<bool>)state!;
+            source.TrySetResult(true);
+        }, cancellation);
+
+        var delayTask = Task.Delay(delay);
+        var completed = await Task.WhenAny(delayTask, cancellation.Task).ConfigureAwait(false);
+
+        if (completed == delayTask)
+        {
+            await delayTask.ConfigureAwait(false);
         }
     }
 

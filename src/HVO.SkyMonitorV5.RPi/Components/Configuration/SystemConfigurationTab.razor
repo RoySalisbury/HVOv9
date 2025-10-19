@@ -1,0 +1,538 @@
+@using HVO.SkyMonitorV5.RPi.Models.System
+@using Microsoft.AspNetCore.Components.Forms
+
+<div class="container py-4 text-light">
+    <div class="row g-4">
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Observatory Site</h2>
+                        <p class="mb-0 text-muted small">Update the primary observatory metadata used for time zone and overlay calculations.</p>
+                    </div>
+                    @if (_observatorySnapshot is not null)
+                    {
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">ID @_observatorySnapshot.Id · Rev @_observatorySnapshot.Revision</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (_observatoryIsLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading observatory settings…</span>
+                            </div>
+                            <span>Loading observatory settings…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_observatoryError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_observatoryError
+                        </div>
+                        <button type="button" class="btn btn-outline-light" @onclick="ReloadObservatoryAsync" disabled="@(_observatoryIsLoading)">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Retry Load
+                        </button>
+                    }
+                    else if (_observatoryEditContext is null)
+                    {
+                        <p class="text-muted">Observatory configuration has not been initialized.</p>
+                        <button type="button" class="btn btn-outline-light" @onclick="ReloadObservatoryAsync">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Check Again
+                        </button>
+                    }
+                    else
+                    {
+                        <EditForm EditContext="@_observatoryEditContext">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger" />
+
+                            @if (!string.IsNullOrWhiteSpace(_observatorySuccessMessage))
+                            {
+                                <div class="alert alert-success" role="status">
+                                    @_observatorySuccessMessage
+                                </div>
+                            }
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="observatory-slug" class="form-label config-label">Observatory Slug
+                                        <span class="label-tooltip" role="img" aria-label="Short unique identifier used in file names and API routes." title="Short unique identifier used in file names and API routes.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="observatory-slug" class="form-control" @bind-Value="_observatoryEdit.Slug" />
+                                    <ValidationMessage For="@(() => _observatoryEdit.Slug)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="observatory-name" class="form-label config-label">Display Name
+                                        <span class="label-tooltip" role="img" aria-label="Friendly observatory title shown throughout the UI." title="Friendly observatory title shown throughout the UI.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="observatory-name" class="form-control" @bind-Value="_observatoryEdit.Name" />
+                                    <ValidationMessage For="@(() => _observatoryEdit.Name)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="observatory-latitude" class="form-label config-label">Latitude (°)
+                                        <span class="label-tooltip" role="img" aria-label="Positive for northern hemisphere, negative for southern." title="Positive for northern hemisphere, negative for southern.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="observatory-latitude" class="form-control" @bind-Value="_observatoryEdit.LatitudeDegrees" step="0.000001" min="-90" max="90" />
+                                    <ValidationMessage For="@(() => _observatoryEdit.LatitudeDegrees)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="observatory-longitude" class="form-label config-label">Longitude (°)
+                                        <span class="label-tooltip" role="img" aria-label="Positive east of Greenwich, negative west." title="Positive east of Greenwich, negative west.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="observatory-longitude" class="form-control" @bind-Value="_observatoryEdit.LongitudeDegrees" step="0.000001" min="-180" max="180" />
+                                    <ValidationMessage For="@(() => _observatoryEdit.LongitudeDegrees)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="observatory-timezone" class="form-label config-label">Time Zone Identifier
+                                        <span class="label-tooltip" role="img" aria-label="System time zone used for schedules and overlay timestamps." title="System time zone used for schedules and overlay timestamps.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputSelect id="observatory-timezone" class="form-select" @bind-Value="_observatoryEdit.TimeZoneId">
+                                        @foreach (var zone in _timeZones)
+                                        {
+                                            <option value="@zone.Id">@zone.DisplayName (@zone.Id)</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => _observatoryEdit.TimeZoneId)" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button type="button" class="btn btn-primary" @onclick="SubmitObservatoryAsync" disabled="@(!CanSaveObservatory)">
+                                    <i class="bi bi-save me-2"></i>
+                                    Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="CancelObservatoryAsync" disabled="@(!CanCancelObservatory)">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="ReloadObservatoryAsync" disabled="@(!CanReloadObservatory)">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>
+                                    Reload
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <h2 class="h5 mb-0 d-flex align-items-center gap-2 config-card__title">Local API Client
+                        <span class="label-tooltip" role="img" aria-label="Settings used by this dashboard to contact the on-device API." title="Settings used by this dashboard to contact the on-device API.">
+                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                        </span>
+                    </h2>
+                    @if (_localApiSnapshot is not null)
+                    {
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">Rev @_localApiSnapshot.Revision</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (_localApiIsLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading local API client settings…</span>
+                            </div>
+                            <span>Loading local API client settings…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_localApiError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_localApiError
+                        </div>
+                        <button type="button" class="btn btn-outline-light" @onclick="ReloadLocalApiAsync" disabled="@(_localApiIsLoading)">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Retry Load
+                        </button>
+                    }
+                    else if (_localApiEditContext is null)
+                    {
+                        <p class="text-muted">Local API client configuration is unavailable.</p>
+                        <button type="button" class="btn btn-outline-light" @onclick="ReloadLocalApiAsync">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Check Again
+                        </button>
+                    }
+                    else
+                    {
+                        <EditForm EditContext="@_localApiEditContext">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger" />
+
+                            @if (!string.IsNullOrWhiteSpace(_localApiSuccessMessage))
+                            {
+                                <div class="alert alert-success" role="status">
+                                    @_localApiSuccessMessage
+                                </div>
+                            }
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="localapi-base" class="form-label config-label">Base Address
+                                        <span class="label-tooltip" role="img" aria-label="Override host URL when the API is not using the default loopback." title="Override host URL when the API is not using the default loopback.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="localapi-base" class="form-control" @bind-Value="_localApiEdit.BaseAddress" />
+                                    <div class="form-text">Leave blank to use the default on-device loopback address.</div>
+                                    <ValidationMessage For="@(() => _localApiEdit.BaseAddress)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="localapi-timeout" class="form-label config-label">Timeout (seconds)
+                                        <span class="label-tooltip" role="img" aria-label="Maximum duration before a request is canceled." title="Maximum duration before a request is canceled.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="localapi-timeout" class="form-control" @bind-Value="_localApiEdit.TimeoutSeconds" step="0.1" min="0.1" max="600" />
+                                    <ValidationMessage For="@(() => _localApiEdit.TimeoutSeconds)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="localapi-header" class="form-label config-label">API Key Header
+                                        <span class="label-tooltip" role="img" aria-label="HTTP header name used to transmit the API key." title="HTTP header name used to transmit the API key.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="localapi-header" class="form-control" @bind-Value="_localApiEdit.ApiKeyHeaderName" />
+                                    <ValidationMessage For="@(() => _localApiEdit.ApiKeyHeaderName)" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="localapi-key" class="form-label config-label">API Key (optional)
+                                        <span class="label-tooltip" role="img" aria-label="Shared secret used to authenticate dashboard calls to the local API." title="Shared secret used to authenticate dashboard calls to the local API.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="localapi-key" type="password" class="form-control" @bind-Value="_localApiEdit.ApiKey" />
+                                    <div class="form-text">Leave blank to remove the stored key.</div>
+                                    <ValidationMessage For="@(() => _localApiEdit.ApiKey)" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button type="button" class="btn btn-primary" @onclick="SubmitLocalApiAsync" disabled="@(!CanSaveLocalApi)">
+                                    <i class="bi bi-save me-2"></i>
+                                    Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="CancelLocalApiAsync" disabled="@(!CanCancelLocalApi)">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="ReloadLocalApiAsync" disabled="@(!CanReloadLocalApi)">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>
+                                    Reload
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Telemetry Retention
+                            <span class="label-tooltip" role="img" aria-label="Purge policies that control how long telemetry and queue data are kept." title="Purge policies that control how long telemetry and queue data are kept.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Control retention policies applied to telemetry and processing data stores.</p>
+                    </div>
+                    @if (_telemetrySnapshot is not null)
+                    {
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis mt-1">Rev @_telemetrySnapshot.Revision</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (_telemetryIsLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading telemetry retention settings…</span>
+                            </div>
+                            <span>Loading telemetry retention settings…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_telemetryError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_telemetryError
+                        </div>
+                        <button type="button" class="btn btn-outline-light" @onclick="ReloadTelemetryAsync" disabled="@(_telemetryIsLoading)">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Retry Load
+                        </button>
+                    }
+                    else if (_telemetryEditContext is null)
+                    {
+                        <p class="text-muted">Telemetry retention configuration is unavailable.</p>
+                        <button type="button" class="btn btn-outline-light" @onclick="ReloadTelemetryAsync">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Check Again
+                        </button>
+                    }
+                    else
+                    {
+                        <EditForm EditContext="@_telemetryEditContext">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger" />
+
+                            @if (!string.IsNullOrWhiteSpace(_telemetrySuccessMessage))
+                            {
+                                <div class="alert alert-success" role="status">
+                                    @_telemetrySuccessMessage
+                                </div>
+                            }
+
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="telemetry-sweep" class="form-label config-label">Sweep Interval (seconds)
+                                        <span class="label-tooltip" role="img" aria-label="Frequency of the retention job sweeping for expired records." title="Frequency of the retention job sweeping for expired records.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="telemetry-sweep" class="form-control" @bind-Value="_telemetryEdit.SweepIntervalSeconds" step="1" min="0.1" max="86400" />
+                                    <ValidationMessage For="@(() => _telemetryEdit.SweepIntervalSeconds)" />
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <div class="form-check">
+                                        <InputCheckbox id="telemetry-vacuum" class="form-check-input" @bind-Value="_telemetryEdit.VacuumAfterPurge" />
+                                        <label for="telemetry-vacuum" class="form-check-label d-inline-flex align-items-center gap-2">Vacuum after purge
+                                            <span class="label-tooltip" role="img" aria-label="Run SQLite VACUUM to reclaim space after deletions." title="Run SQLite VACUUM to reclaim space after deletions.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row g-4 mt-1">
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Remote Dispatch
+                                            <span class="label-tooltip" role="img" aria-label="Telemetry sent to remote services such as Slack or MQTT." title="Telemetry sent to remote services such as Slack or MQTT.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-remote-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Discard remote dispatch records older than this age." title="Discard remote dispatch records older than this age.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-remote-age" class="form-control" @bind-Value="_telemetryEdit.RemoteDispatch.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.RemoteDispatch.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-remote-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit the number of remote dispatch entries kept in storage." title="Limit the number of remote dispatch entries kept in storage.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-remote-records" class="form-control" @bind-Value="_telemetryEdit.RemoteDispatch.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.RemoteDispatch.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Frame Exports
+                                            <span class="label-tooltip" role="img" aria-label="Rendered images and RAW captures exported from processing." title="Rendered images and RAW captures exported from processing.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-exports-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Discard exported frames older than this age." title="Discard exported frames older than this age.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-exports-age" class="form-control" @bind-Value="_telemetryEdit.FrameExports.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.FrameExports.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-exports-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit the number of stored frame export entries." title="Limit the number of stored frame export entries.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-exports-records" class="form-control" @bind-Value="_telemetryEdit.FrameExports.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.FrameExports.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Background Stacker
+                                            <span class="label-tooltip" role="img" aria-label="Intermediate stacker frames and metrics produced during background calibration." title="Intermediate stacker frames and metrics produced during background calibration.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-stacker-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Discard stacker history entries older than this age." title="Discard stacker history entries older than this age.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-stacker-age" class="form-control" @bind-Value="_telemetryEdit.BackgroundStacker.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.BackgroundStacker.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-stacker-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit the number of background stacker records kept." title="Limit the number of background stacker records kept.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-stacker-records" class="form-control" @bind-Value="_telemetryEdit.BackgroundStacker.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.BackgroundStacker.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Capture Pacing
+                                            <span class="label-tooltip" role="img" aria-label="Telemetry captured from pacing controller decisions." title="Telemetry captured from pacing controller decisions.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-capture-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Discard pacing events after this duration." title="Discard pacing events after this duration.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-capture-age" class="form-control" @bind-Value="_telemetryEdit.CapturePacing.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.CapturePacing.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-capture-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit the number of pacing telemetry entries." title="Limit the number of pacing telemetry entries.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-capture-records" class="form-control" @bind-Value="_telemetryEdit.CapturePacing.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.CapturePacing.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Processing Queue
+                                            <span class="label-tooltip" role="img" aria-label="Snapshots of processing queue depth and state transitions." title="Snapshots of processing queue depth and state transitions.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-queue-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Discard queue telemetry older than this age." title="Discard queue telemetry older than this age.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-queue-age" class="form-control" @bind-Value="_telemetryEdit.ProcessingQueue.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.ProcessingQueue.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-queue-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit the number of processing queue telemetry records." title="Limit the number of processing queue telemetry records.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-queue-records" class="form-control" @bind-Value="_telemetryEdit.ProcessingQueue.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.ProcessingQueue.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Filter Metrics
+                                            <span class="label-tooltip" role="img" aria-label="Performance metrics captured from image filters." title="Performance metrics captured from image filters.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-filters-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Maximum age before filter metric samples are removed." title="Maximum age before filter metric samples are removed.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-filters-age" class="form-control" @bind-Value="_telemetryEdit.FilterMetrics.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.FilterMetrics.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-filters-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit on the number of stored filter metric events." title="Limit on the number of stored filter metric events.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-filters-records" class="form-control" @bind-Value="_telemetryEdit.FilterMetrics.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.FilterMetrics.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                                <div class="col-xl-4 col-lg-6">
+                                    <fieldset class="config-fieldset border rounded p-3 h-100">
+                                        <legend class="fs-6 text-uppercase fw-semibold mb-3 d-flex align-items-center gap-2">Telemetry Events
+                                            <span class="label-tooltip" role="img" aria-label="General purpose SkyMonitor telemetry events and notifications." title="General purpose SkyMonitor telemetry events and notifications.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </legend>
+                                        <div class="mb-3">
+                                            <label for="telemetry-events-age" class="form-label config-label">Max Age (seconds)
+                                                <span class="label-tooltip" role="img" aria-label="Discard telemetry events older than this age." title="Discard telemetry events older than this age.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="double?" id="telemetry-events-age" class="form-control" @bind-Value="_telemetryEdit.TelemetryEvents.MaxAgeSeconds" step="60" min="0" max="31536000" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.TelemetryEvents.MaxAgeSeconds)" />
+                                        </div>
+                                        <div>
+                                            <label for="telemetry-events-records" class="form-label config-label">Max Records
+                                                <span class="label-tooltip" role="img" aria-label="Limit on the number of general telemetry events retained." title="Limit on the number of general telemetry events retained.">
+                                                    <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                                </span>
+                                            </label>
+                                            <InputNumber TValue="int?" id="telemetry-events-records" class="form-control" @bind-Value="_telemetryEdit.TelemetryEvents.MaxRecords" min="1" />
+                                            <ValidationMessage For="@(() => _telemetryEdit.TelemetryEvents.MaxRecords)" />
+                                        </div>
+                                    </fieldset>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button type="button" class="btn btn-primary" @onclick="SubmitTelemetryAsync" disabled="@(!CanSaveTelemetry)">
+                                    <i class="bi bi-save me-2"></i>
+                                    Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="CancelTelemetryAsync" disabled="@(!CanCancelTelemetry)">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="ReloadTelemetryAsync" disabled="@(!CanReloadTelemetry)">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>
+                                    Reload
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

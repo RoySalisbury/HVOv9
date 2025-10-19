@@ -220,8 +220,14 @@ internal sealed class SkyMonitorTelemetryRetentionProcessor
             return 0;
         }
 
-        var staleIds = await set
-            .OrderByDescending(timestampSelector)
+        IQueryable<TEntity> orderedQuery;
+
+        // SQLite cannot translate ORDER BY DateTimeOffset, so fall back to the identity key when running on that provider.
+        orderedQuery = context.Database.IsSqlite()
+            ? set.OrderByDescending(idSelector)
+            : set.OrderByDescending(timestampSelector);
+
+        var staleIds = await orderedQuery
             .Skip(maxRecords)
             .Select(idSelector)
             .ToListAsync(cancellationToken)

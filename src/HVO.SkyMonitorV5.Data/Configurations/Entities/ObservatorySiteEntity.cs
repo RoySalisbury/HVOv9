@@ -31,4 +31,9 @@ public sealed class ObservatorySiteEntity
     /// Time zone identifier (IANA/Windows) used for local time conversions.
     /// </summary>
     public string TimeZoneId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Monotonically increasing revision number used to track configuration updates.
+    /// </summary>
+    public long Revision { get; set; }
 }

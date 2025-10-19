@@ -69,7 +69,7 @@ public sealed class SkyMonitorTelemetryRetentionOptions
 /// </summary>
 public sealed class TelemetryRetentionPolicy
 {
-    private TelemetryRetentionPolicy()
+    public TelemetryRetentionPolicy()
     {
     }
 

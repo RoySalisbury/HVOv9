@@ -20,6 +20,7 @@ public sealed class SkyMonitorConfigurationContext : DbContext
     public DbSet<CameraAdapterConfigEntity> CameraAdapters => Set<CameraAdapterConfigEntity>();
     public DbSet<CameraPipelineConfigEntity> CameraPipelineConfigurations => Set<CameraPipelineConfigEntity>();
     public DbSet<StarCatalogSettingsEntity> StarCatalogSettings => Set<StarCatalogSettingsEntity>();
+    public DbSet<SystemSettingEntity> SystemSettings => Set<SystemSettingEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,7 @@ public sealed class SkyMonitorConfigurationContext : DbContext
         ConfigureCameraAdapterEntity(modelBuilder);
         ConfigureCameraPipelineEntity(modelBuilder);
         ConfigureStarCatalogSettingsEntity(modelBuilder);
+        ConfigureSystemSettingEntity(modelBuilder);
     }
 
     private static void ConfigureObservatorySiteEntity(ModelBuilder modelBuilder)
@@ -46,6 +48,7 @@ public sealed class SkyMonitorConfigurationContext : DbContext
             entity.Property(e => e.LatitudeDegrees).HasColumnName("latitude_degrees");
             entity.Property(e => e.LongitudeDegrees).HasColumnName("longitude_degrees");
             entity.Property(e => e.TimeZoneId).HasColumnName("time_zone_id");
+            entity.Property(e => e.Revision).HasColumnName("revision").HasDefaultValue(1L);
 
             entity.HasIndex(e => e.Slug).IsUnique();
 
@@ -56,7 +59,8 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 Name = "Hualapai Valley Observatory",
                 LatitudeDegrees = 35.347,
                 LongitudeDegrees = -113.878,
-                TimeZoneId = "America/Phoenix"
+                TimeZoneId = "America/Phoenix",
+                Revision = 1
             });
         });
     }
@@ -177,6 +181,7 @@ public sealed class SkyMonitorConfigurationContext : DbContext
             entity.Property(e => e.BoresightAltitudeDegrees).HasColumnName("boresight_alt_deg");
             entity.Property(e => e.BoresightAzimuthDegrees).HasColumnName("boresight_az_deg");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.Revision).HasColumnName("revision").HasDefaultValue(1L);
 
             entity.HasIndex(e => e.Key).IsUnique();
 
@@ -199,7 +204,8 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 LensId = 1,
                 BoresightAltitudeDegrees = 90.0,
                 BoresightAzimuthDegrees = 0.0,
-                IsActive = true
+                IsActive = true,
+                Revision = 1
             });
         });
     }
@@ -611,6 +617,24 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 RightAscensionBins = 24,
                 DeclinationBands = 8
             });
+        });
+    }
+
+    private static void ConfigureSystemSettingEntity(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SystemSettingEntity>(entity =>
+        {
+            entity.ToTable("system_setting");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Key).HasColumnName("key");
+            entity.Property(e => e.PayloadJson).HasColumnName("payload_json");
+            entity.Property(e => e.UpdatedUtc).HasColumnName("updated_utc");
+            entity.Property(e => e.Revision).HasColumnName("revision").HasDefaultValue(0L);
+
+            entity.HasIndex(e => e.Key).IsUnique();
         });
     }
 }

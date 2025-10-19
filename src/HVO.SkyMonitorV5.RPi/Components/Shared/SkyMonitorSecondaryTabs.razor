@@ -1,0 +1,41 @@
+@using Microsoft.AspNetCore.Components.Routing
+
+@if (Tabs is { Count: > 0 })
+{
+    <nav class="hvo-tab-row" role="tablist" aria-label="@ResolvedLabel">
+        @foreach (var tab in Tabs)
+        {
+            var isActive = IsActive(tab);
+            if (tab.Disabled)
+            {
+                <span class="@GetTabCss(tab, isActive)"
+                      role="tab"
+                      aria-disabled="true"
+                      aria-current="@(isActive ? "page" : null)"
+                      data-active="@GetActiveFlag(isActive)">
+                    @if (!string.IsNullOrWhiteSpace(tab.IconCssClass))
+                    {
+                        <span class="@tab.IconCssClass me-2" aria-hidden="true"></span>
+                    }
+                    <span>@tab.Label</span>
+                </span>
+            }
+            else
+            {
+                <NavLink class="@GetTabCss(tab, isActive)"
+                         ActiveClass=""
+                         href="@tab.Href"
+                         Match="@tab.Match"
+                         role="tab"
+                         aria-current="@(isActive ? "page" : null)"
+                         data-active="@GetActiveFlag(isActive)">
+                    @if (!string.IsNullOrWhiteSpace(tab.IconCssClass))
+                    {
+                        <span class="@tab.IconCssClass me-2" aria-hidden="true"></span>
+                    }
+                    <span>@tab.Label</span>
+                </NavLink>
+            }
+        }
+    </nav>
+}

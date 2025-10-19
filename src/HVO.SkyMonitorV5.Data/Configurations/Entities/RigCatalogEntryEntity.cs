@@ -15,4 +15,5 @@ public sealed class RigCatalogEntryEntity
     public double BoresightAltitudeDegrees { get; set; }
     public double BoresightAzimuthDegrees { get; set; }
     public bool IsActive { get; set; }
+    public long Revision { get; set; }
 }

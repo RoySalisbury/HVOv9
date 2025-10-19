@@ -1,0 +1,105 @@
+@page "/monitor/raw-frame"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>SkyMonitor v5 · Raw Frame</PageTitle>
+
+<section class="detail-page">
+    <div class="container-fluid detail-container py-5 text-light">
+        @if (_isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-info" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-4 mb-0">Retrieving raw frame…</p>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+            </div>
+        }
+        else if (_viewModel is not null)
+        {
+            <div class="detail-actions">
+                <button type="button" class="btn btn-outline-light detail-actions__back" @onclick="NavigateBack">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Monitor
+                </button>
+                <div class="detail-actions__downloads">
+                    <a class="btn btn-primary" href="@_viewModel.PngDownloadSource" download="@_viewModel.PngDownloadFileName">
+                        <i class="bi bi-image me-2"></i>Download PNG
+                    </a>
+                    @if (_viewModel.HasRawDownload)
+                    {
+                        <a class="btn btn-outline-info" href="@_viewModel.RawDownloadSource" download="@_viewModel.RawDownloadFileName">
+                            <i class="bi bi-cloud-download me-2"></i>Download Raw (.skimg)
+                        </a>
+                    }
+                </div>
+            </div>
+
+            <div class="detail-grid">
+                <div class="detail-grid__image">
+                    <div class="frame-preview">
+                        <img src="@_viewModel.ImageSource" alt="Raw frame preview" class="frame-preview__image" />
+                    </div>
+                </div>
+
+                <div class="detail-grid__meta row g-4">
+                    <div class="col-12 col-xl-4">
+                        <div class="frame-metadata">
+                            <h2 class="h4 fw-semibold mb-3">Frame Details</h2>
+                            <dl class="detail-list">
+                                <div class="detail-item">
+                                    <dt>Frame ID</dt>
+                                    <dd><code>@_viewModel.FrameId.ToString("N")</code></dd>
+                                </div>
+                                <div class="detail-item">
+                                    <dt>Captured</dt>
+                                    <dd>@_viewModel.TimestampDisplay</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-xl-4">
+                        <div class="frame-metadata">
+                            <h2 class="h4 fw-semibold mb-3">Capture Settings</h2>
+                            <ul class="filter-timing-list">
+                                <li>
+                                    <span class="filter-name">Exposure</span>
+                                    <span class="filter-duration">@_viewModel.ExposureSummary</span>
+                                </li>
+                                <li>
+                                    <span class="filter-name">Gain</span>
+                                    <span class="filter-duration">@_viewModel.GainSummary</span>
+                                </li>
+                                <li>
+                                    <span class="filter-name">Automation</span>
+                                    <span class="filter-duration">@_viewModel.AutoSummary</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-xl-4">
+                        <div class="frame-metadata">
+                            <h2 class="h4 fw-semibold mb-3">Image Descriptor</h2>
+                            <ul class="filter-timing-list">
+                                @foreach (var descriptor in @_viewModel.DescriptorEntries)
+                                {
+                                    <li>
+                                        <span class="filter-name">@descriptor.Label</span>
+                                        <span class="filter-duration">@descriptor.Value</span>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>

@@ -1,0 +1,80 @@
+@page "/configuration"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Collections.Generic
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using HVO.SkyMonitorV5.RPi.Components.Configuration
+
+<PageTitle>SkyMonitor v5 · Configuration</PageTitle>
+
+<section class="container-fluid py-3">
+    <SkyMonitorSecondaryTabs Tabs="@ConfigurationTabs"
+                             Label="Configuration sections"
+                             ActiveTabKey="@ActiveTabKey" />
+</section>
+
+@if (IsSystemTabActive)
+{
+    <SystemConfigurationTab />
+}
+else if (IsRigTabActive)
+{
+    <RigConfigurationTab />
+}
+else if (IsCamerasTabActive)
+{
+    <CameraConfigurationTab />
+}
+else if (IsOpticsTabActive)
+{
+    <OpticsConfigurationTab />
+}
+else if (IsOverviewTabActive)
+{
+    <section class="container py-5 text-light">
+        <div class="row justify-content-center">
+            <div class="col-xl-7 text-center">
+                <h1 class="display-5 fw-semibold mb-3">Configuration Workspace</h1>
+                <p class="lead text-muted">
+                    Use the tabs above to manage system services, rig pairings, optics metadata, and camera inventory. Pipeline and filter configuration will surface here once those services are ported.
+                </p>
+                <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap">
+                    <NavLink class="btn btn-primary btn-lg" href="/monitor">
+                        <i class="bi bi-broadcast-pin me-2"></i>
+                        Monitor Now
+                    </NavLink>
+                    <NavLink class="btn btn-outline-light btn-lg" href="/diagnostics">
+                        <i class="bi bi-speedometer2 me-2"></i>
+                        Diagnostics
+                    </NavLink>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    <section class="container py-5 text-light">
+        <div class="row justify-content-center">
+            <div class="col-xl-7 text-center">
+                <h1 class="display-5 fw-semibold mb-3">@ActiveTabDisplayName Coming Soon</h1>
+                <p class="lead text-muted">
+                    We are still wiring up the @ActiveTabDisplayName tab. In the meantime, update rigs, optics, and cameras using the tabs above.
+                </p>
+                <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap">
+                    <NavLink class="btn btn-primary btn-lg" href="/monitor">
+                        <i class="bi bi-broadcast-pin me-2"></i>
+                        Monitor Now
+                    </NavLink>
+                    <NavLink class="btn btn-outline-light btn-lg" href="/diagnostics">
+                        <i class="bi bi-speedometer2 me-2"></i>
+                        Diagnostics
+                    </NavLink>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+
+

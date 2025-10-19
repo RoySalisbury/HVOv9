@@ -269,6 +269,10 @@ public sealed class RigCatalogEntryOptions : IValidatableObject
 
     [Required]
     [MaxLength(128)]
+    public string DisplayName { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(128)]
     public string Camera { get; set; } = string.Empty;
 
     [Required]
@@ -282,7 +286,10 @@ public sealed class RigCatalogEntryOptions : IValidatableObject
     public double BoresightAzDeg { get; set; } = 0.0;
 
     public RigSpec ToRigSpec(CameraSpec camera, LensSpec lens)
-        => new(Name.Trim(), camera, lens, BoresightAltDeg, BoresightAzDeg);
+    {
+        var rigName = string.IsNullOrWhiteSpace(DisplayName) ? Name : DisplayName;
+        return new(rigName.Trim(), camera, lens, BoresightAltDeg, BoresightAzDeg);
+    }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -294,6 +301,11 @@ public sealed class RigCatalogEntryOptions : IValidatableObject
         if (string.IsNullOrWhiteSpace(Lens))
         {
             yield return new ValidationResult("Rig must reference a lens entry.", new[] { nameof(Lens) });
+        }
+
+        if (string.IsNullOrWhiteSpace(DisplayName))
+        {
+            yield return new ValidationResult("Rig display name is required.", new[] { nameof(DisplayName) });
         }
     }
 }

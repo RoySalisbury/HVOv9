@@ -1,0 +1,177 @@
+@using HVO.SkyMonitorV5.RPi.Models.Optics
+
+<div class="container py-4 text-light">
+    <div class="row g-4">
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Lens Catalog
+                            <span class="label-tooltip" role="img" aria-label="Inspect lens models used to generate plate solve and exposure settings." title="Inspect lens models used to generate plate solve and exposure settings.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Review focal length, projection, and field-of-view parameters for each registered lens.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm"
+                            @onclick="ReloadAsync"
+                            disabled="@_isLoading">
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (_isLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading lens catalog…</span>
+                            </div>
+                            <span>Loading lens catalog…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger mb-0" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (_lenses.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No lenses are registered yet. Create a rig entry to associate a lens with SkyMonitor.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Lens</th>
+                                        <th scope="col">Key</th>
+                                        <th scope="col">Projection</th>
+                                        <th scope="col" class="text-center">Focal Length</th>
+                                        <th scope="col" class="text-center">Field of View (X / Y)</th>
+                                        <th scope="col">Assigned Rigs</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var lens in _lenses)
+                                    {
+                                        var usage = GetLensUsage(lens.Key);
+                                        <tr>
+                                            <td>@lens.DisplayName</td>
+                                            <td><code>@lens.Key</code></td>
+                                            <td>@lens.ProjectionModel</td>
+                                            <td class="text-center">@FormatFocalLength(lens.FocalLengthMillimeters)</td>
+                                            <td class="text-center">@FormatFieldOfView(lens.FieldOfViewXDegrees) / @FormatOptionalFieldOfView(lens.FieldOfViewYDegrees)</td>
+                                            <td>
+                                                <div class="d-flex flex-column gap-1">
+                                                    <span class="badge bg-info-subtle text-info-emphasis align-self-start">@usage.Count rig(s)</span>
+                                                    <span class="text-muted small">@GetRigUsageSummary(lens.Key)</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_lastUpdatedMessage) && !_isLoading)
+                {
+                    <div class="card-footer border-secondary text-end text-muted small">
+                        @_lastUpdatedMessage
+                    </div>
+                }
+            </section>
+        </div>
+
+        <div class="col-12 col-xl-4">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary">
+                    <h2 class="h6 mb-0 config-card__title">Active Rig Snapshot</h2>
+                </div>
+                <div class="card-body">
+                    @if (_isLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading active rig…</span>
+                            </div>
+                            <span>Loading active rig…</span>
+                        </div>
+                    }
+                    else if (ActiveRig is null)
+                    {
+                        <p class="text-muted mb-0">No rig has been activated yet. Activate a rig in the Rig tab to populate this snapshot.</p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold">@ActiveRig.DisplayName</span>
+                                <span class="badge bg-success-subtle text-success-emphasis">Active</span>
+                            </div>
+                            <dl class="row gy-2 mb-0">
+                                <dt class="col-5 text-muted">Rig Key</dt>
+                                <dd class="col-7"><code>@ActiveRig.Key</code></dd>
+                                <dt class="col-5 text-muted">Camera</dt>
+                                <dd class="col-7">@ActiveRig.CameraDisplayName</dd>
+                                <dt class="col-5 text-muted">Lens</dt>
+                                <dd class="col-7">@ActiveRig.LensDisplayName</dd>
+                                <dt class="col-5 text-muted">Boresight</dt>
+                                <dd class="col-7">@FormatBoresight(ActiveRig)</dd>
+                            </dl>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12 col-xl-8">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary">
+                    <h2 class="h6 mb-0 config-card__title">Lens Usage</h2>
+                </div>
+                <div class="card-body p-0">
+                    @if (_isLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-3 px-3">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading lens usage…</span>
+                            </div>
+                            <span>Loading lens usage…</span>
+                        </div>
+                    }
+                    else if (_lenses.Count == 0)
+                    {
+                        <p class="text-muted mb-0 px-3 py-3">Lens usage summaries will appear once lenses are registered.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var lens in _lenses)
+                            {
+                                var usage = GetLensUsage(lens.Key);
+                                <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-start">
+                                    <div class="me-3">
+                                        <div class="fw-semibold">@lens.DisplayName</div>
+                                        <div class="text-muted small">@GetRigUsageSummary(lens.Key)</div>
+                                    </div>
+                                    <span class="badge bg-primary-subtle text-primary-emphasis">@usage.Count</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="card-footer border-secondary">
+                    <div class="d-flex flex-wrap gap-3 text-muted small">
+                        <span>Total Lenses: <strong>@LensCount</strong></span>
+                        <span>Total Rigs: <strong>@RigCount</strong></span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

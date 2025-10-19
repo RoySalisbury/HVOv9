@@ -65,7 +65,11 @@ public sealed partial class MainLayoutFooter : ComponentBase, IAsyncDisposable
                 UpdateLocalTime();
                 await InvokeAsync(StateHasChanged).ConfigureAwait(false);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -74,11 +78,7 @@ public sealed partial class MainLayoutFooter : ComponentBase, IAsyncDisposable
                 Logger?.LogError(ex, "Failed to update observatory local time.");
             }
 
-            try
-            {
-                await Task.Delay(ClockInterval, cancellationToken).ConfigureAwait(false);
-            }
-            catch (TaskCanceledException)
+            if (!await CancellationTokenHelpers.DelayWithoutThrowAsync(ClockInterval, cancellationToken).ConfigureAwait(false))
             {
                 break;
             }
@@ -116,4 +116,5 @@ public sealed partial class MainLayoutFooter : ComponentBase, IAsyncDisposable
             }
         }
     }
+
 }

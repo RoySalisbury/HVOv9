@@ -133,7 +133,11 @@ public class MockCameraAdapter : CameraAdapterBase
                     exposure.ExposureMilliseconds,
                     exposure.Gain);
 
-                await Task.Delay(simulatedDuration, cancellationToken).ConfigureAwait(false);
+                var delayCompleted = await CancellationTokenHelpers.DelayWithoutThrowAsync(simulatedDuration, cancellationToken).ConfigureAwait(false);
+                if (!delayCompleted)
+                {
+                    return Result<AdapterFrame>.Failure(new OperationCanceledException("Mock camera exposure cancelled.", cancellationToken));
+                }
             }
 
             var captureInstant = _observatoryClock.UtcNow;

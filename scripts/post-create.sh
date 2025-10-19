@@ -38,6 +38,7 @@ APT_PACKAGES=(
   iproute2
   ripgrep
   iputils-ping
+  sqlite3
 )
 
 log() {

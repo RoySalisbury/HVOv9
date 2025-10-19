@@ -211,12 +211,18 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
             catch (ChannelClosedException ex) when (!stoppingToken.IsCancellationRequested)
             {
                 _logger.LogWarning(ex, "Background stacker channel closed unexpectedly. Restarting loop after {Delay}s.", GetRestartDelay().TotalSeconds);
-                await Task.Delay(GetRestartDelay(), stoppingToken).ConfigureAwait(false);
+                if (!await DelayWithCancellationAsync(GetRestartDelay(), stoppingToken).ConfigureAwait(false))
+                {
+                    break;
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Background frame stacker encountered an error. Restarting after {Delay}s.", GetRestartDelay().TotalSeconds);
-                await Task.Delay(GetRestartDelay(), stoppingToken).ConfigureAwait(false);
+                if (!await DelayWithCancellationAsync(GetRestartDelay(), stoppingToken).ConfigureAwait(false))
+                {
+                    break;
+                }
             }
         }
 
@@ -319,33 +325,40 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
                 UpdateQueuePressure(Math.Max(0, Volatile.Read(ref _queueDepth)));
                 PublishStatus();
 
-                await Task.Delay(DisabledPollInterval, stoppingToken).ConfigureAwait(false);
+                if (!await DelayWithCancellationAsync(DisabledPollInterval, stoppingToken).ConfigureAwait(false))
+                {
+                    break;
+                }
                 channel = Volatile.Read(ref _channel);
                 continue;
             }
 
-            StackingWorkItem workItem;
-            int queueDepthAfterDequeue;
-            try
-            {
-                workItem = await channel.Reader.ReadAsync(stoppingToken).ConfigureAwait(false);
-                queueDepthAfterDequeue = OnWorkItemDequeued(workItem);
-            }
-            catch (ChannelClosedException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (ChannelClosedException)
+            var hasData = await CancellationTokenHelpers.WaitToReadWithoutThrowAsync(channel.Reader, stoppingToken).ConfigureAwait(false);
+
+            if (!hasData)
             {
                 if (stoppingToken.IsCancellationRequested)
                 {
                     break;
                 }
 
-                _logger.LogDebug("Background stacker channel swapped or closed; restarting read loop.");
+                var currentChannel = Volatile.Read(ref _channel);
+                if (!ReferenceEquals(channel, currentChannel))
+                {
+                    channel = currentChannel;
+                    continue;
+                }
+
+                break;
+            }
+
+            if (!channel.Reader.TryRead(out var workItem))
+            {
                 channel = Volatile.Read(ref _channel);
                 continue;
             }
+
+            var queueDepthAfterDequeue = OnWorkItemDequeued(workItem);
 
             await ProcessWorkItemAsync(workItem, stoppingToken).ConfigureAwait(false);
             UpdateQueuePressure(queueDepthAfterDequeue);
@@ -382,6 +395,10 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         var seconds = Math.Clamp(_currentOptions.RestartDelaySeconds, 1, 600);
         return TimeSpan.FromSeconds(seconds);
     }
+
+    private static Task<bool> DelayWithCancellationAsync(TimeSpan delay, CancellationToken cancellationToken) =>
+        CancellationTokenHelpers.DelayWithoutThrowAsync(delay, cancellationToken);
+
 
     private async Task ProcessWorkItemAsync(StackingWorkItem workItem, CancellationToken stoppingToken)
     {

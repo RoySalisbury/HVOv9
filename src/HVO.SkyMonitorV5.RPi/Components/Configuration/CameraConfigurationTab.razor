@@ -1,0 +1,149 @@
+@using HVO.SkyMonitorV5.RPi.Models.Optics
+
+<div class="container py-4 text-light">
+    <div class="row g-4">
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Camera Catalog
+                            <span class="label-tooltip" role="img" aria-label="Review registered cameras and their sensor characteristics." title="Review registered cameras and their sensor characteristics.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Inspect sensor dimensions, manufacturer details, and rig assignments for each camera.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm"
+                            @onclick="ReloadAsync"
+                            disabled="@_isLoading">
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (_isLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading camera catalog…</span>
+                            </div>
+                            <span>Loading camera catalog…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger mb-0" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (_cameras.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No cameras are registered yet. Create a rig to associate a camera with SkyMonitor.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Camera</th>
+                                        <th scope="col">Key</th>
+                                        <th scope="col">Manufacturer</th>
+                                        <th scope="col">Model</th>
+                                        <th scope="col" class="text-center">Sensor (px)</th>
+                                        <th scope="col">Assigned Rigs</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var camera in _cameras)
+                                    {
+                                        var usage = GetCameraUsage(camera.Key);
+                                        <tr>
+                                            <td>@camera.DisplayName</td>
+                                            <td><code>@camera.Key</code></td>
+                                            <td>@camera.Manufacturer</td>
+                                            <td>@camera.Model</td>
+                                            <td class="text-center">@FormatResolution(camera)</td>
+                                            <td>
+                                                <div class="d-flex flex-column gap-1">
+                                                    <span class="badge bg-info-subtle text-info-emphasis align-self-start">@usage.Count rig(s)</span>
+                                                    <span class="text-muted small">@GetCameraUsageSummary(camera.Key)</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_lastUpdatedMessage) && !_isLoading)
+                {
+                    <div class="card-footer border-secondary text-end text-muted small">
+                        @_lastUpdatedMessage
+                    </div>
+                }
+            </section>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary">
+                    <h2 class="h6 mb-0 config-card__title">Camera Usage</h2>
+                </div>
+                <div class="card-body p-0">
+                    @if (_isLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-3 px-3">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading camera usage…</span>
+                            </div>
+                            <span>Loading camera usage…</span>
+                        </div>
+                    }
+                    else if (_cameras.Count == 0)
+                    {
+                        <p class="text-muted mb-0 px-3 py-3">Camera usage summaries will appear once cameras are registered.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var camera in _cameras)
+                            {
+                                var usage = GetCameraUsage(camera.Key);
+                                <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-start">
+                                    <div class="me-3">
+                                        <div class="fw-semibold">@camera.DisplayName</div>
+                                        <div class="text-muted small">@GetCameraUsageSummary(camera.Key)</div>
+                                    </div>
+                                    <span class="badge bg-primary-subtle text-primary-emphasis">@usage.Count</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary">
+                    <h2 class="h6 mb-0 config-card__title">Catalog Summary</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="row gy-2 mb-0">
+                        <dt class="col-6 text-muted">Total Cameras</dt>
+                        <dd class="col-6">@CameraCount</dd>
+                        <dt class="col-6 text-muted">Total Rigs</dt>
+                        <dd class="col-6">@RigCount</dd>
+                        <dt class="col-6 text-muted">Manufacturers</dt>
+                        <dd class="col-6">@UniqueManufacturerCount</dd>
+                        <dt class="col-6 text-muted">Active Rig Camera</dt>
+                        <dd class="col-6">@ActiveRigCameraDisplay</dd>
+                    </dl>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

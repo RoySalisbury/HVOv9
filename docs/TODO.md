@@ -58,6 +58,10 @@
 
 - _No open items tracked._
 
+## HVO.WebSite.Themes
+- [ ] Extend `hvo-dark.css` with shared badge-style navigation tokens so SkyMonitor, Roof Controller, and v9 sites can reuse the compact menu buttons.
+- [ ] Document recommended markup patterns for the new nav badges and diagnostics-style tab rows so consuming projects keep visuals consistent.
+
 ## HVO.NinaClient
 
 - _No open items tracked._

@@ -1,0 +1,284 @@
+@using HVO.SkyMonitorV5.RPi.Models.Optics
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+
+<div class="container py-4 text-light">
+    <div class="row g-4">
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Rig Catalog
+                            <span class="label-tooltip" role="img" aria-label="Manage camera and lens pairings used when assigning adapters." title="Manage camera and lens pairings used when assigning adapters.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Manage all-sky rig pairings that can be bound to camera adapters.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-primary"
+                            title="Create a new rig configuration"
+                            @onclick="BeginCreate"
+                            disabled="@(_isLoading || _isSaving)">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        New Rig
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (_isLoading)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading rig catalog…</span>
+                            </div>
+                            <span>Loading rig catalog…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (_rigs.Count == 0)
+                    {
+                        <p class="text-muted">No rig definitions are configured yet. Create a rig to get started.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Name</th>
+                                        <th scope="col">Key</th>
+                                        <th scope="col">Camera</th>
+                                        <th scope="col">Lens</th>
+                                        <th scope="col" class="text-center">Boresight (Alt / Az)</th>
+                                        <th scope="col" class="text-center">Active</th>
+                                        <th scope="col" class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var rig in _rigs)
+                                    {
+                                        var isSelected = _editModel?.Id == rig.Id && rig.Id != 0;
+                                        <tr @onclick="() => HandleRowSelection(rig)"
+                                            class="@(isSelected ? "table-active" : string.Empty)">
+                                            <td>
+                                                <div class="d-flex flex-column">
+                                                    <span>@rig.DisplayName</span>
+                                                    @if (rig.HasAdapterBindings)
+                                                    {
+                                                        <span class="badge bg-info-subtle text-info-emphasis mt-1">In Use</span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td><code>@rig.Key</code></td>
+                                            <td>
+                                                <div class="d-flex flex-column">
+                                                    <span>@rig.CameraDisplayName</span>
+                                                    <small class="text-muted">@rig.CameraKey</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex flex-column">
+                                                    <span>@rig.LensDisplayName</span>
+                                                    <small class="text-muted">@rig.LensKey</small>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">@rig.BoresightAltitudeDegrees:F1° / @rig.BoresightAzimuthDegrees:F1°</td>
+                                            <td class="text-center">
+                                                @if (rig.IsActive)
+                                                {
+                                                    <span class="badge bg-success-subtle text-success-emphasis">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary-subtle text-secondary-emphasis">Disabled</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="btn-group" role="group" aria-label="Rig actions">
+                                                    <button type="button"
+                                                            class="btn btn-outline-light btn-sm"
+                                                            title="Edit rig"
+                                                            @onclick="(() => SelectRig(rig))"
+                                                            @onclick:stopPropagation="true"
+                                                            disabled="@(_isSaving)">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-outline-light btn-sm"
+                                                            title="Activate rig"
+                                                            @onclick="(() => SetActiveAsync(rig, true))"
+                                                            @onclick:stopPropagation="true"
+                                                            disabled="@(_isSaving || rig.IsActive)">
+                                                        <i class="bi bi-toggle-on"></i>
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-outline-light btn-sm"
+                                                            title="Disable rig"
+                                                            @onclick="(() => SetActiveAsync(rig, false))"
+                                                            @onclick:stopPropagation="true"
+                                                            disabled="@(_isSaving || !rig.IsActive)">
+                                                        <i class="bi bi-toggle-off"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Configure Rig
+                            <span class="label-tooltip" role="img" aria-label="Adjust camera, lens, and boresight data for the selected rig." title="Adjust camera, lens, and boresight data for the selected rig.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Edit rig metadata and activation state used by downstream adapters.</p>
+                    </div>
+                    @if (_editModel is not null)
+                    {
+                        if (_editModel.Id > 0)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis mt-1">ID @_editModel.Id · Rev @_editModel.Revision</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-info-subtle text-info-emphasis mt-1">New Rig Draft</span>
+                        }
+                    }
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrWhiteSpace(_successMessage))
+                    {
+                        <div class="alert alert-success" role="status">
+                            @_successMessage
+                        </div>
+                    }
+
+                    @if (_editContext is null || _editModel is null)
+                    {
+                        <p class="text-muted mb-0">Select a rig to edit or create a new entry.</p>
+                    }
+                    else
+                    {
+                        <EditForm EditContext="@_editContext">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger" />
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="rig-display" class="form-label config-label">Display Name
+                                        <span class="label-tooltip" role="img" aria-label="Friendly rig name shown throughout the dashboard." title="Friendly rig name shown throughout the dashboard.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="rig-display" class="form-control" @bind-Value="_editModel.DisplayName" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="rig-key" class="form-label config-label">Rig Key
+                                        <span class="label-tooltip" role="img" aria-label="Stable identifier used by adapters and service configuration." title="Stable identifier used by adapters and service configuration.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    @if (_editModel.Id == 0)
+                                    {
+                                        <InputText id="rig-key"
+                                                   class="form-control"
+                                                   @bind-Value="_editModel.Key"
+                                                   autocomplete="off"
+                                                   inputmode="text"
+                                                   pattern="^[A-Za-z0-9_-]+$" />
+                                        <div class="form-text">Stable identifier used by adapters. Letters, numbers, hyphen, and underscore only.</div>
+                                    }
+                                    else
+                                    {
+                                        <InputText id="rig-key" class="form-control" @bind-Value="_editModel.Key" readonly />
+                                    }
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="rig-camera" class="form-label config-label">Camera
+                                        <span class="label-tooltip" role="img" aria-label="Select the catalog camera paired with this rig." title="Select the catalog camera paired with this rig.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputSelect id="rig-camera" class="form-select" @bind-Value="_editModel.CameraKey">
+                                        @foreach (var camera in _cameras)
+                                        {
+                                            <option value="@camera.Key">@camera.DisplayName (@camera.Key)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="rig-lens" class="form-label config-label">Lens
+                                        <span class="label-tooltip" role="img" aria-label="Select the catalog lens model that matches this rig." title="Select the catalog lens model that matches this rig.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputSelect id="rig-lens" class="form-select" @bind-Value="_editModel.LensKey">
+                                        @foreach (var lens in _lenses)
+                                        {
+                                            <option value="@lens.Key">@lens.DisplayName (@lens.Key)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="rig-alt" class="form-label config-label">Boresight Altitude (°)
+                                        <span class="label-tooltip" role="img" aria-label="Altitude angle above the horizon for the rig boresight." title="Altitude angle above the horizon for the rig boresight.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="rig-alt" class="form-control" @bind-Value="_editModel.BoresightAltitudeDegrees" step="0.1" min="0" max="90" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="rig-az" class="form-label config-label">Boresight Azimuth (°)
+                                        <span class="label-tooltip" role="img" aria-label="Compass direction for the rig boresight measured clockwise from north." title="Compass direction for the rig boresight measured clockwise from north.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="rig-az" class="form-control" @bind-Value="_editModel.BoresightAzimuthDegrees" step="0.1" min="0" max="360" />
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="form-check">
+                                        <InputCheckbox id="rig-active" class="form-check-input" @bind-Value="_editModel.IsActive" />
+                                        <label for="rig-active" class="form-check-label d-inline-flex align-items-center gap-2">Active by default
+                                            <span class="label-tooltip" role="img" aria-label="Mark this rig as the default active configuration." title="Mark this rig as the default active configuration.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)">
+                                    <i class="bi bi-save me-2"></i>
+                                    Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="BeginCreate" disabled="@(_isLoading || _isSaving)">
+                                    <i class="bi bi-plus-circle me-2"></i>
+                                    New
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" @onclick="DeleteAsync" disabled="@(!CanDelete)">
+                                    <i class="bi bi-trash me-2"></i>
+                                    Delete
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

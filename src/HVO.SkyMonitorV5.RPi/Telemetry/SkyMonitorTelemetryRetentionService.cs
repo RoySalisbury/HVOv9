@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -49,11 +50,8 @@ internal sealed class SkyMonitorTelemetryRetentionService : BackgroundService
                 delay = TimeSpan.FromMinutes(5);
             }
 
-            try
-            {
-                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            var delayCompleted = await CancellationTokenHelpers.DelayWithoutThrowAsync(delay, stoppingToken).ConfigureAwait(false);
+            if (!delayCompleted)
             {
                 break;
             }

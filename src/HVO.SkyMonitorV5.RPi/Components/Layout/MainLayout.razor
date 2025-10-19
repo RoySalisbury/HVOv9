@@ -1,28 +1,47 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Routing
 
 <div class="app-frame">
     <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm app-navbar">
-            <div class="container">
-                <a class="navbar-brand" href="/">
-                    <i class="fas fa-moon"></i> SkyMonitor v5
+        <nav class="navbar navbar-expand-lg navbar-dark app-navbar shadow-sm">
+            <div class="container-fluid align-items-center px-3 px-lg-4">
+                <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                    <i class="bi bi-stars"></i>
+                    <span>SkyMonitor v5</span>
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#primaryNav" aria-controls="primaryNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="/">
-                                <i class="bi bi-house-door"></i> Home
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/diagnostics">
-                                <i class="bi bi-speedometer2"></i> Diagnostics
-                            </a>
-                        </li>
-                    </ul>
+                <div class="collapse navbar-collapse py-3 py-lg-0" id="primaryNav">
+                    <div class="nav-badge-bar me-auto">
+                        <NavLink class="nav-badge" href="/" Match="NavLinkMatch.All">
+                            <i class="bi bi-compass nav-badge__icon"></i>
+                            <span>Dashboard</span>
+                        </NavLink>
+                        <NavLink class="nav-badge" href="/monitor" Match="NavLinkMatch.Prefix">
+                            <i class="bi bi-broadcast-pin nav-badge__icon"></i>
+                            <span>Monitor</span>
+                        </NavLink>
+                        <NavLink class="nav-badge" href="/image-history" Match="NavLinkMatch.Prefix">
+                            <i class="bi bi-collection-play nav-badge__icon"></i>
+                            <span>Image History</span>
+                        </NavLink>
+                        <NavLink class="nav-badge" href="/configuration" Match="NavLinkMatch.Prefix">
+                            <i class="bi bi-sliders nav-badge__icon"></i>
+                            <span>Configuration</span>
+                        </NavLink>
+                        <NavLink class="nav-badge" href="/diagnostics" Match="NavLinkMatch.Prefix">
+                            <i class="bi bi-speedometer2 nav-badge__icon"></i>
+                            <span>Diagnostics</span>
+                        </NavLink>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-3 mt-3 mt-lg-0 ms-lg-4 nav-account-group">
+                        <span class="nav-badge nav-badge--muted">
+                            <i class="bi bi-person-circle nav-badge__icon"></i>
+                            Operator Preview
+                        </span>
+                    </div>
                 </div>
             </div>
         </nav>
