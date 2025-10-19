@@ -1,34 +1,46 @@
 @using HVO.SkyMonitorV5.RPi.Models.Optics
+@using HVO.SkyMonitorV5.RPi.Cameras.Rendering
+@using HVO.SkyMonitorV5.RPi.Cameras.Optics
 
 <div class="container py-4 text-light">
     <div class="row g-4">
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
-                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Lens Catalog
-                            <span class="label-tooltip" role="img" aria-label="Inspect lens models used to generate plate solve and exposure settings." title="Inspect lens models used to generate plate solve and exposure settings.">
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Optics Catalog
+                            <span class="label-tooltip" role="img" aria-label="Review registered optics and manage lifecycle metadata." title="Review registered optics and manage lifecycle metadata.">
                                 <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                             </span>
                         </h2>
-                        <p class="mb-0 text-muted small">Review focal length, projection, and field-of-view parameters for each registered lens.</p>
+                        <p class="mb-0 text-muted small">Create and maintain optics profiles used for plate solving, exposure planning, and rig assignments.</p>
                     </div>
-                    <button type="button"
-                            class="btn btn-outline-light btn-sm"
-                            @onclick="ReloadAsync"
-                            disabled="@_isLoading">
-                        <i class="bi bi-arrow-clockwise me-2"></i>
-                        Refresh
-                    </button>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button"
+                                class="btn btn-primary btn-sm"
+                                title="Create a new optics entry"
+                                @onclick="BeginCreate"
+                                disabled="@(_isLoading || _isSaving)">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            New Optics
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm"
+                                @onclick="ReloadAsync"
+                                disabled="@(_isLoading || _isSaving)">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Refresh
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     @if (_isLoading)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
                             <div class="spinner-border text-secondary" role="status">
-                                <span class="visually-hidden">Loading lens catalog…</span>
+                                <span class="visually-hidden">Loading optics catalog…</span>
                             </div>
-                            <span>Loading lens catalog…</span>
+                            <span>Loading optics catalog…</span>
                         </div>
                     }
                     else if (!string.IsNullOrWhiteSpace(_errorMessage))
@@ -37,9 +49,9 @@
                             @_errorMessage
                         </div>
                     }
-                    else if (_lenses.Count == 0)
+                    else if (_optics.Count == 0)
                     {
-                        <p class="text-muted mb-0">No lenses are registered yet. Create a rig entry to associate a lens with SkyMonitor.</p>
+                        <p class="text-muted mb-0">No optics are registered yet. Create an entry to make optics available for rigs.</p>
                     }
                     else
                     {
@@ -47,28 +59,51 @@
                             <table class="table table-dark table-striped align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th scope="col">Lens</th>
+                                        <th scope="col">Optics</th>
                                         <th scope="col">Key</th>
                                         <th scope="col">Projection</th>
+                                        <th scope="col">Kind</th>
                                         <th scope="col" class="text-center">Focal Length</th>
                                         <th scope="col" class="text-center">Field of View (X / Y)</th>
+                                        <th scope="col">Lifecycle</th>
                                         <th scope="col">Assigned Rigs</th>
+                                        <th scope="col" class="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var lens in _lenses)
+                                    @foreach (var optics in _optics)
                                     {
-                                        var usage = GetLensUsage(lens.Key);
-                                        <tr>
-                                            <td>@lens.DisplayName</td>
-                                            <td><code>@lens.Key</code></td>
-                                            <td>@lens.ProjectionModel</td>
-                                            <td class="text-center">@FormatFocalLength(lens.FocalLengthMillimeters)</td>
-                                            <td class="text-center">@FormatFieldOfView(lens.FieldOfViewXDegrees) / @FormatOptionalFieldOfView(lens.FieldOfViewYDegrees)</td>
+                                        var usage = GetOpticsUsage(optics.Key);
+                                        var isSelected = _editModel?.Id == optics.Id && optics.Id != 0;
+                                        <tr class="@(isSelected ? "table-active" : string.Empty)" @onclick="() => HandleRowSelection(optics)">
+                                            <td>@optics.DisplayName</td>
+                                            <td><code>@optics.Key</code></td>
+                                            <td>@GetProjectionLabel(optics.ProjectionModel)</td>
+                                            <td>@GetLensKindLabel(optics.Kind)</td>
+                                            <td class="text-center">@FormatFocalLength(optics.FocalLengthMillimeters)</td>
+                                            <td class="text-center">@FormatFieldOfView(optics.FieldOfViewXDegrees) / @FormatOptionalFieldOfView(optics.FieldOfViewYDegrees)</td>
+                                            <td>
+                                                <div class="d-flex flex-column gap-1" title="@GetLifecycleTitle(optics)">
+                                                    <span class="@GetStatusBadgeCss(optics.IsActive)">@GetStatusLabel(optics.IsActive)</span>
+                                                    <span class="text-muted small">@FormatLifecycleLabel(optics.UpdatedUtc)</span>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div class="d-flex flex-column gap-1">
-                                                    <span class="badge bg-info-subtle text-info-emphasis align-self-start">@usage.Count rig(s)</span>
-                                                    <span class="text-muted small">@GetRigUsageSummary(lens.Key)</span>
+                                                    <span class="@GetUsageBadgeCss(optics.IsInUse)">@GetUsageBadgeText(usage.Count)</span>
+                                                    <span class="text-muted small">@GetRigUsageSummary(optics.Key)</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="btn-group" role="group" aria-label="Optics actions">
+                                                    <button type="button"
+                                                            class="btn btn-outline-light btn-sm"
+                                                            title="Edit optics"
+                                                            @onclick="(() => SelectOptics(optics))"
+                                                            @onclick:stopPropagation="true"
+                                                            disabled="@_isSaving">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -87,89 +122,115 @@
             </section>
         </div>
 
-        <div class="col-12 col-xl-4">
+        <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
-                <div class="card-header border-secondary">
-                    <h2 class="h6 mb-0 config-card__title">Active Rig Snapshot</h2>
+                <div class="card-header border-secondary d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Configure Optics
+                            <span class="label-tooltip" role="img" aria-label="Adjust optics metadata and lifecycle state." title="Adjust optics metadata and lifecycle state.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Update catalog details so rigs and simulators can reference accurate projection data.</p>
+                    </div>
+                    @if (_editModel is not null)
+                    {
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">@(_editModel.Id > 0 ? $"ID {_editModel.Id} | Rev {_editModel.Revision}" : "New Optics Draft")</span>
+                    }
                 </div>
                 <div class="card-body">
-                    @if (_isLoading)
+                    @if (!string.IsNullOrWhiteSpace(_successMessage))
                     {
-                        <div class="d-flex align-items-center gap-3 text-muted py-2">
-                            <div class="spinner-border text-secondary" role="status">
-                                <span class="visually-hidden">Loading active rig…</span>
-                            </div>
-                            <span>Loading active rig…</span>
+                        <div class="alert alert-success" role="status">
+                            @_successMessage
                         </div>
                     }
-                    else if (ActiveRig is null)
-                    {
-                        <p class="text-muted mb-0">No rig has been activated yet. Activate a rig in the Rig tab to populate this snapshot.</p>
-                    }
-                    else
-                    {
-                        <div class="d-flex flex-column gap-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="fw-semibold">@ActiveRig.DisplayName</span>
-                                <span class="badge bg-success-subtle text-success-emphasis">Active</span>
-                            </div>
-                            <dl class="row gy-2 mb-0">
-                                <dt class="col-5 text-muted">Rig Key</dt>
-                                <dd class="col-7"><code>@ActiveRig.Key</code></dd>
-                                <dt class="col-5 text-muted">Camera</dt>
-                                <dd class="col-7">@ActiveRig.CameraDisplayName</dd>
-                                <dt class="col-5 text-muted">Lens</dt>
-                                <dd class="col-7">@ActiveRig.LensDisplayName</dd>
-                                <dt class="col-5 text-muted">Boresight</dt>
-                                <dd class="col-7">@FormatBoresight(ActiveRig)</dd>
-                            </dl>
-                        </div>
-                    }
-                </div>
-            </section>
-        </div>
 
-        <div class="col-12 col-xl-8">
-            <section class="card bg-dark border-secondary shadow-sm config-card">
-                <div class="card-header border-secondary">
-                    <h2 class="h6 mb-0 config-card__title">Lens Usage</h2>
-                </div>
-                <div class="card-body p-0">
-                    @if (_isLoading)
+                    @if (_editContext is null || _editModel is null)
                     {
-                        <div class="d-flex align-items-center gap-3 text-muted py-3 px-3">
-                            <div class="spinner-border text-secondary" role="status">
-                                <span class="visually-hidden">Loading lens usage…</span>
-                            </div>
-                            <span>Loading lens usage…</span>
-                        </div>
-                    }
-                    else if (_lenses.Count == 0)
-                    {
-                        <p class="text-muted mb-0 px-3 py-3">Lens usage summaries will appear once lenses are registered.</p>
+                        <p class="text-muted mb-0">Select an optics entry from the catalog or create a new optics profile to begin editing.</p>
                     }
                     else
                     {
-                        <ul class="list-group list-group-flush">
-                            @foreach (var lens in _lenses)
-                            {
-                                var usage = GetLensUsage(lens.Key);
-                                <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-start">
-                                    <div class="me-3">
-                                        <div class="fw-semibold">@lens.DisplayName</div>
-                                        <div class="text-muted small">@GetRigUsageSummary(lens.Key)</div>
+                        <EditForm EditContext="@_editContext">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger" />
+
+                            <div class="row g-3">
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-display" class="form-label config-label" title="Display name shown in dashboards, rig pickers, and logs.">Display Name</label>
+                                    <InputText id="optics-display" class="form-control" @bind-Value="_editModel.DisplayName" title="Display name shown in dashboards, rig pickers, and logs." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-key" class="form-label config-label" title="Immutable identifier used by rigs and automation scripts.">Optics Key</label>
+                                    @if (_editModel.Id == 0)
+                                    {
+                                        <InputText id="optics-key" class="form-control" @bind-Value="_editModel.Key" autocomplete="off" pattern="^[A-Za-z0-9_-]+$" title="Letters, numbers, hyphen, and underscore only." />
+                                        <div class="form-text">Letters, numbers, hyphen, and underscore only.</div>
+                                    }
+                                    else
+                                    {
+                                        <InputText id="optics-key" class="form-control" @bind-Value="_editModel.Key" readonly title="Catalog keys cannot be changed." />
+                                    }
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-kind" class="form-label config-label" title="Classify the optical system for downstream adapters.">Lens Kind</label>
+                                    <InputSelect id="optics-kind" class="form-select" @bind-Value="_editModel.Kind" TValue="LensKind" title="Classify the optical system for downstream adapters.">
+                                        @foreach (var kind in LensKinds)
+                                        {
+                                            <option value="@kind">@GetLensKindLabel(kind)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-projection" class="form-label config-label" title="Projection model describing how rays map to the sensor.">Projection Model</label>
+                                    <InputSelect id="optics-projection" class="form-select" @bind-Value="_editModel.ProjectionModel" TValue="ProjectionModel" title="Projection model describing how rays map to the sensor.">
+                                        @foreach (var projection in ProjectionModels)
+                                        {
+                                            <option value="@projection">@GetProjectionLabel(projection)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-focal" class="form-label config-label" title="Effective focal length in millimeters.">Focal Length (mm)</label>
+                                    <InputNumber TValue="double" id="optics-focal" class="form-control" @bind-Value="_editModel.FocalLengthMillimeters" step="0.1" min="0.1" title="Effective focal length in millimeters." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-fovx" class="form-label config-label" title="Horizontal field-of-view in degrees; set to 0 to derive from focal length and sensor size.">Field of View X (°)</label>
+                                    <InputNumber TValue="double" id="optics-fovx" class="form-control" @bind-Value="_editModel.FieldOfViewXDegrees" step="0.1" min="0" max="360" title="Horizontal field-of-view in degrees; set to 0 to derive from focal length and sensor size." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-fovy" class="form-label config-label" title="Optional vertical field-of-view override; leave blank to derive automatically.">Field of View Y (°)</label>
+                                    <InputNumber TValue="double?" id="optics-fovy" class="form-control" @bind-Value="_editModel.FieldOfViewYDegrees" step="0.1" min="0" max="360" title="Optional vertical field-of-view override; leave blank to derive automatically." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="optics-roll" class="form-label config-label" title="Roll offset applied to align the rendered field with reality.">Roll Offset (°)</label>
+                                    <InputNumber TValue="double" id="optics-roll" class="form-control" @bind-Value="_editModel.RollDegrees" step="0.1" min="-180" max="180" title="Roll offset applied to align the rendered field with reality." />
+                                </div>
+                                <div class="col-md-6 col-xl-4 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="optics-active" class="form-check-input" @bind-Value="_editModel.IsActive" />
+                                        <label for="optics-active" class="form-check-label text-light" title="Inactive entries stay in the catalog but are hidden from selection menus.">Active in catalog</label>
                                     </div>
-                                    <span class="badge bg-primary-subtle text-primary-emphasis">@usage.Count</span>
-                                </li>
-                            }
-                        </ul>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)" title="Save changes to the optics catalog.">
+                                    <i class="bi bi-save me-2"></i>
+                                    Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="BeginCreate" disabled="@(_isLoading || _isSaving)" title="Create a new optics entry.">
+                                    <i class="bi bi-plus-circle me-2"></i>
+                                    New
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="ResetChanges" disabled="@(!_hasChanges || _isSaving)" title="Discard changes and revert to the saved values.">
+                                    <i class="bi bi-arrow-counterclockwise me-2"></i>
+                                    Reset
+                                </button>
+                            </div>
+                        </EditForm>
                     }
-                </div>
-                <div class="card-footer border-secondary">
-                    <div class="d-flex flex-wrap gap-3 text-muted small">
-                        <span>Total Lenses: <strong>@LensCount</strong></span>
-                        <span>Total Rigs: <strong>@RigCount</strong></span>
-                    </div>
                 </div>
             </section>
         </div>

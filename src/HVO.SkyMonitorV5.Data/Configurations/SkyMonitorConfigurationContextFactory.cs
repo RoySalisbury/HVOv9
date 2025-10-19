@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,18 @@ public sealed class SkyMonitorConfigurationContextFactory : IDesignTimeDbContext
     {
         var builder = new DbContextOptionsBuilder<SkyMonitorConfigurationContext>();
 
-        var baseDirectory = Directory.GetCurrentDirectory();
-        var databasePath = Path.Combine(baseDirectory, "SkyMonitor.Configuration.DesignTime.sqlite");
+        var overridePath = Environment.GetEnvironmentVariable("SKYMONITOR_CONFIGURATION_DB_PATH");
+
+        string databasePath;
+        if (!string.IsNullOrWhiteSpace(overridePath))
+        {
+            databasePath = Path.GetFullPath(overridePath);
+        }
+        else
+        {
+            var baseDirectory = Directory.GetCurrentDirectory();
+            databasePath = Path.Combine(baseDirectory, "SkyMonitor.Configuration.DesignTime.sqlite");
+        }
 
         var connectionString = new SqliteConnectionStringBuilder
         {

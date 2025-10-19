@@ -17,7 +17,7 @@ public sealed class UpdateOpticsRigRequest
 
     [Required]
     [MaxLength(128)]
-    public string LensKey { get; set; } = string.Empty;
+    public string OpticsKey { get; set; } = string.Empty;
 
     [Range(0.0, 90.0)]
     public double BoresightAltitudeDegrees { get; set; } = 90.0;

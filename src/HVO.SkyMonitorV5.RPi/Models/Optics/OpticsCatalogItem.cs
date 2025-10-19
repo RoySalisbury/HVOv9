@@ -1,13 +1,11 @@
 using System;
 
-namespace HVO.SkyMonitorV5.Data.Configurations.Entities;
+namespace HVO.SkyMonitorV5.RPi.Models.Optics;
 
-/// <summary>
-/// Represents a lens specification stored in the SkyMonitor catalog.
-/// </summary>
-public sealed class OpticsCatalogEntity
+public sealed class OpticsCatalogItem
 {
     public int Id { get; set; }
+    public long Revision { get; set; }
     public string Key { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string ProjectionModel { get; set; } = string.Empty;
@@ -19,5 +17,5 @@ public sealed class OpticsCatalogEntity
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
     public bool IsActive { get; set; }
-    public long Revision { get; set; }
+    public bool IsInUse { get; set; }
 }

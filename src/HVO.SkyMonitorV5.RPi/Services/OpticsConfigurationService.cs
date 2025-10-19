@@ -1,15 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Configurations.Entities;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
+using HVO.SkyMonitorV5.RPi.Models.Catalog;
+using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
+using HVO.SkyMonitorV5.RPi.Models.Rigs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-
 namespace HVO.SkyMonitorV5.RPi.Services;
 
 public sealed class OpticsConfigurationService : IOpticsConfigurationService
@@ -17,6 +21,7 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _contextFactory;
     private readonly IConfigurationSnapshotInvalidator _snapshotInvalidator;
     private readonly ILogger<OpticsConfigurationService>? _logger;
+    private static readonly JsonSerializerOptions CatalogSerializerOptions = new(JsonSerializerDefaults.Web);
 
     public OpticsConfigurationService(
         IDbContextFactory<SkyMonitorConfigurationContext> contextFactory,
@@ -28,21 +33,21 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
         _logger = logger;
     }
 
-    public async Task<Result<OpticsCatalogResponse>> GetCatalogAsync(CancellationToken cancellationToken)
+    public async Task<Result<EquipmentCatalogResponse>> GetCatalogAsync(CancellationToken cancellationToken)
     {
         try
         {
             await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            return Result<OpticsCatalogResponse>.Success(catalog);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
         {
-            return Result<OpticsCatalogResponse>.Failure(ex);
+            _logger?.LogError(ex, "Failed to retrieve equipment catalog.");
+            return Result<EquipmentCatalogResponse>.Failure(ex);
         }
     }
-
-    public async Task<Result<OpticsCatalogResponse>> CreateRigAsync(CreateOpticsRigRequest request, CancellationToken cancellationToken)
+    public async Task<Result<EquipmentCatalogResponse>> CreateRigAsync(CreateRigRequest request, CancellationToken cancellationToken)
     {
         if (request is null)
         {
@@ -54,29 +59,29 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
             var normalizedKey = NormalizeKey(request.Key);
             var normalizedName = NormalizeName(request.DisplayName);
             var cameraKey = NormalizeKey(request.CameraKey);
-            var lensKey = NormalizeKey(request.LensKey);
+            var opticsKey = NormalizeKey(request.OpticsKey);
 
             await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
             if (await context.RigCatalogEntries.AnyAsync(rig => rig.Key == normalizedKey, cancellationToken).ConfigureAwait(false))
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"An optics rig with key '{normalizedKey}' already exists."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"A rig with key '{normalizedKey}' already exists."));
             }
 
-            var camera = await context.CameraCatalogCameras
+            var camera = await context.CameraCatalog
                 .FirstOrDefaultAsync(camera => camera.Key == cameraKey, cancellationToken)
                 .ConfigureAwait(false);
             if (camera is null)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Camera '{cameraKey}' was not found in the catalog."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Camera '{cameraKey}' was not found in the catalog."));
             }
 
-            var lens = await context.CameraCatalogLenses
-                .FirstOrDefaultAsync(lens => lens.Key == lensKey, cancellationToken)
+            var optics = await context.OpticsCatalog
+                .FirstOrDefaultAsync(optics => optics.Key == opticsKey, cancellationToken)
                 .ConfigureAwait(false);
-            if (lens is null)
+            if (optics is null)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Lens '{lensKey}' was not found in the catalog."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Optics '{opticsKey}' was not found in the catalog."));
             }
 
             var rig = new RigCatalogEntryEntity
@@ -84,7 +89,7 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
                 Key = normalizedKey,
                 DisplayName = normalizedName,
                 CameraId = camera.Id,
-                LensId = lens.Id,
+                LensId = optics.Id,
                 BoresightAltitudeDegrees = ClampAltitude(request.BoresightAltitudeDegrees),
                 BoresightAzimuthDegrees = ClampAzimuth(request.BoresightAzimuthDegrees),
                 IsActive = request.IsActive,
@@ -108,16 +113,252 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
             _snapshotInvalidator.InvalidateSnapshot();
 
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            return Result<OpticsCatalogResponse>.Success(catalog);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to create optics rig configuration.");
-            return Result<OpticsCatalogResponse>.Failure(ex);
+            _logger?.LogError(ex, "Failed to create rig configuration.");
+            return Result<EquipmentCatalogResponse>.Failure(ex);
         }
     }
 
-    public async Task<Result<OpticsCatalogResponse>> UpdateRigAsync(int rigId, UpdateOpticsRigRequest request, CancellationToken cancellationToken)
+    public async Task<Result<EquipmentCatalogResponse>> CreateCameraAsync(CreateCameraRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        try
+        {
+            var normalizedKey = NormalizeKey(request.Key);
+            var normalizedName = NormalizeName(request.DisplayName);
+
+            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            if (await context.CameraCatalog.AnyAsync(camera => camera.Key == normalizedKey, cancellationToken).ConfigureAwait(false))
+            {
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"A camera with key '{normalizedKey}' already exists."));
+            }
+
+            var timestamp = DateTime.UtcNow;
+
+            var camera = new CameraCatalogEntity
+            {
+                Key = normalizedKey,
+                DisplayName = normalizedName,
+                Manufacturer = NormalizeOptional(request.Manufacturer),
+                Model = NormalizeOptional(request.Model),
+                DriverVersion = NormalizeOptional(request.DriverVersion),
+                AdapterName = NormalizeOptional(request.AdapterName),
+                DriverId = NormalizeOptional(request.DriverId),
+                IsSynthetic = request.IsSynthetic,
+                SyntheticProfile = NormalizeOptional(request.SyntheticProfile),
+                SensorWidthPixels = request.SensorWidthPixels,
+                SensorHeightPixels = request.SensorHeightPixels,
+                PixelSizeMicrons = request.PixelSizeMicrons,
+                SensorCxPixels = request.SensorCxPixels,
+                SensorCyPixels = request.SensorCyPixels,
+                ColorMode = NormalizeOptional(request.ColorMode),
+                SensorTechnology = NormalizeOptional(request.SensorTechnology),
+                BodyType = NormalizeOptional(request.BodyType),
+                Cooling = NormalizeOptional(request.Cooling),
+                SupportsGainControl = request.SupportsGainControl,
+                SupportsExposureControl = request.SupportsExposureControl,
+                SupportsTemperatureTelemetry = request.SupportsTemperatureTelemetry,
+                SupportsSoftwareBinning = request.SupportsSoftwareBinning,
+                AdditionalTagsJson = SerializeTags(request.AdditionalTags),
+                CreatedUtc = timestamp,
+                UpdatedUtc = timestamp,
+                IsActive = request.IsActive,
+                Revision = 1
+            };
+
+            await context.CameraCatalog.AddAsync(camera, cancellationToken).ConfigureAwait(false);
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            _snapshotInvalidator.InvalidateSnapshot();
+
+            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to create camera catalog entry.");
+            return Result<EquipmentCatalogResponse>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<EquipmentCatalogResponse>> UpdateCameraAsync(int cameraId, UpdateCameraRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        try
+        {
+            var normalizedName = NormalizeName(request.DisplayName);
+
+            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var camera = await context.CameraCatalog
+                .FirstOrDefaultAsync(entry => entry.Id == cameraId, cancellationToken)
+                .ConfigureAwait(false);
+            if (camera is null)
+            {
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Camera with id {cameraId} was not found."));
+            }
+
+            if (request.Revision <= 0 || request.Revision != camera.Revision)
+            {
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Camera '{camera.Key}' has been updated by another request (expected revision {camera.Revision}, received {request.Revision})."));
+            }
+
+            camera.DisplayName = normalizedName;
+            camera.Manufacturer = NormalizeOptional(request.Manufacturer);
+            camera.Model = NormalizeOptional(request.Model);
+            camera.DriverVersion = NormalizeOptional(request.DriverVersion);
+            camera.AdapterName = NormalizeOptional(request.AdapterName);
+            camera.DriverId = NormalizeOptional(request.DriverId);
+            camera.IsSynthetic = request.IsSynthetic;
+            camera.SyntheticProfile = NormalizeOptional(request.SyntheticProfile);
+            camera.SensorWidthPixels = request.SensorWidthPixels;
+            camera.SensorHeightPixels = request.SensorHeightPixels;
+            camera.PixelSizeMicrons = request.PixelSizeMicrons;
+            camera.SensorCxPixels = request.SensorCxPixels;
+            camera.SensorCyPixels = request.SensorCyPixels;
+            camera.ColorMode = NormalizeOptional(request.ColorMode);
+            camera.SensorTechnology = NormalizeOptional(request.SensorTechnology);
+            camera.BodyType = NormalizeOptional(request.BodyType);
+            camera.Cooling = NormalizeOptional(request.Cooling);
+            camera.SupportsGainControl = request.SupportsGainControl;
+            camera.SupportsExposureControl = request.SupportsExposureControl;
+            camera.SupportsTemperatureTelemetry = request.SupportsTemperatureTelemetry;
+            camera.SupportsSoftwareBinning = request.SupportsSoftwareBinning;
+            camera.AdditionalTagsJson = SerializeTags(request.AdditionalTags);
+            camera.IsActive = request.IsActive;
+            camera.UpdatedUtc = DateTime.UtcNow;
+            camera.Revision = NextRevision(camera.Revision);
+
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            _snapshotInvalidator.InvalidateSnapshot();
+
+            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to update camera catalog entry (ID {CameraId}).", cameraId);
+            return Result<EquipmentCatalogResponse>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<EquipmentCatalogResponse>> CreateOpticsAsync(CreateOpticsRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        try
+        {
+            var normalizedKey = NormalizeKey(request.Key);
+            var normalizedName = NormalizeName(request.DisplayName);
+
+            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            if (await context.OpticsCatalog.AnyAsync(optics => optics.Key == normalizedKey, cancellationToken).ConfigureAwait(false))
+            {
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Optics with key '{normalizedKey}' already exists."));
+            }
+
+            var timestamp = DateTime.UtcNow;
+
+            var optics = new OpticsCatalogEntity
+            {
+                Key = normalizedKey,
+                DisplayName = normalizedName,
+                ProjectionModel = NormalizeOptional(request.ProjectionModel),
+                FocalLengthMillimeters = request.FocalLengthMillimeters,
+                FieldOfViewXDegrees = request.FieldOfViewXDegrees,
+                FieldOfViewYDegrees = request.FieldOfViewYDegrees,
+                RollDegrees = request.RollDegrees,
+                Kind = NormalizeOptional(request.Kind),
+                CreatedUtc = timestamp,
+                UpdatedUtc = timestamp,
+                IsActive = request.IsActive,
+                Revision = 1
+            };
+
+            await context.OpticsCatalog.AddAsync(optics, cancellationToken).ConfigureAwait(false);
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            _snapshotInvalidator.InvalidateSnapshot();
+
+            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to create optics catalog entry.");
+            return Result<EquipmentCatalogResponse>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<EquipmentCatalogResponse>> UpdateOpticsAsync(int opticsId, UpdateOpticsRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        try
+        {
+            var normalizedName = NormalizeName(request.DisplayName);
+
+            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            var optics = await context.OpticsCatalog
+                .FirstOrDefaultAsync(entry => entry.Id == opticsId, cancellationToken)
+                .ConfigureAwait(false);
+            if (optics is null)
+            {
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Optics with id {opticsId} was not found."));
+            }
+
+            if (request.Revision <= 0 || request.Revision != optics.Revision)
+            {
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Optics '{optics.Key}' has been updated by another request (expected revision {optics.Revision}, received {request.Revision})."));
+            }
+
+            optics.DisplayName = normalizedName;
+            optics.ProjectionModel = NormalizeOptional(request.ProjectionModel);
+            optics.FocalLengthMillimeters = request.FocalLengthMillimeters;
+            optics.FieldOfViewXDegrees = request.FieldOfViewXDegrees;
+            optics.FieldOfViewYDegrees = request.FieldOfViewYDegrees;
+            optics.RollDegrees = request.RollDegrees;
+            optics.Kind = NormalizeOptional(request.Kind);
+            optics.IsActive = request.IsActive;
+            optics.UpdatedUtc = DateTime.UtcNow;
+            optics.Revision = NextRevision(optics.Revision);
+
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            _snapshotInvalidator.InvalidateSnapshot();
+
+            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to update optics catalog entry (ID {OpticsId}).", opticsId);
+            return Result<EquipmentCatalogResponse>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<EquipmentCatalogResponse>> UpdateRigAsync(int rigId, UpdateRigRequest request, CancellationToken cancellationToken)
     {
         if (request is null)
         {
@@ -128,7 +369,7 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
         {
             var normalizedName = NormalizeName(request.DisplayName);
             var cameraKey = NormalizeKey(request.CameraKey);
-            var lensKey = NormalizeKey(request.LensKey);
+            var opticsKey = NormalizeKey(request.OpticsKey);
 
             await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
@@ -137,33 +378,33 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
                 .ConfigureAwait(false);
             if (rig is null)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Optics rig with id {rigId} was not found."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig with id {rigId} was not found."));
             }
 
             if (request.Revision <= 0 || request.Revision != rig.Revision)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Optics rig '{rig.Key}' has been updated by another request (expected revision {rig.Revision}, received {request.Revision})."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{rig.Key}' has been updated by another request (expected revision {rig.Revision}, received {request.Revision})."));
             }
 
-            var camera = await context.CameraCatalogCameras
+            var camera = await context.CameraCatalog
                 .FirstOrDefaultAsync(camera => camera.Key == cameraKey, cancellationToken)
                 .ConfigureAwait(false);
             if (camera is null)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Camera '{cameraKey}' was not found in the catalog."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Camera '{cameraKey}' was not found in the catalog."));
             }
 
-            var lens = await context.CameraCatalogLenses
-                .FirstOrDefaultAsync(lens => lens.Key == lensKey, cancellationToken)
+            var optics = await context.OpticsCatalog
+                .FirstOrDefaultAsync(optics => optics.Key == opticsKey, cancellationToken)
                 .ConfigureAwait(false);
-            if (lens is null)
+            if (optics is null)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Lens '{lensKey}' was not found in the catalog."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Optics '{opticsKey}' was not found in the catalog."));
             }
 
             rig.DisplayName = normalizedName;
             rig.CameraId = camera.Id;
-            rig.LensId = lens.Id;
+            rig.LensId = optics.Id;
             rig.BoresightAltitudeDegrees = ClampAltitude(request.BoresightAltitudeDegrees);
             rig.BoresightAzimuthDegrees = ClampAzimuth(request.BoresightAzimuthDegrees);
             rig.IsActive = request.IsActive;
@@ -184,16 +425,16 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
             _snapshotInvalidator.InvalidateSnapshot();
 
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            return Result<OpticsCatalogResponse>.Success(catalog);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to update optics rig configuration (ID {RigId}).", rigId);
-            return Result<OpticsCatalogResponse>.Failure(ex);
+            _logger?.LogError(ex, "Failed to update rig configuration (ID {RigId}).", rigId);
+            return Result<EquipmentCatalogResponse>.Failure(ex);
         }
     }
 
-    public async Task<Result<OpticsCatalogResponse>> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken)
+    public async Task<Result<EquipmentCatalogResponse>> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken)
     {
         try
         {
@@ -204,12 +445,12 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
                 .ConfigureAwait(false);
             if (rig is null)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Optics rig with id {rigId} was not found."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig with id {rigId} was not found."));
             }
 
             if (revision is > 0 && revision != rig.Revision)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Optics rig '{rig.Key}' has been updated by another request (expected revision {rig.Revision}, received {revision})."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{rig.Key}' has been updated by another request (expected revision {rig.Revision}, received {revision})."));
             }
 
             var isReferenced = await context.CameraAdapters
@@ -217,7 +458,7 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
                 .ConfigureAwait(false);
             if (isReferenced)
             {
-                return Result<OpticsCatalogResponse>.Failure(new InvalidOperationException($"Optics rig '{rig.Key}' is in use by a camera adapter and cannot be deleted."));
+                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{rig.Key}' is in use by a camera adapter and cannot be deleted."));
             }
 
             var wasActive = rig.IsActive;
@@ -233,12 +474,12 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
             _snapshotInvalidator.InvalidateSnapshot();
 
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            return Result<OpticsCatalogResponse>.Success(catalog);
+            return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to delete optics rig configuration (ID {RigId}).", rigId);
-            return Result<OpticsCatalogResponse>.Failure(ex);
+            return Result<EquipmentCatalogResponse>.Failure(ex);
         }
     }
 
@@ -246,7 +487,7 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException("Optics rig keys must not be empty.");
+            throw new InvalidOperationException("Catalog keys must not be empty.");
         }
 
         return value.Trim();
@@ -256,10 +497,31 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException("Optics rig display name must not be empty.");
+            throw new InvalidOperationException("Display name must not be empty.");
         }
 
         return value.Trim();
+    }
+
+    private static string NormalizeOptional(string value)
+        => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+
+    private static string SerializeTags(IReadOnlyList<string>? tags)
+    {
+        if (tags is null || tags.Count == 0)
+        {
+            return "[]";
+        }
+
+        var normalized = tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return normalized.Length == 0
+            ? "[]"
+            : JsonSerializer.Serialize(normalized, CatalogSerializerOptions);
     }
 
     private static double ClampAltitude(double altitude)
@@ -307,7 +569,7 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
         return true;
     }
 
-    private static async Task<OpticsCatalogResponse> BuildCatalogAsync(SkyMonitorConfigurationContext context, CancellationToken cancellationToken)
+    private static async Task<EquipmentCatalogResponse> BuildCatalogAsync(SkyMonitorConfigurationContext context, CancellationToken cancellationToken)
     {
         var rigs = await context.RigCatalogEntries
             .AsNoTracking()
@@ -324,48 +586,88 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
             .ToDictionaryAsync(entry => entry.RigId, entry => entry.Count, cancellationToken)
             .ConfigureAwait(false);
 
-        var cameras = await context.CameraCatalogCameras
+    var camerasInUse = rigs.Select(rig => rig.CameraId).ToHashSet();
+    var opticsInUse = rigs.Select(rig => rig.LensId).ToHashSet();
+
+        var cameraEntities = await context.CameraCatalog
             .AsNoTracking()
             .OrderBy(camera => camera.DisplayName)
-            .Select(camera => new OpticsCatalogCamera
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var cameras = cameraEntities
+            .Select(camera => new CameraCatalogItem
             {
+                Id = camera.Id,
+                Revision = camera.Revision,
                 Key = camera.Key,
                 DisplayName = camera.DisplayName,
                 Manufacturer = camera.Manufacturer,
                 Model = camera.Model,
+                DriverVersion = camera.DriverVersion,
+                AdapterName = camera.AdapterName,
+                DriverId = camera.DriverId,
+                IsSynthetic = camera.IsSynthetic,
+                SyntheticProfile = camera.SyntheticProfile,
                 SensorWidthPixels = camera.SensorWidthPixels,
-                SensorHeightPixels = camera.SensorHeightPixels
+                SensorHeightPixels = camera.SensorHeightPixels,
+                PixelSizeMicrons = camera.PixelSizeMicrons,
+                SensorCxPixels = camera.SensorCxPixels,
+                SensorCyPixels = camera.SensorCyPixels,
+                ColorMode = camera.ColorMode,
+                SensorTechnology = camera.SensorTechnology,
+                BodyType = camera.BodyType,
+                Cooling = camera.Cooling,
+                SupportsGainControl = camera.SupportsGainControl,
+                SupportsExposureControl = camera.SupportsExposureControl,
+                SupportsTemperatureTelemetry = camera.SupportsTemperatureTelemetry,
+                SupportsSoftwareBinning = camera.SupportsSoftwareBinning,
+                AdditionalTags = DeserializeTags(camera.AdditionalTagsJson),
+                CreatedUtc = camera.CreatedUtc,
+                UpdatedUtc = camera.UpdatedUtc,
+                IsActive = camera.IsActive,
+                IsInUse = camerasInUse.Contains(camera.Id)
             })
+            .ToList();
+
+        var opticsEntities = await context.OpticsCatalog
+            .AsNoTracking()
+            .OrderBy(lens => lens.DisplayName)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var lenses = await context.CameraCatalogLenses
-            .AsNoTracking()
-            .OrderBy(lens => lens.DisplayName)
-            .Select(lens => new OpticsCatalogLens
+        var optics = opticsEntities
+            .Select(lens => new OpticsCatalogItem
             {
+                Id = lens.Id,
+                Revision = lens.Revision,
                 Key = lens.Key,
                 DisplayName = lens.DisplayName,
                 ProjectionModel = lens.ProjectionModel,
                 FocalLengthMillimeters = lens.FocalLengthMillimeters,
                 FieldOfViewXDegrees = lens.FieldOfViewXDegrees,
-                FieldOfViewYDegrees = lens.FieldOfViewYDegrees
+                FieldOfViewYDegrees = lens.FieldOfViewYDegrees,
+                RollDegrees = lens.RollDegrees,
+                Kind = lens.Kind,
+                CreatedUtc = lens.CreatedUtc,
+                UpdatedUtc = lens.UpdatedUtc,
+                IsActive = lens.IsActive,
+                IsInUse = opticsInUse.Contains(lens.Id)
             })
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+            .ToList();
 
         var activeRigKey = rigs.FirstOrDefault(rig => rig.IsActive)?.Key;
 
         var summaries = rigs
-            .Select(rig => new OpticsRigSummary
+            .Select(rig => new RigSummary
             {
                 Id = rig.Id,
                 Key = rig.Key,
                 DisplayName = rig.DisplayName,
                 CameraKey = rig.Camera?.Key ?? string.Empty,
                 CameraDisplayName = rig.Camera?.DisplayName ?? string.Empty,
-                LensKey = rig.Lens?.Key ?? string.Empty,
-                LensDisplayName = rig.Lens?.DisplayName ?? string.Empty,
+                OpticsKey = rig.Lens?.Key ?? string.Empty,
+                OpticsDisplayName = rig.Lens?.DisplayName ?? string.Empty,
                 BoresightAltitudeDegrees = rig.BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = rig.BoresightAzimuthDegrees,
                 IsActive = rig.IsActive,
@@ -374,12 +676,30 @@ public sealed class OpticsConfigurationService : IOpticsConfigurationService
             })
             .ToList();
 
-        return new OpticsCatalogResponse
+        return new EquipmentCatalogResponse
         {
             Rigs = summaries,
             Cameras = cameras,
-            Lenses = lenses,
+            Optics = optics,
             ActiveRigKey = activeRigKey
         };
+    }
+
+    private static IReadOnlyList<string> DeserializeTags(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            var tags = JsonSerializer.Deserialize<string[]?>(json, CatalogSerializerOptions);
+            return tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).Select(tag => tag.Trim()).ToArray() ?? Array.Empty<string>();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<string>();
+        }
     }
 }

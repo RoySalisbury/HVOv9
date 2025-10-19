@@ -1,13 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace HVO.SkyMonitorV5.RPi.Models.Optics;
+namespace HVO.SkyMonitorV5.RPi.Models.Rigs;
 
-public sealed class CreateOpticsRigRequest
+public sealed class UpdateRigRequest
 {
-    [Required]
-    [MaxLength(128)]
-    [RegularExpression("^[A-Za-z0-9_-]+$")] // slug-style rig key
-    public string Key { get; set; } = string.Empty;
+    [Range(1, long.MaxValue)]
+    public long Revision { get; set; }
 
     [Required]
     [MaxLength(128)]

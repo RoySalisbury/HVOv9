@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using HVO.SkyMonitorV5.Data.Configurations.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,8 @@ public sealed class SkyMonitorConfigurationContext : DbContext
     }
 
     public DbSet<ObservatorySiteEntity> ObservatorySites => Set<ObservatorySiteEntity>();
-    public DbSet<CameraCatalogCameraEntity> CameraCatalogCameras => Set<CameraCatalogCameraEntity>();
-    public DbSet<CameraCatalogLensEntity> CameraCatalogLenses => Set<CameraCatalogLensEntity>();
+    public DbSet<CameraCatalogEntity> CameraCatalog => Set<CameraCatalogEntity>();
+    public DbSet<OpticsCatalogEntity> OpticsCatalog => Set<OpticsCatalogEntity>();
     public DbSet<RigCatalogEntryEntity> RigCatalogEntries => Set<RigCatalogEntryEntity>();
     public DbSet<CameraAdapterConfigEntity> CameraAdapters => Set<CameraAdapterConfigEntity>();
     public DbSet<CameraPipelineConfigEntity> CameraPipelineConfigurations => Set<CameraPipelineConfigEntity>();
@@ -25,8 +26,8 @@ public sealed class SkyMonitorConfigurationContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureObservatorySiteEntity(modelBuilder);
-        ConfigureCameraCatalogCameraEntity(modelBuilder);
-        ConfigureCameraCatalogLensEntity(modelBuilder);
+    ConfigureCameraCatalogEntity(modelBuilder);
+    ConfigureOpticsCatalogEntity(modelBuilder);
         ConfigureRigCatalogEntity(modelBuilder);
         ConfigureCameraAdapterEntity(modelBuilder);
         ConfigureCameraPipelineEntity(modelBuilder);
@@ -65,13 +66,13 @@ public sealed class SkyMonitorConfigurationContext : DbContext
         });
     }
 
-    private static void ConfigureCameraCatalogCameraEntity(ModelBuilder modelBuilder)
+    private static void ConfigureCameraCatalogEntity(ModelBuilder modelBuilder)
     {
         var additionalTags = JsonSerializer.Serialize(new[] { "Simulation" }, SerializerOptions);
 
-        modelBuilder.Entity<CameraCatalogCameraEntity>(entity =>
+        modelBuilder.Entity<CameraCatalogEntity>(entity =>
         {
-            entity.ToTable("camera_catalog_camera");
+            entity.ToTable("camera_catalog");
 
             entity.HasKey(e => e.Id);
 
@@ -99,10 +100,14 @@ public sealed class SkyMonitorConfigurationContext : DbContext
             entity.Property(e => e.SupportsTemperatureTelemetry).HasColumnName("supports_temperature_telemetry");
             entity.Property(e => e.SupportsSoftwareBinning).HasColumnName("supports_software_binning");
             entity.Property(e => e.AdditionalTagsJson).HasColumnName("additional_tags_json");
+            entity.Property(e => e.CreatedUtc).HasColumnName("created_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedUtc).HasColumnName("updated_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.Revision).HasColumnName("revision").HasDefaultValue(1L);
 
             entity.HasIndex(e => e.Key).IsUnique();
 
-            entity.HasData(new CameraCatalogCameraEntity
+            entity.HasData(new CameraCatalogEntity
             {
                 Id = 1,
                 Key = "MockASI174MM",
@@ -125,16 +130,20 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 SupportsExposureControl = true,
                 SupportsTemperatureTelemetry = false,
                 SupportsSoftwareBinning = true,
-                AdditionalTagsJson = additionalTags
+                AdditionalTagsJson = additionalTags,
+                CreatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+                IsActive = true,
+                Revision = 1
             });
         });
     }
 
-    private static void ConfigureCameraCatalogLensEntity(ModelBuilder modelBuilder)
+    private static void ConfigureOpticsCatalogEntity(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<CameraCatalogLensEntity>(entity =>
+        modelBuilder.Entity<OpticsCatalogEntity>(entity =>
         {
-            entity.ToTable("camera_catalog_lens");
+            entity.ToTable("optics_catalog");
 
             entity.HasKey(e => e.Id);
 
@@ -147,10 +156,14 @@ public sealed class SkyMonitorConfigurationContext : DbContext
             entity.Property(e => e.FieldOfViewYDegrees).HasColumnName("fov_y_deg");
             entity.Property(e => e.RollDegrees).HasColumnName("roll_deg");
             entity.Property(e => e.Kind).HasColumnName("kind");
+            entity.Property(e => e.CreatedUtc).HasColumnName("created_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedUtc).HasColumnName("updated_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.Revision).HasColumnName("revision").HasDefaultValue(1L);
 
             entity.HasIndex(e => e.Key).IsUnique();
 
-            entity.HasData(new CameraCatalogLensEntity
+            entity.HasData(new OpticsCatalogEntity
             {
                 Id = 1,
                 Key = "Fujinon_FE185C086HA_1",
@@ -160,7 +173,11 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 FieldOfViewXDegrees = 185.0,
                 FieldOfViewYDegrees = 185.0,
                 RollDegrees = 0.0,
-                Kind = "Fisheye"
+                Kind = "Fisheye",
+                CreatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+                IsActive = true,
+                Revision = 1
             });
         });
     }

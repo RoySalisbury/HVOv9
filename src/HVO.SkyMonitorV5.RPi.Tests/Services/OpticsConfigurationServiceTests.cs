@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
-using HVO.SkyMonitorV5.RPi.Models.Optics;
+using HVO.SkyMonitorV5.RPi.Models.Rigs;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
 using Microsoft.EntityFrameworkCore;
@@ -33,8 +33,8 @@ public sealed class OpticsConfigurationServiceTests
         Assert.AreEqual(1, catalog.Rigs.Count);
         Assert.AreEqual("Mock Fisheye", catalog.Rigs[0].DisplayName);
         Assert.AreEqual("MockFisheye", catalog.Rigs[0].Key);
-        Assert.AreEqual("MockASI174MM", catalog.Rigs[0].CameraKey);
-        Assert.AreEqual("Fujinon_FE185C086HA_1", catalog.Rigs[0].LensKey);
+    Assert.AreEqual("MockASI174MM", catalog.Rigs[0].CameraKey);
+    Assert.AreEqual("Fujinon_FE185C086HA_1", catalog.Rigs[0].OpticsKey);
         Assert.AreEqual(0, invalidator.CallCount);
     }
 
@@ -47,12 +47,12 @@ public sealed class OpticsConfigurationServiceTests
         var invalidator = new StubInvalidator();
         var service = new OpticsConfigurationService(factory, invalidator, NullLogger<OpticsConfigurationService>.Instance);
 
-        var request = new CreateOpticsRigRequest
+        var request = new CreateRigRequest
         {
             Key = "NewRig",
             DisplayName = "New Rig",
             CameraKey = "MockASI174MM",
-            LensKey = "Fujinon_FE185C086HA_1",
+            OpticsKey = "Fujinon_FE185C086HA_1",
             BoresightAltitudeDegrees = 45.0,
             BoresightAzimuthDegrees = 135.0,
             IsActive = false
@@ -79,12 +79,12 @@ public sealed class OpticsConfigurationServiceTests
         var invalidator = new StubInvalidator();
         var service = new OpticsConfigurationService(factory, invalidator, NullLogger<OpticsConfigurationService>.Instance);
 
-        var request = new UpdateOpticsRigRequest
+        var request = new UpdateRigRequest
         {
             Revision = 99,
             DisplayName = "Changed",
             CameraKey = "MockASI174MM",
-            LensKey = "Fujinon_FE185C086HA_1",
+            OpticsKey = "Fujinon_FE185C086HA_1",
             BoresightAltitudeDegrees = 80,
             BoresightAzimuthDegrees = 10,
             IsActive = true

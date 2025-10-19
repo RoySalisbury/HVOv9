@@ -9,9 +9,9 @@ public sealed class RigCatalogEntryEntity
     public string Key { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public int CameraId { get; set; }
-    public CameraCatalogCameraEntity? Camera { get; set; }
+    public CameraCatalogEntity? Camera { get; set; }
     public int LensId { get; set; }
-    public CameraCatalogLensEntity? Lens { get; set; }
+    public OpticsCatalogEntity? Lens { get; set; }
     public double BoresightAltitudeDegrees { get; set; }
     public double BoresightAzimuthDegrees { get; set; }
     public bool IsActive { get; set; }

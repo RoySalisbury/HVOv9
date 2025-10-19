@@ -9,7 +9,7 @@
                 <div class="card-header border-secondary d-flex justify-content-between align-items-center">
                     <div>
                         <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Rig Catalog
-                            <span class="label-tooltip" role="img" aria-label="Manage camera and lens pairings used when assigning adapters." title="Manage camera and lens pairings used when assigning adapters.">
+                            <span class="label-tooltip" role="img" aria-label="Manage camera and optics pairings used when assigning adapters." title="Manage camera and optics pairings used when assigning adapters.">
                                 <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                             </span>
                         </h2>
@@ -53,7 +53,7 @@
                                         <th scope="col">Name</th>
                                         <th scope="col">Key</th>
                                         <th scope="col">Camera</th>
-                                        <th scope="col">Lens</th>
+                                        <th scope="col">Optics</th>
                                         <th scope="col" class="text-center">Boresight (Alt / Az)</th>
                                         <th scope="col" class="text-center">Active</th>
                                         <th scope="col" class="text-end">Actions</th>
@@ -83,8 +83,8 @@
                                             </td>
                                             <td>
                                                 <div class="d-flex flex-column">
-                                                    <span>@rig.LensDisplayName</span>
-                                                    <small class="text-muted">@rig.LensKey</small>
+                                                    <span>@rig.OpticsDisplayName</span>
+                                                    <small class="text-muted">@rig.OpticsKey</small>
                                                 </div>
                                             </td>
                                             <td class="text-center">@rig.BoresightAltitudeDegrees:F1° / @rig.BoresightAzimuthDegrees:F1°</td>
@@ -141,7 +141,7 @@
                 <div class="card-header border-secondary d-flex justify-content-between align-items-start">
                     <div>
                         <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Configure Rig
-                            <span class="label-tooltip" role="img" aria-label="Adjust camera, lens, and boresight data for the selected rig." title="Adjust camera, lens, and boresight data for the selected rig.">
+                            <span class="label-tooltip" role="img" aria-label="Adjust camera, optics, and boresight data for the selected rig." title="Adjust camera, optics, and boresight data for the selected rig.">
                                 <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                             </span>
                         </h2>
@@ -221,15 +221,15 @@
                                     </InputSelect>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="rig-lens" class="form-label config-label">Lens
-                                        <span class="label-tooltip" role="img" aria-label="Select the catalog lens model that matches this rig." title="Select the catalog lens model that matches this rig.">
+                                    <label for="rig-optics" class="form-label config-label">Optics
+                                        <span class="label-tooltip" role="img" aria-label="Select the catalog optics profile that matches this rig." title="Select the catalog optics profile that matches this rig.">
                                             <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                                         </span>
                                     </label>
-                                    <InputSelect id="rig-lens" class="form-select" @bind-Value="_editModel.LensKey">
-                                        @foreach (var lens in _lenses)
+                                    <InputSelect id="rig-optics" class="form-select" @bind-Value="_editModel.OpticsKey">
+                                        @foreach (var optics in _optics)
                                         {
-                                            <option value="@lens.Key">@lens.DisplayName (@lens.Key)</option>
+                                            <option value="@optics.Key">@optics.DisplayName (@optics.Key)</option>
                                         }
                                     </InputSelect>
                                 </div>

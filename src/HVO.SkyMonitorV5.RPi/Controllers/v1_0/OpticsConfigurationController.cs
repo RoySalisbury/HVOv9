@@ -2,7 +2,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
+using HVO.SkyMonitorV5.RPi.Models.Catalog;
+using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
+using HVO.SkyMonitorV5.RPi.Models.Rigs;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,14 +25,14 @@ public sealed class OpticsConfigurationController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(OpticsCatalogResponse), StatusCodes.Status200OK)]
-    public async Task<ActionResult<OpticsCatalogResponse>> GetCatalogAsync(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<EquipmentCatalogResponse>> GetCatalogAsync(CancellationToken cancellationToken)
         => await ExecuteAsync(() => _opticsService.GetCatalogAsync(cancellationToken)).ConfigureAwait(false);
 
     [HttpPost]
-    [ProducesResponseType(typeof(OpticsCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<OpticsCatalogResponse>> CreateRigAsync([FromBody] CreateOpticsRigRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<EquipmentCatalogResponse>> CreateRigAsync([FromBody] CreateRigRequest request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -40,9 +43,9 @@ public sealed class OpticsConfigurationController : ControllerBase
     }
 
     [HttpPut("{rigId:int}")]
-    [ProducesResponseType(typeof(OpticsCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<OpticsCatalogResponse>> UpdateRigAsync(int rigId, [FromBody] UpdateOpticsRigRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<EquipmentCatalogResponse>> UpdateRigAsync(int rigId, [FromBody] UpdateRigRequest request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -53,12 +56,64 @@ public sealed class OpticsConfigurationController : ControllerBase
     }
 
     [HttpDelete("{rigId:int}")]
-    [ProducesResponseType(typeof(OpticsCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<OpticsCatalogResponse>> DeleteRigAsync(int rigId, [FromQuery] long? revision, CancellationToken cancellationToken)
+    public async Task<ActionResult<EquipmentCatalogResponse>> DeleteRigAsync(int rigId, [FromQuery] long? revision, CancellationToken cancellationToken)
         => await ExecuteAsync(() => _opticsService.DeleteRigAsync(rigId, revision, cancellationToken)).ConfigureAwait(false);
 
-    private async Task<ActionResult<OpticsCatalogResponse>> ExecuteAsync(Func<Task<HVO.Result<OpticsCatalogResponse>>> operation)
+    [HttpPost("cameras")]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<EquipmentCatalogResponse>> CreateCameraAsync([FromBody] CreateCameraRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return await ExecuteAsync(() => _opticsService.CreateCameraAsync(request, cancellationToken)).ConfigureAwait(false);
+    }
+
+    [HttpPut("cameras/{cameraId:int}")]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<EquipmentCatalogResponse>> UpdateCameraAsync(int cameraId, [FromBody] UpdateCameraRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return await ExecuteAsync(() => _opticsService.UpdateCameraAsync(cameraId, request, cancellationToken)).ConfigureAwait(false);
+    }
+
+    [HttpPost("lenses")]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<EquipmentCatalogResponse>> CreateOpticsAsync([FromBody] CreateOpticsRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return await ExecuteAsync(() => _opticsService.CreateOpticsAsync(request, cancellationToken)).ConfigureAwait(false);
+    }
+
+    [HttpPut("lenses/{opticsId:int}")]
+    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<EquipmentCatalogResponse>> UpdateOpticsAsync(int opticsId, [FromBody] UpdateOpticsRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return await ExecuteAsync(() => _opticsService.UpdateOpticsAsync(opticsId, request, cancellationToken)).ConfigureAwait(false);
+    }
+
+    private async Task<ActionResult<EquipmentCatalogResponse>> ExecuteAsync(Func<Task<HVO.Result<EquipmentCatalogResponse>>> operation)
     {
         var result = await operation().ConfigureAwait(false);
         if (result.IsSuccessful)

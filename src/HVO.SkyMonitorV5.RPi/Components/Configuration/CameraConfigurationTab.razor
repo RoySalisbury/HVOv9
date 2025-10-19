@@ -1,25 +1,37 @@
-@using HVO.SkyMonitorV5.RPi.Models.Optics
+@using HVO.SkyMonitorV5.RPi.Models.Cameras
+@using HVO.SkyMonitorV5.RPi.Models.Rigs
+@using HVO.SkyMonitorV5.RPi.Cameras.Optics
 
 <div class="container py-4 text-light">
     <div class="row g-4">
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
-                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
                         <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Camera Catalog
-                            <span class="label-tooltip" role="img" aria-label="Review registered cameras and their sensor characteristics." title="Review registered cameras and their sensor characteristics.">
+                            <span class="label-tooltip" role="img" aria-label="Review registered cameras and manage lifecycle metadata." title="Review registered cameras and manage lifecycle metadata.">
                                 <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                             </span>
                         </h2>
-                        <p class="mb-0 text-muted small">Inspect sensor dimensions, manufacturer details, and rig assignments for each camera.</p>
+                        <p class="mb-0 text-muted small">Create and maintain camera profiles available to rigs and adapters.</p>
                     </div>
-                    <button type="button"
-                            class="btn btn-outline-light btn-sm"
-                            @onclick="ReloadAsync"
-                            disabled="@_isLoading">
-                        <i class="bi bi-arrow-clockwise me-2"></i>
-                        Refresh
-                    </button>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button"
+                                class="btn btn-primary btn-sm"
+                                title="Create a new camera entry"
+                                @onclick="BeginCreate"
+                                disabled="@(_isLoading || _isSaving)">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            New Camera
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm"
+                                @onclick="ReloadAsync"
+                                disabled="@(_isLoading || _isSaving)">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Refresh
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     @if (_isLoading)
@@ -39,7 +51,7 @@
                     }
                     else if (_cameras.Count == 0)
                     {
-                        <p class="text-muted mb-0">No cameras are registered yet. Create a rig to associate a camera with SkyMonitor.</p>
+                        <p class="text-muted mb-0">No cameras are registered yet. Add a camera to make it available for rig assignments.</p>
                     }
                     else
                     {
@@ -52,23 +64,49 @@
                                         <th scope="col">Manufacturer</th>
                                         <th scope="col">Model</th>
                                         <th scope="col" class="text-center">Sensor (px)</th>
+                                        <th scope="col">Lifecycle</th>
                                         <th scope="col">Assigned Rigs</th>
+                                        <th scope="col" class="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var camera in _cameras)
                                     {
                                         var usage = GetCameraUsage(camera.Key);
-                                        <tr>
-                                            <td>@camera.DisplayName</td>
+                                        var isSelected = _editModel?.Id == camera.Id && camera.Id != 0;
+                                        <tr class="@(isSelected ? "table-active" : string.Empty)" @onclick="() => HandleRowSelection(camera)">
+                                            <td>
+                                                <div class="d-flex flex-column">
+                                                    <span>@camera.DisplayName</span>
+                                                    <small class="text-muted">@camera.DriverVersion</small>
+                                                </div>
+                                            </td>
                                             <td><code>@camera.Key</code></td>
                                             <td>@camera.Manufacturer</td>
                                             <td>@camera.Model</td>
                                             <td class="text-center">@FormatResolution(camera)</td>
                                             <td>
+                                                <div class="d-flex flex-column gap-1" title="@GetLifecycleTitle(camera)">
+                                                    <span class="@GetStatusBadgeCss(camera.IsActive)">@GetStatusLabel(camera.IsActive)</span>
+                                                    <span class="text-muted small">@FormatLifecycleLabel(camera.UpdatedUtc)</span>
+                                                </div>
+                                            </td>
+                                            <td>
                                                 <div class="d-flex flex-column gap-1">
-                                                    <span class="badge bg-info-subtle text-info-emphasis align-self-start">@usage.Count rig(s)</span>
+                                                    <span class="@GetUsageBadgeCss(camera.IsInUse)">@GetUsageBadgeText(usage.Count)</span>
                                                     <span class="text-muted small">@GetCameraUsageSummary(camera.Key)</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="btn-group" role="group" aria-label="Camera actions">
+                                                    <button type="button"
+                                                            class="btn btn-outline-light btn-sm"
+                                                            title="Edit camera"
+                                                            @onclick="(() => SelectCamera(camera))"
+                                                            @onclick:stopPropagation="true"
+                                                            disabled="@_isSaving">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -87,61 +125,187 @@
             </section>
         </div>
 
-        <div class="col-12 col-xl-6">
+        <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
-                <div class="card-header border-secondary">
-                    <h2 class="h6 mb-0 config-card__title">Camera Usage</h2>
-                </div>
-                <div class="card-body p-0">
-                    @if (_isLoading)
+                <div class="card-header border-secondary d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Configure Camera
+                            <span class="label-tooltip" role="img" aria-label="Adjust camera metadata, capabilities, and lifecycle state." title="Adjust camera metadata, capabilities, and lifecycle state.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                        <p class="mb-0 text-muted small">Update catalog details so rigs and adapters can reference accurate sensor data.</p>
+                    </div>
+                    @if (_editModel is not null)
                     {
-                        <div class="d-flex align-items-center gap-3 text-muted py-3 px-3">
-                            <div class="spinner-border text-secondary" role="status">
-                                <span class="visually-hidden">Loading camera usage…</span>
-                            </div>
-                            <span>Loading camera usage…</span>
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">@(_editModel.Id > 0 ? $"ID {_editModel.Id} | Rev {_editModel.Revision}" : "New Camera Draft")</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrWhiteSpace(_successMessage))
+                    {
+                        <div class="alert alert-success" role="status">
+                            @_successMessage
                         </div>
                     }
-                    else if (_cameras.Count == 0)
+
+                    @if (_editContext is null || _editModel is null)
                     {
-                        <p class="text-muted mb-0 px-3 py-3">Camera usage summaries will appear once cameras are registered.</p>
+                        <p class="text-muted mb-0">Select a camera from the catalog or create a new entry to begin editing.</p>
                     }
                     else
                     {
-                        <ul class="list-group list-group-flush">
-                            @foreach (var camera in _cameras)
-                            {
-                                var usage = GetCameraUsage(camera.Key);
-                                <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-start">
-                                    <div class="me-3">
-                                        <div class="fw-semibold">@camera.DisplayName</div>
-                                        <div class="text-muted small">@GetCameraUsageSummary(camera.Key)</div>
-                                    </div>
-                                    <span class="badge bg-primary-subtle text-primary-emphasis">@usage.Count</span>
-                                </li>
-                            }
-                        </ul>
-                    }
-                </div>
-            </section>
-        </div>
+                        <EditForm EditContext="@_editContext">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger" />
 
-        <div class="col-12 col-xl-6">
-            <section class="card bg-dark border-secondary shadow-sm config-card">
-                <div class="card-header border-secondary">
-                    <h2 class="h6 mb-0 config-card__title">Catalog Summary</h2>
-                </div>
-                <div class="card-body">
-                    <dl class="row gy-2 mb-0">
-                        <dt class="col-6 text-muted">Total Cameras</dt>
-                        <dd class="col-6">@CameraCount</dd>
-                        <dt class="col-6 text-muted">Total Rigs</dt>
-                        <dd class="col-6">@RigCount</dd>
-                        <dt class="col-6 text-muted">Manufacturers</dt>
-                        <dd class="col-6">@UniqueManufacturerCount</dd>
-                        <dt class="col-6 text-muted">Active Rig Camera</dt>
-                        <dd class="col-6">@ActiveRigCameraDisplay</dd>
-                    </dl>
+                            <div class="row g-3">
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-display" class="form-label config-label" title="Display name shown in dashboards and logs.">Display Name</label>
+                                    <InputText id="camera-display" class="form-control" @bind-Value="_editModel.DisplayName" title="Display name shown in dashboards and logs." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-key" class="form-label config-label" title="Immutable identifier referenced by rigs.">Camera Key</label>
+                                    @if (_editModel.Id == 0)
+                                    {
+                                        <InputText id="camera-key" class="form-control" @bind-Value="_editModel.Key" autocomplete="off" inputmode="text" pattern="^[A-Za-z0-9_-]+$" title="Letters, numbers, hyphen, and underscore only." />
+                                        <div class="form-text">Letters, numbers, hyphen, and underscore only.</div>
+                                    }
+                                    else
+                                    {
+                                        <InputText id="camera-key" class="form-control" @bind-Value="_editModel.Key" readonly title="Catalog keys cannot be changed." />
+                                    }
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-manufacturer" class="form-label config-label" title="Manufacturer name reported for the camera body.">Manufacturer</label>
+                                    <InputText id="camera-manufacturer" class="form-control" @bind-Value="_editModel.Manufacturer" title="Manufacturer name reported for the camera body." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-model" class="form-label config-label" title="Model identifier used in UI displays.">Model</label>
+                                    <InputText id="camera-model" class="form-control" @bind-Value="_editModel.Model" title="Model identifier used in UI displays." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-driver-version" class="form-label config-label" title="Driver or SDK version paired with this camera.">Driver Version</label>
+                                    <InputText id="camera-driver-version" class="form-control" @bind-Value="_editModel.DriverVersion" title="Driver or SDK version paired with this camera." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-adapter" class="form-label config-label" title="Adapter class or integration responsible for this camera.">Adapter Name</label>
+                                    <InputText id="camera-adapter" class="form-control" @bind-Value="_editModel.AdapterName" title="Adapter class or integration responsible for this camera." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-driver-id" class="form-label config-label" title="Driver identifier used when connecting to hardware.">Driver Identifier</label>
+                                    <InputText id="camera-driver-id" class="form-control" @bind-Value="_editModel.DriverId" title="Driver identifier used when connecting to hardware." />
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label for="camera-synthetic-profile" class="form-label config-label" title="Synthetic camera profile to load when emulating hardware.">Synthetic Profile</label>
+                                    <InputText id="camera-synthetic-profile" class="form-control" @bind-Value="_editModel.SyntheticProfile" disabled="@(!_editModel.IsSynthetic)" title="Synthetic camera profile to load when emulating hardware." />
+                                </div>
+                                <div class="col-md-6 col-xl-4 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-synthetic" class="form-check-input" @bind-Value="_editModel.IsSynthetic" />
+                                        <label for="camera-synthetic" class="form-check-label text-light" title="Toggle for virtual cameras that do not correspond to physical hardware.">Synthetic Camera</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-width" class="form-label config-label" title="Full sensor width in pixels.">Sensor Width (px)</label>
+                                    <InputNumber TValue="int" id="camera-width" class="form-control" @bind-Value="_editModel.SensorWidthPixels" min="1" title="Full sensor width in pixels." />
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-height" class="form-label config-label" title="Full sensor height in pixels.">Sensor Height (px)</label>
+                                    <InputNumber TValue="int" id="camera-height" class="form-control" @bind-Value="_editModel.SensorHeightPixels" min="1" title="Full sensor height in pixels." />
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-pixel" class="form-label config-label" title="Physical pixel size in microns.">Pixel Size (µm)</label>
+                                    <InputNumber TValue="double" id="camera-pixel" class="form-control" @bind-Value="_editModel.PixelSizeMicrons" step="0.01" min="0.01" title="Physical pixel size in microns." />
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-cx" class="form-label config-label" title="Principal point X coordinate (optional).">Sensor Cx (px)</label>
+                                    <InputNumber TValue="double?" id="camera-cx" class="form-control" @bind-Value="_editModel.SensorCxPixels" step="0.1" min="0" title="Principal point X coordinate (optional)." />
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-cy" class="form-label config-label" title="Principal point Y coordinate (optional).">Sensor Cy (px)</label>
+                                    <InputNumber TValue="double?" id="camera-cy" class="form-control" @bind-Value="_editModel.SensorCyPixels" step="0.1" min="0" title="Principal point Y coordinate (optional)." />
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-color" class="form-check-input" @bind-Value="_editModel.IsColor" />
+                                        <label for="camera-color" class="form-check-label text-light" title="Turn on for Bayer/OSC sensors; leave off for monochrome sensors.">Color Sensor</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-tech" class="form-label config-label" title="Underlying sensor silicon technology.">Sensor Technology</label>
+                                    <InputSelect id="camera-tech" class="form-select" @bind-Value="_editModel.SensorTechnology" TValue="CameraSensorTechnology" title="Underlying sensor silicon technology.">
+                                        <option value="@CameraSensorTechnology.Cmos">CMOS</option>
+                                        <option value="@CameraSensorTechnology.Ccd">CCD</option>
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-body" class="form-label config-label" title="Body classification such as dedicated astronomy or DSLR.">Body Type</label>
+                                    <InputText id="camera-body" class="form-control" @bind-Value="_editModel.BodyType" title="Body classification such as dedicated astronomy or DSLR." />
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-cooling-enabled" class="form-check-input" @bind-Value="_editModel.HasCooling" />
+                                        <label for="camera-cooling-enabled" class="form-check-label text-light" title="Enable when the camera includes regulated cooling hardware.">Regulated Cooling</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="camera-cooling-target" class="form-label config-label" title="Optional regulated cooling target temperature in Celsius.">Cooling Target (°C)</label>
+                                    <InputNumber TValue="double?" id="camera-cooling-target" class="form-control" @bind-Value="_editModel.CoolingTargetCelsius" step="0.5" min="-80" max="40" disabled="@(!_editModel.HasCooling)" title="Optional regulated cooling target temperature in Celsius." />
+                                    <div class="form-text">Leave blank to use the camera default.</div>
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-gain" class="form-check-input" @bind-Value="_editModel.SupportsGainControl" />
+                                        <label for="camera-gain" class="form-check-label text-light" title="Indicates whether gain can be adjusted through software.">Gain Control</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-exposure" class="form-check-input" @bind-Value="_editModel.SupportsExposureControl" />
+                                        <label for="camera-exposure" class="form-check-label text-light" title="Toggle when exposure duration can be commanded via software.">Exposure Control</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-telemetry" class="form-check-input" @bind-Value="_editModel.SupportsTemperatureTelemetry" />
+                                        <label for="camera-telemetry" class="form-check-label text-light" title="Enable when the camera exposes internal temperature telemetry.">Temperature Telemetry</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-binning" class="form-check-input" @bind-Value="_editModel.SupportsSoftwareBinning" />
+                                        <label for="camera-binning" class="form-check-label text-light" title="Enable to allow 2×2 or higher software binning modes.">Software Binning</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <InputCheckbox id="camera-active" class="form-check-input" @bind-Value="_editModel.IsActive" />
+                                        <label for="camera-active" class="form-check-label text-light" title="Inactive entries remain in the catalog but are hidden from assignment pickers.">Active in catalog</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label for="camera-tags" class="form-label config-label" title="Additional capability tags (one per line or comma separated)."><span>Additional Tags</span></label>
+                                    <InputTextArea id="camera-tags" class="form-control" rows="2" @bind-Value="_editModel.AdditionalTagsInput" placeholder="Enter tags separated by commas or new lines." title="Additional capability tags (one per line or comma separated)." />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)" title="Save changes to the camera catalog.">
+                                    <i class="bi bi-save me-2"></i>
+                                    Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-light" @onclick="BeginCreate" disabled="@(_isLoading || _isSaving)" title="Create a new camera entry.">
+                                    <i class="bi bi-plus-circle me-2"></i>
+                                    New
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="ResetChanges" disabled="@(!_hasChanges || _isSaving)" title="Discard changes and revert to the saved values.">
+                                    <i class="bi bi-arrow-counterclockwise me-2"></i>
+                                    Reset
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
                 </div>
             </section>
         </div>

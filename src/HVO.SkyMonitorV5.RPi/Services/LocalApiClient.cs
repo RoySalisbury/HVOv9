@@ -8,7 +8,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
+using HVO.SkyMonitorV5.RPi.Models.Cameras;
+using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
+using HVO.SkyMonitorV5.RPi.Models.Rigs;
 using HVO.SkyMonitorV5.RPi.Models.System;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -33,13 +36,21 @@ public interface ILocalApiClient
 
     Task<SystemTelemetryRetentionConfigurationResponse?> UpdateTelemetryRetentionAsync(UpdateSystemTelemetryRetentionRequest request, CancellationToken cancellationToken);
 
-    Task<OpticsCatalogResponse?> GetOpticsCatalogAsync(CancellationToken cancellationToken);
+    Task<EquipmentCatalogResponse?> GetEquipmentCatalogAsync(CancellationToken cancellationToken);
 
-    Task<OpticsCatalogResponse?> CreateOpticsRigAsync(CreateOpticsRigRequest request, CancellationToken cancellationToken);
+    Task<EquipmentCatalogResponse?> CreateRigAsync(CreateRigRequest request, CancellationToken cancellationToken);
 
-    Task<OpticsCatalogResponse?> UpdateOpticsRigAsync(int rigId, UpdateOpticsRigRequest request, CancellationToken cancellationToken);
+    Task<EquipmentCatalogResponse?> UpdateRigAsync(int rigId, UpdateRigRequest request, CancellationToken cancellationToken);
 
-    Task<OpticsCatalogResponse?> DeleteOpticsRigAsync(int rigId, long? revision, CancellationToken cancellationToken);
+    Task<EquipmentCatalogResponse?> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken);
+
+    Task<EquipmentCatalogResponse?> CreateCameraAsync(CreateCameraRequest request, CancellationToken cancellationToken);
+
+    Task<EquipmentCatalogResponse?> UpdateCameraAsync(int cameraId, UpdateCameraRequest request, CancellationToken cancellationToken);
+
+    Task<EquipmentCatalogResponse?> CreateOpticsAsync(CreateOpticsRequest request, CancellationToken cancellationToken);
+
+    Task<EquipmentCatalogResponse?> UpdateOpticsAsync(int opticsId, UpdateOpticsRequest request, CancellationToken cancellationToken);
 }
 
 public sealed record LocalApiFrameResponse(
@@ -252,7 +263,7 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
         return await ReadJsonAsync<SystemTelemetryRetentionConfigurationResponse>(response, "telemetry-retention", cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<OpticsCatalogResponse?> GetOpticsCatalogAsync(CancellationToken cancellationToken)
+    public async Task<EquipmentCatalogResponse?> GetEquipmentCatalogAsync(CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "api/v1.0/optics");
         ApplyApiKey(request);
@@ -264,10 +275,10 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
             return null;
         }
 
-        return await ReadJsonAsync<OpticsCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<OpticsCatalogResponse?> CreateOpticsRigAsync(CreateOpticsRigRequest requestModel, CancellationToken cancellationToken)
+    public async Task<EquipmentCatalogResponse?> CreateRigAsync(CreateRigRequest requestModel, CancellationToken cancellationToken)
     {
         if (requestModel is null)
         {
@@ -288,10 +299,10 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
             return null;
         }
 
-        return await ReadJsonAsync<OpticsCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<OpticsCatalogResponse?> UpdateOpticsRigAsync(int rigId, UpdateOpticsRigRequest requestModel, CancellationToken cancellationToken)
+    public async Task<EquipmentCatalogResponse?> UpdateRigAsync(int rigId, UpdateRigRequest requestModel, CancellationToken cancellationToken)
     {
         if (requestModel is null)
         {
@@ -312,10 +323,10 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
             return null;
         }
 
-        return await ReadJsonAsync<OpticsCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<OpticsCatalogResponse?> DeleteOpticsRigAsync(int rigId, long? revision, CancellationToken cancellationToken)
+    public async Task<EquipmentCatalogResponse?> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken)
     {
         var uri = revision is { } value
             ? $"api/v1.0/optics/{rigId}?revision={value}"
@@ -331,7 +342,103 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
             return null;
         }
 
-        return await ReadJsonAsync<OpticsCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<EquipmentCatalogResponse?> CreateCameraAsync(CreateCameraRequest requestModel, CancellationToken cancellationToken)
+    {
+        if (requestModel is null)
+        {
+            throw new ArgumentNullException(nameof(requestModel));
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1.0/optics/cameras")
+        {
+            Content = CreateJsonContent(requestModel)
+        };
+
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API camera create request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<EquipmentCatalogResponse?> UpdateCameraAsync(int cameraId, UpdateCameraRequest requestModel, CancellationToken cancellationToken)
+    {
+        if (requestModel is null)
+        {
+            throw new ArgumentNullException(nameof(requestModel));
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"api/v1.0/optics/cameras/{cameraId}")
+        {
+            Content = CreateJsonContent(requestModel)
+        };
+
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API camera update request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<EquipmentCatalogResponse?> CreateOpticsAsync(CreateOpticsRequest requestModel, CancellationToken cancellationToken)
+    {
+        if (requestModel is null)
+        {
+            throw new ArgumentNullException(nameof(requestModel));
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1.0/optics/lenses")
+        {
+            Content = CreateJsonContent(requestModel)
+        };
+
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API lens create request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<EquipmentCatalogResponse?> UpdateOpticsAsync(int opticsId, UpdateOpticsRequest requestModel, CancellationToken cancellationToken)
+    {
+        if (requestModel is null)
+        {
+            throw new ArgumentNullException(nameof(requestModel));
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"api/v1.0/optics/lenses/{opticsId}")
+        {
+            Content = CreateJsonContent(requestModel)
+        };
+
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API lens update request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "optics", cancellationToken).ConfigureAwait(false);
     }
 
     private void ApplyApiKey(HttpRequestMessage request)

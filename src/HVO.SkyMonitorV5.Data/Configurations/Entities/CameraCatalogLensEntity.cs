@@ -5,7 +5,7 @@ namespace HVO.SkyMonitorV5.Data.Configurations.Entities;
 /// <summary>
 /// Represents a lens specification stored in the SkyMonitor catalog.
 /// </summary>
-public sealed class OpticsCatalogEntity
+public sealed class CameraCatalogLensEntity
 {
     public int Id { get; set; }
     public string Key { get; set; } = string.Empty;

@@ -1,6 +1,6 @@
-namespace HVO.SkyMonitorV5.RPi.Models.Optics;
+namespace HVO.SkyMonitorV5.RPi.Models.Rigs;
 
-public sealed class OpticsRigSummary
+public sealed class RigSummary
 {
     public int Id { get; set; }
     public string Key { get; set; } = string.Empty;

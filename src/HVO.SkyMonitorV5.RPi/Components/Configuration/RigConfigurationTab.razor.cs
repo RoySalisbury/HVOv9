@@ -4,7 +4,10 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Models.Catalog;
+using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
+using HVO.SkyMonitorV5.RPi.Models.Rigs;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
@@ -16,9 +19,9 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
 
-    private IReadOnlyList<OpticsRigSummary> _rigs = Array.Empty<OpticsRigSummary>();
-    private IReadOnlyList<OpticsCatalogCamera> _cameras = Array.Empty<OpticsCatalogCamera>();
-    private IReadOnlyList<OpticsCatalogLens> _lenses = Array.Empty<OpticsCatalogLens>();
+    private IReadOnlyList<RigSummary> _rigs = Array.Empty<RigSummary>();
+    private IReadOnlyList<CameraCatalogItem> _cameras = Array.Empty<CameraCatalogItem>();
+    private IReadOnlyList<OpticsCatalogItem> _optics = Array.Empty<OpticsCatalogItem>();
     private string? _activeRigKey;
 
     private EditContext? _editContext;
@@ -71,7 +74,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetOpticsCatalogAsync(CancellationToken).ConfigureAwait(false);
+            var response = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
             if (response is null)
             {
                 _errorMessage = "Unable to load rig catalog from the local API.";
@@ -106,15 +109,15 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
         }
     }
 
-    private void ApplyCatalog(OpticsCatalogResponse response)
+    private void ApplyCatalog(EquipmentCatalogResponse response)
     {
         _rigs = response.Rigs.OrderBy(rig => rig.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
         _cameras = response.Cameras.OrderBy(camera => camera.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
-        _lenses = response.Lenses.OrderBy(lens => lens.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        _optics = response.Optics.OrderBy(optics => optics.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
         _activeRigKey = response.ActiveRigKey;
     }
 
-    private void SelectRig(OpticsRigSummary rig)
+    private void SelectRig(RigSummary rig)
     {
         _errorMessage = null;
         _successMessage = null;
@@ -134,7 +137,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         var model = RigEditModel.CreateNew(
             _cameras.FirstOrDefault()?.Key,
-            _lenses.FirstOrDefault()?.Key,
+            _optics.FirstOrDefault()?.Key,
             _rigs.Count == 0);
         AttachEditContext(model);
     }
@@ -167,7 +170,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
         DetachEditContext();
     }
 
-    private OpticsRigSummary? ResolveSelectionAfterRefresh()
+    private RigSummary? ResolveSelectionAfterRefresh()
     {
         if (_rigs.Count == 0)
         {
@@ -218,15 +221,15 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            OpticsCatalogResponse? response;
+            EquipmentCatalogResponse? response;
 
             if (_editModel.Id == 0)
             {
-                response = await LocalApiClient.CreateOpticsRigAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false);
+                response = await LocalApiClient.CreateRigAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false);
             }
             else
             {
-                response = await LocalApiClient.UpdateOpticsRigAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false);
+                response = await LocalApiClient.UpdateRigAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false);
             }
 
             if (response is null)
@@ -292,7 +295,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.DeleteOpticsRigAsync(_editModel.Id, _editModel.Revision, CancellationToken).ConfigureAwait(false);
+            var response = await LocalApiClient.DeleteRigAsync(_editModel.Id, _editModel.Revision, CancellationToken).ConfigureAwait(false);
             if (response is null)
             {
                 _errorMessage = "The local API did not confirm deletion.";
@@ -324,7 +327,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
         }
     }
 
-    private async Task SetActiveAsync(OpticsRigSummary rig, bool isActive)
+    private async Task SetActiveAsync(RigSummary rig, bool isActive)
     {
         if (_isSaving || _isLoading)
         {
@@ -333,12 +336,12 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var request = new UpdateOpticsRigRequest
+            var request = new UpdateRigRequest
             {
                 Revision = rig.Revision,
                 DisplayName = rig.DisplayName,
                 CameraKey = rig.CameraKey,
-                LensKey = rig.LensKey,
+                OpticsKey = rig.OpticsKey,
                 BoresightAltitudeDegrees = rig.BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = rig.BoresightAzimuthDegrees,
                 IsActive = isActive
@@ -347,7 +350,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
             _isSaving = true;
             await RequestRepaintAsync().ConfigureAwait(false);
 
-            var response = await LocalApiClient.UpdateOpticsRigAsync(rig.Id, request, CancellationToken).ConfigureAwait(false);
+            var response = await LocalApiClient.UpdateRigAsync(rig.Id, request, CancellationToken).ConfigureAwait(false);
             if (response is null)
             {
                 _errorMessage = "The local API did not update the rig activation state.";
@@ -387,7 +390,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
     private bool HasAdapterBindings(int rigId)
         => _rigs.FirstOrDefault(rig => rig.Id == rigId)?.HasAdapterBindings ?? false;
 
-    private void HandleRowSelection(OpticsRigSummary rig)
+    private void HandleRowSelection(RigSummary rig)
     {
         if (_isSaving)
         {
@@ -444,7 +447,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         [Required]
         [MaxLength(128)]
-        public string LensKey { get; set; } = string.Empty;
+        public string OpticsKey { get; set; } = string.Empty;
 
         [Range(0.0, 90.0)]
         public double BoresightAltitudeDegrees { get; set; } = 90.0;
@@ -458,14 +461,14 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         public bool HasAdapterBindings { get; set; }
 
-        public static RigEditModel CreateNew(string? defaultCameraKey, string? defaultLensKey, bool isActiveByDefault)
+        public static RigEditModel CreateNew(string? defaultCameraKey, string? defaultOpticsKey, bool isActiveByDefault)
             => new()
             {
                 Id = 0,
                 Key = string.Empty,
                 DisplayName = string.Empty,
                 CameraKey = defaultCameraKey ?? string.Empty,
-                LensKey = defaultLensKey ?? string.Empty,
+                OpticsKey = defaultOpticsKey ?? string.Empty,
                 BoresightAltitudeDegrees = 90.0,
                 BoresightAzimuthDegrees = 0.0,
                 IsActive = isActiveByDefault,
@@ -473,14 +476,14 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
                 HasAdapterBindings = false
             };
 
-        public static RigEditModel FromSummary(OpticsRigSummary summary)
+    public static RigEditModel FromSummary(RigSummary summary)
             => new()
             {
                 Id = summary.Id,
                 Key = summary.Key,
                 DisplayName = summary.DisplayName,
                 CameraKey = summary.CameraKey,
-                LensKey = summary.LensKey,
+                OpticsKey = summary.OpticsKey,
                 BoresightAltitudeDegrees = summary.BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = summary.BoresightAzimuthDegrees,
                 IsActive = summary.IsActive,
@@ -495,7 +498,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
                 Key = Key,
                 DisplayName = DisplayName,
                 CameraKey = CameraKey,
-                LensKey = LensKey,
+                OpticsKey = OpticsKey,
                 BoresightAltitudeDegrees = BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = BoresightAzimuthDegrees,
                 IsActive = IsActive,
@@ -503,25 +506,25 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
                 HasAdapterBindings = HasAdapterBindings
             };
 
-        public CreateOpticsRigRequest ToCreateRequest()
+        public CreateRigRequest ToCreateRequest()
             => new()
             {
                 Key = Key?.Trim() ?? string.Empty,
                 DisplayName = DisplayName?.Trim() ?? string.Empty,
                 CameraKey = CameraKey?.Trim() ?? string.Empty,
-                LensKey = LensKey?.Trim() ?? string.Empty,
+                OpticsKey = OpticsKey?.Trim() ?? string.Empty,
                 BoresightAltitudeDegrees = BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = BoresightAzimuthDegrees,
                 IsActive = IsActive
             };
 
-        public UpdateOpticsRigRequest ToUpdateRequest()
+        public UpdateRigRequest ToUpdateRequest()
             => new()
             {
                 Revision = Revision,
                 DisplayName = DisplayName?.Trim() ?? string.Empty,
                 CameraKey = CameraKey?.Trim() ?? string.Empty,
-                LensKey = LensKey?.Trim() ?? string.Empty,
+                OpticsKey = OpticsKey?.Trim() ?? string.Empty,
                 BoresightAltitudeDegrees = BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = BoresightAzimuthDegrees,
                 IsActive = IsActive
@@ -537,7 +540,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
             return string.Equals(Key, other.Key, StringComparison.Ordinal)
                 && string.Equals(DisplayName, other.DisplayName, StringComparison.Ordinal)
                 && string.Equals(CameraKey, other.CameraKey, StringComparison.Ordinal)
-                && string.Equals(LensKey, other.LensKey, StringComparison.Ordinal)
+                && string.Equals(OpticsKey, other.OpticsKey, StringComparison.Ordinal)
                 && Math.Abs(BoresightAltitudeDegrees - other.BoresightAltitudeDegrees) < 0.0001
                 && Math.Abs(BoresightAzimuthDegrees - other.BoresightAzimuthDegrees) < 0.0001
                 && IsActive == other.IsActive;

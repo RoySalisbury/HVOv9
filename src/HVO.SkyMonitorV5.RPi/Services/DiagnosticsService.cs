@@ -676,8 +676,8 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             var tables = new List<DataStoreTableMetric>
             {
                 new("observatory_site", await context.ObservatorySites.LongCountAsync(cancellationToken).ConfigureAwait(false)),
-                new("camera_catalog_camera", await context.CameraCatalogCameras.LongCountAsync(cancellationToken).ConfigureAwait(false)),
-                new("camera_catalog_lens", await context.CameraCatalogLenses.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("camera_catalog", await context.CameraCatalog.LongCountAsync(cancellationToken).ConfigureAwait(false)),
+                new("optics_catalog", await context.OpticsCatalog.LongCountAsync(cancellationToken).ConfigureAwait(false)),
                 new("rig_catalog_entry", await context.RigCatalogEntries.LongCountAsync(cancellationToken).ConfigureAwait(false)),
                 new("camera_adapter_config", await context.CameraAdapters.LongCountAsync(cancellationToken).ConfigureAwait(false)),
                 new("camera_pipeline_config", await context.CameraPipelineConfigurations.LongCountAsync(cancellationToken).ConfigureAwait(false)),

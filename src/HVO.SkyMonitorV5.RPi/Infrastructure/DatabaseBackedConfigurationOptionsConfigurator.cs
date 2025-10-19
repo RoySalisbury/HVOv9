@@ -153,13 +153,13 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         var snapshot = GetSnapshot();
 
         var cameraLookup = snapshot.Cameras.ToDictionary(c => c.Id);
-        var lensLookup = snapshot.Lenses.ToDictionary(l => l.Id);
+    var lensLookup = snapshot.Optics.ToDictionary(l => l.Id);
 
         options.Cameras = snapshot.Cameras
             .Select(CreateCameraOption)
             .ToList();
 
-        options.Lenses = snapshot.Lenses
+    options.Lenses = snapshot.Optics
             .Select(CreateLensOption)
             .ToList();
 
@@ -591,8 +591,8 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
             var observatory = context.ObservatorySites.AsNoTracking().OrderBy(site => site.Id).FirstOrDefault()
                 ?? throw new InvalidOperationException("Observatory configuration is missing from the SkyMonitor data store.");
 
-            var cameras = context.CameraCatalogCameras.AsNoTracking().OrderBy(camera => camera.Id).ToList();
-            var lenses = context.CameraCatalogLenses.AsNoTracking().OrderBy(lens => lens.Id).ToList();
+            var cameras = context.CameraCatalog.AsNoTracking().OrderBy(camera => camera.Id).ToList();
+            var optics = context.OpticsCatalog.AsNoTracking().OrderBy(optic => optic.Id).ToList();
             var rigs = context.RigCatalogEntries.AsNoTracking().OrderBy(rig => rig.Id).ToList();
             var adapters = context.CameraAdapters.AsNoTracking().OrderBy(adapter => adapter.Id).ToList();
 
@@ -614,7 +614,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
                     setting => setting.PayloadJson ?? string.Empty,
                     StringComparer.OrdinalIgnoreCase);
 
-            _snapshot = new ConfigurationSnapshot(observatory, cameras, lenses, rigs, adapters, pipeline, starCatalog, settingsLookup);
+            _snapshot = new ConfigurationSnapshot(observatory, cameras, optics, rigs, adapters, pipeline, starCatalog, settingsLookup);
             return _snapshot;
         }
     }
@@ -780,7 +780,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         return true;
     }
 
-    private CameraCatalogEntryOptions CreateCameraOption(CameraCatalogCameraEntity entity)
+    private CameraCatalogEntryOptions CreateCameraOption(CameraCatalogEntity entity)
     {
         var capabilities = DeserializeStringArray(entity.AdditionalTagsJson);
 
@@ -821,7 +821,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         };
     }
 
-    private static LensCatalogEntryOptions CreateLensOption(CameraCatalogLensEntity entity)
+    private static LensCatalogEntryOptions CreateLensOption(OpticsCatalogEntity entity)
         => new()
         {
             Name = entity.Key,
@@ -868,8 +868,8 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     {
         public ConfigurationSnapshot(
             ObservatorySiteEntity observatory,
-            IReadOnlyList<CameraCatalogCameraEntity> cameras,
-            IReadOnlyList<CameraCatalogLensEntity> lenses,
+            IReadOnlyList<CameraCatalogEntity> cameras,
+            IReadOnlyList<OpticsCatalogEntity> optics,
             IReadOnlyList<RigCatalogEntryEntity> rigs,
             IReadOnlyList<CameraAdapterConfigEntity> adapters,
             CameraPipelineConfigEntity pipeline,
@@ -878,7 +878,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         {
             Observatory = observatory ?? throw new ArgumentNullException(nameof(observatory));
             Cameras = cameras ?? throw new ArgumentNullException(nameof(cameras));
-            Lenses = lenses ?? throw new ArgumentNullException(nameof(lenses));
+            Optics = optics ?? throw new ArgumentNullException(nameof(optics));
             Rigs = rigs ?? throw new ArgumentNullException(nameof(rigs));
             Adapters = adapters ?? throw new ArgumentNullException(nameof(adapters));
             Pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
@@ -888,9 +888,9 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
 
         public ObservatorySiteEntity Observatory { get; }
 
-        public IReadOnlyList<CameraCatalogCameraEntity> Cameras { get; }
+    public IReadOnlyList<CameraCatalogEntity> Cameras { get; }
 
-        public IReadOnlyList<CameraCatalogLensEntity> Lenses { get; }
+    public IReadOnlyList<OpticsCatalogEntity> Optics { get; }
 
         public IReadOnlyList<RigCatalogEntryEntity> Rigs { get; }
 

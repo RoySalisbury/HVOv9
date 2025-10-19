@@ -1,25 +1,41 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Cameras.Optics;
+using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
+using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
+using HVO.SkyMonitorV5.RPi.Models.Rigs;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Components.Configuration;
 
 public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 {
+    private static readonly ProjectionModel[] ProjectionModelValues = Enum.GetValues<ProjectionModel>();
+    private static readonly LensKind[] LensKindValues = Enum.GetValues<LensKind>();
+
     private readonly CancellationTokenSource _lifetime = new();
 
-    private IReadOnlyList<OpticsCatalogLens> _lenses = Array.Empty<OpticsCatalogLens>();
-    private IReadOnlyList<OpticsRigSummary> _rigs = Array.Empty<OpticsRigSummary>();
-    private IReadOnlyDictionary<string, IReadOnlyList<OpticsRigSummary>> _lensUsage = new Dictionary<string, IReadOnlyList<OpticsRigSummary>>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyList<OpticsCatalogItem> _optics = Array.Empty<OpticsCatalogItem>();
+    private IReadOnlyList<RigSummary> _rigs = Array.Empty<RigSummary>();
+    private IReadOnlyDictionary<string, IReadOnlyList<RigSummary>> _opticsUsage = new Dictionary<string, IReadOnlyList<RigSummary>>(StringComparer.OrdinalIgnoreCase);
+
+    private OpticsEditModel? _editModel;
+    private OpticsEditModel? _baseline;
+    private EditContext? _editContext;
 
     private bool _isLoading;
+    private bool _isSaving;
+    private bool _hasChanges;
     private string? _errorMessage;
+    private string? _successMessage;
     private string? _lastUpdatedMessage;
     private string? _activeRigKey;
 
@@ -31,36 +47,16 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 
     private CancellationToken CancellationToken => _lifetime.Token;
 
-    private int LensCount => _lenses.Count;
+    private bool CanSave => _editModel is not null && !_isLoading && !_isSaving && _hasChanges;
 
-    private int RigCount => _rigs.Count;
+    private IReadOnlyList<ProjectionModel> ProjectionModels => ProjectionModelValues;
 
-    private OpticsRigSummary? ActiveRig
-    {
-        get
-        {
-            if (_rigs.Count == 0)
-            {
-                return null;
-            }
+    private IReadOnlyList<LensKind> LensKinds => LensKindValues;
 
-            if (!string.IsNullOrWhiteSpace(_activeRigKey))
-            {
-                var active = _rigs.FirstOrDefault(rig => string.Equals(rig.Key, _activeRigKey, StringComparison.OrdinalIgnoreCase));
-                if (active is not null)
-                {
-                    return active;
-                }
-            }
-
-            return _rigs.FirstOrDefault(rig => rig.IsActive) ?? _rigs.First();
-        }
-    }
+    private int OpticsCount => _optics.Count;
 
     protected override async Task OnInitializedAsync()
-    {
-        await LoadCatalogAsync().ConfigureAwait(false);
-    }
+        => await LoadCatalogAsync().ConfigureAwait(false);
 
     public void Dispose()
     {
@@ -79,11 +75,12 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
     {
         _isLoading = true;
         _errorMessage = null;
+        _successMessage = null;
         await RequestRepaintAsync().ConfigureAwait(false);
 
         try
         {
-            var response = await LocalApiClient.GetOpticsCatalogAsync(CancellationToken).ConfigureAwait(false);
+            var response = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
             if (response is null)
             {
                 _errorMessage = "Unable to load optics catalog from the local API.";
@@ -92,10 +89,19 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 
             ApplyCatalog(response);
             _lastUpdatedMessage = $"Updated {DateTimeOffset.Now:HH:mm:ss}";
+
+            var preferred = ResolveSelectionAfterRefresh();
+            if (preferred is not null)
+            {
+                SelectOptics(preferred);
+            }
+            else
+            {
+                ClearSelection();
+            }
         }
         catch (OperationCanceledException)
         {
-            // component disposed
         }
         catch (Exception ex)
         {
@@ -109,35 +115,216 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
         }
     }
 
-    private void ApplyCatalog(OpticsCatalogResponse response)
+    private void ApplyCatalog(EquipmentCatalogResponse response)
     {
-        _lenses = response.Lenses.OrderBy(lens => lens.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
-        _rigs = response.Rigs.OrderBy(rig => rig.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        _optics = response.Optics
+            .OrderBy(optics => optics.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _rigs = response.Rigs
+            .OrderBy(rig => rig.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         _activeRigKey = response.ActiveRigKey;
 
-        var usage = _rigs
-            .GroupBy(rig => rig.LensKey ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+        _opticsUsage = _rigs
+            .GroupBy(rig => rig.OpticsKey ?? string.Empty, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<OpticsRigSummary>)group.ToList(),
+                group => (IReadOnlyList<RigSummary>)group.ToList(),
                 StringComparer.OrdinalIgnoreCase);
-
-        _lensUsage = usage;
     }
 
-    private IReadOnlyList<OpticsRigSummary> GetLensUsage(string lensKey)
+    private OpticsCatalogItem? ResolveSelectionAfterRefresh()
     {
-        if (_lensUsage.TryGetValue(lensKey, out var rigs))
+        if (_optics.Count == 0)
+        {
+            return null;
+        }
+
+        if (_editModel is not null)
+        {
+            var existing = _optics.FirstOrDefault(optics => optics.Id == _editModel.Id);
+            if (existing is not null)
+            {
+                return existing;
+            }
+        }
+
+        return _optics.First();
+    }
+
+    private void SelectOptics(OpticsCatalogItem optics)
+    {
+        _errorMessage = null;
+        _successMessage = null;
+
+        var model = OpticsEditModel.FromCatalog(optics);
+        AttachEditContext(model);
+    }
+
+    private void BeginCreate()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        _successMessage = null;
+
+        var model = OpticsEditModel.CreateNew();
+        AttachEditContext(model);
+    }
+
+    private void AttachEditContext(OpticsEditModel model)
+    {
+        DetachEditContext();
+
+        _editModel = model;
+        _baseline = model.Clone();
+        _editContext = new EditContext(model);
+        _editContext.OnFieldChanged += HandleFieldChanged;
+        _hasChanges = false;
+    }
+
+    private void DetachEditContext()
+    {
+        if (_editContext is not null)
+        {
+            _editContext.OnFieldChanged -= HandleFieldChanged;
+        }
+
+        _editContext = null;
+        _editModel = null;
+        _baseline = null;
+        _hasChanges = false;
+    }
+
+    private void ClearSelection()
+        => DetachEditContext();
+
+    private void ResetChanges()
+    {
+        if (_baseline is null)
+        {
+            return;
+        }
+
+        var snapshot = _baseline.Clone();
+        AttachEditContext(snapshot);
+    }
+
+    private void HandleRowSelection(OpticsCatalogItem optics)
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        if (_hasChanges && _editModel is not null && optics.Id != _editModel.Id)
+        {
+            _errorMessage = "Save or reset your changes before switching optics.";
+            return;
+        }
+
+        SelectOptics(optics);
+    }
+
+    private void HandleFieldChanged(object? sender, FieldChangedEventArgs args)
+    {
+        if (_editModel is null || _baseline is null)
+        {
+            return;
+        }
+
+        _hasChanges = !_editModel.EqualsByValue(_baseline);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editContext is null || _editModel is null)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        _successMessage = null;
+
+        if (!_editContext.Validate())
+        {
+            _errorMessage = "Please resolve validation errors before saving.";
+            await RequestRepaintAsync().ConfigureAwait(false);
+            return;
+        }
+
+        _isSaving = true;
+        await RequestRepaintAsync().ConfigureAwait(false);
+
+        try
+        {
+            EquipmentCatalogResponse? response;
+
+            if (_editModel.Id == 0)
+            {
+                response = await LocalApiClient.CreateOpticsAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                response = await LocalApiClient.UpdateOpticsAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false);
+            }
+
+            if (response is null)
+            {
+                _errorMessage = "The local API did not return updated optics data.";
+                return;
+            }
+
+            ApplyCatalog(response);
+
+            OpticsCatalogItem? refreshed = _editModel.Id == 0
+                ? _optics.FirstOrDefault(optics => string.Equals(optics.Key, _editModel.Key, StringComparison.OrdinalIgnoreCase))
+                : _optics.FirstOrDefault(optics => optics.Id == _editModel.Id);
+
+            if (refreshed is not null)
+            {
+                SelectOptics(refreshed);
+            }
+            else
+            {
+                ClearSelection();
+            }
+
+            _successMessage = "Optics catalog entry saved.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Failed to persist optics catalog changes.");
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isSaving = false;
+            await RequestRepaintAsync().ConfigureAwait(false);
+        }
+    }
+
+    private IReadOnlyList<RigSummary> GetOpticsUsage(string opticsKey)
+    {
+        if (_opticsUsage.TryGetValue(opticsKey, out var rigs))
         {
             return rigs;
         }
 
-        return Array.Empty<OpticsRigSummary>();
+        return Array.Empty<RigSummary>();
     }
 
-    private string GetRigUsageSummary(string lensKey)
+    private string GetRigUsageSummary(string opticsKey)
     {
-        var rigs = GetLensUsage(lensKey);
+        var rigs = GetOpticsUsage(opticsKey);
         if (rigs.Count == 0)
         {
             return "Not assigned to any rig.";
@@ -153,10 +340,87 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
         => $"{value:F1}°";
 
     private string FormatOptionalFieldOfView(double? value)
-        => value.HasValue ? $"{value.Value:F1}°" : "--";
+        => value.HasValue ? $"{value.Value:F1}°" : "—";
 
-    private string FormatBoresight(OpticsRigSummary rig)
+    private string FormatBoresight(RigSummary rig)
         => $"{rig.BoresightAltitudeDegrees:F1}° / {rig.BoresightAzimuthDegrees:F1}°";
+
+    private static string GetStatusBadgeCss(bool isActive)
+        => isActive
+            ? "badge bg-success-subtle text-success-emphasis align-self-start"
+            : "badge bg-secondary-subtle text-secondary-emphasis align-self-start";
+
+    private static string GetStatusLabel(bool isActive)
+        => isActive ? "Active" : "Disabled";
+
+    private static string GetUsageBadgeCss(bool isInUse)
+        => isInUse
+            ? "badge bg-info-subtle text-info-emphasis align-self-start"
+            : "badge bg-secondary-subtle text-secondary-emphasis align-self-start";
+
+    private static string GetUsageBadgeText(int usageCount)
+        => usageCount > 0 ? $"{usageCount} rig(s)" : "Not assigned";
+
+    private static string FormatLifecycleLabel(DateTime updatedUtc)
+    {
+        var formatted = FormatTimestamp(updatedUtc);
+        return formatted == "—" ? "Updated —" : $"Updated {formatted}";
+    }
+
+    private static string GetLifecycleTitle(OpticsCatalogItem optics)
+        => $"Created {FormatTimestamp(optics.CreatedUtc)} | Updated {FormatTimestamp(optics.UpdatedUtc)}";
+
+    private static string FormatTimestamp(DateTime timestamp)
+    {
+        if (timestamp == default)
+        {
+            return "—";
+        }
+
+        var utc = timestamp.Kind switch
+        {
+            DateTimeKind.Utc => timestamp,
+            DateTimeKind.Local => timestamp.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)
+        };
+
+        return utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static string GetProjectionLabel(ProjectionModel projection)
+        => projection switch
+        {
+            ProjectionModel.EquisolidAngle => "Equisolid Angle",
+            _ => projection.ToString()
+        };
+
+    private static string GetLensKindLabel(LensKind kind)
+        => kind switch
+        {
+            LensKind.Rectilinear => "Rectilinear",
+            LensKind.Telescope => "Telescope",
+            _ => kind.ToString()
+        };
+
+    private static string GetProjectionLabel(string? projection)
+    {
+        if (Enum.TryParse(projection, ignoreCase: true, out ProjectionModel parsed))
+        {
+            return GetProjectionLabel(parsed);
+        }
+
+        return string.IsNullOrWhiteSpace(projection) ? "Unknown" : projection;
+    }
+
+    private static string GetLensKindLabel(string? kind)
+    {
+        if (Enum.TryParse(kind, ignoreCase: true, out LensKind parsed))
+        {
+            return GetLensKindLabel(parsed);
+        }
+
+        return string.IsNullOrWhiteSpace(kind) ? "Unknown" : kind;
+    }
 
     private async Task RequestRepaintAsync()
     {
@@ -166,6 +430,165 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
         }
         catch (OperationCanceledException)
         {
+        }
+    }
+
+    private sealed class OpticsEditModel
+    {
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(128)]
+        [RegularExpression("^[A-Za-z0-9_-]+$")]
+        public string Key { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(256)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        public ProjectionModel ProjectionModel { get; set; } = ProjectionModel.Perspective;
+
+        [Range(0.1, 1000.0)]
+        public double FocalLengthMillimeters { get; set; } = 1.0;
+
+        [Range(0.1, 360.0)]
+        public double FieldOfViewXDegrees { get; set; } = 1.0;
+
+        [Range(0.0, 360.0)]
+        public double? FieldOfViewYDegrees { get; set; }
+
+        [Range(-180.0, 180.0)]
+        public double RollDegrees { get; set; }
+
+        public LensKind Kind { get; set; } = LensKind.Rectilinear;
+
+        public bool IsActive { get; set; } = true;
+
+        public long Revision { get; set; }
+
+        public Models.Optics.CreateOpticsRequest ToCreateRequest()
+        {
+            var request = new Models.Optics.CreateOpticsRequest();
+            request.Key = this.Key.Trim();
+            request.DisplayName = this.DisplayName.Trim();
+            request.ProjectionModel = this.ProjectionModel.ToString();
+            request.FocalLengthMillimeters = this.FocalLengthMillimeters;
+            request.FieldOfViewXDegrees = this.FieldOfViewXDegrees;
+            request.FieldOfViewYDegrees = this.FieldOfViewYDegrees;
+            request.RollDegrees = this.RollDegrees;
+            request.Kind = this.Kind.ToString();
+            request.IsActive = this.IsActive;
+            return request;
+        }
+
+        public Models.Optics.UpdateOpticsRequest ToUpdateRequest()
+        {
+            var request = new Models.Optics.UpdateOpticsRequest();
+            request.Revision = this.Revision;
+            request.Key = this.Key;
+            request.DisplayName = this.DisplayName;
+            request.ProjectionModel = this.ProjectionModel.ToString();
+            request.FocalLengthMillimeters = this.FocalLengthMillimeters;
+            request.FieldOfViewXDegrees = this.FieldOfViewXDegrees;
+            request.FieldOfViewYDegrees = this.FieldOfViewYDegrees;
+            request.RollDegrees = this.RollDegrees;
+            request.Kind = this.Kind.ToString();
+            request.IsActive = this.IsActive;
+            return request;
+        }
+
+        public OpticsEditModel Clone()
+            => new()
+            {
+                Id = Id,
+                Key = Key,
+                DisplayName = DisplayName,
+                ProjectionModel = ProjectionModel,
+                FocalLengthMillimeters = FocalLengthMillimeters,
+                FieldOfViewXDegrees = FieldOfViewXDegrees,
+                FieldOfViewYDegrees = FieldOfViewYDegrees,
+                RollDegrees = RollDegrees,
+                Kind = Kind,
+                IsActive = IsActive,
+                Revision = Revision
+            };
+
+        public bool EqualsByValue(OpticsEditModel other)
+        {
+            if (other is null)
+            {
+                return false;
+            }
+
+            return Id == other.Id
+                && string.Equals(Key, other.Key, StringComparison.Ordinal)
+                && string.Equals(DisplayName, other.DisplayName, StringComparison.Ordinal)
+                && ProjectionModel == other.ProjectionModel
+                && Math.Abs(FocalLengthMillimeters - other.FocalLengthMillimeters) < 0.0001
+                && NearlyEquals(FieldOfViewXDegrees, other.FieldOfViewXDegrees)
+                && NearlyEquals(FieldOfViewYDegrees, other.FieldOfViewYDegrees)
+                && Math.Abs(RollDegrees - other.RollDegrees) < 0.0001
+                && Kind == other.Kind
+                && IsActive == other.IsActive
+                && Revision == other.Revision;
+        }
+
+        public static OpticsEditModel FromCatalog(OpticsCatalogItem item)
+        {
+            var model = new OpticsEditModel
+            {
+                Id = item.Id,
+                Key = item.Key,
+                DisplayName = item.DisplayName,
+                FocalLengthMillimeters = item.FocalLengthMillimeters,
+                FieldOfViewXDegrees = item.FieldOfViewXDegrees,
+                FieldOfViewYDegrees = item.FieldOfViewYDegrees,
+                RollDegrees = item.RollDegrees,
+                IsActive = item.IsActive,
+                Revision = item.Revision
+            };
+
+            if (Enum.TryParse(item.ProjectionModel, ignoreCase: true, out ProjectionModel parsedProjection))
+            {
+                model.ProjectionModel = parsedProjection;
+            }
+
+            if (Enum.TryParse(item.Kind, ignoreCase: true, out LensKind parsedKind))
+            {
+                model.Kind = parsedKind;
+            }
+
+            return model;
+        }
+
+        public static OpticsEditModel CreateNew()
+            => new()
+            {
+                ProjectionModel = ProjectionModel.Perspective,
+                FocalLengthMillimeters = 1.0,
+                FieldOfViewXDegrees = 1.0,
+                FieldOfViewYDegrees = null,
+                RollDegrees = 0.0,
+                Kind = LensKind.Rectilinear,
+                IsActive = true
+            };
+
+        private static bool NearlyEquals(double left, double right)
+            => Math.Abs(left - right) < 0.0001;
+
+        private static bool NearlyEquals(double? left, double? right)
+        {
+            if (!left.HasValue && !right.HasValue)
+            {
+                return true;
+            }
+
+            if (!left.HasValue || !right.HasValue)
+            {
+                return false;
+            }
+
+            return Math.Abs(left.Value - right.Value) < 0.0001;
         }
     }
 }
