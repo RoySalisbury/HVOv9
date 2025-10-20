@@ -11,7 +11,7 @@ namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 
 [ApiController]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/system")]
+[Route("api/v{version:apiVersion}/configuration/system")]
 public sealed class SystemConfigurationController : ControllerBase
 {
     private readonly ISystemConfigurationService _configurationService;

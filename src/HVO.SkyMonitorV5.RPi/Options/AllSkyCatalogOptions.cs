@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Text.Json;
 using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
@@ -100,10 +101,15 @@ public sealed class CameraCatalogEntryOptions : IValidatableObject
     [EnumDataType(typeof(CameraDriverId))]
     public CameraDriverId DriverId { get; set; } = CameraDriverId.Unknown;
 
+    [MaxLength(128)]
+    public string? DriverIdentifier { get; set; }
+
     public bool? IsSynthetic { get; set; }
 
     [MaxLength(128)]
     public string? SyntheticProfile { get; set; }
+
+    public string? DriverSettingsJson { get; set; }
 
     public CameraSpec ToCameraSpec()
     {
@@ -113,6 +119,8 @@ public sealed class CameraCatalogEntryOptions : IValidatableObject
         var driverId = DriverId;
         var synthetic = IsSynthetic ?? driverId == CameraDriverId.Synthetic;
         var profile = string.IsNullOrWhiteSpace(SyntheticProfile) ? null : SyntheticProfile.Trim();
+        var driverIdentifier = string.IsNullOrWhiteSpace(DriverIdentifier) ? null : DriverIdentifier.Trim();
+        var driverSettings = string.IsNullOrWhiteSpace(DriverSettingsJson) ? null : DriverSettingsJson.Trim();
 
         if (synthetic && driverId != CameraDriverId.Synthetic)
         {
@@ -124,7 +132,11 @@ public sealed class CameraCatalogEntryOptions : IValidatableObject
             profile = null;
         }
 
-        return new CameraSpec(Name.Trim(), sensor, capabilities, descriptor, driverId, synthetic, profile);
+        var spec = new CameraSpec(Name.Trim(), sensor, capabilities, descriptor, driverId, synthetic, profile, driverSettings);
+
+        return string.IsNullOrWhiteSpace(driverIdentifier)
+            ? spec
+            : spec with { DriverIdentifierOverride = driverIdentifier };
     }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -187,6 +199,33 @@ public sealed class CameraCatalogEntryOptions : IValidatableObject
             yield return new ValidationResult(
                 "Synthetic cameras must provide a synthetic profile identifier.",
                 new[] { nameof(SyntheticProfile) });
+        }
+
+        if (!string.IsNullOrWhiteSpace(DriverIdentifier) && DriverIdentifier.Length > 128)
+        {
+            yield return new ValidationResult(
+                "Driver identifier overrides must be 128 characters or fewer.",
+                new[] { nameof(DriverIdentifier) });
+        }
+
+        if (!string.IsNullOrWhiteSpace(DriverSettingsJson))
+        {
+            var isValid = true;
+            try
+            {
+                using var _ = JsonDocument.Parse(DriverSettingsJson);
+            }
+            catch (JsonException)
+            {
+                isValid = false;
+            }
+
+            if (!isValid)
+            {
+                yield return new ValidationResult(
+                    "Driver settings JSON is invalid.",
+                    new[] { nameof(DriverSettingsJson) });
+            }
         }
     }
 }

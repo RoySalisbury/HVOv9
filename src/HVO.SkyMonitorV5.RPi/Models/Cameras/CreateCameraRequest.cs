@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace HVO.SkyMonitorV5.RPi.Models.Cameras;
 
@@ -77,6 +78,8 @@ public class CreateCameraRequest : IValidatableObject
 
     public IReadOnlyList<string> AdditionalTags { get; set; } = new List<string>();
 
+    public string? DriverSettingsJson { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (SensorWidthPixels <= 0)
@@ -92,6 +95,24 @@ public class CreateCameraRequest : IValidatableObject
         if (PixelSizeMicrons <= 0)
         {
             yield return new ValidationResult("Pixel size must be greater than zero.", new[] { nameof(PixelSizeMicrons) });
+        }
+
+        if (!string.IsNullOrWhiteSpace(DriverSettingsJson))
+        {
+            var isValid = true;
+            try
+            {
+                using var _ = JsonDocument.Parse(DriverSettingsJson);
+            }
+            catch (JsonException)
+            {
+                isValid = false;
+            }
+
+            if (!isValid)
+            {
+                yield return new ValidationResult("Driver settings JSON is invalid.", new[] { nameof(DriverSettingsJson) });
+            }
         }
     }
 }

@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text.Json;
 using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Catalog;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Options;
@@ -170,6 +171,12 @@ public sealed class RigSpecOptions : IValidatableObject
         var syntheticProfile = string.IsNullOrWhiteSpace(cameraOptions?.SyntheticProfile)
             ? null
             : cameraOptions!.SyntheticProfile!.Trim();
+        var driverIdentifierOverride = string.IsNullOrWhiteSpace(cameraOptions?.DriverIdentifier)
+            ? null
+            : cameraOptions!.DriverIdentifier!.Trim();
+        var driverSettingsJson = string.IsNullOrWhiteSpace(cameraOptions?.DriverSettingsJson)
+            ? null
+            : cameraOptions!.DriverSettingsJson!.Trim();
 
         if (!synthetic)
         {
@@ -186,13 +193,19 @@ public sealed class RigSpecOptions : IValidatableObject
         }
 
         var cameraSpec = descriptor is not null
-            ? new CameraSpec(resolvedCameraName, sensorSpec, capabilities, descriptor, driverId, synthetic, syntheticProfile)
+            ? new CameraSpec(resolvedCameraName, sensorSpec, capabilities, descriptor, driverId, synthetic, syntheticProfile, driverSettingsJson)
             : new CameraSpec(resolvedCameraName, sensorSpec, capabilities) with
             {
                 DriverId = driverId,
                 IsSynthetic = synthetic,
-                SyntheticProfile = syntheticProfile
+                SyntheticProfile = syntheticProfile,
+                DriverSettingsJson = driverSettingsJson
             };
+
+        if (!string.IsNullOrWhiteSpace(driverIdentifierOverride))
+        {
+            cameraSpec = cameraSpec with { DriverIdentifierOverride = driverIdentifierOverride };
+        }
 
         return new RigSpec(
             Name,
@@ -278,10 +291,15 @@ public sealed class CameraSpecOptions
     [EnumDataType(typeof(CameraDriverId))]
     public CameraDriverId DriverId { get; set; } = CameraDriverId.Unknown;
 
+    [MaxLength(128)]
+    public string? DriverIdentifier { get; set; }
+
     public bool? IsSynthetic { get; set; }
 
     [MaxLength(128)]
     public string? SyntheticProfile { get; set; }
+
+    public string? DriverSettingsJson { get; set; }
 
     public IEnumerable<ValidationResult> Validate(string memberName)
     {
@@ -310,6 +328,33 @@ public sealed class CameraSpecOptions
             yield return new ValidationResult(
                 "Synthetic cameras must provide a synthetic profile identifier.",
                 new[] { memberName + "." + nameof(SyntheticProfile) });
+        }
+
+        if (!string.IsNullOrWhiteSpace(DriverIdentifier) && DriverIdentifier.Length > 128)
+        {
+            yield return new ValidationResult(
+                "Driver identifier overrides must be 128 characters or fewer.",
+                new[] { memberName + "." + nameof(DriverIdentifier) });
+        }
+
+        if (!string.IsNullOrWhiteSpace(DriverSettingsJson))
+        {
+            var isValid = true;
+            try
+            {
+                using var _ = JsonDocument.Parse(DriverSettingsJson);
+            }
+            catch (JsonException)
+            {
+                isValid = false;
+            }
+
+            if (!isValid)
+            {
+                yield return new ValidationResult(
+                    "Driver settings JSON is invalid.",
+                    new[] { memberName + "." + nameof(DriverSettingsJson) });
+            }
         }
     }
 }

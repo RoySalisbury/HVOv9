@@ -16,6 +16,7 @@ public partial class Configuration
         new SkyMonitorTabDefinition("overview", "Overview", "/configuration", "bi bi-grid", NavLinkMatch.All),
     new SkyMonitorTabDefinition("system", "System", "/configuration?tab=system", "bi bi-cpu", NavLinkMatch.All),
     new SkyMonitorTabDefinition("rig", "Rig", "/configuration?tab=rig", "bi bi-diagram-3", NavLinkMatch.All),
+    new SkyMonitorTabDefinition("adapters", "Adapters", "/configuration?tab=adapters", "bi bi-usb-symbol", NavLinkMatch.All),
     new SkyMonitorTabDefinition("cameras", "Cameras", "/configuration?tab=cameras", "bi bi-camera-video", NavLinkMatch.All),
         new SkyMonitorTabDefinition("optics", "Optics", "/configuration?tab=optics", "bi bi-binoculars", NavLinkMatch.All),
         new SkyMonitorTabDefinition("pipeline", "Pipeline", "/configuration?tab=pipeline", "bi bi-filter", NavLinkMatch.All, Disabled: true),
@@ -35,6 +36,8 @@ public partial class Configuration
     protected bool IsSystemTabActive => string.Equals(ActiveTabKey, "system", StringComparison.OrdinalIgnoreCase);
 
     protected bool IsRigTabActive => string.Equals(ActiveTabKey, "rig", StringComparison.OrdinalIgnoreCase);
+
+    protected bool IsAdaptersTabActive => string.Equals(ActiveTabKey, "adapters", StringComparison.OrdinalIgnoreCase);
 
     protected bool IsCamerasTabActive => string.Equals(ActiveTabKey, "cameras", StringComparison.OrdinalIgnoreCase);
 

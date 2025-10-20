@@ -180,7 +180,7 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
         return Result<bool>.Success(false);
     }
 
-    public async Task<Result<bool>> ReloadAsync(RigSpec rig, CancellationToken cancellationToken)
+    public async Task<Result<bool>> ReloadAsync(RigSpec rig, CancellationToken cancellationToken, bool forceReload = false)
     {
         if (rig is null)
         {
@@ -198,7 +198,7 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
             }
 
-            if (string.Equals(rig.Name, _activeRig.Name, StringComparison.OrdinalIgnoreCase))
+            if (!forceReload && rig == _activeRig)
             {
                 _logger?.LogDebug("ReloadAsync skipped; active rig already {RigName}.", rig.Name);
                 return Result<bool>.Success(false);

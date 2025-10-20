@@ -21,12 +21,18 @@ using Microsoft.Extensions.Options;
 using SkiaSharp;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras;
 
 /// <summary>
 /// Synthetic fisheye camera adapter that renders a realistic all-sky projection using the starfield engine.
 /// </summary>
+[CameraDriver(
+    id: CameraDriverIdentifiers.SimulationMockMono,
+    DisplayName = "Mock All-Sky (Monochrome)",
+    Description = "Synthetic monochrome fisheye adapter used for development and testing.",
+    Version = "1.0.0")]
 public class MockCameraAdapter : CameraAdapterBase
 {
     private const int RandomFillerStars = 0;

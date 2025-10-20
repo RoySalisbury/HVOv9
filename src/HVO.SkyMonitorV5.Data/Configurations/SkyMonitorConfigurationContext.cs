@@ -100,6 +100,7 @@ public sealed class SkyMonitorConfigurationContext : DbContext
             entity.Property(e => e.SupportsTemperatureTelemetry).HasColumnName("supports_temperature_telemetry");
             entity.Property(e => e.SupportsSoftwareBinning).HasColumnName("supports_software_binning");
             entity.Property(e => e.AdditionalTagsJson).HasColumnName("additional_tags_json");
+            entity.Property(e => e.DriverSettingsJson).HasColumnName("driver_settings_json");
             entity.Property(e => e.CreatedUtc).HasColumnName("created_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedUtc).HasColumnName("updated_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
@@ -131,6 +132,7 @@ public sealed class SkyMonitorConfigurationContext : DbContext
                 SupportsTemperatureTelemetry = false,
                 SupportsSoftwareBinning = true,
                 AdditionalTagsJson = additionalTags,
+                DriverSettingsJson = "{}",
                 CreatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, DateTimeKind.Utc),
                 UpdatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, DateTimeKind.Utc),
                 IsActive = true,

@@ -161,132 +161,299 @@
 
                             <div class="row g-3">
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-display" class="form-label config-label" title="Display name shown in dashboards and logs.">Display Name</label>
-                                    <InputText id="camera-display" class="form-control" @bind-Value="_editModel.DisplayName" title="Display name shown in dashboards and logs." />
+                                    <label for="camera-display" class="form-label config-label">
+                                        Display Name
+                                        <span class="label-tooltip" role="img" aria-label="Display name shown in dashboards and logs." title="Display name shown in dashboards and logs.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-display" class="form-control" @bind-Value="_editModel.DisplayName" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-key" class="form-label config-label" title="Immutable identifier referenced by rigs.">Camera Key</label>
+                                    <label for="camera-key" class="form-label config-label">
+                                        Camera Key
+                                        <span class="label-tooltip" role="img" aria-label="Immutable identifier referenced by rigs." title="Immutable identifier referenced by rigs.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
                                     @if (_editModel.Id == 0)
                                     {
-                                        <InputText id="camera-key" class="form-control" @bind-Value="_editModel.Key" autocomplete="off" inputmode="text" pattern="^[A-Za-z0-9_-]+$" title="Letters, numbers, hyphen, and underscore only." />
+                                        <InputText id="camera-key" class="form-control" @bind-Value="_editModel.Key" autocomplete="off" inputmode="text" pattern="^[A-Za-z0-9_-]+$" />
                                         <div class="form-text">Letters, numbers, hyphen, and underscore only.</div>
                                     }
                                     else
                                     {
-                                        <InputText id="camera-key" class="form-control" @bind-Value="_editModel.Key" readonly title="Catalog keys cannot be changed." />
+                                        <InputText id="camera-key" class="form-control" @bind-Value="_editModel.Key" readonly />
                                     }
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-manufacturer" class="form-label config-label" title="Manufacturer name reported for the camera body.">Manufacturer</label>
-                                    <InputText id="camera-manufacturer" class="form-control" @bind-Value="_editModel.Manufacturer" title="Manufacturer name reported for the camera body." />
+                                    <label for="camera-manufacturer" class="form-label config-label">
+                                        Manufacturer
+                                        <span class="label-tooltip" role="img" aria-label="Manufacturer name reported for the camera body." title="Manufacturer name reported for the camera body.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-manufacturer" class="form-control" @bind-Value="_editModel.Manufacturer" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-model" class="form-label config-label" title="Model identifier used in UI displays.">Model</label>
-                                    <InputText id="camera-model" class="form-control" @bind-Value="_editModel.Model" title="Model identifier used in UI displays." />
+                                    <label for="camera-model" class="form-label config-label">
+                                        Model
+                                        <span class="label-tooltip" role="img" aria-label="Model identifier used in UI displays." title="Model identifier used in UI displays.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-model" class="form-control" @bind-Value="_editModel.Model" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-driver-version" class="form-label config-label" title="Driver or SDK version paired with this camera.">Driver Version</label>
-                                    <InputText id="camera-driver-version" class="form-control" @bind-Value="_editModel.DriverVersion" title="Driver or SDK version paired with this camera." />
+                                    <label for="camera-driver-version" class="form-label config-label">
+                                        Driver Version
+                                        <span class="label-tooltip" role="img" aria-label="Driver or SDK version paired with this camera." title="Driver or SDK version paired with this camera.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-driver-version" class="form-control" @bind-Value="_editModel.DriverVersion" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-adapter" class="form-label config-label" title="Adapter class or integration responsible for this camera.">Adapter Name</label>
-                                    <InputText id="camera-adapter" class="form-control" @bind-Value="_editModel.AdapterName" title="Adapter class or integration responsible for this camera." />
+                                    <label for="camera-adapter" class="form-label config-label">
+                                        Adapter Name
+                                        <span class="label-tooltip" role="img" aria-label="Adapter class or integration responsible for this camera." title="Adapter class or integration responsible for this camera.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-adapter" class="form-control" @bind-Value="_editModel.AdapterName" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-driver-id" class="form-label config-label" title="Driver identifier used when connecting to hardware.">Driver Identifier</label>
-                                    <InputText id="camera-driver-id" class="form-control" @bind-Value="_editModel.DriverId" title="Driver identifier used when connecting to hardware." />
+                                    <label for="camera-driver-id" class="form-label config-label">
+                                        Driver Identifier
+                                        <span class="label-tooltip" role="img" aria-label="Driver identifier used when connecting to hardware." title="Driver identifier used when connecting to hardware.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    @if (_driverDescriptors.Count == 0)
+                                    {
+                                        <InputText id="camera-driver-id" class="form-control" @bind-Value="_editModel.DriverId" />
+                                        <div class="form-text">Driver registry is unavailable; enter the identifier manually.</div>
+                                    }
+                                    else
+                                    {
+                                        <InputSelect id="camera-driver-id" class="form-select" @bind-Value="_editModel.DriverId">
+                                            <option value="">Select a driver…</option>
+                                            @foreach (var driver in _driverDescriptors)
+                                            {
+                                                <option value="@driver.Id">@driver.DisplayName (@driver.Id)</option>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(_editModel.DriverId) && ResolveDriverDescriptor(_editModel.DriverId) is null)
+                                            {
+                                                <option value="@_editModel.DriverId">@_editModel.DriverId (custom)</option>
+                                            }
+                                        </InputSelect>
+                                        <div class="form-text">
+                                            @if (ResolveDriverDescriptor(_editModel.DriverId) is { } descriptor)
+                                            {
+                                                <span>@descriptor.Description</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Choose a registered driver or enter a custom identifier.</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-12">
+                                    <label for="camera-driver-settings" class="form-label config-label">
+                                        Driver Settings JSON
+                                        <span class="label-tooltip" role="img" aria-label="Optional driver-specific configuration payload." title="Optional driver-specific configuration payload.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputTextArea id="camera-driver-settings"
+                                                   class="form-control font-monospace"
+                                                   @bind-Value="_editModel.DriverSettingsJson"
+                                                   rows="6"
+                                                   placeholder="{ &quot;gainMode&quot;: &quot;High&quot; }" />
+                                    <div class="form-text">@GetDriverSettingsHelpText()</div>
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="camera-synthetic-profile" class="form-label config-label" title="Synthetic camera profile to load when emulating hardware.">Synthetic Profile</label>
-                                    <InputText id="camera-synthetic-profile" class="form-control" @bind-Value="_editModel.SyntheticProfile" disabled="@(!_editModel.IsSynthetic)" title="Synthetic camera profile to load when emulating hardware." />
+                                    <label for="camera-synthetic-profile" class="form-label config-label">
+                                        Synthetic Profile
+                                        <span class="label-tooltip" role="img" aria-label="Synthetic camera profile to load when emulating hardware." title="Synthetic camera profile to load when emulating hardware.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-synthetic-profile" class="form-control" @bind-Value="_editModel.SyntheticProfile" disabled="@(!_editModel.IsSynthetic)" />
                                 </div>
                                 <div class="col-md-6 col-xl-4 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-synthetic" class="form-check-input" @bind-Value="_editModel.IsSynthetic" />
-                                        <label for="camera-synthetic" class="form-check-label text-light" title="Toggle for virtual cameras that do not correspond to physical hardware.">Synthetic Camera</label>
+                                        <label for="camera-synthetic" class="form-check-label text-light">
+                                            Synthetic Camera
+                                            <span class="label-tooltip" role="img" aria-label="Toggle for virtual cameras that do not correspond to physical hardware." title="Toggle for virtual cameras that do not correspond to physical hardware.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-width" class="form-label config-label" title="Full sensor width in pixels.">Sensor Width (px)</label>
-                                    <InputNumber TValue="int" id="camera-width" class="form-control" @bind-Value="_editModel.SensorWidthPixels" min="1" title="Full sensor width in pixels." />
+                                    <label for="camera-width" class="form-label config-label">
+                                        Sensor Width (px)
+                                        <span class="label-tooltip" role="img" aria-label="Full sensor width in pixels." title="Full sensor width in pixels.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="int" id="camera-width" class="form-control" @bind-Value="_editModel.SensorWidthPixels" min="1" />
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-height" class="form-label config-label" title="Full sensor height in pixels.">Sensor Height (px)</label>
-                                    <InputNumber TValue="int" id="camera-height" class="form-control" @bind-Value="_editModel.SensorHeightPixels" min="1" title="Full sensor height in pixels." />
+                                    <label for="camera-height" class="form-label config-label">
+                                        Sensor Height (px)
+                                        <span class="label-tooltip" role="img" aria-label="Full sensor height in pixels." title="Full sensor height in pixels.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="int" id="camera-height" class="form-control" @bind-Value="_editModel.SensorHeightPixels" min="1" />
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-pixel" class="form-label config-label" title="Physical pixel size in microns.">Pixel Size (µm)</label>
-                                    <InputNumber TValue="double" id="camera-pixel" class="form-control" @bind-Value="_editModel.PixelSizeMicrons" step="0.01" min="0.01" title="Physical pixel size in microns." />
+                                    <label for="camera-pixel" class="form-label config-label">
+                                        Pixel Size (µm)
+                                        <span class="label-tooltip" role="img" aria-label="Physical pixel size in microns." title="Physical pixel size in microns.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="camera-pixel" class="form-control" @bind-Value="_editModel.PixelSizeMicrons" step="0.01" min="0.01" />
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-cx" class="form-label config-label" title="Principal point X coordinate (optional).">Sensor Cx (px)</label>
-                                    <InputNumber TValue="double?" id="camera-cx" class="form-control" @bind-Value="_editModel.SensorCxPixels" step="0.1" min="0" title="Principal point X coordinate (optional)." />
+                                    <label for="camera-cx" class="form-label config-label">
+                                        Sensor Cx (px)
+                                        <span class="label-tooltip" role="img" aria-label="Principal point X coordinate (optional)." title="Principal point X coordinate (optional).">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double?" id="camera-cx" class="form-control" @bind-Value="_editModel.SensorCxPixels" step="0.1" min="0" />
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-cy" class="form-label config-label" title="Principal point Y coordinate (optional).">Sensor Cy (px)</label>
-                                    <InputNumber TValue="double?" id="camera-cy" class="form-control" @bind-Value="_editModel.SensorCyPixels" step="0.1" min="0" title="Principal point Y coordinate (optional)." />
+                                    <label for="camera-cy" class="form-label config-label">
+                                        Sensor Cy (px)
+                                        <span class="label-tooltip" role="img" aria-label="Principal point Y coordinate (optional)." title="Principal point Y coordinate (optional).">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double?" id="camera-cy" class="form-control" @bind-Value="_editModel.SensorCyPixels" step="0.1" min="0" />
                                 </div>
                                 <div class="col-md-4 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-color" class="form-check-input" @bind-Value="_editModel.IsColor" />
-                                        <label for="camera-color" class="form-check-label text-light" title="Turn on for Bayer/OSC sensors; leave off for monochrome sensors.">Color Sensor</label>
+                                        <label for="camera-color" class="form-check-label text-light">
+                                            Color Sensor
+                                            <span class="label-tooltip" role="img" aria-label="Turn on for Bayer/OSC sensors; leave off for monochrome sensors." title="Turn on for Bayer/OSC sensors; leave off for monochrome sensors.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-tech" class="form-label config-label" title="Underlying sensor silicon technology.">Sensor Technology</label>
-                                    <InputSelect id="camera-tech" class="form-select" @bind-Value="_editModel.SensorTechnology" TValue="CameraSensorTechnology" title="Underlying sensor silicon technology.">
+                                    <label for="camera-tech" class="form-label config-label">
+                                        Sensor Technology
+                                        <span class="label-tooltip" role="img" aria-label="Underlying sensor silicon technology." title="Underlying sensor silicon technology.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputSelect id="camera-tech" class="form-select" @bind-Value="_editModel.SensorTechnology" TValue="CameraSensorTechnology">
                                         <option value="@CameraSensorTechnology.Cmos">CMOS</option>
                                         <option value="@CameraSensorTechnology.Ccd">CCD</option>
                                     </InputSelect>
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-body" class="form-label config-label" title="Body classification such as dedicated astronomy or DSLR.">Body Type</label>
-                                    <InputText id="camera-body" class="form-control" @bind-Value="_editModel.BodyType" title="Body classification such as dedicated astronomy or DSLR." />
+                                    <label for="camera-body" class="form-label config-label">
+                                        Body Type
+                                        <span class="label-tooltip" role="img" aria-label="Body classification such as dedicated astronomy or DSLR." title="Body classification such as dedicated astronomy or DSLR.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="camera-body" class="form-control" @bind-Value="_editModel.BodyType" />
                                 </div>
                                 <div class="col-md-4 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-cooling-enabled" class="form-check-input" @bind-Value="_editModel.HasCooling" />
-                                        <label for="camera-cooling-enabled" class="form-check-label text-light" title="Enable when the camera includes regulated cooling hardware.">Regulated Cooling</label>
+                                        <label for="camera-cooling-enabled" class="form-check-label text-light">
+                                            Regulated Cooling
+                                            <span class="label-tooltip" role="img" aria-label="Enable when the camera includes regulated cooling hardware." title="Enable when the camera includes regulated cooling hardware.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="camera-cooling-target" class="form-label config-label" title="Optional regulated cooling target temperature in Celsius.">Cooling Target (°C)</label>
-                                    <InputNumber TValue="double?" id="camera-cooling-target" class="form-control" @bind-Value="_editModel.CoolingTargetCelsius" step="0.5" min="-80" max="40" disabled="@(!_editModel.HasCooling)" title="Optional regulated cooling target temperature in Celsius." />
+                                    <label for="camera-cooling-target" class="form-label config-label">
+                                        Cooling Target (°C)
+                                        <span class="label-tooltip" role="img" aria-label="Optional regulated cooling target temperature in Celsius." title="Optional regulated cooling target temperature in Celsius.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double?" id="camera-cooling-target" class="form-control" @bind-Value="_editModel.CoolingTargetCelsius" step="0.5" min="-80" max="40" disabled="@(!_editModel.HasCooling)" />
                                     <div class="form-text">Leave blank to use the camera default.</div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-gain" class="form-check-input" @bind-Value="_editModel.SupportsGainControl" />
-                                        <label for="camera-gain" class="form-check-label text-light" title="Indicates whether gain can be adjusted through software.">Gain Control</label>
+                                        <label for="camera-gain" class="form-check-label text-light">
+                                            Gain Control
+                                            <span class="label-tooltip" role="img" aria-label="Indicates whether gain can be adjusted through software." title="Indicates whether gain can be adjusted through software.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-exposure" class="form-check-input" @bind-Value="_editModel.SupportsExposureControl" />
-                                        <label for="camera-exposure" class="form-check-label text-light" title="Toggle when exposure duration can be commanded via software.">Exposure Control</label>
+                                        <label for="camera-exposure" class="form-check-label text-light">
+                                            Exposure Control
+                                            <span class="label-tooltip" role="img" aria-label="Toggle when exposure duration can be commanded via software." title="Toggle when exposure duration can be commanded via software.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-telemetry" class="form-check-input" @bind-Value="_editModel.SupportsTemperatureTelemetry" />
-                                        <label for="camera-telemetry" class="form-check-label text-light" title="Enable when the camera exposes internal temperature telemetry.">Temperature Telemetry</label>
+                                        <label for="camera-telemetry" class="form-check-label text-light">
+                                            Temperature Telemetry
+                                            <span class="label-tooltip" role="img" aria-label="Enable when the camera exposes internal temperature telemetry." title="Enable when the camera exposes internal temperature telemetry.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-binning" class="form-check-input" @bind-Value="_editModel.SupportsSoftwareBinning" />
-                                        <label for="camera-binning" class="form-check-label text-light" title="Enable to allow 2×2 or higher software binning modes.">Software Binning</label>
+                                        <label for="camera-binning" class="form-check-label text-light">
+                                            Software Binning
+                                            <span class="label-tooltip" role="img" aria-label="Enable to allow 2×2 or higher software binning modes." title="Enable to allow 2×2 or higher software binning modes.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-4 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="camera-active" class="form-check-input" @bind-Value="_editModel.IsActive" />
-                                        <label for="camera-active" class="form-check-label text-light" title="Inactive entries remain in the catalog but are hidden from assignment pickers.">Active in catalog</label>
+                                        <label for="camera-active" class="form-check-label text-light">
+                                            Active in catalog
+                                            <span class="label-tooltip" role="img" aria-label="Inactive entries remain in the catalog but are hidden from assignment pickers." title="Inactive entries remain in the catalog but are hidden from assignment pickers.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-12">
-                                    <label for="camera-tags" class="form-label config-label" title="Additional capability tags (one per line or comma separated)."><span>Additional Tags</span></label>
-                                    <InputTextArea id="camera-tags" class="form-control" rows="2" @bind-Value="_editModel.AdditionalTagsInput" placeholder="Enter tags separated by commas or new lines." title="Additional capability tags (one per line or comma separated)." />
+                                    <label for="camera-tags" class="form-label config-label">
+                                        <span>Additional Tags</span>
+                                        <span class="label-tooltip" role="img" aria-label="Additional capability tags (one per line or comma separated)." title="Additional capability tags (one per line or comma separated).">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputTextArea id="camera-tags" class="form-control" rows="2" @bind-Value="_editModel.AdditionalTagsInput" placeholder="Enter tags separated by commas or new lines." />
                                 </div>
                             </div>
 

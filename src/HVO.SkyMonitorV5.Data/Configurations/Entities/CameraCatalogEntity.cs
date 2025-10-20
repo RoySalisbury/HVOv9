@@ -49,6 +49,11 @@ public sealed class CameraCatalogEntity
     /// </summary>
     public string AdditionalTagsJson { get; set; } = "[]";
 
+    /// <summary>
+    /// Optional JSON payload containing driver-specific configuration settings.
+    /// </summary>
+    public string? DriverSettingsJson { get; set; }
+
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
     public bool IsActive { get; set; }

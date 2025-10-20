@@ -3,6 +3,7 @@ using System;
 using HVO.SkyMonitorV5.Data.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
 {
     [DbContext(typeof(SkyMonitorConfigurationContext))]
-    partial class SkyMonitorConfigurationContextModelSnapshot : ModelSnapshot
+    [Migration("20251020013841_AddCameraDriverSettings")]
+    partial class AddCameraDriverSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
@@ -229,7 +232,6 @@ namespace HVO.SkyMonitorV5.Data.Migrations.Configuration
                             SupportsExposureControl = true,
                             SupportsGainControl = true,
                             SupportsSoftwareBinning = true,
-                            DriverSettingsJson = "{}",
                             SupportsTemperatureTelemetry = false,
                             SyntheticProfile = "MockFisheye",
                             UpdatedUtc = new DateTime(2024, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc)

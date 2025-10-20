@@ -158,24 +158,39 @@
 
                             <div class="row g-3">
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-display" class="form-label config-label" title="Display name shown in dashboards, rig pickers, and logs.">Display Name</label>
-                                    <InputText id="optics-display" class="form-control" @bind-Value="_editModel.DisplayName" title="Display name shown in dashboards, rig pickers, and logs." />
+                                    <label for="optics-display" class="form-label config-label">
+                                        Display Name
+                                        <span class="label-tooltip" role="img" aria-label="Display name shown in dashboards, rig pickers, and logs." title="Display name shown in dashboards, rig pickers, and logs.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputText id="optics-display" class="form-control" @bind-Value="_editModel.DisplayName" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-key" class="form-label config-label" title="Immutable identifier used by rigs and automation scripts.">Optics Key</label>
+                                    <label for="optics-key" class="form-label config-label">
+                                        Optics Key
+                                        <span class="label-tooltip" role="img" aria-label="Immutable identifier used by rigs and automation scripts." title="Immutable identifier used by rigs and automation scripts.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
                                     @if (_editModel.Id == 0)
                                     {
-                                        <InputText id="optics-key" class="form-control" @bind-Value="_editModel.Key" autocomplete="off" pattern="^[A-Za-z0-9_-]+$" title="Letters, numbers, hyphen, and underscore only." />
+                                        <InputText id="optics-key" class="form-control" @bind-Value="_editModel.Key" autocomplete="off" pattern="^[A-Za-z0-9_-]+$" />
                                         <div class="form-text">Letters, numbers, hyphen, and underscore only.</div>
                                     }
                                     else
                                     {
-                                        <InputText id="optics-key" class="form-control" @bind-Value="_editModel.Key" readonly title="Catalog keys cannot be changed." />
+                                        <InputText id="optics-key" class="form-control" @bind-Value="_editModel.Key" readonly />
                                     }
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-kind" class="form-label config-label" title="Classify the optical system for downstream adapters.">Lens Kind</label>
-                                    <InputSelect id="optics-kind" class="form-select" @bind-Value="_editModel.Kind" TValue="LensKind" title="Classify the optical system for downstream adapters.">
+                                    <label for="optics-kind" class="form-label config-label">
+                                        Lens Kind
+                                        <span class="label-tooltip" role="img" aria-label="Classify the optical system for downstream adapters." title="Classify the optical system for downstream adapters.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputSelect id="optics-kind" class="form-select" @bind-Value="_editModel.Kind" TValue="LensKind">
                                         @foreach (var kind in LensKinds)
                                         {
                                             <option value="@kind">@GetLensKindLabel(kind)</option>
@@ -183,8 +198,13 @@
                                     </InputSelect>
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-projection" class="form-label config-label" title="Projection model describing how rays map to the sensor.">Projection Model</label>
-                                    <InputSelect id="optics-projection" class="form-select" @bind-Value="_editModel.ProjectionModel" TValue="ProjectionModel" title="Projection model describing how rays map to the sensor.">
+                                    <label for="optics-projection" class="form-label config-label">
+                                        Projection Model
+                                        <span class="label-tooltip" role="img" aria-label="Projection model describing how rays map to the sensor." title="Projection model describing how rays map to the sensor.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputSelect id="optics-projection" class="form-select" @bind-Value="_editModel.ProjectionModel" TValue="ProjectionModel">
                                         @foreach (var projection in ProjectionModels)
                                         {
                                             <option value="@projection">@GetProjectionLabel(projection)</option>
@@ -192,25 +212,50 @@
                                     </InputSelect>
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-focal" class="form-label config-label" title="Effective focal length in millimeters.">Focal Length (mm)</label>
-                                    <InputNumber TValue="double" id="optics-focal" class="form-control" @bind-Value="_editModel.FocalLengthMillimeters" step="0.1" min="0.1" title="Effective focal length in millimeters." />
+                                    <label for="optics-focal" class="form-label config-label">
+                                        Focal Length (mm)
+                                        <span class="label-tooltip" role="img" aria-label="Effective focal length in millimeters." title="Effective focal length in millimeters.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="optics-focal" class="form-control" @bind-Value="_editModel.FocalLengthMillimeters" step="0.1" min="0.1" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-fovx" class="form-label config-label" title="Horizontal field-of-view in degrees; set to 0 to derive from focal length and sensor size.">Field of View X (°)</label>
-                                    <InputNumber TValue="double" id="optics-fovx" class="form-control" @bind-Value="_editModel.FieldOfViewXDegrees" step="0.1" min="0" max="360" title="Horizontal field-of-view in degrees; set to 0 to derive from focal length and sensor size." />
+                                    <label for="optics-fovx" class="form-label config-label">
+                                        Field of View X (°)
+                                        <span class="label-tooltip" role="img" aria-label="Horizontal field-of-view in degrees; set to 0 to derive from focal length and sensor size." title="Horizontal field-of-view in degrees; set to 0 to derive from focal length and sensor size.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="optics-fovx" class="form-control" @bind-Value="_editModel.FieldOfViewXDegrees" step="0.1" min="0" max="360" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-fovy" class="form-label config-label" title="Optional vertical field-of-view override; leave blank to derive automatically.">Field of View Y (°)</label>
-                                    <InputNumber TValue="double?" id="optics-fovy" class="form-control" @bind-Value="_editModel.FieldOfViewYDegrees" step="0.1" min="0" max="360" title="Optional vertical field-of-view override; leave blank to derive automatically." />
+                                    <label for="optics-fovy" class="form-label config-label">
+                                        Field of View Y (°)
+                                        <span class="label-tooltip" role="img" aria-label="Optional vertical field-of-view override; leave blank to derive automatically." title="Optional vertical field-of-view override; leave blank to derive automatically.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double?" id="optics-fovy" class="form-control" @bind-Value="_editModel.FieldOfViewYDegrees" step="0.1" min="0" max="360" />
                                 </div>
                                 <div class="col-md-6 col-xl-4">
-                                    <label for="optics-roll" class="form-label config-label" title="Roll offset applied to align the rendered field with reality.">Roll Offset (°)</label>
-                                    <InputNumber TValue="double" id="optics-roll" class="form-control" @bind-Value="_editModel.RollDegrees" step="0.1" min="-180" max="180" title="Roll offset applied to align the rendered field with reality." />
+                                    <label for="optics-roll" class="form-label config-label">
+                                        Roll Offset (°)
+                                        <span class="label-tooltip" role="img" aria-label="Roll offset applied to align the rendered field with reality." title="Roll offset applied to align the rendered field with reality.">
+                                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                        </span>
+                                    </label>
+                                    <InputNumber TValue="double" id="optics-roll" class="form-control" @bind-Value="_editModel.RollDegrees" step="0.1" min="-180" max="180" />
                                 </div>
                                 <div class="col-md-6 col-xl-4 d-flex align-items-end">
                                     <div class="form-check form-switch">
                                         <InputCheckbox id="optics-active" class="form-check-input" @bind-Value="_editModel.IsActive" />
-                                        <label for="optics-active" class="form-check-label text-light" title="Inactive entries stay in the catalog but are hidden from selection menus.">Active in catalog</label>
+                                        <label for="optics-active" class="form-check-label text-light">
+                                            Active in catalog
+                                            <span class="label-tooltip" role="img" aria-label="Inactive entries stay in the catalog but are hidden from selection menus." title="Inactive entries stay in the catalog but are hidden from selection menus.">
+                                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>

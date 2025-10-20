@@ -296,7 +296,8 @@ public static class Program
     services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
     services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
-    services.AddSingleton<IOpticsConfigurationService, OpticsConfigurationService>();
+    services.AddSingleton<IRigRuntimeUpdater, RigRuntimeUpdater>();
+    services.AddSingleton<IEquipmentConfigurationService, EquipmentConfigurationService>();
 
         services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
         services.AddSingleton<SkyMonitorTelemetryMetrics>();
@@ -420,7 +421,8 @@ public static class Program
         services.AddSingleton<IRigCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
         services.AddHostedService<CatalogConfigurationReporter>();
 
-        services.AddSingleton<ICameraDriverFactory, CameraDriverFactory>();
+    services.AddSingleton<ICameraDriverRegistry, CameraDriverRegistry>();
+    services.AddSingleton<ICameraDriverFactory, CameraDriverFactory>();
         services.AddSingleton<IRigAcquisitionAdapter, RigAcquisitionAdapter>();
 
         services.AddSingleton<FrameFilterPipeline>(sp =>

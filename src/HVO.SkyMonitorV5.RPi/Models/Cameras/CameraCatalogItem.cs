@@ -30,6 +30,7 @@ public sealed class CameraCatalogItem
     public bool SupportsTemperatureTelemetry { get; set; }
     public bool SupportsSoftwareBinning { get; set; }
     public IReadOnlyList<string> AdditionalTags { get; set; } = Array.Empty<string>();
+    public string? DriverSettingsJson { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
     public bool IsActive { get; set; }

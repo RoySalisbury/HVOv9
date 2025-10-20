@@ -70,7 +70,7 @@
                                                     <span>@rig.DisplayName</span>
                                                     @if (rig.HasAdapterBindings)
                                                     {
-                                                        <span class="badge bg-info-subtle text-info-emphasis mt-1">In Use</span>
+                                                        <span class="badge bg-info-subtle text-info-emphasis mt-1" title="Rig is linked to at least one adapter binding.">Adapters Linked</span>
                                                     }
                                                 </div>
                                             </td>
@@ -87,7 +87,7 @@
                                                     <small class="text-muted">@rig.OpticsKey</small>
                                                 </div>
                                             </td>
-                                            <td class="text-center">@rig.BoresightAltitudeDegrees:F1° / @rig.BoresightAzimuthDegrees:F1°</td>
+                                            <td class="text-center">@($"{rig.BoresightAltitudeDegrees:F1}° / {rig.BoresightAzimuthDegrees:F1}°")</td>
                                             <td class="text-center">
                                                 @if (rig.IsActive)
                                                 {
@@ -101,28 +101,31 @@
                                             <td class="text-end">
                                                 <div class="btn-group" role="group" aria-label="Rig actions">
                                                     <button type="button"
-                                                            class="btn btn-outline-light btn-sm"
+                                                            class="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
                                                             title="Edit rig"
                                                             @onclick="(() => SelectRig(rig))"
                                                             @onclick:stopPropagation="true"
                                                             disabled="@(_isSaving)">
                                                         <i class="bi bi-pencil-square"></i>
+                                                        <span>Edit</span>
                                                     </button>
                                                     <button type="button"
-                                                            class="btn btn-outline-light btn-sm"
+                                                            class="btn btn-outline-success btn-sm d-flex align-items-center gap-2"
                                                             title="Activate rig"
                                                             @onclick="(() => SetActiveAsync(rig, true))"
                                                             @onclick:stopPropagation="true"
                                                             disabled="@(_isSaving || rig.IsActive)">
                                                         <i class="bi bi-toggle-on"></i>
+                                                        <span>Activate</span>
                                                     </button>
                                                     <button type="button"
-                                                            class="btn btn-outline-light btn-sm"
+                                                            class="btn btn-outline-warning btn-sm d-flex align-items-center gap-2"
                                                             title="Disable rig"
                                                             @onclick="(() => SetActiveAsync(rig, false))"
                                                             @onclick:stopPropagation="true"
                                                             disabled="@(_isSaving || !rig.IsActive)">
                                                         <i class="bi bi-toggle-off"></i>
+                                                        <span>Disable</span>
                                                     </button>
                                                 </div>
                                             </td>
@@ -252,7 +255,7 @@
                                 <div class="col-md-3 d-flex align-items-end">
                                     <div class="form-check">
                                         <InputCheckbox id="rig-active" class="form-check-input" @bind-Value="_editModel.IsActive" />
-                                        <label for="rig-active" class="form-check-label d-inline-flex align-items-center gap-2">Active by default
+                                        <label for="rig-active" class="form-check-label text-light d-inline-flex align-items-center gap-2">Active by default
                                             <span class="label-tooltip" role="img" aria-label="Mark this rig as the default active configuration." title="Mark this rig as the default active configuration.">
                                                 <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                                             </span>

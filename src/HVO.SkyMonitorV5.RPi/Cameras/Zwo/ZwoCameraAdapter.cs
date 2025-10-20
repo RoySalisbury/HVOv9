@@ -22,6 +22,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 using static HVO.ZWOOptical.ASISDK.ASICamera2;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 
@@ -29,6 +30,11 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 /// Native camera adapter for ZWO ASI devices. Frames are captured directly from the ASICamera2 SDK into
 /// unmanaged buffers that back <see cref="SKBitmap"/> instances without additional copies.
 /// </summary>
+[CameraDriver(
+    id: CameraDriverIdentifiers.ZwoAsi,
+    DisplayName = "ZWO ASI Camera",
+    Description = "Native ASICamera2 adapter for ZWO ASI-series devices.",
+    Version = "1.0.0")]
 public sealed class ZwoCameraAdapter : CameraAdapterBase
 {
     private const int DefaultBin = 1;

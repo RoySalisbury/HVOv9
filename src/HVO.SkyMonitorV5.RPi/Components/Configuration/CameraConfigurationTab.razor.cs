@@ -23,6 +23,7 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     private IReadOnlyList<CameraCatalogItem> _cameras = Array.Empty<CameraCatalogItem>();
     private IReadOnlyList<RigSummary> _rigs = Array.Empty<RigSummary>();
     private IReadOnlyDictionary<string, IReadOnlyList<RigSummary>> _cameraUsage = new Dictionary<string, IReadOnlyList<RigSummary>>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyList<CameraDriverDescriptorResponse> _driverDescriptors = Array.Empty<CameraDriverDescriptorResponse>();
 
     private CameraEditModel? _editModel;
     private CameraEditModel? _baseline;
@@ -70,14 +71,15 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var catalogResponse = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
+            if (catalogResponse is null)
             {
                 _errorMessage = "Unable to load camera catalog from the local API.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(catalogResponse);
+            await LoadDriverCatalogAsync().ConfigureAwait(false);
             _lastUpdatedMessage = $"Updated {DateTimeOffset.Now:HH:mm:ss}";
 
             var preferred = ResolveSelectionAfterRefresh();
@@ -121,6 +123,37 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 group => group.Key,
                 group => (IReadOnlyList<RigSummary>)group.ToList(),
                 StringComparer.OrdinalIgnoreCase);
+    }
+
+    private async Task LoadDriverCatalogAsync()
+    {
+        try
+        {
+            var driverResponse = await LocalApiClient.GetCameraDriverCatalogAsync(CancellationToken).ConfigureAwait(false);
+            if (driverResponse is null)
+            {
+                Logger?.LogWarning("Local API returned no camera driver descriptors.");
+                _driverDescriptors = Array.Empty<CameraDriverDescriptorResponse>();
+                return;
+            }
+
+            ApplyDriverCatalog(driverResponse);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogWarning(ex, "Failed to load camera driver descriptors from the local API.");
+            _driverDescriptors = Array.Empty<CameraDriverDescriptorResponse>();
+        }
+    }
+
+    private void ApplyDriverCatalog(CameraDriverCatalogResponse response)
+    {
+        _driverDescriptors = response.Drivers
+            .OrderBy(descriptor => descriptor.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private CameraCatalogItem? ResolveSelectionAfterRefresh()
@@ -227,6 +260,38 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
         }
 
         _hasChanges = !_editModel.EqualsByValue(_baseline);
+    }
+
+    private CameraDriverDescriptorResponse? ResolveDriverDescriptor(string? driverId)
+    {
+        if (string.IsNullOrWhiteSpace(driverId) || _driverDescriptors.Count == 0)
+        {
+            return null;
+        }
+
+        return _driverDescriptors.FirstOrDefault(descriptor => string.Equals(descriptor.Id, driverId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetDriverSettingsHelpText()
+    {
+        if (_editModel is null)
+        {
+            return "Provide driver-specific JSON payloads when required.";
+        }
+
+        var descriptor = ResolveDriverDescriptor(_editModel.DriverId);
+        if (descriptor is null)
+        {
+            return "Driver registry did not return metadata for this identifier. Leave blank unless the driver expects configuration.";
+        }
+
+        if (!descriptor.SupportsConfiguration)
+        {
+            return $"{descriptor.DisplayName} does not declare a configuration payload; leave blank to use driver defaults.";
+        }
+
+        var typeName = descriptor.ConfigurationType ?? descriptor.AssemblyQualifiedName ?? "configuration type";
+        return $"Provide JSON matching {typeName}. Leave blank to fall back to driver defaults.";
     }
 
     private async Task SaveAsync()
@@ -410,6 +475,8 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
         [MaxLength(128)]
         public string SyntheticProfile { get; set; } = string.Empty;
 
+        public string DriverSettingsJson { get; set; } = string.Empty;
+
         public bool IsSynthetic { get; set; }
 
         [Range(1, 20000)]
@@ -503,7 +570,8 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 SupportsTemperatureTelemetry = SupportsTemperatureTelemetry,
                 SupportsSoftwareBinning = SupportsSoftwareBinning,
                 IsActive = IsActive,
-                AdditionalTags = BuildAdditionalTags()
+                AdditionalTags = BuildAdditionalTags(),
+                DriverSettingsJson = string.IsNullOrWhiteSpace(DriverSettingsJson) ? null : DriverSettingsJson
             };
 
         public UpdateCameraRequest ToUpdateRequest()
@@ -534,7 +602,8 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 SupportsTemperatureTelemetry = SupportsTemperatureTelemetry,
                 SupportsSoftwareBinning = SupportsSoftwareBinning,
                 IsActive = IsActive,
-                AdditionalTags = BuildAdditionalTags()
+                AdditionalTags = BuildAdditionalTags(),
+                DriverSettingsJson = string.IsNullOrWhiteSpace(DriverSettingsJson) ? null : DriverSettingsJson
             };
 
             return request;
@@ -569,7 +638,8 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 SupportsSoftwareBinning = SupportsSoftwareBinning,
                 IsActive = IsActive,
                 Revision = Revision,
-                AdditionalTagsInput = AdditionalTagsInput
+                AdditionalTagsInput = AdditionalTagsInput,
+                DriverSettingsJson = DriverSettingsJson
             };
 
         public bool EqualsByValue(CameraEditModel other)
@@ -588,6 +658,7 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 && string.Equals(AdapterName, other.AdapterName, StringComparison.Ordinal)
                 && string.Equals(DriverId, other.DriverId, StringComparison.Ordinal)
                 && string.Equals(SyntheticProfile, other.SyntheticProfile, StringComparison.Ordinal)
+                && string.Equals(DriverSettingsJson ?? string.Empty, other.DriverSettingsJson ?? string.Empty, StringComparison.Ordinal)
                 && IsSynthetic == other.IsSynthetic
                 && SensorWidthPixels == other.SensorWidthPixels
                 && SensorHeightPixels == other.SensorHeightPixels
@@ -633,7 +704,8 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 SupportsTemperatureTelemetry = item.SupportsTemperatureTelemetry,
                 SupportsSoftwareBinning = item.SupportsSoftwareBinning,
                 IsActive = item.IsActive,
-                Revision = item.Revision
+                Revision = item.Revision,
+                DriverSettingsJson = item.DriverSettingsJson ?? string.Empty
             };
 
             if (Enum.TryParse(item.ColorMode, ignoreCase: true, out CameraColorMode colorMode))
@@ -685,7 +757,8 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 IsActive = true,
                 SensorWidthPixels = 1,
                 SensorHeightPixels = 1,
-                PixelSizeMicrons = 1.0
+                PixelSizeMicrons = 1.0,
+                DriverSettingsJson = string.Empty
             };
 
         private IReadOnlyList<string> BuildAdditionalTags()

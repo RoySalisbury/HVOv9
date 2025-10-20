@@ -44,8 +44,10 @@ public interface IRigAcquisitionAdapter : IAsyncDisposable
 
     /// <summary>
     /// Reloads the adapter with a new rig specification, restarting capture if previously running.
+    /// When <paramref name="forceReload"/> is <c>true</c>, the underlying driver is reinitialized even if the
+    /// incoming rig specification matches the current active rig.
     /// </summary>
-    Task<Result<bool>> ReloadAsync(RigSpec rig, CancellationToken cancellationToken);
+    Task<Result<bool>> ReloadAsync(RigSpec rig, CancellationToken cancellationToken, bool forceReload = false);
 
     /// <summary>
     /// Captures an image using the active rig for the supplied exposure settings.

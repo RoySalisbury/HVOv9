@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
+using HVO.SkyMonitorV5.RPi.Models.Adapters;
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -8,7 +9,7 @@ using HVO.SkyMonitorV5.RPi.Models.Rigs;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
 
-public interface IOpticsConfigurationService
+public interface IEquipmentConfigurationService
 {
     Task<Result<EquipmentCatalogResponse>> GetCatalogAsync(CancellationToken cancellationToken);
 
@@ -18,6 +19,12 @@ public interface IOpticsConfigurationService
 
     Task<Result<EquipmentCatalogResponse>> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken);
 
+    Task<Result<EquipmentCatalogResponse>> CreateAdapterAsync(CreateAdapterRequest request, CancellationToken cancellationToken);
+
+    Task<Result<EquipmentCatalogResponse>> UpdateAdapterAsync(int adapterId, UpdateAdapterRequest request, CancellationToken cancellationToken);
+
+    Task<Result<EquipmentCatalogResponse>> DeleteAdapterAsync(int adapterId, CancellationToken cancellationToken);
+
     Task<Result<EquipmentCatalogResponse>> CreateCameraAsync(CreateCameraRequest request, CancellationToken cancellationToken);
 
     Task<Result<EquipmentCatalogResponse>> UpdateCameraAsync(int cameraId, UpdateCameraRequest request, CancellationToken cancellationToken);
@@ -25,4 +32,6 @@ public interface IOpticsConfigurationService
     Task<Result<EquipmentCatalogResponse>> CreateOpticsAsync(CreateOpticsRequest request, CancellationToken cancellationToken);
 
     Task<Result<EquipmentCatalogResponse>> UpdateOpticsAsync(int opticsId, UpdateOpticsRequest request, CancellationToken cancellationToken);
+
+    Task<Result<CameraDriverCatalogResponse>> GetCameraDriversAsync(CancellationToken cancellationToken);
 }

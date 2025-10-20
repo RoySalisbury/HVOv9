@@ -3,15 +3,7 @@ using System;
 using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
-using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
-using HVO.SkyMonitorV5.RPi.Infrastructure;
-using HVO.SkyMonitorV5.RPi.Models;
-using HVO.SkyMonitorV5.RPi.Infrastructure.NativeMemory;
-using HVO.SkyMonitorV5.RPi.Options;
-using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 
@@ -21,11 +13,16 @@ namespace HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 public sealed class CameraDriverFactory : ICameraDriverFactory
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly ICameraDriverRegistry _registry;
     private readonly ILogger<CameraDriverFactory>? _logger;
 
-    public CameraDriverFactory(IServiceProvider serviceProvider, ILogger<CameraDriverFactory>? logger = null)
+    public CameraDriverFactory(
+        IServiceProvider serviceProvider,
+        ICameraDriverRegistry registry,
+        ILogger<CameraDriverFactory>? logger = null)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _logger = logger;
     }
 
@@ -38,72 +35,32 @@ public sealed class CameraDriverFactory : ICameraDriverFactory
 
         try
         {
-            return rig.Camera.DriverId switch
+            var driverIdentifier = rig.Camera.DriverIdentifier;
+            if (string.IsNullOrWhiteSpace(driverIdentifier))
             {
-                CameraDriverId.Synthetic => Result<ICameraAdapter>.Success(CreateSyntheticAdapter(rig)),
-                CameraDriverId.Zwo => Result<ICameraAdapter>.Success(CreateZwoAdapter(rig)),
-                _ => Result<ICameraAdapter>.Failure(new InvalidOperationException(
-                    $"Unsupported camera driver id '{rig.Camera.DriverId}' for rig '{rig.Name}'."))
-            };
+                return Result<ICameraAdapter>.Failure(new InvalidOperationException(
+                    $"Rig '{rig.Name}' specifies unsupported camera driver id '{rig.Camera.DriverId}'."));
+            }
+
+            if (!_registry.TryGetDriver(driverIdentifier, out var descriptor))
+            {
+                return Result<ICameraAdapter>.Failure(new InvalidOperationException(
+                    $"Camera driver '{driverIdentifier}' is not registered for rig '{rig.Name}'."));
+            }
+
+            var adapter = descriptor.Create(_serviceProvider, rig);
+            _logger?.LogDebug(
+                "Created camera driver {DriverId} ({DriverType}) for rig {RigName}.",
+                descriptor.Id,
+                descriptor.ImplementationType.Name,
+                rig.Name);
+
+            return Result<ICameraAdapter>.Success(adapter);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to create camera driver for rig {RigName}.", rig.Name);
             return Result<ICameraAdapter>.Failure(ex);
         }
-    }
-
-    private ICameraAdapter CreateSyntheticAdapter(RigSpec rig)
-    {
-        var clock = _serviceProvider.GetRequiredService<IObservatoryClock>();
-        var locationOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>();
-        var starCatalogOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<StarCatalogOptions>>();
-        var cardinalOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>();
-        var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
-            var preprocessor = _serviceProvider.GetService<IFramePreprocessingOrchestrator>();
-
-        var colorMode = rig.Camera.Capabilities.ColorMode;
-        if (colorMode is CameraColorMode.Color or CameraColorMode.Switchable)
-        {
-            return new MockColorCameraAdapter(
-                locationOptions,
-                starCatalogOptions,
-                cardinalOptions,
-                scopeFactory,
-                rig,
-                clock,
-                _serviceProvider.GetService<ILoggerFactory>(),
-                    _serviceProvider.GetService<ILogger<MockColorCameraAdapter>>(),
-                    noiseProfile: null,
-                    preprocessingOrchestrator: preprocessor);
-        }
-
-        return new MockCameraAdapter(
-            locationOptions,
-            starCatalogOptions,
-            cardinalOptions,
-            scopeFactory,
-            rig,
-            clock,
-                _serviceProvider.GetService<ILogger<MockCameraAdapter>>(),
-                preprocessingOrchestrator: preprocessor);
-    }
-
-    private ICameraAdapter CreateZwoAdapter(RigSpec rig)
-    {
-        var clock = _serviceProvider.GetRequiredService<IObservatoryClock>();
-        var locationOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<ObservatoryLocationOptions>>();
-        var cardinalOptions = _serviceProvider.GetRequiredService<IOptionsMonitor<CardinalDirectionsOptions>>();
-        var loggerFactory = _serviceProvider.GetService<ILoggerFactory>();
-        var bufferFactory = _serviceProvider.GetRequiredService<INativeBufferLeaseFactory>();
-        return new ZwoCameraAdapter(
-            rig,
-            clock,
-            locationOptions,
-            cardinalOptions,
-            loggerFactory,
-                _serviceProvider.GetService<ILogger<ZwoCameraAdapter>>(),
-                _serviceProvider.GetService<IFramePreprocessingOrchestrator>(),
-                bufferFactory);
     }
 }

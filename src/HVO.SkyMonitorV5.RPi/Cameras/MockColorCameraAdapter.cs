@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 using HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;
+using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras;
 
@@ -18,6 +19,11 @@ namespace HVO.SkyMonitorV5.RPi.Cameras;
 /// Mock camera adapter that renders the synthetic scene in full colour, applying Bayer-like noise so
 /// the pipeline experiences a workload closer to the ASI174MC sensor.
 /// </summary>
+[CameraDriver(
+    id: CameraDriverIdentifiers.SimulationMockColor,
+    DisplayName = "Mock All-Sky (Color)",
+    Description = "Synthetic colour fisheye adapter emulating Bayer-pattern noise characteristics.",
+    Version = "1.0.0")]
 public sealed class MockColorCameraAdapter : MockCameraAdapter
 {
     private readonly ILogger<MockColorCameraAdapter>? _logger;

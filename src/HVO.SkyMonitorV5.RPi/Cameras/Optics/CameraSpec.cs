@@ -15,7 +15,8 @@ public sealed record CameraSpec(
     CameraDescriptor Descriptor,
     CameraDriverId DriverId = CameraDriverId.Unknown,
     bool IsSynthetic = false,
-    string? SyntheticProfile = null)
+    string? SyntheticProfile = null,
+    string? DriverSettingsJson = null)
 {
     public CameraSpec(string name, SensorSpec sensor)
         : this(name, sensor, CameraCapabilities.Empty, CreateDefaultDescriptor(name))
@@ -27,7 +28,13 @@ public sealed record CameraSpec(
     {
     }
 
-    public bool RequiresDriverRegistration => DriverId != CameraDriverId.Unknown;
+    public bool RequiresDriverRegistration => DriverId != CameraDriverId.Unknown || !string.IsNullOrWhiteSpace(DriverIdentifierOverride);
+
+    public string DriverIdentifier => string.IsNullOrWhiteSpace(DriverIdentifierOverride)
+        ? ResolveDriverIdentifier()
+        : DriverIdentifierOverride;
+
+    public string? DriverIdentifierOverride { get; init; }
 
     private static CameraDescriptor CreateDefaultDescriptor(string name)
     {
@@ -38,5 +45,19 @@ public sealed record CameraSpec(
             DriverVersion: string.Empty,
             AdapterName: label,
             Capabilities: Array.Empty<string>());
+    }
+
+    private string ResolveDriverIdentifier()
+    {
+        return DriverId switch
+        {
+            CameraDriverId.Synthetic => Capabilities.ColorMode switch
+            {
+                CameraColorMode.Color or CameraColorMode.Switchable => CameraDriverIdentifiers.SimulationMockColor,
+                _ => CameraDriverIdentifiers.SimulationMockMono
+            },
+            CameraDriverId.Zwo => CameraDriverIdentifiers.ZwoAsi,
+            _ => string.Empty
+        };
     }
 }
