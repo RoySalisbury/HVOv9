@@ -12,6 +12,6 @@ public sealed class RigSummary
     public double BoresightAltitudeDegrees { get; set; }
     public double BoresightAzimuthDegrees { get; set; }
     public bool IsActive { get; set; }
-    public bool HasAdapterBindings { get; set; }
+
     public long Revision { get; set; }
 }

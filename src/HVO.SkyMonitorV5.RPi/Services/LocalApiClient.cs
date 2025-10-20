@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
-using HVO.SkyMonitorV5.RPi.Models.Adapters;
+
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -47,11 +47,7 @@ public interface ILocalApiClient
 
     Task<EquipmentCatalogResponse?> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken);
 
-    Task<EquipmentCatalogResponse?> CreateAdapterAsync(CreateAdapterRequest request, CancellationToken cancellationToken);
 
-    Task<EquipmentCatalogResponse?> UpdateAdapterAsync(int adapterId, UpdateAdapterRequest request, CancellationToken cancellationToken);
-
-    Task<EquipmentCatalogResponse?> DeleteAdapterAsync(int adapterId, CancellationToken cancellationToken);
 
     Task<EquipmentCatalogResponse?> CreateCameraAsync(CreateCameraRequest request, CancellationToken cancellationToken);
 
@@ -369,68 +365,7 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
         return await ReadJsonAsync<EquipmentCatalogResponse>(response, "equipment", cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<EquipmentCatalogResponse?> CreateAdapterAsync(CreateAdapterRequest requestModel, CancellationToken cancellationToken)
-    {
-        if (requestModel is null)
-        {
-            throw new ArgumentNullException(nameof(requestModel));
-        }
 
-    using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1.0/configuration/equipment/adapters")
-        {
-            Content = CreateJsonContent(requestModel)
-        };
-
-        ApplyApiKey(request);
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Local API adapter create request failed with status code {StatusCode}.", response.StatusCode);
-            return null;
-        }
-
-        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "equipment", cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<EquipmentCatalogResponse?> UpdateAdapterAsync(int adapterId, UpdateAdapterRequest requestModel, CancellationToken cancellationToken)
-    {
-        if (requestModel is null)
-        {
-            throw new ArgumentNullException(nameof(requestModel));
-        }
-
-    using var request = new HttpRequestMessage(HttpMethod.Put, $"api/v1.0/configuration/equipment/adapters/{adapterId}")
-        {
-            Content = CreateJsonContent(requestModel)
-        };
-
-        ApplyApiKey(request);
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Local API adapter update request failed with status code {StatusCode}.", response.StatusCode);
-            return null;
-        }
-
-    return await ReadJsonAsync<EquipmentCatalogResponse>(response, "equipment", cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<EquipmentCatalogResponse?> DeleteAdapterAsync(int adapterId, CancellationToken cancellationToken)
-    {
-    using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/v1.0/configuration/equipment/adapters/{adapterId}");
-        ApplyApiKey(request);
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Local API adapter delete request failed with status code {StatusCode}.", response.StatusCode);
-            return null;
-        }
-
-        return await ReadJsonAsync<EquipmentCatalogResponse>(response, "equipment", cancellationToken).ConfigureAwait(false);
-    }
 
     public async Task<EquipmentCatalogResponse?> CreateCameraAsync(CreateCameraRequest requestModel, CancellationToken cancellationToken)
     {

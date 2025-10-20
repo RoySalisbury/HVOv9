@@ -65,9 +65,9 @@ public sealed class ZwoCameraAdapter : ICameraAdapter
 - [x] Validate user-provided settings server-side by attempting to deserialize into the declared configuration type.
 
 ### 6. Rig & Runtime Simplification
-- [ ] Remove the adapter catalog entities, controller endpoints, UI tab, and related tests introduced previously.
-- [ ] Trim `EquipmentConfigurationService` to drop adapter CRUD methods and rely solely on camera/rig operations.
-- [ ] Keep the existing runtime reload hook but make it trigger on camera/rig changes only (adapter-specific logic becomes unnecessary).
+- [x] Remove the adapter catalog entities, controller endpoints, UI tab, and related tests introduced previously.
+- [x] Trim `EquipmentConfigurationService` to drop adapter CRUD methods and rely solely on camera/rig operations.
+- [x] Keep the existing runtime reload hook but make it trigger on camera/rig changes only (adapter-specific logic becomes unnecessary).
 
 ### 7. Testing & Validation
 - [ ] Add unit tests for the registry (discovery success, duplicate id detection, configuration type binding).

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
-using HVO.SkyMonitorV5.RPi.Models.Adapters;
+
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -62,37 +62,7 @@ public sealed class EquipmentConfigurationController : ControllerBase
     public async Task<ActionResult<EquipmentCatalogResponse>> DeleteRigAsync(int rigId, [FromQuery] long? revision, CancellationToken cancellationToken)
         => await ExecuteAsync(() => _equipmentService.DeleteRigAsync(rigId, revision, cancellationToken)).ConfigureAwait(false);
 
-    [HttpPost("adapters")]
-    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<EquipmentCatalogResponse>> CreateAdapterAsync([FromBody] CreateAdapterRequest request, CancellationToken cancellationToken)
-    {
-        if (!ModelState.IsValid)
-        {
-            return ValidationProblem(ModelState);
-        }
 
-        return await ExecuteAsync(() => _equipmentService.CreateAdapterAsync(request, cancellationToken)).ConfigureAwait(false);
-    }
-
-    [HttpPut("adapters/{adapterId:int}")]
-    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<EquipmentCatalogResponse>> UpdateAdapterAsync(int adapterId, [FromBody] UpdateAdapterRequest request, CancellationToken cancellationToken)
-    {
-        if (!ModelState.IsValid)
-        {
-            return ValidationProblem(ModelState);
-        }
-
-        return await ExecuteAsync(() => _equipmentService.UpdateAdapterAsync(adapterId, request, cancellationToken)).ConfigureAwait(false);
-    }
-
-    [HttpDelete("adapters/{adapterId:int}")]
-    [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<EquipmentCatalogResponse>> DeleteAdapterAsync(int adapterId, CancellationToken cancellationToken)
-        => await ExecuteAsync(() => _equipmentService.DeleteAdapterAsync(adapterId, cancellationToken)).ConfigureAwait(false);
 
     [HttpPost("cameras")]
     [ProducesResponseType(typeof(EquipmentCatalogResponse), StatusCodes.Status200OK)]

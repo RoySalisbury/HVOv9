@@ -9,7 +9,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Configurations.Entities;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
-using HVO.SkyMonitorV5.RPi.Models.Adapters;
+
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -510,13 +510,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
                 return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{rig.Key}' has been updated by another request (expected revision {rig.Revision}, received {revision})."));
             }
 
-            var isReferenced = await context.CameraAdapters
-                .AnyAsync(adapter => adapter.RigId == rig.Id, cancellationToken)
-                .ConfigureAwait(false);
-            if (isReferenced)
-            {
-                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{rig.Key}' is in use by a camera adapter and cannot be deleted."));
-            }
+
 
             var wasActive = rig.IsActive;
 
@@ -548,158 +542,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
         }
     }
 
-    public async Task<Result<EquipmentCatalogResponse>> CreateAdapterAsync(CreateAdapterRequest request, CancellationToken cancellationToken)
-    {
-        if (request is null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
 
-        try
-        {
-            var normalizedName = NormalizeKey(request.Name);
-            var normalizedAdapterType = NormalizeAdapterType(request.AdapterType);
-            var normalizedRigKey = NormalizeKey(request.RigKey);
-
-            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-
-            if (await context.CameraAdapters.AnyAsync(adapter => adapter.Name == normalizedName, cancellationToken).ConfigureAwait(false))
-            {
-                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"An adapter named '{normalizedName}' already exists."));
-            }
-
-            var rig = await context.RigCatalogEntries
-                .FirstOrDefaultAsync(entry => entry.Key == normalizedRigKey, cancellationToken)
-                .ConfigureAwait(false);
-            if (rig is null)
-            {
-                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{normalizedRigKey}' was not found in the catalog."));
-            }
-
-            var rigIsActive = rig.IsActive;
-
-            var entity = new CameraAdapterConfigEntity
-            {
-                Name = normalizedName,
-                AdapterType = normalizedAdapterType,
-                RigId = rig.Id
-            };
-
-            await context.CameraAdapters.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-            _snapshotInvalidator.InvalidateSnapshot();
-
-            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            await ReloadRigAdapterAsync(rigIsActive, CancellationToken.None).ConfigureAwait(false);
-            return Result<EquipmentCatalogResponse>.Success(catalog);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to create camera adapter configuration.");
-            return Result<EquipmentCatalogResponse>.Failure(ex);
-        }
-    }
-
-    public async Task<Result<EquipmentCatalogResponse>> UpdateAdapterAsync(int adapterId, UpdateAdapterRequest request, CancellationToken cancellationToken)
-    {
-        if (request is null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
-        try
-        {
-            var normalizedName = NormalizeKey(request.Name);
-            var normalizedAdapterType = NormalizeAdapterType(request.AdapterType);
-            var normalizedRigKey = NormalizeKey(request.RigKey);
-
-            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-
-            var adapter = await context.CameraAdapters
-                .Include(entry => entry.Rig)
-                .FirstOrDefaultAsync(entry => entry.Id == adapterId, cancellationToken)
-                .ConfigureAwait(false);
-            if (adapter is null)
-            {
-                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Adapter with id {adapterId} was not found."));
-            }
-
-            var previousRigActive = adapter.Rig?.IsActive ?? false;
-
-            if (!string.Equals(adapter.Name, normalizedName, StringComparison.OrdinalIgnoreCase))
-            {
-                var collision = await context.CameraAdapters
-                    .AnyAsync(entry => entry.Id != adapterId && entry.Name == normalizedName, cancellationToken)
-                    .ConfigureAwait(false);
-                if (collision)
-                {
-                    return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"An adapter named '{normalizedName}' already exists."));
-                }
-            }
-
-            var rig = await context.RigCatalogEntries
-                .FirstOrDefaultAsync(entry => entry.Key == normalizedRigKey, cancellationToken)
-                .ConfigureAwait(false);
-            if (rig is null)
-            {
-                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Rig '{normalizedRigKey}' was not found in the catalog."));
-            }
-
-            var newRigActive = rig.IsActive;
-
-            adapter.Name = normalizedName;
-            adapter.AdapterType = normalizedAdapterType;
-            adapter.RigId = rig.Id;
-            adapter.Rig = rig;
-
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-            _snapshotInvalidator.InvalidateSnapshot();
-
-            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            await ReloadRigAdapterAsync(previousRigActive || newRigActive, CancellationToken.None).ConfigureAwait(false);
-            return Result<EquipmentCatalogResponse>.Success(catalog);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to update camera adapter configuration (ID {AdapterId}).", adapterId);
-            return Result<EquipmentCatalogResponse>.Failure(ex);
-        }
-    }
-
-    public async Task<Result<EquipmentCatalogResponse>> DeleteAdapterAsync(int adapterId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-
-            var adapter = await context.CameraAdapters
-                .Include(entry => entry.Rig)
-                .FirstOrDefaultAsync(entry => entry.Id == adapterId, cancellationToken)
-                .ConfigureAwait(false);
-            if (adapter is null)
-            {
-                return Result<EquipmentCatalogResponse>.Failure(new InvalidOperationException($"Adapter with id {adapterId} was not found."));
-            }
-
-            var activeRig = adapter.Rig?.IsActive ?? false;
-
-            context.CameraAdapters.Remove(adapter);
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-            _snapshotInvalidator.InvalidateSnapshot();
-
-            var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            await ReloadRigAdapterAsync(activeRig, CancellationToken.None).ConfigureAwait(false);
-            return Result<EquipmentCatalogResponse>.Success(catalog);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to delete camera adapter configuration (ID {AdapterId}).", adapterId);
-            return Result<EquipmentCatalogResponse>.Failure(ex);
-        }
-    }
 
     private static string NormalizeKey(string value)
     {
@@ -831,16 +674,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var adapterEntities = await context.CameraAdapters
-            .AsNoTracking()
-            .Include(adapter => adapter.Rig)
-            .OrderBy(adapter => adapter.Name)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
 
-        var adapterLookup = adapterEntities
-            .GroupBy(adapter => adapter.RigId)
-            .ToDictionary(group => group.Key, group => group.Count());
 
     var camerasInUse = rigs.Select(rig => rig.CameraId).ToHashSet();
     var opticsInUse = rigs.Select(rig => rig.LensId).ToHashSet();
@@ -928,60 +762,23 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
                 BoresightAltitudeDegrees = rig.BoresightAltitudeDegrees,
                 BoresightAzimuthDegrees = rig.BoresightAzimuthDegrees,
                 IsActive = rig.IsActive,
-                HasAdapterBindings = adapterLookup.ContainsKey(rig.Id),
+
                 Revision = rig.Revision
             })
             .ToList();
 
-        var adapters = adapterEntities
-            .Select(adapter => new AdapterSummary
-            {
-                Id = adapter.Id,
-                Name = adapter.Name,
-                AdapterType = adapter.AdapterType,
-                RigKey = adapter.Rig?.Key ?? string.Empty,
-                RigDisplayName = adapter.Rig?.DisplayName ?? string.Empty,
-                RigIsActive = adapter.Rig?.IsActive ?? false,
-                RigRevision = adapter.Rig?.Revision ?? 0
-            })
-            .ToList();
+
 
         return new EquipmentCatalogResponse
         {
             Rigs = summaries,
             Cameras = cameras,
             Optics = optics,
-            Adapters = adapters,
             ActiveRigKey = activeRigKey
         };
     }
 
-    private static string NormalizeAdapterType(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new InvalidOperationException("Adapter type must not be empty.");
-        }
 
-        var trimmed = value.Trim();
-
-        if (CameraAdapterTypes.IsMockColor(trimmed))
-        {
-            return CameraAdapterTypes.MockColor;
-        }
-
-        if (CameraAdapterTypes.IsMock(trimmed))
-        {
-            return CameraAdapterTypes.Mock;
-        }
-
-        if (CameraAdapterTypes.IsZwo(trimmed))
-        {
-            return CameraAdapterTypes.Zwo;
-        }
-
-        throw new InvalidOperationException($"Unsupported camera adapter type '{trimmed}'.");
-    }
 
     private static IReadOnlyList<string> DeserializeTags(string? json)
     {

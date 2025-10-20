@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using HVO;
-using HVO.SkyMonitorV5.RPi.Models.Adapters;
+
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -19,11 +19,7 @@ public interface IEquipmentConfigurationService
 
     Task<Result<EquipmentCatalogResponse>> DeleteRigAsync(int rigId, long? revision, CancellationToken cancellationToken);
 
-    Task<Result<EquipmentCatalogResponse>> CreateAdapterAsync(CreateAdapterRequest request, CancellationToken cancellationToken);
 
-    Task<Result<EquipmentCatalogResponse>> UpdateAdapterAsync(int adapterId, UpdateAdapterRequest request, CancellationToken cancellationToken);
-
-    Task<Result<EquipmentCatalogResponse>> DeleteAdapterAsync(int adapterId, CancellationToken cancellationToken);
 
     Task<Result<EquipmentCatalogResponse>> CreateCameraAsync(CreateCameraRequest request, CancellationToken cancellationToken);
 

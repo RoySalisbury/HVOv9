@@ -48,7 +48,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
     private bool CanSave => HasSelection && !_isLoading && !_isSaving && _hasChanges;
 
-    private bool CanDelete => HasSelection && !IsNewSelection && !_isLoading && !_isSaving && _editModel is { IsActive: false } model && !HasAdapterBindings(model.Id);
+    private bool CanDelete => HasSelection && !IsNewSelection && !_isLoading && !_isSaving && _editModel is { IsActive: false };
 
     protected override async Task OnInitializedAsync()
     {
@@ -387,8 +387,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
         }
     }
 
-    private bool HasAdapterBindings(int rigId)
-        => _rigs.FirstOrDefault(rig => rig.Id == rigId)?.HasAdapterBindings ?? false;
+
 
     private void HandleRowSelection(RigSummary rig)
     {
@@ -459,7 +458,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         public long Revision { get; set; }
 
-        public bool HasAdapterBindings { get; set; }
+
 
         public static RigEditModel CreateNew(string? defaultCameraKey, string? defaultOpticsKey, bool isActiveByDefault)
             => new()
@@ -473,7 +472,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
                 BoresightAzimuthDegrees = 0.0,
                 IsActive = isActiveByDefault,
                 Revision = 0,
-                HasAdapterBindings = false
+
             };
 
     public static RigEditModel FromSummary(RigSummary summary)
@@ -488,7 +487,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
                 BoresightAzimuthDegrees = summary.BoresightAzimuthDegrees,
                 IsActive = summary.IsActive,
                 Revision = summary.Revision,
-                HasAdapterBindings = summary.HasAdapterBindings
+
             };
 
         public RigEditModel Clone()
@@ -503,7 +502,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
                 BoresightAzimuthDegrees = BoresightAzimuthDegrees,
                 IsActive = IsActive,
                 Revision = Revision,
-                HasAdapterBindings = HasAdapterBindings
+
             };
 
         public CreateRigRequest ToCreateRequest()
