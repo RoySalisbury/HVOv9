@@ -218,6 +218,11 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
             }
             catch (Exception ex)
             {
+                if (_logger.TryLogOperationCanceled(ex, stoppingToken, "Background stacker loop cancelled."))
+                {
+                    throw;
+                }
+
                 _logger.LogError(ex, "Background frame stacker encountered an error. Restarting after {Delay}s.", GetRestartDelay().TotalSeconds);
                 if (!await DelayWithCancellationAsync(GetRestartDelay(), stoppingToken).ConfigureAwait(false))
                 {
@@ -545,6 +550,11 @@ public sealed class BackgroundFrameStackerService : BackgroundService, IBackgrou
         }
         catch (Exception ex)
         {
+            if (_logger.TryLogOperationCanceled(ex, stoppingToken, "Processing cancelled for frame #{FrameNumber}.", workItem.FrameNumber))
+            {
+                throw;
+            }
+
             _logger.LogError(ex, "Unhandled error while processing frame #{FrameNumber}.", workItem.FrameNumber);
             _frameStateStore.SetLastError(ex);
             DisposeWorkItem(workItem);

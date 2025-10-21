@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using HVO.SkyMonitorV5.Data.Configurations;
+using HVO.SkyMonitorV5.Data.Telemetry;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.HostedServices;
@@ -14,6 +16,7 @@ using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Skia;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -275,6 +278,8 @@ internal static class Program
 
             await using var provider = services.BuildServiceProvider();
 
+            await EnsureDataStoresAsync(provider, CancellationToken.None).ConfigureAwait(false);
+
             var hostedServices = provider.GetServices<IHostedService>().ToList();
             var background = provider.GetRequiredService<BackgroundFrameStackerService>();
             var capture = hostedServices.OfType<AllSkyCaptureService>().FirstOrDefault()
@@ -413,11 +418,17 @@ internal static class Program
         private static IConfiguration BuildConfiguration(string repoRoot, IDictionary<string, string?> overrides)
         {
             var appSettingsPath = Path.Combine(repoRoot, "src", "HVO.SkyMonitorV5.RPi");
+            var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                ?? "Development";
 
             var builder = new ConfigurationBuilder()
                 .SetBasePath(appSettingsPath)
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: false)
                 .AddInMemoryCollection(overrides);
+
+            builder.AddEnvironmentVariables();
 
             return builder.Build();
         }
@@ -426,6 +437,7 @@ internal static class Program
         {
             var overrides = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
+                ["SkyMonitor:Data:OverrideRootPath"] = Path.Combine(repoRoot, "datastores"),
                 ["CameraPipeline:EnableStacking"] = "true",
                 ["CameraPipeline:StackingFrameCount"] = "8",
                 ["CameraPipeline:StackingBufferMinimumFrames"] = "180",
@@ -506,6 +518,27 @@ internal static class Program
             var method = programType.GetMethod("ConfigureServices", BindingFlags.NonPublic | BindingFlags.Static)
                 ?? throw new InvalidOperationException("Unable to locate Program.ConfigureServices via reflection.");
             method.Invoke(null, new object[] { services, configuration });
+        }
+
+        private static async Task EnsureDataStoresAsync(IServiceProvider provider, CancellationToken cancellationToken)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            var loggerFactory = scope.ServiceProvider.GetService<ILoggerFactory>();
+            var logger = loggerFactory?.CreateLogger("StressHarness.DataBootstrap");
+
+            var configFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SkyMonitorConfigurationContext>>();
+            await using (var context = await configFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+            {
+                logger?.LogInformation("Applying configuration store migrations for stress harness data root.");
+                await context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var telemetryFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SkyMonitorTelemetryContext>>();
+            await using (var context = await telemetryFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+            {
+                logger?.LogInformation("Applying telemetry store migrations for stress harness data root.");
+                await context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

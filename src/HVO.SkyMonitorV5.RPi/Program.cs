@@ -496,24 +496,16 @@ public static class Program
                         FirstChanceExceptionCallsites.Clear();
                     }
 
-                    if (callSite != null && FirstChanceExceptionCallsites.TryAdd(callSite, 0))
-                    {
-                        logger.LogWarning(
-                            exception,
-                            "First-chance {ExceptionType} observed on thread {ThreadId} at {CallSite}.",
-                            exception.GetType().FullName,
-                            Environment.CurrentManagedThreadId,
-                            callSite);
-                        return;
-                    }
+                    var isNewCallSite = callSite != null && FirstChanceExceptionCallsites.TryAdd(callSite, 0);
+                    var logLevel = isNewCallSite ? LogLevel.Debug : (callSite is null ? LogLevel.Debug : LogLevel.Trace);
 
-                    var logLevel = callSite is null ? LogLevel.Warning : LogLevel.Debug;
                     logger.Log(logLevel,
                         exception,
-                        "First-chance {ExceptionType} observed on thread {ThreadId}{CallSiteInformation}.",
+                        "First-chance {ExceptionType} observed on thread {ThreadId}{CallSiteInformation}. (newCallSite={IsNewCallSite})",
                         exception.GetType().FullName,
                         Environment.CurrentManagedThreadId,
-                        callSite is null ? string.Empty : $" at {callSite}");
+                        callSite is null ? string.Empty : $" at {callSite}",
+                        isNewCallSite);
                 }
             };
         }

@@ -41,6 +41,11 @@ internal sealed class SkyMonitorTelemetryRetentionService : BackgroundService
             }
             catch (Exception ex)
             {
+                if (_logger.TryLogOperationCanceled(ex, stoppingToken, "Telemetry retention sweep cancelled."))
+                {
+                    break;
+                }
+
                 _logger.LogError(ex, "Telemetry retention sweep failed.");
             }
 

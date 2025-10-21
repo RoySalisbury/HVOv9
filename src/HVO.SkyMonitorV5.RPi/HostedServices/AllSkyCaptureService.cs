@@ -105,6 +105,11 @@ public sealed class AllSkyCaptureService : BackgroundService
             }
             catch (Exception ex)
             {
+                if (_logger.TryLogOperationCanceled(ex, stoppingToken, "Capture loop stopped due to cancellation."))
+                {
+                    throw;
+                }
+
                 _logger.LogError(ex, "Unhandled exception in capture loop. Rig will be restarted.");
                 _frameStateStore.SetLastError(ex);
                 await DelayWithCancellation(RetryDelay, stoppingToken);
@@ -489,6 +494,11 @@ public sealed class AllSkyCaptureService : BackgroundService
         }
         catch (Exception ex)
         {
+            if (_logger.TryLogOperationCanceled(ex, stoppingToken, "Synchronous frame processing cancelled."))
+            {
+                throw;
+            }
+
             _logger.LogError(ex, "Failed to process frame synchronously.");
             _frameStateStore.SetLastError(ex);
 
@@ -556,6 +566,13 @@ public sealed class AllSkyCaptureService : BackgroundService
     private async Task HandleCaptureFailureAsync(Exception? exception, CancellationToken stoppingToken)
     {
         var error = exception ?? new InvalidOperationException("Camera capture failed without an exception instance.");
+        // If the failure is due to an explicit cancellation triggered by shutdown, treat as a graceful stop.
+        if (error is OperationCanceledException && stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(error, "Rig capture cancelled due to shutdown.");
+            return;
+        }
+
         _frameStateStore.SetLastError(error);
         _logger.LogError(error, "Rig capture failed. Retrying after short delay.");
 
@@ -1075,6 +1092,11 @@ public sealed class AllSkyCaptureService : BackgroundService
             }
             catch (Exception ex)
             {
+                if (_logger.TryLogOperationCanceled(ex, cancellationToken, "Async pipeline cancelled while processing frame #{FrameNumber}.", item.FrameNumber))
+                {
+                    break;
+                }
+
                 _logger.LogError(ex, "Failed to process frame #{FrameNumber} in async pipeline.", item.FrameNumber);
                 _frameStateStore.SetLastError(ex);
             }

@@ -85,8 +85,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             var response = MapBackgroundStackerMetrics(status, fallbackSeconds, fallbackCompletedAt);
             return Task.FromResult(Result<BackgroundStackerMetricsResponse>.Success(response));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Background stacker metrics request cancelled.");
             throw;
         }
         catch (Exception ex)
@@ -111,8 +112,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             _logger.LogWarning("Frame filter pipeline implementation did not expose telemetry snapshot; returning empty telemetry.");
             return Task.FromResult(Result<FilterMetricsSnapshot>.Success(new FilterMetricsSnapshot(Array.Empty<FilterMetrics>())));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Filter metrics request cancelled.");
             throw;
         }
         catch (Exception ex)
@@ -133,8 +135,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
             return Task.FromResult(Result<BackgroundStackerHistoryResponse>.Success(history));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Background stacker history request cancelled.");
             throw;
         }
         catch (Exception ex)
@@ -159,8 +162,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
             return Task.FromResult(Result<RemoteDispatchMetricsSnapshot>.Success(metrics));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Remote dispatch metrics request cancelled.");
             throw;
         }
         catch (Exception ex)
@@ -181,8 +185,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
             return Task.FromResult(Result<RemoteDispatchHistoryResponse>.Success(history));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Remote dispatch history request cancelled.");
             throw;
         }
         catch (Exception ex)
@@ -224,8 +229,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             var response = new ComposedFrameHistoryResponse(_clock.LocalNow, samples);
             return Task.FromResult(Result<ComposedFrameHistoryResponse>.Success(response));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Composed frame history request cancelled.");
             throw;
         }
         catch (Exception ex)
@@ -384,8 +390,9 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
             return Result<FrameExportMetricsSnapshot>.Success(snapshot);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Remote dispatch metrics request cancelled.");
             throw;
         }
         catch (Exception ex)

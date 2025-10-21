@@ -54,6 +54,11 @@ internal sealed class SkyMonitorTelemetryIngestionService : BackgroundService
             }
             catch (Exception ex)
             {
+                if (_logger.TryLogOperationCanceled(ex, stoppingToken, "Telemetry ingestion cancelled while handling {WorkItemType}.", workItem.GetType().Name))
+                {
+                    break;
+                }
+
                 _logger.LogError(ex, "Telemetry ingestion failed for work item {WorkItemType}.", workItem.GetType().Name);
             }
         }

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.Data.Telemetry.Entities;
 using HVO.SkyMonitorV5.Data.Telemetry.Repositories;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 namespace HVO.SkyMonitorV5.RPi.Telemetry;
@@ -33,12 +34,18 @@ internal sealed class TelemetrySystemProfileRegistrar : ITelemetrySystemProfileR
             var result = await _repository.UpsertSystemProfileAsync(entity, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Telemetry system profile registered for hash {SystemHash} (Machine:{Machine} OS:{OS}).", result.SystemHash, result.MachineName ?? result.HostName, result.OperatingSystem);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Telemetry system profile registration cancelled.");
             throw;
         }
         catch (Exception ex)
         {
+            if (_logger.TryLogOperationCanceled(ex, cancellationToken, "Telemetry system profile registration cancelled."))
+            {
+                throw;
+            }
+
             _logger.LogError(ex, "Failed to register telemetry system profile metadata.");
             throw;
         }

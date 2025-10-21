@@ -14,6 +14,7 @@ using HVO.SkyMonitorV5.Data.Catalogs.DeepSky;
 using HVO.SkyMonitorV5.Data.Catalogs.Hyg;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
+using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -549,7 +550,7 @@ public sealed class SkyMonitorRepository : IStarRepository, IPlanetRepository, I
         }
         catch (OperationCanceledException ex)
         {
-            _logger.LogDebug(ex, "Planet visibility request cancelled.");
+            _logger.TryLogOperationCanceled(ex, cancellationToken, "Planet visibility request cancelled.");
             return Task.FromResult(Result<IReadOnlyList<PlanetMark>>.Failure(ex));
         }
         catch (Exception ex)
