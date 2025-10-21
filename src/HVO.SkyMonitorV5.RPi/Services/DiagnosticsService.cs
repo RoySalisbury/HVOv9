@@ -27,6 +27,8 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 {
     private const int FrameExportHistoryLimit = 200;
     private const int PendingRetryPreviewLimit = 10;
+    private const int TelemetryEventDefaultPageSize = 200;
+    private const int TelemetryEventMaxPageSize = 500;
     private readonly IFrameStateStore _frameStateStore;
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _configurationContextFactory;
@@ -452,6 +454,131 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         {
             _logger.LogError(ex, "Error while gathering frame export telemetry history.");
             return Result<FrameExportHistoryResponse>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<TelemetryEventPage>> GetTelemetryEventsAsync(
+        long? afterId = null,
+        long? beforeId = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (afterId.HasValue && beforeId.HasValue)
+            {
+                throw new ArgumentException("Specify only one of afterId or beforeId.", nameof(beforeId));
+            }
+
+            var size = pageSize.HasValue
+                ? Math.Clamp(pageSize.Value, 1, TelemetryEventMaxPageSize)
+                : TelemetryEventDefaultPageSize;
+
+            await using var telemetryContext = await _telemetryContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            IQueryable<TelemetryEventEntity> query;
+            if (afterId.HasValue)
+            {
+                query = telemetryContext.TelemetryEvents
+                    .AsNoTracking()
+                    .Where(entity => entity.Id > afterId.Value)
+                    .OrderBy(entity => entity.Id);
+            }
+            else if (beforeId.HasValue)
+            {
+                query = telemetryContext.TelemetryEvents
+                    .AsNoTracking()
+                    .Where(entity => entity.Id < beforeId.Value)
+                    .OrderByDescending(entity => entity.Id);
+            }
+            else
+            {
+                query = telemetryContext.TelemetryEvents
+                    .AsNoTracking()
+                    .OrderByDescending(entity => entity.Id);
+            }
+
+            var entities = await query
+                .Take(size + 1)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var hasMore = entities.Count > size;
+            if (hasMore)
+            {
+                entities.RemoveAt(entities.Count - 1);
+            }
+
+            IReadOnlyList<TelemetryEventEntity> orderedEntities;
+            if (afterId.HasValue)
+            {
+                orderedEntities = entities
+                    .OrderBy(entity => entity.Id)
+                    .ToList();
+            }
+            else
+            {
+                orderedEntities = entities
+                    .OrderByDescending(entity => entity.OccurredAtLocal)
+                    .ToList();
+            }
+
+            if (orderedEntities.Count == 0)
+            {
+                var emptyPage = new TelemetryEventPage(
+                    _clock.LocalNow,
+                    Array.Empty<TelemetryEventLogEntry>(),
+                    null,
+                    null,
+                    beforeId.HasValue && hasMore,
+                    afterId.HasValue && hasMore);
+
+                return Result<TelemetryEventPage>.Success(emptyPage);
+            }
+
+            var events = orderedEntities
+                .Select(entity => new TelemetryEventLogEntry(
+                    entity.Id,
+                    entity.OccurredAtUtc,
+                    entity.OccurredAtLocal,
+                    entity.Category,
+                    entity.EventType,
+                    entity.Severity,
+                    entity.Summary,
+                    entity.Detail,
+                    entity.PropertiesJson))
+                .ToList();
+
+            var latestId = events.Max(entry => entry.Id);
+            var oldestId = events.Min(entry => entry.Id);
+            var hasMoreBefore = beforeId.HasValue ? hasMore : (!afterId.HasValue && hasMore);
+            var hasMoreAfter = afterId.HasValue && hasMore;
+
+            var page = new TelemetryEventPage(
+                _clock.LocalNow,
+                events,
+                latestId,
+                oldestId,
+                hasMoreBefore,
+                hasMoreAfter);
+
+            return Result<TelemetryEventPage>.Success(page);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid telemetry event query parameters provided to diagnostics service.");
+            return Result<TelemetryEventPage>.Failure(ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retrieving telemetry events page.");
+            return Result<TelemetryEventPage>.Failure(ex);
         }
     }
 

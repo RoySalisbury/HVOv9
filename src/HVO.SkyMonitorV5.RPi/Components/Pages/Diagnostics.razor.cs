@@ -19,13 +19,16 @@ namespace HVO.SkyMonitorV5.RPi.Components.Pages;
 public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
 {
     private const int HistoryCapacity = 60;
-    private static readonly TimeSpan SystemRefreshInterval = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan QueueRefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan SystemRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan QueueRefreshInterval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan FilterRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RemoteDispatchRefreshInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan BackgroundRefreshInterval = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan FrameExportRefreshInterval = TimeSpan.FromSeconds(5);
-    private const string DefaultTabKey = "system";
+    private static readonly TimeSpan FrameExportRefreshInterval = TimeSpan.FromSeconds(7);
+    private static readonly TimeSpan LogsRefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan StorageRefreshInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan BackgroundRefreshInterval = TimeSpan.FromSeconds(5);
+    private const string DefaultTabKey = "overview";
+    private const string DiagnosticsApiBasePath = "/api/v1.0/diagnostics";
 
     private readonly List<double> _queueFillHistory = new();
     private readonly List<double> _queueLatencyHistory = new();
@@ -36,6 +39,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private readonly List<double> _frameExportProcessingHistory = new();
     private readonly List<double> _frameExportFullPipelineHistory = new();
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private readonly List<TelemetryEventLogEntry> _telemetryEvents = new();
+    private readonly HashSet<long> _telemetryEventIds = new();
 
     private CancellationTokenSource? _refreshCts;
     private Task? _refreshTask;
@@ -47,16 +52,24 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private FrameExportMetricsSnapshot? _frameExportMetrics;
     private FrameExportHistorySample? _lastFrameExportSample;
     private IReadOnlyList<FrameExportHistorySample> _frameExportHistory = Array.Empty<FrameExportHistorySample>();
+    private DataStoreMetricsSnapshot? _dataStoreMetrics;
+    private long? _latestTelemetryEventId;
+    private long? _oldestTelemetryEventId;
+    private bool _logsInitialised;
+    private bool _logsHasOlder;
+    private bool _logsHasNewer;
     private DateTimeOffset? _lastUpdated;
     private string? _errorMessage;
     private bool _isLoading = true;
-    private DiagnosticsTab _activeTab = DiagnosticsTab.System;
+    private DiagnosticsTab _activeTab = DiagnosticsTab.Overview;
     private string _activeTabKey = DefaultTabKey;
     private DateTimeOffset _lastSystemRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastQueueRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFilterRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastLogsRefreshUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastStorageRefreshUtc = DateTimeOffset.MinValue;
     private RemoteDispatchConfigSnapshot _remoteDispatchConfig = RemoteDispatchConfigSnapshot.Disabled;
     private IDisposable? _optionsChangeSubscription;
 
@@ -170,6 +183,28 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private IEnumerable<FrameExportSinkMetrics> FrameExportSinksByAttempts => FrameExportSinks.Count > 0
         ? FrameExportSinks.OrderByDescending(static sink => sink.AttemptCount)
         : Array.Empty<FrameExportSinkMetrics>();
+    private DataStoreMetricsSnapshot? DataStoreMetrics => _dataStoreMetrics;
+    private DataStoreInstanceMetrics? TelemetryStoreMetrics => DataStoreMetrics?.TelemetryStore;
+    private DataStoreInstanceMetrics? ConfigurationStoreMetrics => DataStoreMetrics?.ConfigurationStore;
+    private bool HasDataStoreMetrics => DataStoreMetrics is not null;
+    private string TelemetryDatabaseSizeDisplay => FormatBytes(TelemetryStoreMetrics?.FileBytes);
+    private string TelemetryDatabasePagesDisplay => FormatCount(TelemetryStoreMetrics?.PageCount ?? 0);
+    private string TelemetryDatabaseFreePagesDisplay => FormatCount(TelemetryStoreMetrics?.FreePages ?? 0);
+    private string TelemetryRetentionLastRunDisplay => FormatTimestamp(TelemetryStoreMetrics?.TelemetryRetention?.LastCompletedAtUtc);
+    private string ConfigurationDatabaseSizeDisplay => FormatBytes(ConfigurationStoreMetrics?.FileBytes);
+    private string TelemetryQueueDepthDisplay => TelemetryStoreMetrics?.TelemetryIngestion is { } metrics ? metrics.QueueDepth.ToString("N0", CultureInfo.CurrentCulture) : "—";
+    private string TelemetryIngestionLatencyDisplay => TelemetryStoreMetrics?.TelemetryIngestion is { } metrics ? FormatMilliseconds(metrics.LastIngestionLatencyMilliseconds) : "—";
+    private IReadOnlyList<DataStoreTableMetric> TelemetryTables => TelemetryStoreMetrics?.Tables ?? Array.Empty<DataStoreTableMetric>();
+    private IReadOnlyList<DataStoreTableMetric> ConfigurationTables => ConfigurationStoreMetrics?.Tables ?? Array.Empty<DataStoreTableMetric>();
+    private TelemetryRetentionSummaryMetrics? TelemetryRetentionMetrics => TelemetryStoreMetrics?.TelemetryRetention;
+    private DataStoreBootstrapStatusMetrics? TelemetryBootstrap => TelemetryStoreMetrics?.Bootstrap;
+    private DataStoreBootstrapStatusMetrics? ConfigurationBootstrap => ConfigurationStoreMetrics?.Bootstrap;
+    private IReadOnlyList<TelemetryEventLogEntry> TelemetryEvents => _telemetryEvents;
+    private bool HasTelemetryEvents => _telemetryEvents.Count > 0;
+    private string TelemetryEventCountDisplay => _telemetryEvents.Count.ToString("N0", CultureInfo.CurrentCulture);
+    private bool LogsHasOlder => _logsHasOlder;
+    private bool LogsHasNewer => _logsHasNewer;
+    private string LogsStatusDisplay => _logsInitialised ? $"Streaming · {TelemetryEventCountDisplay} events" : "Not loaded";
     private string RemoteDispatchConfigSummary => _remoteDispatchConfig.Summary;
     private string RemoteDispatchConfigBadgeText => _remoteDispatchConfig.Status switch
     {
@@ -268,9 +303,15 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private static DiagnosticsTab ResolveDiagnosticsTab(string tabKey)
         => tabKey switch
         {
-            "filters" => DiagnosticsTab.Filters,
-            "queue" => DiagnosticsTab.Queue,
-            _ => DiagnosticsTab.System
+            "pipeline" => DiagnosticsTab.Pipeline,
+            "filters" => DiagnosticsTab.Pipeline,
+            "queue" => DiagnosticsTab.Pipeline,
+            "dispatch" => DiagnosticsTab.Dispatch,
+            "exports" => DiagnosticsTab.Exports,
+            "logs" => DiagnosticsTab.Logs,
+            "storage" => DiagnosticsTab.Storage,
+            "system" => DiagnosticsTab.Overview,
+            _ => DiagnosticsTab.Overview
         };
 
     protected override void OnParametersSet()
@@ -329,50 +370,103 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         await RefreshAsync(_refreshCts.Token).ConfigureAwait(false);
     }
 
+    private async Task LoadOlderTelemetryEventsAsync()
+    {
+        if (!_logsHasOlder || !_oldestTelemetryEventId.HasValue)
+        {
+            return;
+        }
+
+        var cancellationToken = _refreshCts?.Token ?? CancellationToken.None;
+
+        try
+        {
+            await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await DiagnosticsService.GetTelemetryEventsAsync(beforeId: _oldestTelemetryEventId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (result.IsSuccessful)
+            {
+                ApplyTelemetryEventsPage(result.Value, TelemetryEventLoadMode.Older);
+
+                if (result.Value.OldestEventId.HasValue)
+                {
+                    _oldestTelemetryEventId = result.Value.OldestEventId;
+                }
+
+                if (result.Value.LatestEventId.HasValue && !_latestTelemetryEventId.HasValue)
+                {
+                    _latestTelemetryEventId = result.Value.LatestEventId;
+                }
+
+                _logsHasOlder = result.Value.HasMoreBefore;
+                _logsHasNewer = _logsHasNewer || result.Value.HasMoreAfter;
+                _logsInitialised = true;
+            }
+            else
+            {
+                var error = result.Error ?? new InvalidOperationException("Unknown telemetry events error");
+                Logger.LogWarning(error, "Failed to load older diagnostic telemetry events.");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unexpected error while loading older telemetry events.");
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
     private void ForceRefreshForTab(DiagnosticsTab tab)
     {
-        if (tab is DiagnosticsTab.System)
+        switch (tab)
         {
-            _lastSystemRefreshUtc = DateTimeOffset.MinValue;
-            _lastQueueRefreshUtc = DateTimeOffset.MinValue;
-            _lastFilterRefreshUtc = DateTimeOffset.MinValue;
-            _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
-            _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
-            return;
-        }
-
-        if (tab is DiagnosticsTab.Queue)
-        {
-            _lastQueueRefreshUtc = DateTimeOffset.MinValue;
-            _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
-            _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
-            return;
-        }
-
-        if (tab is DiagnosticsTab.Filters)
-        {
-            _lastFilterRefreshUtc = DateTimeOffset.MinValue;
+            case DiagnosticsTab.Overview:
+                _lastSystemRefreshUtc = DateTimeOffset.MinValue;
+                break;
+            case DiagnosticsTab.Pipeline:
+                _lastQueueRefreshUtc = DateTimeOffset.MinValue;
+                _lastFilterRefreshUtc = DateTimeOffset.MinValue;
+                break;
+            case DiagnosticsTab.Dispatch:
+                _lastRemoteDispatchRefreshUtc = DateTimeOffset.MinValue;
+                break;
+            case DiagnosticsTab.Exports:
+                _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
+                break;
+            case DiagnosticsTab.Logs:
+                _lastLogsRefreshUtc = DateTimeOffset.MinValue;
+                break;
+            case DiagnosticsTab.Storage:
+                _lastStorageRefreshUtc = DateTimeOffset.MinValue;
+                break;
         }
     }
 
     private TimeSpan GetCurrentLoopInterval() => _activeTab switch
     {
-        DiagnosticsTab.System => MinInterval(SystemRefreshInterval, RemoteDispatchRefreshInterval, FrameExportRefreshInterval, FilterRefreshInterval, BackgroundRefreshInterval),
-        DiagnosticsTab.Queue => MinInterval(QueueRefreshInterval, RemoteDispatchRefreshInterval, FrameExportRefreshInterval, BackgroundRefreshInterval),
-        DiagnosticsTab.Filters => MinInterval(FilterRefreshInterval, BackgroundRefreshInterval),
+        DiagnosticsTab.Overview => SystemRefreshInterval,
+        DiagnosticsTab.Pipeline => QueueRefreshInterval,
+        DiagnosticsTab.Dispatch => RemoteDispatchRefreshInterval,
+        DiagnosticsTab.Exports => FrameExportRefreshInterval,
+        DiagnosticsTab.Logs => LogsRefreshInterval,
+        DiagnosticsTab.Storage => StorageRefreshInterval,
         _ => BackgroundRefreshInterval
     };
-
-    private static TimeSpan MinInterval(params TimeSpan[] intervals)
-    {
-        if (intervals.Length == 0)
-        {
-            return BackgroundRefreshInterval;
-        }
-
-        var minTicks = intervals.Min(static interval => interval.Ticks);
-        return TimeSpan.FromTicks(minTicks);
-    }
 
     public async ValueTask DisposeAsync()
     {
@@ -756,6 +850,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                     if (systemResult.IsSuccessful)
                     {
                         _systemDiagnostics = systemResult.Value;
+                        _lastUpdated = ObservatoryClock.LocalNow;
                     }
                     else
                     {
@@ -775,6 +870,96 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
                 }
 
                 _lastSystemRefreshUtc = nowUtc;
+            }
+
+            if (ShouldRefreshLogs() && nowUtc - _lastLogsRefreshUtc >= LogsRefreshInterval)
+            {
+                try
+                {
+                    var afterId = _latestTelemetryEventId;
+                    var isInitialLoad = !_logsInitialised || !afterId.HasValue;
+                    var eventsResult = await DiagnosticsService.GetTelemetryEventsAsync(
+                        afterId: isInitialLoad ? null : afterId,
+                        beforeId: null,
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                    if (eventsResult.IsSuccessful)
+                    {
+                        var mode = isInitialLoad ? TelemetryEventLoadMode.Initial : TelemetryEventLoadMode.Newer;
+                        ApplyTelemetryEventsPage(eventsResult.Value, mode);
+
+                        if (eventsResult.Value.LatestEventId.HasValue)
+                        {
+                            _latestTelemetryEventId = eventsResult.Value.LatestEventId;
+                        }
+
+                        if (eventsResult.Value.OldestEventId.HasValue)
+                        {
+                            if (!_oldestTelemetryEventId.HasValue || eventsResult.Value.OldestEventId.Value < _oldestTelemetryEventId.Value)
+                            {
+                                _oldestTelemetryEventId = eventsResult.Value.OldestEventId;
+                            }
+                        }
+
+                        if (mode == TelemetryEventLoadMode.Initial)
+                        {
+                            _logsHasOlder = eventsResult.Value.HasMoreBefore;
+                        }
+                        else if (mode == TelemetryEventLoadMode.Newer)
+                        {
+                            _logsHasOlder = _logsHasOlder || eventsResult.Value.HasMoreBefore;
+                        }
+
+                        _logsHasNewer = eventsResult.Value.HasMoreAfter;
+                        _logsInitialised = true;
+                    }
+                    else
+                    {
+                        var error = eventsResult.Error ?? new InvalidOperationException("Unknown telemetry events diagnostics error");
+                        Logger.LogWarning(error, "Failed to refresh telemetry events stream.");
+                        errorMessages.Add("Unable to retrieve telemetry events.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Unexpected error refreshing telemetry events stream.");
+                    errorMessages.Add("Unexpected error while retrieving telemetry events.");
+                }
+
+                _lastLogsRefreshUtc = nowUtc;
+            }
+
+            if (ShouldRefreshStorageMetrics() && nowUtc - _lastStorageRefreshUtc >= StorageRefreshInterval)
+            {
+                try
+                {
+                    var storageResult = await DiagnosticsService.GetDataStoreMetricsAsync(cancellationToken).ConfigureAwait(false);
+                    if (storageResult.IsSuccessful)
+                    {
+                        _dataStoreMetrics = storageResult.Value;
+                    }
+                    else
+                    {
+                        var error = storageResult.Error ?? new InvalidOperationException("Unknown storage diagnostics error");
+                        Logger.LogWarning(error, "Failed to refresh data store metrics snapshot.");
+                        errorMessages.Add("Unable to retrieve storage metrics.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Unexpected error refreshing data store metrics snapshot.");
+                    errorMessages.Add("Unexpected error while retrieving storage metrics.");
+                }
+
+                _lastStorageRefreshUtc = nowUtc;
             }
 
             _errorMessage = errorMessages.Count > 0 ? string.Join(" ", errorMessages) : null;
@@ -817,7 +1002,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         _frameExportLatencyHistory.Clear();
         _frameExportQueueLatencyHistory.Clear();
         _frameExportProcessingHistory.Clear();
-    _frameExportFullPipelineHistory.Clear();
+        _frameExportFullPipelineHistory.Clear();
 
         if (attempts.Count == 0)
         {
@@ -852,6 +1037,83 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         }
 
         _lastRemoteDispatchSample = samples[^1];
+    }
+
+    private void ApplyTelemetryEventsPage(TelemetryEventPage page, TelemetryEventLoadMode mode)
+    {
+        if (mode == TelemetryEventLoadMode.Initial)
+        {
+            _telemetryEvents.Clear();
+            _telemetryEventIds.Clear();
+        }
+
+        if (page.Events.Count > 0)
+        {
+            switch (mode)
+            {
+                case TelemetryEventLoadMode.Initial:
+                    foreach (var entry in page.Events)
+                    {
+                        if (_telemetryEventIds.Add(entry.Id))
+                        {
+                            _telemetryEvents.Add(entry);
+                        }
+                    }
+
+                    break;
+                case TelemetryEventLoadMode.Newer:
+                    foreach (var entry in page.Events)
+                    {
+                        if (_telemetryEventIds.Add(entry.Id))
+                        {
+                            _telemetryEvents.Insert(0, entry);
+                        }
+                    }
+
+                    break;
+                case TelemetryEventLoadMode.Older:
+                    foreach (var entry in page.Events)
+                    {
+                        if (_telemetryEventIds.Add(entry.Id))
+                        {
+                            _telemetryEvents.Add(entry);
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        TrimTelemetryEvents();
+        UpdateTelemetryEventBounds();
+    }
+
+    private void TrimTelemetryEvents(int maxCount = 500)
+    {
+        if (_telemetryEvents.Count <= maxCount)
+        {
+            return;
+        }
+
+        for (var index = _telemetryEvents.Count - 1; index >= maxCount; index--)
+        {
+            var removed = _telemetryEvents[index];
+            _telemetryEvents.RemoveAt(index);
+            _telemetryEventIds.Remove(removed.Id);
+        }
+    }
+
+    private void UpdateTelemetryEventBounds()
+    {
+        if (_telemetryEvents.Count == 0)
+        {
+            _latestTelemetryEventId = null;
+            _oldestTelemetryEventId = null;
+            return;
+        }
+
+        _latestTelemetryEventId = _telemetryEvents[0].Id;
+        _oldestTelemetryEventId = _telemetryEvents[^1].Id;
     }
 
     private void ApplyFrameExportFallbackFromMetrics(FrameExportMetricsSnapshot snapshot)
@@ -931,6 +1193,12 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         {
             history.RemoveAt(0);
         }
+    }
+
+    private static string BuildDiagnosticsDownloadPath(string resource, string? query = null)
+    {
+        var path = $"{DiagnosticsApiBasePath}/{resource}";
+        return string.IsNullOrWhiteSpace(query) ? path : $"{path}?{query}";
     }
 
     private static string BuildGaugeStyle(double percentage)
@@ -1216,6 +1484,45 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         _ => outcome.ToString()
     };
 
+    private static string GetLogSeverityBadgeClass(string severity)
+    {
+        if (string.IsNullOrWhiteSpace(severity))
+        {
+            return "badge badge-log badge-log--info";
+        }
+
+        return severity.Trim().ToLowerInvariant() switch
+        {
+            "critical" => "badge badge-log badge-log--critical",
+            "fatal" => "badge badge-log badge-log--critical",
+            "error" => "badge badge-log badge-log--error",
+            "warning" => "badge badge-log badge-log--warning",
+            "warn" => "badge badge-log badge-log--warning",
+            "debug" => "badge badge-log badge-log--debug",
+            "trace" => "badge badge-log badge-log--trace",
+            _ => "badge badge-log badge-log--info"
+        };
+    }
+
+    private static string DescribeVacuumResult(TelemetryRetentionSummaryMetrics retention) => retention switch
+    {
+        { VacuumAttempted: false } => "Not attempted",
+        { VacuumSucceeded: true } => "Succeeded",
+        _ => "Failed"
+    };
+
+    private static string DescribeBootstrap(DataStoreBootstrapStatusMetrics bootstrap) => bootstrap switch
+    {
+        { Ran: false } => "Not run yet",
+        { Succeeded: true } => "Completed successfully",
+        _ => "Failed"
+    };
+
+    private static string FormatTimestamp(DateTimeOffset? timestamp)
+        => timestamp.HasValue
+            ? timestamp.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture)
+            : "—";
+
     private string GetFilterBarStyle(FilterMetrics metric)
     {
         var max = _filterMetrics is { Filters.Count: > 0 }
@@ -1243,21 +1550,35 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
 
     private enum DiagnosticsTab
     {
-        System,
-        Filters,
-        Queue
+        Overview,
+        Pipeline,
+        Dispatch,
+        Exports,
+        Logs,
+        Storage
     }
 
-    private bool ShouldRefreshFrameExportMetrics() => ActiveTab is DiagnosticsTab.Queue or DiagnosticsTab.System;
-
-    private bool ShouldRefreshRemoteDispatchMetrics() => ActiveTab is DiagnosticsTab.System or DiagnosticsTab.Queue;
-
-    private bool ShouldRefreshQueueMetrics() => ActiveTab is DiagnosticsTab.Queue or DiagnosticsTab.System;
-
-    private bool ShouldRefreshFilterMetrics() => ActiveTab is DiagnosticsTab.Filters or DiagnosticsTab.System;
-
-    private bool ShouldRefreshSystemMetrics() => ActiveTab is DiagnosticsTab.System;
+    private enum TelemetryEventLoadMode
+    {
+        Initial,
+        Newer,
+        Older
     }
+
+    private bool ShouldRefreshFrameExportMetrics() => ActiveTab is DiagnosticsTab.Exports;
+
+    private bool ShouldRefreshRemoteDispatchMetrics() => ActiveTab is DiagnosticsTab.Dispatch;
+
+    private bool ShouldRefreshQueueMetrics() => ActiveTab is DiagnosticsTab.Pipeline;
+
+    private bool ShouldRefreshFilterMetrics() => ActiveTab is DiagnosticsTab.Pipeline;
+
+    private bool ShouldRefreshSystemMetrics() => ActiveTab is DiagnosticsTab.Overview;
+
+    private bool ShouldRefreshLogs() => ActiveTab is DiagnosticsTab.Logs;
+
+    private bool ShouldRefreshStorageMetrics() => ActiveTab is DiagnosticsTab.Storage;
+}
 
     internal enum RemoteDispatchConfigurationStatus
     {

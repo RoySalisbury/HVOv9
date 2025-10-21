@@ -55,10 +55,21 @@
         {
             @switch (ActiveTab)
             {
-                case DiagnosticsTab.System:
+                case DiagnosticsTab.Overview:
                 {
                     <div class="tab-pane active">
                         <DriverRuntimePanel />
+
+                        <div class="d-flex flex-wrap justify-content-end gap-2 mb-4">
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("system")"
+                               target="_blank"
+                               rel="noopener"
+                               download="system-diagnostics.json">
+                                <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                Download system snapshot
+                            </a>
+                        </div>
 
                         <div class="row g-4">
                             <div class="col-xxl-4 col-lg-6">
@@ -81,14 +92,6 @@
                                             <div class="metric-row">
                                                 <dt>Refresh cadence</dt>
                                                 <dd>@RefreshIntervalDisplay</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Queue pressure</dt>
-                                                <dd>@QueuePressureDisplay</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Seconds since last frame</dt>
-                                                <dd>@SecondsSinceLastCompletedDisplay</dd>
                                             </div>
                                         </dl>
                                     </div>
@@ -220,43 +223,113 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    break;
+                }
+                case DiagnosticsTab.Pipeline:
+                {
+                    <div class="tab-pane active">
+                        <div class="d-flex flex-wrap justify-content-end gap-2 mb-4">
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("background-stacker")"
+                               target="_blank"
+                               rel="noopener"
+                               download="stacker-metrics.json">
+                                <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                Download queue metrics
+                            </a>
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("background-stacker/history")"
+                               target="_blank"
+                               rel="noopener"
+                               download="stacker-history.json">
+                                <span class="bi bi-clock-history me-1" aria-hidden="true"></span>
+                                Download queue history
+                            </a>
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("filters")"
+                               target="_blank"
+                               rel="noopener"
+                               download="filter-metrics.json">
+                                <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                Download filter metrics
+                            </a>
+                        </div>
 
-                        <div class="row g-4 mt-1">
-                            <div class="col-xl-6 col-lg-6">
+                        <div class="row g-4">
+                            <div class="col-xl-4 col-lg-6">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body">
-                                        <h2 class="section-title">Queue summary</h2>
+                                        <h2 class="section-title">Queue utilization</h2>
+                                        <div class="gauge-wrapper">
+                                            <div class="gauge" style="@QueueFillGaugeStyle">
+                                                <div class="gauge-inner">
+                                                    <span class="gauge-value">@QueueFillPercentageDisplay</span>
+                                                    <span class="gauge-label">current</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <dl class="metric-list">
                                             <div class="metric-row">
-                                                <dt>Queue memory</dt>
-                                                <dd>@QueueMemorySummary</dd>
+                                                <dt>Depth</dt>
+                                                <dd>@QueueDepthSummary</dd>
                                             </div>
                                             <div class="metric-row">
-                                                <dt>Peak memory</dt>
-                                                <dd>@PeakQueueMemorySummary</dd>
+                                                <dt>Peak depth</dt>
+                                                <dd>@PeakQueueDepthSummary</dd>
                                             </div>
                                             <div class="metric-row">
-                                                <dt>Last queue latency</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.LastQueueLatencyMilliseconds)</dd>
+                                                <dt>Peak fill</dt>
+                                                <dd>@PeakQueueFillDisplay</dd>
                                             </div>
                                             <div class="metric-row">
-                                                <dt>Avg queue latency</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.AverageQueueLatencyMilliseconds)</dd>
+                                                <dt>Queue pressure</dt>
+                                                <dd>@QueuePressureDisplay</dd>
                                             </div>
                                             <div class="metric-row">
-                                                <dt>Max queue latency</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.MaxQueueLatencyMilliseconds)</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Last frame number</dt>
-                                                <dd>@LastFrameNumberDisplay</dd>
+                                                <dt>Seconds since last frame</dt>
+                                                <dd>@SecondsSinceLastCompletedDisplay</dd>
                                             </div>
                                         </dl>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="col-xl-6">
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <h2 class="section-title">Processing</h2>
+                                        <dl class="metric-list">
+                                            <div class="metric-row">
+                                                <dt>Processed frames</dt>
+                                                <dd>@ProcessedFrameCountDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Dropped frames</dt>
+                                                <dd>@DroppedFrameCountDisplay</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last stack</dt>
+                                                <dd>@FormatMilliseconds(StackerMetrics?.LastStackMilliseconds)</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Avg stack</dt>
+                                                <dd>@FormatMilliseconds(StackerMetrics?.AverageStackMilliseconds)</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Last filter run</dt>
+                                                <dd>@FormatMilliseconds(StackerMetrics?.LastFilterMilliseconds)</dd>
+                                            </div>
+                                            <div class="metric-row">
+                                                <dt>Avg filter run</dt>
+                                                <dd>@FormatMilliseconds(StackerMetrics?.AverageFilterMilliseconds)</dd>
+                                            </div>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-4">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body">
                                         <h2 class="section-title">Telemetry insights</h2>
@@ -284,6 +357,143 @@
                         </div>
 
                         <div class="row g-4 mt-1">
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Queue fill trend</h2>
+                                            <span class="badge bg-outline">@HistoryDurationDisplay</span>
+                                        </div>
+                                        <div class="chart-wrapper mt-3">
+                                            <HistoryLineChart Values="@_queueFillHistory"
+                                                              DatasetLabel="Queue Fill %"
+                                                              Color="#0d6efd"
+                                                              YAxisLabel="Fill %"
+                                                              ValueSuffix="%"
+                                                              XAxisLabel="Samples"
+                                                              EmptyMessage="History will appear here once metrics roll in." />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Queue latency</h2>
+                                            <span class="badge bg-outline">@LatencyMaxDisplay</span>
+                                        </div>
+                                        <div class="chart-wrapper mt-3">
+                                            <HistoryLineChart Values="@_queueLatencyHistory"
+                                                              DatasetLabel="Queue Latency"
+                                                              Color="#0dcaf0"
+                                                              YAxisLabel="Milliseconds"
+                                                              ValueSuffix=" ms"
+                                                              XAxisLabel="Samples"
+                                                              EmptyMessage="Latency history will appear after the first few samples." />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-4">
+                                <div class="card diagnostics-card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h2 class="section-title mb-0">Stack duration</h2>
+                                            <span class="badge bg-outline">@StackDurationMaxDisplay</span>
+                                        </div>
+                                        <div class="chart-wrapper mt-3">
+                                            <HistoryLineChart Values="@_stackDurationHistory"
+                                                              DatasetLabel="Stack Duration"
+                                                              Color="#20c997"
+                                                              YAxisLabel="Milliseconds"
+                                                              ValueSuffix=" ms"
+                                                              XAxisLabel="Samples"
+                                                              EmptyMessage="Stack duration history will appear after the first few samples." />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mt-1">
+                            <div class="col-12">
+                                <div class="card diagnostics-card">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                            <div>
+                                                <h2 class="section-title mb-0">Filter telemetry</h2>
+                                                <p class="text-muted small mb-0">Average durations are compared relative to the busiest filter.</p>
+                                            </div>
+                                            <span class="badge bg-outline">@FilterSummaryDisplay</span>
+                                        </div>
+
+                                        @if (FilterMetricsSnapshot?.Filters.Count > 0)
+                                        {
+                                            <div class="filter-list mt-4">
+                                                @foreach (var filter in FilterMetricsSnapshot.Filters)
+                                                {
+                                                    <div class="filter-row">
+                                                        <div class="filter-name">@filter.FilterName</div>
+                                                        <div class="filter-bar">
+                                                            <div class="filter-bar-fill" style="@GetFilterBarStyle(filter)"></div>
+                                                        </div>
+                                                        <div class="filter-stats">
+                                                            <span class="stat">
+                                                                <span class="label">avg</span>
+                                                                <span class="value">@FormatMilliseconds(filter.AverageDurationMilliseconds)</span>
+                                                            </span>
+                                                            <span class="stat">
+                                                                <span class="label">last</span>
+                                                                <span class="value">@FormatMilliseconds(filter.LastDurationMilliseconds)</span>
+                                                            </span>
+                                                            <span class="stat">
+                                                                <span class="label">applied</span>
+                                                                <span class="value">@FormatCount(filter.AppliedCount)</span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="chart-empty text-muted mt-3">
+                                                Filter metrics will appear once the pipeline processes frames.
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    break;
+                }
+                case DiagnosticsTab.Dispatch:
+                {
+                    <div class="tab-pane active">
+                        <div class="d-flex flex-wrap justify-content-end gap-2 mb-4">
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("remote-dispatch")"
+                               target="_blank"
+                               rel="noopener"
+                               download="dispatch-metrics.json">
+                                <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                Download dispatch metrics
+                            </a>
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("remote-dispatch/history")"
+                               target="_blank"
+                               rel="noopener"
+                               download="dispatch-history.json">
+                                <span class="bi bi-clock-history me-1" aria-hidden="true"></span>
+                                Download dispatch history
+                            </a>
+                        </div>
+
+                        <div class="row g-4">
                             <div class="col-xl-6 col-lg-6">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body">
@@ -419,197 +629,29 @@
                     </div>
                     break;
                 }
-                case DiagnosticsTab.Filters:
+                case DiagnosticsTab.Exports:
                 {
                     <div class="tab-pane active">
-                        <div class="card diagnostics-card">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                                    <div>
-                                        <h2 class="section-title mb-0">Filter telemetry</h2>
-                                        <p class="text-muted small mb-0">Average durations are compared relative to the busiest filter.</p>
-                                    </div>
-                                    <span class="badge bg-outline">@FilterSummaryDisplay</span>
-                                </div>
-
-                                @if (FilterMetricsSnapshot?.Filters.Count > 0)
-                                {
-                                    <div class="filter-list mt-4">
-                                        @foreach (var filter in FilterMetricsSnapshot.Filters)
-                                        {
-                                            <div class="filter-row">
-                                                <div class="filter-name">@filter.FilterName</div>
-                                                <div class="filter-bar">
-                                                    <div class="filter-bar-fill" style="@GetFilterBarStyle(filter)"></div>
-                                                </div>
-                                                <div class="filter-stats">
-                                                    <span class="stat">
-                                                        <span class="label">avg</span>
-                                                        <span class="value">@FormatMilliseconds(filter.AverageDurationMilliseconds)</span>
-                                                    </span>
-                                                    <span class="stat">
-                                                        <span class="label">last</span>
-                                                        <span class="value">@FormatMilliseconds(filter.LastDurationMilliseconds)</span>
-                                                    </span>
-                                                    <span class="stat">
-                                                        <span class="label">applied</span>
-                                                        <span class="value">@FormatCount(filter.AppliedCount)</span>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="chart-empty text-muted mt-3">
-                                        Filter metrics will appear once the pipeline processes frames.
-                                    </div>
-                                }
-                            </div>
+                        <div class="d-flex flex-wrap justify-content-end gap-2 mb-4">
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("frame-exports")"
+                               target="_blank"
+                               rel="noopener"
+                               download="frame-export-metrics.json">
+                                <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                Download export metrics
+                            </a>
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("frame-exports/history")"
+                               target="_blank"
+                               rel="noopener"
+                               download="frame-export-history.json">
+                                <span class="bi bi-clock-history me-1" aria-hidden="true"></span>
+                                Download export history
+                            </a>
                         </div>
-                    </div>
-                    break;
-                }
-                case DiagnosticsTab.Queue:
-                {
-                    <div class="tab-pane active">
+
                         <div class="row g-4">
-                            <div class="col-xl-6 col-lg-6">
-                                <div class="card diagnostics-card h-100">
-                                    <div class="card-body">
-                                        <h2 class="section-title">Queue utilization</h2>
-                                        <div class="gauge-wrapper">
-                                            <div class="gauge" style="@QueueFillGaugeStyle">
-                                                <div class="gauge-inner">
-                                                    <span class="gauge-value">@QueueFillPercentageDisplay</span>
-                                                    <span class="gauge-label">current</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <dl class="metric-list">
-                                            <div class="metric-row">
-                                                <dt>Depth</dt>
-                                                <dd>@QueueDepthSummary</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Peak depth</dt>
-                                                <dd>@PeakQueueDepthSummary</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Peak fill</dt>
-                                                <dd>@PeakQueueFillDisplay</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Queue pressure</dt>
-                                                <dd>@QueuePressureDisplay</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Seconds since last frame</dt>
-                                                <dd>@SecondsSinceLastCompletedDisplay</dd>
-                                            </div>
-                                        </dl>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-xl-6 col-lg-6">
-                                <div class="card diagnostics-card h-100">
-                                    <div class="card-body">
-                                        <h2 class="section-title">Processing</h2>
-                                        <dl class="metric-list">
-                                            <div class="metric-row">
-                                                <dt>Processed frames</dt>
-                                                <dd>@ProcessedFrameCountDisplay</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Dropped frames</dt>
-                                                <dd>@DroppedFrameCountDisplay</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Last stack</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.LastStackMilliseconds)</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Avg stack</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.AverageStackMilliseconds)</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Last filter run</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.LastFilterMilliseconds)</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Avg filter run</dt>
-                                                <dd>@FormatMilliseconds(StackerMetrics?.AverageFilterMilliseconds)</dd>
-                                            </div>
-                                        </dl>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row g-4 mt-1">
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="card diagnostics-card h-100">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <h2 class="section-title mb-0">Queue fill trend</h2>
-                                            <span class="badge bg-outline">@HistoryDurationDisplay</span>
-                                        </div>
-                                        <div class="chart-wrapper mt-3">
-                                            <HistoryLineChart Values="@_queueFillHistory"
-                                                              DatasetLabel="Queue Fill %"
-                                                              Color="#0d6efd"
-                                                              YAxisLabel="Fill %"
-                                                              ValueSuffix="%"
-                                                              XAxisLabel="Samples"
-                                                              EmptyMessage="History will appear here once metrics roll in." />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="card diagnostics-card h-100">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <h2 class="section-title mb-0">Queue latency</h2>
-                                            <span class="badge bg-outline">@LatencyMaxDisplay</span>
-                                        </div>
-                                        <div class="chart-wrapper mt-3">
-                                            <HistoryLineChart Values="@_queueLatencyHistory"
-                                                              DatasetLabel="Queue Latency"
-                                                              Color="#0dcaf0"
-                                                              YAxisLabel="Milliseconds"
-                                                              ValueSuffix=" ms"
-                                                              XAxisLabel="Samples"
-                                                              EmptyMessage="Latency history will appear after the first few samples." />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-xl-4">
-                                <div class="card diagnostics-card h-100">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <h2 class="section-title mb-0">Stack duration</h2>
-                                            <span class="badge bg-outline">@StackDurationMaxDisplay</span>
-                                        </div>
-                                        <div class="chart-wrapper mt-3">
-                                            <HistoryLineChart Values="@_stackDurationHistory"
-                                                              DatasetLabel="Stack Duration"
-                                                              Color="#20c997"
-                                                              YAxisLabel="Milliseconds"
-                                                              ValueSuffix=" ms"
-                                                              XAxisLabel="Samples"
-                                                              EmptyMessage="Stack duration history will appear after the first few samples." />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row g-4 mt-1">
                             <div class="col-xxl-4 col-lg-6">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body">
@@ -844,6 +886,273 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    break;
+                }
+                case DiagnosticsTab.Logs:
+                {
+                    <div class="tab-pane active">
+                        <div class="card diagnostics-card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                    <div>
+                                        <h2 class="section-title mb-0">Telemetry event stream</h2>
+                                        <p class="text-muted small mb-0">Events append in real time while this tab stays active.</p>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                                        <span class="badge bg-outline">@LogsStatusDisplay</span>
+                                        <button class="btn btn-outline-info btn-sm" @onclick="LoadOlderTelemetryEventsAsync" disabled="@(!LogsHasOlder)">
+                                            <span class="bi bi-clock-history me-1" aria-hidden="true"></span>
+                                            Load older
+                                        </button>
+                                        <a class="btn btn-outline-info btn-sm"
+                                           href="@BuildDiagnosticsDownloadPath("telemetry-events", "pageSize=500")"
+                                           target="_blank"
+                                           rel="noopener"
+                                           download="telemetry-events.json">
+                                            <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                            Download JSON
+                                        </a>
+                                    </div>
+                                </div>
+
+                                @if (HasTelemetryEvents)
+                                {
+                                    <div class="log-viewer mt-4">
+                                        @foreach (var entry in TelemetryEvents)
+                                        {
+                                            <article class="log-entry">
+                                                <div class="log-entry-header">
+                                                    <span class="@GetLogSeverityBadgeClass(entry.Severity)">@entry.Severity</span>
+                                                    <span class="text-muted small">@entry.OccurredAtLocal.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture)</span>
+                                                    <span class="text-muted small">@entry.Category · @entry.EventType</span>
+                                                </div>
+                                                <div class="log-entry-body">
+                                                    <div class="log-entry-summary">@(!string.IsNullOrWhiteSpace(entry.Summary) ? entry.Summary : "(no summary)")</div>
+                                                    @if (!string.IsNullOrWhiteSpace(entry.Detail))
+                                                    {
+                                                        <div class="log-entry-detail text-muted small">@entry.Detail</div>
+                                                    }
+                                                </div>
+                                            </article>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="chart-empty text-muted mt-3">
+                                        Telemetry events will appear after the first entries are recorded.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    break;
+                }
+                case DiagnosticsTab.Storage:
+                {
+                    <div class="tab-pane active">
+                        <div class="d-flex flex-wrap justify-content-end gap-2 mb-4">
+                            <a class="btn btn-outline-info btn-sm"
+                               href="@BuildDiagnosticsDownloadPath("data-stores")"
+                               target="_blank"
+                               rel="noopener"
+                               download="storage-metrics.json">
+                                <span class="bi bi-download me-1" aria-hidden="true"></span>
+                                Download storage snapshot
+                            </a>
+                        </div>
+
+                        @if (HasDataStoreMetrics)
+                        {
+                            <div class="row g-4">
+                                <div class="col-xl-6 col-lg-6">
+                                    <div class="card diagnostics-card h-100">
+                                        <div class="card-body">
+                                            <h2 class="section-title">Telemetry store</h2>
+                                            <dl class="metric-list">
+                                                <div class="metric-row">
+                                                    <dt>Path</dt>
+                                                    <dd class="text-break">@TelemetryStoreMetrics?.DatabasePath</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Size</dt>
+                                                    <dd>@TelemetryDatabaseSizeDisplay</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Pages</dt>
+                                                    <dd>@TelemetryDatabasePagesDisplay</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Free pages</dt>
+                                                    <dd>@TelemetryDatabaseFreePagesDisplay</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Ingestion queue</dt>
+                                                    <dd>@TelemetryQueueDepthDisplay</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Ingestion latency</dt>
+                                                    <dd>@TelemetryIngestionLatencyDisplay</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Retention completed</dt>
+                                                    <dd>@TelemetryRetentionLastRunDisplay</dd>
+                                                </div>
+                                            </dl>
+
+                                            @if (TelemetryRetentionMetrics is { } retention)
+                                            {
+                                                <div class="mt-3">
+                                                    <p class="text-muted text-uppercase small fw-semibold mb-2">Last retention cycle</p>
+                                                    <dl class="metric-list">
+                                                        <div class="metric-row">
+                                                            <dt>Total purged</dt>
+                                                            <dd>@FormatCount(retention.TotalPurged)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Remote dispatch purged</dt>
+                                                            <dd>@FormatCount(retention.RemoteDispatchPurged)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Frame exports purged</dt>
+                                                            <dd>@FormatCount(retention.FrameExportsPurged)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Telemetry events purged</dt>
+                                                            <dd>@FormatCount(retention.TelemetryEventsPurged)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Vacuum</dt>
+                                                            <dd>@DescribeVacuumResult(retention)</dd>
+                                                        </div>
+                                                    </dl>
+                                                </div>
+                                            }
+
+                                            @if (TelemetryBootstrap is { } telemetryBootstrap)
+                                            {
+                                                <div class="mt-3">
+                                                    <p class="text-muted text-uppercase small fw-semibold mb-2">Bootstrap</p>
+                                                    <dl class="metric-list">
+                                                        <div class="metric-row">
+                                                            <dt>Status</dt>
+                                                            <dd>@DescribeBootstrap(telemetryBootstrap)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Completed</dt>
+                                                            <dd>@FormatTimestamp(telemetryBootstrap.CompletedAtUtc)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Error</dt>
+                                                            <dd>@(string.IsNullOrWhiteSpace(telemetryBootstrap.ErrorMessage) ? "—" : telemetryBootstrap.ErrorMessage)</dd>
+                                                        </div>
+                                                    </dl>
+                                                </div>
+                                            }
+
+                                            <div class="mt-3">
+                                                <p class="text-muted text-uppercase small fw-semibold mb-2">Tables</p>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-dark table-borderless align-middle mb-0">
+                                                        <thead class="text-muted small text-uppercase">
+                                                            <tr>
+                                                                <th scope="col">Table</th>
+                                                                <th scope="col" class="text-end">Rows</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var table in TelemetryTables)
+                                                            {
+                                                                <tr>
+                                                                    <td>@table.Table</td>
+                                                                    <td class="text-end">@FormatCount(table.RowCount)</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-xl-6 col-lg-6">
+                                    <div class="card diagnostics-card h-100">
+                                        <div class="card-body">
+                                            <h2 class="section-title">Configuration store</h2>
+                                            <dl class="metric-list">
+                                                <div class="metric-row">
+                                                    <dt>Path</dt>
+                                                    <dd class="text-break">@ConfigurationStoreMetrics?.DatabasePath</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Size</dt>
+                                                    <dd>@ConfigurationDatabaseSizeDisplay</dd>
+                                                </div>
+                                                <div class="metric-row">
+                                                    <dt>Exists</dt>
+                                                    <dd>@(ConfigurationStoreMetrics?.Exists == true ? "Yes" : "No")</dd>
+                                                </div>
+                                            </dl>
+
+                                            @if (ConfigurationBootstrap is { } configBootstrap)
+                                            {
+                                                <div class="mt-3">
+                                                    <p class="text-muted text-uppercase small fw-semibold mb-2">Bootstrap</p>
+                                                    <dl class="metric-list">
+                                                        <div class="metric-row">
+                                                            <dt>Status</dt>
+                                                            <dd>@DescribeBootstrap(configBootstrap)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Completed</dt>
+                                                            <dd>@FormatTimestamp(configBootstrap.CompletedAtUtc)</dd>
+                                                        </div>
+                                                        <div class="metric-row">
+                                                            <dt>Error</dt>
+                                                            <dd>@(string.IsNullOrWhiteSpace(configBootstrap.ErrorMessage) ? "—" : configBootstrap.ErrorMessage)</dd>
+                                                        </div>
+                                                    </dl>
+                                                </div>
+                                            }
+
+                                            <div class="mt-3">
+                                                <p class="text-muted text-uppercase small fw-semibold mb-2">Tables</p>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-dark table-borderless align-middle mb-0">
+                                                        <thead class="text-muted small text-uppercase">
+                                                            <tr>
+                                                                <th scope="col">Table</th>
+                                                                <th scope="col" class="text-end">Rows</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var table in ConfigurationTables)
+                                                            {
+                                                                <tr>
+                                                                    <td>@table.Table</td>
+                                                                    <td class="text-end">@FormatCount(table.RowCount)</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="card diagnostics-card">
+                                <div class="card-body">
+                                    <h2 class="section-title mb-2">Storage diagnostics</h2>
+                                    <p class="text-muted mb-0">Storage metrics will appear after the first snapshot is captured.</p>
+                                </div>
+                            </div>
+                        }
                     </div>
                     break;
                 }

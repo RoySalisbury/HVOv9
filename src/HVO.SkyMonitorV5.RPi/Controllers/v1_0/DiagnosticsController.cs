@@ -93,6 +93,30 @@ public sealed class DiagnosticsController : ControllerBase
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
+    [HttpGet("system")]
+    [ProducesResponseType(typeof(SystemDiagnosticsSnapshot), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<SystemDiagnosticsSnapshot>> GetSystemDiagnosticsAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetSystemDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve system diagnostics.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     [HttpGet("filters")]
     [ProducesResponseType(typeof(FilterMetricsSnapshot), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
@@ -113,6 +137,54 @@ public sealed class DiagnosticsController : ControllerBase
 
         return Problem(
             title: "Unable to retrieve filter telemetry.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [HttpGet("remote-dispatch")]
+    [ProducesResponseType(typeof(RemoteDispatchMetricsSnapshot), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<RemoteDispatchMetricsSnapshot>> GetRemoteDispatchMetricsAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetRemoteDispatchMetricsAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve remote dispatch metrics.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [HttpGet("remote-dispatch/history")]
+    [ProducesResponseType(typeof(RemoteDispatchHistoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<RemoteDispatchHistoryResponse>> GetRemoteDispatchHistoryAsync(CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetRemoteDispatchHistoryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        return Problem(
+            title: "Unable to retrieve remote dispatch history.",
             detail: error?.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
@@ -185,6 +257,43 @@ public sealed class DiagnosticsController : ControllerBase
 
         return Problem(
             title: "Unable to retrieve data store diagnostics.",
+            detail: error?.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [HttpGet("telemetry-events")]
+    [ProducesResponseType(typeof(TelemetryEventPage), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<TelemetryEventPage>> GetTelemetryEventsAsync(
+        [FromQuery] long? afterId,
+        [FromQuery] long? beforeId,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _diagnosticsService.GetTelemetryEventsAsync(afterId, beforeId, pageSize, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccessful)
+        {
+            return Ok(result.Value);
+        }
+
+        var error = result.Error;
+        if (error is OperationCanceledException)
+        {
+            throw error;
+        }
+
+        if (error is ArgumentException)
+        {
+            return Problem(
+                title: "Invalid telemetry event query.",
+                detail: error.Message,
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        return Problem(
+            title: "Unable to retrieve telemetry events.",
             detail: error?.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }

@@ -26,4 +26,10 @@ public interface IDiagnosticsService
     Task<Result<FrameExportHistoryResponse>> GetFrameExportHistoryAsync(CancellationToken cancellationToken = default);
 
     Task<Result<DataStoreMetricsSnapshot>> GetDataStoreMetricsAsync(CancellationToken cancellationToken = default);
+
+    Task<Result<TelemetryEventPage>> GetTelemetryEventsAsync(
+        long? afterId = null,
+        long? beforeId = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default);
 }

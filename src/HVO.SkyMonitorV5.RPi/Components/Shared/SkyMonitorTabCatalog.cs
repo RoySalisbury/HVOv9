@@ -24,9 +24,11 @@ internal static class SkyMonitorTabCatalog
 
     public static IReadOnlyList<SkyMonitorTabDefinition> DiagnosticsTabs { get; } = new[]
     {
-        new SkyMonitorTabDefinition("system", "System", "/diagnostics?tab=system", "bi bi-activity", NavLinkMatch.All),
-        new SkyMonitorTabDefinition("filters", "Filters", "/diagnostics?tab=filters", "bi bi-funnel", NavLinkMatch.All),
-        new SkyMonitorTabDefinition("queue", "Queue", "/diagnostics?tab=queue", "bi bi-stack", NavLinkMatch.All),
-        new SkyMonitorTabDefinition("exports", "Exports", "/diagnostics?tab=exports", "bi bi-cloud-upload", NavLinkMatch.All, Disabled: true)
+        new SkyMonitorTabDefinition("overview", "Overview", "/diagnostics?tab=overview", "bi bi-activity", NavLinkMatch.All),
+        new SkyMonitorTabDefinition("pipeline", "Pipeline", "/diagnostics?tab=pipeline", "bi bi-diagram-3", NavLinkMatch.All),
+        new SkyMonitorTabDefinition("dispatch", "Dispatch", "/diagnostics?tab=dispatch", "bi bi-broadcast", NavLinkMatch.All),
+        new SkyMonitorTabDefinition("exports", "Exports", "/diagnostics?tab=exports", "bi bi-cloud-upload", NavLinkMatch.All),
+        new SkyMonitorTabDefinition("logs", "Logs", "/diagnostics?tab=logs", "bi bi-terminal", NavLinkMatch.All),
+        new SkyMonitorTabDefinition("storage", "Storage", "/diagnostics?tab=storage", "bi bi-hdd-stack", NavLinkMatch.All)
     };
 }

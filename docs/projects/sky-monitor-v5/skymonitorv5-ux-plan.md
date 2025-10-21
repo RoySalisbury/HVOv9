@@ -44,10 +44,10 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 - [x] Update documentation/runbooks to reflect new configuration flows.
 
 ### 5. Diagnostics Modernization
-- [ ] Reorganize telemetry into grouped tabs, highlighting newly captured metrics.
-- [ ] Embed a real-time log viewer tab with throttled polling aligned to the active view.
-- [ ] Rationalize existing diagnostics polling intervals to avoid duplicate requests.
-- [ ] Add export/snapshot controls for offline diagnostics review.
+- [x] Reorganize telemetry into grouped tabs, highlighting newly captured metrics.
+- [x] Embed a real-time log viewer tab with throttled polling aligned to the active view.
+- [x] Rationalize existing diagnostics polling intervals to avoid duplicate requests.
+- [x] Add export/snapshot controls for offline diagnostics review.
 
 ### 6. Validation & Release Readiness
 - [ ] Exercise the updated UI against physical hardware when available (capture notes on exposure behavior and queue pressure).
