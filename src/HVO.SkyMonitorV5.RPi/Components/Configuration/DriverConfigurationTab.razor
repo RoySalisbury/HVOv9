@@ -1,0 +1,213 @@
+@using HVO.SkyMonitorV5.RPi.Models.Cameras
+
+<div class="container py-4 text-light">
+    <header class="config-toolbar">
+        <div class="config-toolbar__info">
+            <h1 class="config-toolbar__title">Driver Management</h1>
+            <p class="config-toolbar__subtitle">Inspect camera driver providers discovered on this device.</p>
+        </div>
+        <div class="config-toolbar__actions">
+            <button type="button"
+                    class="btn btn-sm btn-outline-info"
+                    @onclick="ReloadCatalogAsync"
+                    disabled="@(!CanReloadCatalog)">
+                <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                Refresh Catalog
+            </button>
+        </div>
+        @if (IsBusy)
+        {
+            <div class="config-toolbar__status text-muted">
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Loading driver catalog…
+            </div>
+        }
+        else
+        {
+            <div class="config-toolbar__status @(string.IsNullOrWhiteSpace(_errorMessage) ? "text-muted" : "text-danger")">
+                @GetToolbarStatus()
+            </div>
+        }
+    </header>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Registered Drivers</h2>
+                        <p class="mb-0 text-muted small">Drivers are discovered from runtime assemblies and provide camera adapter implementations.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        <div class="input-group input-group-sm driver-filter">
+                            <span class="input-group-text bg-transparent border-secondary text-muted">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                            </span>
+                            <input type="search"
+                                   class="form-control"
+                                   placeholder="Filter drivers…"
+                                   @bind="SearchText"
+                                   @bind:event="oninput"
+                                   aria-label="Filter drivers by name, identifier, or description" />
+                        </div>
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleCatalogSection"
+                                aria-expanded="@(!_catalogCollapsed)"
+                                aria-controls="driver-catalog"
+                                title='@GetCollapseButtonTitle("Driver catalog section", _catalogCollapsed)'>
+                            <i class="@GetCollapseIconCss(_catalogCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Driver catalog section", _catalogCollapsed)</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="driver-catalog"
+                     class="card-body @GetCollapseCss(_catalogCollapsed)"
+                     aria-hidden="@_catalogCollapsed">
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger mb-0" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (IsBusy && _drivers.Count == 0)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading driver catalog…</span>
+                            </div>
+                            <span>Loading driver catalog…</span>
+                        </div>
+                    }
+                    else if (_filteredDrivers.Count == 0)
+                    {
+                        <p class="text-muted mb-0">@GetEmptyFilterMessage()</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped align-middle driver-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Driver</th>
+                                        <th scope="col">Identifier</th>
+                                        <th scope="col">Supports Configuration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var driver in _filteredDrivers)
+                                    {
+                                        <tr class="@(string.Equals(_selectedDriverId, driver.Id, StringComparison.OrdinalIgnoreCase) ? "table-active" : null)">
+                                            <th scope="row">
+                                                <button type="button"
+                                                        class="btn btn-link btn-sm text-start text-light p-0 driver-selection"
+                                                        @onclick="() => SelectDriver(driver.Id)"
+                                                        disabled="@IsBusy">
+                                                    <span class="d-block fw-semibold">@driver.DisplayName</span>
+                                                    @if (!string.IsNullOrWhiteSpace(driver.Description))
+                                                    {
+                                                        <span class="d-block text-muted small">@driver.Description</span>
+                                                    }
+                                                </button>
+                                            </th>
+                                            <td class="text-monospace">@driver.Id</td>
+                                            <td>
+                                                <span class="badge @((driver.SupportsConfiguration ? "bg-success" : "bg-secondary"))">
+                                                    @(driver.SupportsConfiguration ? "Supported" : "Not supported")
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Driver Details</h2>
+                        <p class="mb-0 text-muted small">Selected driver capabilities and metadata.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm config-card__collapse"
+                            @onclick="ToggleDetailsSection"
+                            aria-expanded="@(!_detailsCollapsed)"
+                            aria-controls="driver-details"
+                            title='@GetCollapseButtonTitle("Driver details section", _detailsCollapsed)'>
+                        <i class="@GetCollapseIconCss(_detailsCollapsed)" aria-hidden="true"></i>
+                        <span class="visually-hidden">@GetCollapseButtonTitle("Driver details section", _detailsCollapsed)</span>
+                    </button>
+                </div>
+                <div id="driver-details"
+                     class="card-body @GetCollapseCss(_detailsCollapsed)"
+                     aria-hidden="@_detailsCollapsed">
+                    @if (SelectedDriver is null)
+                    {
+                        <p class="text-muted mb-0">Select a driver above to inspect its details.</p>
+                    }
+                    else
+                    {
+                        <dl class="row driver-detail-list">
+                            <dt class="col-sm-3 text-muted">Display Name</dt>
+                            <dd class="col-sm-9">@SelectedDriver!.DisplayName</dd>
+
+                            <dt class="col-sm-3 text-muted">Identifier</dt>
+                            <dd class="col-sm-9 text-monospace">@SelectedDriver.Id</dd>
+
+                            <dt class="col-sm-3 text-muted">Configuration</dt>
+                            <dd class="col-sm-9">@GetConfigurationSupportLabel(SelectedDriver)</dd>
+
+                            @if (!string.IsNullOrWhiteSpace(SelectedDriver.Version))
+                            {
+                                <dt class="col-sm-3 text-muted">Version</dt>
+                                <dd class="col-sm-9">@SelectedDriver.Version</dd>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(SelectedDriver.Description))
+                            {
+                                <dt class="col-sm-3 text-muted">Description</dt>
+                                <dd class="col-sm-9">@SelectedDriver.Description</dd>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(SelectedDriver.AssemblyQualifiedName))
+                            {
+                                <dt class="col-sm-3 text-muted">Assembly</dt>
+                                <dd class="col-sm-9 text-monospace">@SelectedDriver.AssemblyQualifiedName</dd>
+                            }
+                        </dl>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Driver Lifecycle</h2>
+                        <p class="mb-0 text-muted small">Control the active capture driver lifecycle and monitor runtime state.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm config-card__collapse"
+                            @onclick="ToggleLifecycleSection"
+                            aria-expanded="@(!_lifecycleCollapsed)"
+                            aria-controls="driver-lifecycle"
+                            title='@GetCollapseButtonTitle("Driver lifecycle section", _lifecycleCollapsed)'>
+                        <i class="@GetCollapseIconCss(_lifecycleCollapsed)" aria-hidden="true"></i>
+                        <span class="visually-hidden">@GetCollapseButtonTitle("Driver lifecycle section", _lifecycleCollapsed)</span>
+                    </button>
+                </div>
+                <div id="driver-lifecycle"
+                     class="card-body @GetCollapseCss(_lifecycleCollapsed)"
+                     aria-hidden="@_lifecycleCollapsed">
+                    <DriverLifecycleControls />
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

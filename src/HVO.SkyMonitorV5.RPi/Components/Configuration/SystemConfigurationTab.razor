@@ -2,6 +2,33 @@
 @using Microsoft.AspNetCore.Components.Forms
 
 <div class="container py-4 text-light">
+    <header class="config-toolbar">
+        <div class="config-toolbar__info">
+            <h1 class="config-toolbar__title">System Settings</h1>
+            <p class="config-toolbar__subtitle">Manage observatory metadata, local API access, and telemetry retention policies.</p>
+        </div>
+        <div class="config-toolbar__actions">
+            <button type="button"
+                    class="btn btn-sm btn-outline-info"
+                    @onclick="ReloadAllAsync"
+                    disabled="@(!CanReloadAll)">
+                <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                Refresh
+            </button>
+        </div>
+        @if (IsBusy)
+        {
+            <div class="config-toolbar__status text-muted">
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Working…
+            </div>
+        }
+        else
+        {
+            <div class="config-toolbar__status text-muted">@GetToolbarStatus()</div>
+        }
+    </header>
+
     <div class="row g-4">
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
@@ -10,12 +37,25 @@
                         <h2 class="h5 mb-1 config-card__title">Observatory Site</h2>
                         <p class="mb-0 text-muted small">Update the primary observatory metadata used for time zone and overlay calculations.</p>
                     </div>
-                    @if (_observatorySnapshot is not null)
-                    {
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis">ID @_observatorySnapshot.Id · Rev @_observatorySnapshot.Revision</span>
-                    }
+                    <div class="d-flex align-items-center gap-2">
+                        @if (_observatorySnapshot is not null)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis">ID @_observatorySnapshot.Id · Rev @_observatorySnapshot.Revision</span>
+                        }
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleObservatorySection"
+                                aria-expanded="@(!_observatoryCollapsed)"
+                                aria-controls="observatory-card-body"
+                                title='@GetCollapseButtonTitle("Observatory section", _observatoryCollapsed)'>
+                            <i class="@GetCollapseIconCss(_observatoryCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Observatory section", _observatoryCollapsed)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div id="observatory-card-body"
+                     class="card-body @GetCollapseCss(_observatoryCollapsed)"
+                     aria-hidden="@_observatoryCollapsed">
                     @if (_observatoryIsLoading)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
@@ -30,7 +70,7 @@
                         <div class="alert alert-danger" role="alert">
                             @_observatoryError
                         </div>
-                        <button type="button" class="btn btn-outline-light" @onclick="ReloadObservatoryAsync" disabled="@(_observatoryIsLoading)">
+                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadObservatoryAsync" disabled="@(_observatoryIsLoading)">
                             <i class="bi bi-arrow-clockwise me-2"></i>
                             Retry Load
                         </button>
@@ -38,7 +78,7 @@
                     else if (_observatoryEditContext is null)
                     {
                         <p class="text-muted">Observatory configuration has not been initialized.</p>
-                        <button type="button" class="btn btn-outline-light" @onclick="ReloadObservatoryAsync">
+                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadObservatoryAsync">
                             <i class="bi bi-arrow-clockwise me-2"></i>
                             Check Again
                         </button>
@@ -110,17 +150,17 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button type="button" class="btn btn-primary" @onclick="SubmitObservatoryAsync" disabled="@(!CanSaveObservatory)">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="SubmitObservatoryAsync" disabled="@(!CanSaveObservatory)">
                                     <i class="bi bi-save me-2"></i>
                                     Save Changes
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="CancelObservatoryAsync" disabled="@(!CanCancelObservatory)">
+                                <button type="button" class="btn btn-sm btn-outline-light" @onclick="CancelObservatoryAsync" disabled="@(!CanCancelObservatory)">
                                     <i class="bi bi-x-circle me-2"></i>
                                     Cancel
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="ReloadObservatoryAsync" disabled="@(!CanReloadObservatory)">
+                                <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadObservatoryAsync" disabled="@(!CanReloadObservatory)">
                                     <i class="bi bi-arrow-clockwise me-2"></i>
-                                    Reload
+                                    Refresh
                                 </button>
                             </div>
                         </EditForm>
@@ -132,17 +172,32 @@
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
                 <div class="card-header border-secondary d-flex justify-content-between align-items-center">
-                    <h2 class="h5 mb-0 d-flex align-items-center gap-2 config-card__title">Local API Client
-                        <span class="label-tooltip" role="img" aria-label="Settings used by this dashboard to contact the on-device API." title="Settings used by this dashboard to contact the on-device API.">
-                            <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
-                        </span>
-                    </h2>
-                    @if (_localApiSnapshot is not null)
-                    {
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis">Rev @_localApiSnapshot.Revision</span>
-                    }
+                    <div>
+                        <h2 class="h5 mb-0 d-flex align-items-center gap-2 config-card__title">Local API Client
+                            <span class="label-tooltip" role="img" aria-label="Settings used by this dashboard to contact the on-device API." title="Settings used by this dashboard to contact the on-device API.">
+                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
+                            </span>
+                        </h2>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (_localApiSnapshot is not null)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis">Rev @_localApiSnapshot.Revision</span>
+                        }
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleLocalApiSection"
+                                aria-expanded="@(!_localApiCollapsed)"
+                                aria-controls="localapi-card-body"
+                                title='@GetCollapseButtonTitle("Local API section", _localApiCollapsed)'>
+                            <i class="@GetCollapseIconCss(_localApiCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Local API section", _localApiCollapsed)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div id="localapi-card-body"
+                     class="card-body @GetCollapseCss(_localApiCollapsed)"
+                     aria-hidden="@_localApiCollapsed">
                     @if (_localApiIsLoading)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
@@ -157,7 +212,7 @@
                         <div class="alert alert-danger" role="alert">
                             @_localApiError
                         </div>
-                        <button type="button" class="btn btn-outline-light" @onclick="ReloadLocalApiAsync" disabled="@(_localApiIsLoading)">
+                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadLocalApiAsync" disabled="@(_localApiIsLoading)">
                             <i class="bi bi-arrow-clockwise me-2"></i>
                             Retry Load
                         </button>
@@ -165,7 +220,7 @@
                     else if (_localApiEditContext is null)
                     {
                         <p class="text-muted">Local API client configuration is unavailable.</p>
-                        <button type="button" class="btn btn-outline-light" @onclick="ReloadLocalApiAsync">
+                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadLocalApiAsync">
                             <i class="bi bi-arrow-clockwise me-2"></i>
                             Check Again
                         </button>
@@ -225,17 +280,17 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button type="button" class="btn btn-primary" @onclick="SubmitLocalApiAsync" disabled="@(!CanSaveLocalApi)">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="SubmitLocalApiAsync" disabled="@(!CanSaveLocalApi)">
                                     <i class="bi bi-save me-2"></i>
                                     Save Changes
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="CancelLocalApiAsync" disabled="@(!CanCancelLocalApi)">
+                                <button type="button" class="btn btn-sm btn-outline-light" @onclick="CancelLocalApiAsync" disabled="@(!CanCancelLocalApi)">
                                     <i class="bi bi-x-circle me-2"></i>
                                     Cancel
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="ReloadLocalApiAsync" disabled="@(!CanReloadLocalApi)">
+                                <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadLocalApiAsync" disabled="@(!CanReloadLocalApi)">
                                     <i class="bi bi-arrow-clockwise me-2"></i>
-                                    Reload
+                                    Refresh
                                 </button>
                             </div>
                         </EditForm>
@@ -255,12 +310,25 @@
                         </h2>
                         <p class="mb-0 text-muted small">Control retention policies applied to telemetry and processing data stores.</p>
                     </div>
-                    @if (_telemetrySnapshot is not null)
-                    {
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis mt-1">Rev @_telemetrySnapshot.Revision</span>
-                    }
+                    <div class="d-flex align-items-center gap-2">
+                        @if (_telemetrySnapshot is not null)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis mt-1">Rev @_telemetrySnapshot.Revision</span>
+                        }
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleTelemetrySection"
+                                aria-expanded="@(!_telemetryCollapsed)"
+                                aria-controls="telemetry-card-body"
+                                title='@GetCollapseButtonTitle("Telemetry retention section", _telemetryCollapsed)'>
+                            <i class="@GetCollapseIconCss(_telemetryCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Telemetry retention section", _telemetryCollapsed)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div id="telemetry-card-body"
+                     class="card-body @GetCollapseCss(_telemetryCollapsed)"
+                     aria-hidden="@_telemetryCollapsed">
                     @if (_telemetryIsLoading)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
@@ -275,7 +343,7 @@
                         <div class="alert alert-danger" role="alert">
                             @_telemetryError
                         </div>
-                        <button type="button" class="btn btn-outline-light" @onclick="ReloadTelemetryAsync" disabled="@(_telemetryIsLoading)">
+                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadTelemetryAsync" disabled="@(_telemetryIsLoading)">
                             <i class="bi bi-arrow-clockwise me-2"></i>
                             Retry Load
                         </button>
@@ -283,7 +351,7 @@
                     else if (_telemetryEditContext is null)
                     {
                         <p class="text-muted">Telemetry retention configuration is unavailable.</p>
-                        <button type="button" class="btn btn-outline-light" @onclick="ReloadTelemetryAsync">
+                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadTelemetryAsync">
                             <i class="bi bi-arrow-clockwise me-2"></i>
                             Check Again
                         </button>
@@ -516,17 +584,17 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button type="button" class="btn btn-primary" @onclick="SubmitTelemetryAsync" disabled="@(!CanSaveTelemetry)">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="SubmitTelemetryAsync" disabled="@(!CanSaveTelemetry)">
                                     <i class="bi bi-save me-2"></i>
                                     Save Changes
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="CancelTelemetryAsync" disabled="@(!CanCancelTelemetry)">
+                                <button type="button" class="btn btn-sm btn-outline-light" @onclick="CancelTelemetryAsync" disabled="@(!CanCancelTelemetry)">
                                     <i class="bi bi-x-circle me-2"></i>
                                     Cancel
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="ReloadTelemetryAsync" disabled="@(!CanReloadTelemetry)">
+                                <button type="button" class="btn btn-sm btn-outline-info" @onclick="ReloadTelemetryAsync" disabled="@(!CanReloadTelemetry)">
                                     <i class="bi bi-arrow-clockwise me-2"></i>
-                                    Reload
+                                    Refresh
                                 </button>
                             </div>
                         </EditForm>

@@ -22,6 +22,10 @@ else if (IsRigTabActive)
 {
     <RigConfigurationTab />
 }
+else if (IsDriversTabActive)
+{
+    <DriverConfigurationTab />
+}
 
 else if (IsCamerasTabActive)
 {
@@ -41,11 +45,11 @@ else if (IsOverviewTabActive)
                     Use the tabs above to manage system services, rig pairings, optics metadata, and camera inventory. Pipeline and filter configuration will surface here once those services are ported.
                 </p>
                 <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap">
-                    <NavLink class="btn btn-primary btn-lg" href="/monitor">
+                    <NavLink class="btn btn-sm btn-primary" href="/monitor">
                         <i class="bi bi-broadcast-pin me-2"></i>
                         Monitor Now
                     </NavLink>
-                    <NavLink class="btn btn-outline-light btn-lg" href="/diagnostics">
+                    <NavLink class="btn btn-sm btn-outline-light" href="/diagnostics">
                         <i class="bi bi-speedometer2 me-2"></i>
                         Diagnostics
                     </NavLink>
@@ -64,11 +68,11 @@ else
                     We are still wiring up the @ActiveTabDisplayName tab. In the meantime, update rigs, optics, and cameras using the tabs above.
                 </p>
                 <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap">
-                    <NavLink class="btn btn-primary btn-lg" href="/monitor">
+                    <NavLink class="btn btn-sm btn-primary" href="/monitor">
                         <i class="bi bi-broadcast-pin me-2"></i>
                         Monitor Now
                     </NavLink>
-                    <NavLink class="btn btn-outline-light btn-lg" href="/diagnostics">
+                    <NavLink class="btn btn-sm btn-outline-light" href="/diagnostics">
                         <i class="bi bi-speedometer2 me-2"></i>
                         Diagnostics
                     </NavLink>

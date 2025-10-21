@@ -47,6 +47,26 @@ This runbook documents operational procedures for SkyMonitor v5 deployments that
 
 > Expect initial warm-up to consume up to 1.5x the steady-state CPU budget for ~60 seconds while shader caches populate. Memory usage should stabilize around **400–450 MB** RSS with the default stacking depth (4 frames) and dual-role export payloads.
 
+## Camera Driver Metadata & Settings
+
+- Camera drivers are now discovered at runtime via the `CameraDriverAttribute`; no manual catalog seeding is necessary. Confirm the active drivers with:
+   ```bash
+   curl http://localhost:5136/api/v1.0/configuration/drivers | jq '.drivers[] | { id, displayName, supportsConfiguration }'
+   ```
+- Driver-specific settings live in `camera_catalog.driver_settings_json`. The UI surfaces these when `supportsConfiguration=true`, but operators can also update them directly:
+   ```sql
+   UPDATE camera_catalog
+       SET driver_settings_json = json_object(
+             'usbLimit', 40,
+             'defaultGain', 150,
+             'cooler', json_object('enabled', 1, 'setPointCelsius', -10),
+             'devicePath', '/dev/asi0'
+       )
+    WHERE key = 'MockASI174MM';
+   ```
+- After modifying JSON settings, trigger a configuration reload (`POST /api/v1.0/configuration/reload`) or restart the service. New settings take effect the next time the adapter initializes.
+- Keep payloads limited to the properties the driver understands. Unknown fields are ignored but remain in storage, so periodically prune obsolete keys.
+
 ### Skia Pipeline Feature Management
 
 - Configuration keys live under `SkiaPipelineFeatures` in the configuration store / `appsettings.{Environment}.json`.

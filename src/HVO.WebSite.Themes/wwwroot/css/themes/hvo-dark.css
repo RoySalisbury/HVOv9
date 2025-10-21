@@ -56,6 +56,11 @@
     --hvo-warning-strong: #facc15;
     --hvo-info-strong: #0ea5e9;
     --history-chart-color: #60a5fa;
+    --hvo-action-btn-font-size: 0.82rem;
+    --hvo-action-btn-padding-y: 0.44rem;
+    --hvo-action-btn-padding-x: 1rem;
+    --hvo-action-btn-radius: 0.75rem;
+    --hvo-action-btn-gap: 0.45rem;
 }
 
 html[data-theme="hvo-dark"] {
@@ -88,6 +93,30 @@ body[data-theme="hvo-dark"] .btn-primary {
     color: #fff;
     background-color: var(--hvo-accent-strong);
     border-color: var(--hvo-accent-stronger);
+}
+
+body[data-theme="hvo-dark"] .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--hvo-action-btn-gap);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border-radius: var(--hvo-action-btn-radius);
+    padding: var(--hvo-action-btn-padding-y) var(--hvo-action-btn-padding-x);
+    font-size: var(--hvo-action-btn-font-size);
+    line-height: 1.2;
+}
+
+body[data-theme="hvo-dark"] .btn.btn-sm {
+    padding: calc(var(--hvo-action-btn-padding-y) * 0.9) calc(var(--hvo-action-btn-padding-x) * 0.85);
+    font-size: calc(var(--hvo-action-btn-font-size) * 0.92);
+}
+
+body[data-theme="hvo-dark"] .btn.btn-lg {
+    padding: calc(var(--hvo-action-btn-padding-y) * 1.3) calc(var(--hvo-action-btn-padding-x) * 1.3);
+    font-size: calc(var(--hvo-action-btn-font-size) * 1.08);
+    border-radius: calc(var(--hvo-action-btn-radius) * 1.05);
 }
 
 body[data-theme="hvo-dark"] .btn:focus,

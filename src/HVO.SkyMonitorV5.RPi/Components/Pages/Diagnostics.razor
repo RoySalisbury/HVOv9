@@ -2,6 +2,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using Microsoft.AspNetCore.Components.Routing
 @using System.Globalization
+@using HVO.SkyMonitorV5.RPi.Components.Shared
 
 <PageTitle>Diagnostics Dashboard</PageTitle>
 
@@ -23,35 +24,11 @@
         </div>
     </div>
 
-    <nav class="diagnostics-nav nav nav-pills gap-2" role="tablist">
-        <button type="button"
-                class="nav-link @GetTabCss(DiagnosticsTab.System)"
-                role="tab"
-                aria-selected="@(ActiveTab == DiagnosticsTab.System)"
-                aria-current="@GetAriaCurrent(DiagnosticsTab.System)"
-                @onclick="() => SetActiveTab(DiagnosticsTab.System)">
-            <span class="bi bi-activity me-1" aria-hidden="true"></span>
-            System
-        </button>
-        <button type="button"
-                class="nav-link @GetTabCss(DiagnosticsTab.Filters)"
-                role="tab"
-                aria-selected="@(ActiveTab == DiagnosticsTab.Filters)"
-                aria-current="@GetAriaCurrent(DiagnosticsTab.Filters)"
-                @onclick="() => SetActiveTab(DiagnosticsTab.Filters)">
-            <span class="bi bi-funnel me-1" aria-hidden="true"></span>
-            Filters
-        </button>
-        <button type="button"
-                class="nav-link @GetTabCss(DiagnosticsTab.Queue)"
-                role="tab"
-                aria-selected="@(ActiveTab == DiagnosticsTab.Queue)"
-                aria-current="@GetAriaCurrent(DiagnosticsTab.Queue)"
-                @onclick="() => SetActiveTab(DiagnosticsTab.Queue)">
-            <span class="bi bi-stack me-1" aria-hidden="true"></span>
-            Queue
-        </button>
-    </nav>
+    <div class="w-100 mt-3">
+        <SkyMonitorSecondaryTabs Tabs="@DiagnosticsTabs"
+                                 Label="Diagnostics sections"
+                                 ActiveTabKey="@ActiveTabKey" />
+    </div>
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
@@ -81,6 +58,8 @@
                 case DiagnosticsTab.System:
                 {
                     <div class="tab-pane active">
+                        <DriverRuntimePanel />
+
                         <div class="row g-4">
                             <div class="col-xxl-4 col-lg-6">
                                 <div class="card diagnostics-card h-100">

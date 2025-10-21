@@ -12,6 +12,11 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 - Modernize Diagnostics with clearer telemetry groupings and a real-time log viewer.
 - Provide documented theme primitives so all HVO web properties can adopt the new patterns.
 
+## Current Priority
+- Finish Workstreams 3 through 6 before resuming any Workstream 7 items.
+- Ensure secondary tab and configuration changes (Workstreams 3 & 4) accommodate the camera driver refactor.
+- Carry the updated navigation conventions through Diagnostics modernization (Workstream 5) and validation efforts (Workstream 6) before touching media streaming enhancements again.
+
 ## Workstreams & Tasks
 
 ### 1. Theme Foundation (`HVO.WebSite.Themes`)
@@ -28,13 +33,13 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 
 ### 3. Secondary Tabs & Layout Hygiene
 - [x] Introduce reusable secondary tab component with page-specific definitions.
-- [ ] Integrate the component across Monitor, Image History, Configuration, and Diagnostics with their unique tab sets.
-- [ ] Map configuration areas to individual tabs (System, Rig, Cameras, Optics, Pipeline, Filters, etc.).
-- [ ] Introduce collapsible sections within dense cards to improve scanability.
-- [ ] Provide per-tab Save / Reload / Cancel controls, wiring commands to existing services.
+- [x] Re-baseline the tab map after the camera driver refactor, ensuring dedicated tabs for System, Rig, Drivers, Cameras, Optics, Pipeline, Filters, and new adapter diagnostics.
+- [x] Integrate the component across Monitor, Image History, Configuration, and Diagnostics with their updated tab sets.
+- [x] Introduce collapsible sections within dense cards to improve scanability (System, Rig, Driver catalog, and Adapter diagnostics cards now share the pattern).
+- [x] Confirm driver and adapter tabs remain informational with refresh-only controls, relying on per-section save/cancel actions where editing is supported (global save/cancel removed).
 
 ### 4. Configuration Enhancements
-- [ ] Surface camera adapter lifecycle actions (Start, Stop, Pause, Reload) within the System tab.
+- [x] Surface camera adapter lifecycle actions (Start, Stop, Pause, Reload) within the System tab.
 - [ ] Audit configuration forms for Result<T> usage, validation, and logging alignment.
 - [ ] Update documentation/runbooks to reflect new configuration flows.
 
@@ -49,10 +54,11 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 - [ ] Re-run stress harnesses or simulations to confirm UI-driven controls do not regress pipeline throughput.
 - [ ] Coordinate milestone tagging and release notes once documentation and UI updates are complete.
 
-### 7. Media Streaming & Performance
+### 7. Media Streaming & Performance _(on hold until Workstreams 3–6 are complete)_
 - [x] Introduce the `FrameMediaProvider` with API-first retrieval and frame-buffer fallback.
 - [x] Switch processed and raw detail pages to use the media provider and async loading flows.
 - [x] Update the Monitor page to reuse streamed media for the live tiles.
+- [ ] Begin design of the image history page.  Pause here for design discussion first as it may impact the `FrameMediaProvider` and the API calls.
 - [ ] Add unit coverage validating provider caching, API fallback, and native/raw descriptor handling.
 - [ ] Support format selection via the `type` query parameter on detail routes.
 - [ ] Surface quick-download actions on the Monitor cards using cached media URIs.
@@ -70,7 +76,8 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 - Diagnostics log viewer polling must be tuned to avoid excessive server load.
 
 ## Next Steps
-1. Align with stakeholders on milestone sequencing and resource availability.
-2. Prototype the badge navigation using theme tokens to validate spacing and accessibility.
-3. Finish Workstream 7 follow-on items: add provider test coverage, honor detail format selection, and wire monitor download actions.
-4. Start implementation under dedicated branches per workstream, gating merges on UI reviews.
+1. Validate the read-only Driver and Adapter Diagnostics experiences cover required telemetry, and capture follow-up tasks for lifecycle command surfaces separately.
+2. Align Workstream 4 scope with stakeholders, prioritizing adapter lifecycle actions and validation updates now that the layouts are in place.
+3. Begin Workstream 4 implementation (configuration enhancements), ensuring Result<T> usage and logging follow the refreshed standards.
+4. Modernize Diagnostics (Workstream 5) and execute the validation/release readiness checklist (Workstream 6), capturing any follow-up documentation.
+5. Resume Workstream 7 follow-ons (media provider tests, format selection, download actions) only after Workstreams 3–6 are delivered.

@@ -18,4 +18,8 @@ public interface ISystemConfigurationService
     Task<Result<SystemTelemetryRetentionConfigurationResponse>> GetTelemetryRetentionAsync(CancellationToken cancellationToken);
 
     Task<Result<SystemTelemetryRetentionConfigurationResponse>> UpdateTelemetryRetentionAsync(UpdateSystemTelemetryRetentionRequest request, CancellationToken cancellationToken);
+    
+    Task<Result<RigRuntimeStatusResponse>> GetRigRuntimeStatusAsync(CancellationToken cancellationToken);
+    
+    Task<Result<RigRuntimeActionResponse>> ExecuteRigRuntimeActionAsync(RigRuntimeActionRequest request, CancellationToken cancellationToken);
 }

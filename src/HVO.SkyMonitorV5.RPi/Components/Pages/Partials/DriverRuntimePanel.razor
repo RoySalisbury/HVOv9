@@ -1,0 +1,137 @@
+@using HVO.SkyMonitorV5.RPi.Models
+@using HVO.SkyMonitorV5.RPi.Models.System
+@inherits DriverRuntimeComponentBase<DriverRuntimePanel>
+
+<div class="row g-4 driver-runtime-panel text-light mb-4">
+    <div class="col-xxl-5 col-xl-6">
+        <section class="card diagnostics-card h-100">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <div>
+                        <h2 class="section-title mb-1">Driver Runtime</h2>
+                        <p class="text-muted small mb-0">Monitor the active capture driver and control its lifecycle.</p>
+                    </div>
+                    <div class="ms-auto d-flex flex-wrap gap-2 justify-content-end align-items-center">
+            <button type="button"
+                class="btn btn-sm btn-outline-info"
+                                @onclick="RefreshAsync"
+                                disabled="@(!CanRefresh)">
+                            <span class="bi bi-arrow-clockwise me-1" aria-hidden="true"></span>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <hr class="opacity-10 my-4" />
+
+                @if (!string.IsNullOrWhiteSpace(RuntimeError))
+                {
+                    <div class="alert alert-danger" role="alert">
+                        <span class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></span>
+                        @RuntimeError
+                    </div>
+                }
+                else if (Runtime is null)
+                {
+                    <p class="text-muted mb-0">Driver runtime telemetry is unavailable. Refresh to try again.</p>
+                }
+                else
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                        <span class="@GetRuntimeStateBadgeCss()" aria-live="polite">@Runtime.State</span>
+                        <span class="text-muted small">@GetRuntimeSubtitle()</span>
+                    </div>
+                    <dl class="metric-list driver-runtime-list">
+                        <div class="metric-row">
+                            <dt>Driver</dt>
+                            <dd>@GetDriverDisplayName()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Driver Identifier</dt>
+                            <dd>@GetDriverVersion()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Rig</dt>
+                            <dd>@GetRigName()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>State Summary</dt>
+                            <dd>@GetDriverStateSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Capabilities</dt>
+                            <dd>@GetCapabilitySummary()</dd>
+                        </div>
+                    </dl>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div class="col-xxl-7 col-xl-6">
+        <section class="card diagnostics-card h-100">
+            <div class="card-body">
+                <h2 class="section-title mb-1">Capture Snapshot</h2>
+                <p class="text-muted small mb-4">Recent frames and capture pipeline signals from the all-sky adapter.</p>
+
+                @if (!string.IsNullOrWhiteSpace(CaptureError))
+                {
+                    <div class="alert alert-danger" role="alert">
+                        <span class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></span>
+                        @CaptureError
+                    </div>
+                }
+                else if (IsLoading && Status is null)
+                {
+                    <div class="d-flex align-items-center gap-3 text-muted py-2">
+                        <div class="spinner-border text-info" role="status">
+                            <span class="visually-hidden">Loading capture snapshot…</span>
+                        </div>
+                        <span>Loading capture snapshot…</span>
+                    </div>
+                }
+                else if (Status is null)
+                {
+                    <p class="text-muted mb-0">Capture telemetry is not available yet. Refresh to try again.</p>
+                }
+                else
+                {
+                    <dl class="metric-list driver-snapshot-list">
+                        <div class="metric-row">
+                            <dt>Capture State</dt>
+                            <dd>@GetCaptureState()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Last Frame</dt>
+                            <dd>@GetLastFrameSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Exposure</dt>
+                            <dd>@GetExposureSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Background Stacker</dt>
+                            <dd>@GetBackgroundStackerSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Capture Pacing</dt>
+                            <dd>@GetCapturePacingSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Processing Queue</dt>
+                            <dd>@GetProcessingQueueSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Remote Dispatch</dt>
+                            <dd>@GetRemoteDispatchSummary()</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Hardware</dt>
+                            <dd>@GetHardwareSummary()</dd>
+                        </div>
+                    </dl>
+                }
+            </div>
+        </section>
+    </div>
+</div>

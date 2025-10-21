@@ -1,0 +1,46 @@
+.driver-runtime-panel {
+    --driver-panel-gap: 1rem;
+}
+
+.driver-runtime-panel .metric-list {
+    --metric-row-gap: 0.35rem;
+}
+
+.driver-runtime-panel .metric-list .metric-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.driver-runtime-panel .metric-list .metric-row:last-child {
+    border-bottom: none;
+}
+
+.driver-runtime-panel .metric-list dt {
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0;
+}
+
+.driver-runtime-panel .metric-list dd {
+    margin-bottom: 0;
+    text-align: right;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+@media (max-width: 768px) {
+    .driver-runtime-panel .metric-list .metric-row {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .driver-runtime-panel .metric-list dd {
+        text-align: left;
+    }
+}

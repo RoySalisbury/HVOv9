@@ -2,8 +2,15 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Web
+@using HVO.SkyMonitorV5.RPi.Components.Shared
 
 <PageTitle>SkyMonitor v5 · Image History</PageTitle>
+
+<section class="container-fluid py-3">
+    <SkyMonitorSecondaryTabs Tabs="@HistoryTabs"
+                             Label="Image history navigation"
+                             ActiveTabKey="@ActiveTabKey" />
+</section>
 
 <section class="container py-5 text-light">
     <div class="row justify-content-center">
@@ -12,10 +19,16 @@
             <p class="lead text-muted">
                 Archived frame browsing and telemetry overlays are in development. Return soon to review captured imagery and performance trends.
             </p>
-            <NavLink class="btn btn-outline-light btn-lg" href="/monitor">
+            <NavLink class="btn btn-sm btn-outline-light" href="/monitor">
                 <i class="bi bi-broadcast-pin me-2"></i>
                 Go to Monitor
             </NavLink>
         </div>
     </div>
 </section>
+
+@code {
+    private IReadOnlyList<SkyMonitorTabDefinition> HistoryTabs => SkyMonitorTabCatalog.ImageHistoryTabs;
+
+    private string ActiveTabKey => "image-history-overview";
+}

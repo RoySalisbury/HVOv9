@@ -86,37 +86,54 @@ public static class CancellationTokenHelpers
 
     public static async ValueTask<bool> WaitToReadWithoutThrowAsync<T>(ChannelReader<T> reader, CancellationToken cancellationToken)
     {
-        if (!cancellationToken.CanBeCanceled)
+        try
         {
-            return await reader.WaitToReadAsync().ConfigureAwait(false);
-        }
+            if (!cancellationToken.CanBeCanceled)
+            {
+                return await reader.WaitToReadAsync().ConfigureAwait(false);
+            }
 
-        if (cancellationToken.IsCancellationRequested)
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            var waitTask = reader.WaitToReadAsync().AsTask();
+            if (waitTask.IsCompleted)
+            {
+                if (waitTask.IsCanceled)
+                {
+                    return false;
+                }
+
+                return await waitTask.ConfigureAwait(false);
+            }
+
+            var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using var registration = cancellationToken.Register(static state =>
+            {
+                var source = (TaskCompletionSource<bool>)state!;
+                source.TrySetResult(false);
+            }, cancellationSource);
+
+            var completed = await Task.WhenAny(waitTask, cancellationSource.Task).ConfigureAwait(false);
+
+            if (completed == waitTask)
+            {
+                if (waitTask.IsCanceled)
+                {
+                    return false;
+                }
+
+                return await waitTask.ConfigureAwait(false);
+            }
+
+            return false;
+        }
+        catch (OperationCanceledException)
         {
             return false;
         }
-
-        var waitTask = reader.WaitToReadAsync().AsTask();
-        if (waitTask.IsCompleted)
-        {
-            return await waitTask.ConfigureAwait(false);
-        }
-
-        var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        using var registration = cancellationToken.Register(static state =>
-        {
-            var source = (TaskCompletionSource<bool>)state!;
-            source.TrySetResult(false);
-        }, cancellationSource);
-
-        var completed = await Task.WhenAny(waitTask, cancellationSource.Task).ConfigureAwait(false);
-
-        if (completed == waitTask)
-        {
-            return await waitTask.ConfigureAwait(false);
-        }
-
-        return false;
     }
 }

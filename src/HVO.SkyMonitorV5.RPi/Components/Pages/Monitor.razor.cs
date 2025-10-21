@@ -22,7 +22,6 @@ namespace HVO.SkyMonitorV5.RPi.Components.Pages;
 public sealed partial class Monitor : ComponentBase, IDisposable
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(10);
-
     private AllSkyStatusResponse? _status;
     private CancellationTokenSource? _refreshCts;
     private Task? _refreshTask;

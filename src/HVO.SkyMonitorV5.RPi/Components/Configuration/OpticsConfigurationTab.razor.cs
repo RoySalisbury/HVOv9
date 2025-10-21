@@ -22,6 +22,7 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
     private static readonly LensKind[] LensKindValues = Enum.GetValues<LensKind>();
 
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly List<OpticsCatalogItem> _filteredOptics = new();
 
     private IReadOnlyList<OpticsCatalogItem> _optics = Array.Empty<OpticsCatalogItem>();
     private IReadOnlyList<RigSummary> _rigs = Array.Empty<RigSummary>();
@@ -34,10 +35,12 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
     private bool _isLoading;
     private bool _isSaving;
     private bool _hasChanges;
+    private bool _catalogCollapsed;
     private string? _errorMessage;
     private string? _successMessage;
     private string? _lastUpdatedMessage;
     private string? _activeRigKey;
+    private string _searchText = string.Empty;
 
     [Inject]
     public ILocalApiClient LocalApiClient { get; set; } = default!;
@@ -47,13 +50,32 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 
     private CancellationToken CancellationToken => _lifetime.Token;
 
+    private bool IsBusy => _isLoading || _isSaving;
+
+    private bool CanReloadCatalog => !_isLoading && !_isSaving;
+
     private bool CanSave => _editModel is not null && !_isLoading && !_isSaving && _hasChanges;
 
     private IReadOnlyList<ProjectionModel> ProjectionModels => ProjectionModelValues;
 
     private IReadOnlyList<LensKind> LensKinds => LensKindValues;
 
-    private int OpticsCount => _optics.Count;
+    private IReadOnlyList<OpticsCatalogItem> FilteredOptics => _filteredOptics;
+
+    private string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            var next = value ?? string.Empty;
+            if (!string.Equals(_searchText, next, StringComparison.Ordinal))
+            {
+                _searchText = next;
+                ApplyFilter();
+                _ = RequestRepaintAsync();
+            }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
         => await LoadCatalogAsync().ConfigureAwait(false);
@@ -69,7 +91,7 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
     }
 
     private Task ReloadAsync()
-        => LoadCatalogAsync();
+        => CanReloadCatalog ? LoadCatalogAsync() : Task.CompletedTask;
 
     private async Task LoadCatalogAsync()
     {
@@ -133,7 +155,99 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
                 group => group.Key,
                 group => (IReadOnlyList<RigSummary>)group.ToList(),
                 StringComparer.OrdinalIgnoreCase);
+
+        ApplyFilter();
     }
+
+    private void ApplyFilter()
+    {
+        _filteredOptics.Clear();
+
+        if (_optics.Count == 0)
+        {
+            return;
+        }
+
+        var filter = _searchText.Trim();
+        IEnumerable<OpticsCatalogItem> query = _optics;
+
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            query = query.Where(optics =>
+                optics.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || optics.Key.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || optics.ProjectionModel.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || optics.Kind.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        foreach (var optics in query)
+        {
+            _filteredOptics.Add(optics);
+        }
+    }
+
+    private string GetToolbarStatus()
+    {
+        if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            return "Optics catalog failed to load.";
+        }
+
+        if (_isSaving)
+        {
+            return "Saving optics catalog changes…";
+        }
+
+        if (_isLoading)
+        {
+            return "Loading optics catalog…";
+        }
+
+        if (_optics.Count == 0)
+        {
+            return "No optics entries registered.";
+        }
+
+        if (_filteredOptics.Count == _optics.Count || string.IsNullOrWhiteSpace(_searchText))
+        {
+            return FormattableString.Invariant($"{_optics.Count} optics entr{(_optics.Count == 1 ? "y" : "ies")} loaded.");
+        }
+
+        return FormattableString.Invariant($"{_filteredOptics.Count} of {_optics.Count} optics entries match the filter.");
+    }
+
+    private string GetToolbarStatusCss()
+        => !string.IsNullOrWhiteSpace(_errorMessage) ? "text-danger" : "text-muted";
+
+    private string GetEmptyFilterMessage()
+    {
+        if (_optics.Count == 0)
+        {
+            return _isLoading ? "Loading optics catalog…" : "No optics entries are registered yet.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return "No optics entries are available.";
+        }
+
+        return "No optics entries match the current filter.";
+    }
+
+    private void ToggleCatalogSection()
+    {
+        _catalogCollapsed = !_catalogCollapsed;
+        StateHasChanged();
+    }
+
+    private static string GetCollapseIconCss(bool collapsed)
+        => collapsed ? "bi bi-chevron-down" : "bi bi-chevron-up";
+
+    private static string GetCollapseCss(bool collapsed)
+        => collapsed ? "collapse-hidden" : string.Empty;
+
+    private static string GetCollapseButtonTitle(string sectionName, bool collapsed)
+        => collapsed ? $"Expand {sectionName}" : $"Collapse {sectionName}";
 
     private OpticsCatalogItem? ResolveSelectionAfterRefresh()
     {
@@ -160,20 +274,6 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
         _successMessage = null;
 
         var model = OpticsEditModel.FromCatalog(optics);
-        AttachEditContext(model);
-    }
-
-    private void BeginCreate()
-    {
-        if (_isSaving)
-        {
-            return;
-        }
-
-        _errorMessage = null;
-        _successMessage = null;
-
-        var model = OpticsEditModel.CreateNew();
         AttachEditContext(model);
     }
 
@@ -560,19 +660,6 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 
             return model;
         }
-
-        public static OpticsEditModel CreateNew()
-            => new()
-            {
-                ProjectionModel = ProjectionModel.Perspective,
-                FocalLengthMillimeters = 1.0,
-                FieldOfViewXDegrees = 1.0,
-                FieldOfViewYDegrees = null,
-                RollDegrees = 0.0,
-                Kind = LensKind.Rectilinear,
-                IsActive = true
-            };
-
         private static bool NearlyEquals(double left, double right)
             => Math.Abs(left - right) < 0.0001;
 

@@ -214,6 +214,7 @@ public sealed class FrameExportRetryService : BackgroundService, IFrameExportRet
         var nowUtc = _clock.UtcNow;
 
         var pendingItems = await context.FrameExportRetries
+            .AsTracking()
             .ToListAsync(stoppingToken)
             .ConfigureAwait(false);
 

@@ -4,11 +4,12 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
-
+using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -36,6 +37,12 @@ public interface ILocalApiClient
     Task<SystemTelemetryRetentionConfigurationResponse?> GetTelemetryRetentionAsync(CancellationToken cancellationToken);
 
     Task<SystemTelemetryRetentionConfigurationResponse?> UpdateTelemetryRetentionAsync(UpdateSystemTelemetryRetentionRequest request, CancellationToken cancellationToken);
+
+    Task<RigRuntimeStatusResponse?> GetRigRuntimeStatusAsync(CancellationToken cancellationToken);
+
+    Task<RigRuntimeActionResponse?> ExecuteRigRuntimeActionAsync(RigRuntimeActionRequest request, CancellationToken cancellationToken);
+
+    Task<AllSkyStatusResponse?> GetAllSkyStatusAsync(CancellationToken cancellationToken);
 
     Task<EquipmentCatalogResponse?> GetEquipmentCatalogAsync(CancellationToken cancellationToken);
 
@@ -69,7 +76,7 @@ public sealed record LocalApiFrameResponse(
 internal sealed class LocalApiClient : ILocalApiClient, IDisposable
 {
     private static readonly string[] EmptyValues = Array.Empty<string>();
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     private readonly HttpClient _httpClient;
     private readonly LocalApiClientOptions _options;
@@ -266,6 +273,60 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
         }
 
         return await ReadJsonAsync<SystemTelemetryRetentionConfigurationResponse>(response, "telemetry-retention", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RigRuntimeStatusResponse?> GetRigRuntimeStatusAsync(CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/v1.0/configuration/system/runtime");
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API rig runtime status request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<RigRuntimeStatusResponse>(response, "runtime status", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RigRuntimeActionResponse?> ExecuteRigRuntimeActionAsync(RigRuntimeActionRequest requestModel, CancellationToken cancellationToken)
+    {
+        if (requestModel is null)
+        {
+            throw new ArgumentNullException(nameof(requestModel));
+        }
+
+    using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1.0/configuration/system/runtime/action")
+        {
+            Content = CreateJsonContent(requestModel)
+        };
+
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API rig runtime action request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<RigRuntimeActionResponse>(response, "runtime action", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AllSkyStatusResponse?> GetAllSkyStatusAsync(CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/v1.0/all-sky/status");
+        ApplyApiKey(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Local API all-sky status request failed with status code {StatusCode}.", response.StatusCode);
+            return null;
+        }
+
+        return await ReadJsonAsync<AllSkyStatusResponse>(response, "all-sky status", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<EquipmentCatalogResponse?> GetEquipmentCatalogAsync(CancellationToken cancellationToken)
@@ -558,6 +619,17 @@ internal sealed class LocalApiClient : ILocalApiClient, IDisposable
             _logger.LogError(ex, "Local API {Resource} response could not be deserialized.", resourceName);
             return default;
         }
+    }
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        return options;
     }
 }
 

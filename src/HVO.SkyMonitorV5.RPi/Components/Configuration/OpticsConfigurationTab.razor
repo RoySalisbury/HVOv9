@@ -3,6 +3,29 @@
 @using HVO.SkyMonitorV5.RPi.Cameras.Optics
 
 <div class="container py-4 text-light">
+    <header class="config-toolbar">
+        <div class="config-toolbar__info">
+            <h1 class="config-toolbar__title">Optics Configuration</h1>
+            <p class="config-toolbar__subtitle">Manage optics catalog entries and projection metadata for rigs and simulators.</p>
+        </div>
+        <div class="config-toolbar__actions">
+            <button type="button"
+                    class="btn btn-sm btn-outline-info"
+                    @onclick="ReloadAsync"
+                    disabled="@(!CanReloadCatalog)">
+                <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                Refresh
+            </button>
+        </div>
+        <div class="config-toolbar__status @GetToolbarStatusCss()">
+            @if (IsBusy)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            }
+            @GetToolbarStatus()
+        </div>
+    </header>
+
     <div class="row g-4">
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
@@ -13,28 +36,41 @@
                                 <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
                             </span>
                         </h2>
-                        <p class="mb-0 text-muted small">Create and maintain optics profiles used for plate solving, exposure planning, and rig assignments.</p>
+                        <p class="mb-0 text-muted small">Inspect optics profiles used for plate solving, exposure planning, and rig assignments.</p>
                     </div>
-                    <div class="d-flex flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        <div class="input-group input-group-sm optics-filter">
+                            <span class="input-group-text bg-transparent border-secondary text-muted">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                            </span>
+                            <input type="search"
+                                   class="form-control"
+                                   placeholder="Filter optics…"
+                                   @bind="SearchText"
+                                   @bind:event="oninput"
+                                   aria-label="Filter optics by name, key, projection model, or kind" />
+                        </div>
                         <button type="button"
-                                class="btn btn-primary btn-sm"
-                                title="Create a new optics entry"
-                                @onclick="BeginCreate"
-                                disabled="@(_isLoading || _isSaving)">
-                            <i class="bi bi-plus-circle me-2"></i>
-                            New Optics
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-light btn-sm"
-                                @onclick="ReloadAsync"
-                                disabled="@(_isLoading || _isSaving)">
-                            <i class="bi bi-arrow-clockwise me-2"></i>
-                            Refresh
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleCatalogSection"
+                                aria-expanded="@(!_catalogCollapsed)"
+                                aria-controls="optics-catalog"
+                                title='@GetCollapseButtonTitle("Optics catalog section", _catalogCollapsed)'>
+                            <i class="@GetCollapseIconCss(_catalogCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Optics catalog section", _catalogCollapsed)</span>
                         </button>
                     </div>
                 </div>
-                <div class="card-body">
-                    @if (_isLoading)
+                <div id="optics-catalog"
+                     class="card-body @GetCollapseCss(_catalogCollapsed)"
+                     aria-hidden="@_catalogCollapsed">
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger mb-0" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (_isLoading && FilteredOptics.Count == 0)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
                             <div class="spinner-border text-secondary" role="status">
@@ -43,15 +79,9 @@
                             <span>Loading optics catalog…</span>
                         </div>
                     }
-                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    else if (FilteredOptics.Count == 0)
                     {
-                        <div class="alert alert-danger mb-0" role="alert">
-                            @_errorMessage
-                        </div>
-                    }
-                    else if (_optics.Count == 0)
-                    {
-                        <p class="text-muted mb-0">No optics are registered yet. Create an entry to make optics available for rigs.</p>
+                        <p class="text-muted mb-0">@GetEmptyFilterMessage()</p>
                     }
                     else
                     {
@@ -71,7 +101,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var optics in _optics)
+                                    @foreach (var optics in FilteredOptics)
                                     {
                                         var usage = GetOpticsUsage(optics.Key);
                                         var isSelected = _editModel?.Id == optics.Id && optics.Id != 0;
@@ -133,9 +163,9 @@
                         </h2>
                         <p class="mb-0 text-muted small">Update catalog details so rigs and simulators can reference accurate projection data.</p>
                     </div>
-                    @if (_editModel is not null)
+                    @if (_editModel is { Id: > 0 })
                     {
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis">@(_editModel.Id > 0 ? $"ID {_editModel.Id} | Rev {_editModel.Revision}" : "New Optics Draft")</span>
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">ID @_editModel.Id | Rev @_editModel.Revision</span>
                     }
                 </div>
                 <div class="card-body">
@@ -148,7 +178,7 @@
 
                     @if (_editContext is null || _editModel is null)
                     {
-                        <p class="text-muted mb-0">Select an optics entry from the catalog or create a new optics profile to begin editing.</p>
+                        <p class="text-muted mb-0">Select an optics entry from the catalog to begin editing.</p>
                     }
                     else
                     {
@@ -261,15 +291,11 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)" title="Save changes to the optics catalog.">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)" title="Save changes to the optics catalog.">
                                     <i class="bi bi-save me-2"></i>
                                     Save Changes
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="BeginCreate" disabled="@(_isLoading || _isSaving)" title="Create a new optics entry.">
-                                    <i class="bi bi-plus-circle me-2"></i>
-                                    New
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" @onclick="ResetChanges" disabled="@(!_hasChanges || _isSaving)" title="Discard changes and revert to the saved values.">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ResetChanges" disabled="@(!_hasChanges || _isSaving)" title="Discard changes and revert to the saved values.">
                                     <i class="bi bi-arrow-counterclockwise me-2"></i>
                                     Reset
                                 </button>

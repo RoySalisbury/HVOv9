@@ -5,8 +5,6 @@
   <Project Path="HVO.RoofControllerV4.Common/HVO.RoofControllerV4.Common.csproj" />
   </Folder>
   <Folder Name="/SkyMonitor/">
-  <Project Path="HVO.SkyMonitorV4.CLI/HVO.SkyMonitorV4.CLI.csproj" />
-  <Project Path="HVO.SkyMonitorV4.RPi/HVO.SkyMonitorV4.RPi.csproj" />
   <Project Path="HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj" />
   <Project Path="HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
   <Project Path="HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj" />
@@ -24,11 +22,6 @@
     <File Path="../docs/TODO.md" />
     <File Path="../README.md" />
     <File Path="HVOv9.DevContainer.slnf" />
-  </Folder>
-  <Folder Name="/Playground/">
-    <Project Path="HVO.Playground.CLI/HVO.Playground.CLI.csproj" />
-    <Project Path="HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj" />
-    <Project Path="HVO.WebSite.Playground/HVO.WebSite.Playground.csproj" />
   </Folder>
   <Folder Name="/Themes/">
     <Project Path="HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />

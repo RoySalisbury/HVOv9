@@ -40,49 +40,74 @@ public sealed class RigRuntimeUpdater : IRigRuntimeUpdater
     {
         try
         {
-            _catalogCache.TryRemove(OptionsDefaults.DefaultName);
+            _logger?.LogInformation("Rig runtime reload requested. ForceRestart={ForceRestart}.", forceRestart);
+
+            var cacheCleared = _catalogCache.TryRemove(OptionsDefaults.DefaultName);
+            _logger?.LogDebug(
+                "Active rig options cache invalidated before reload. ForceRestart={ForceRestart}, CacheCleared={CacheCleared}.",
+                forceRestart,
+                cacheCleared);
 
             var resolved = _rigCatalog.ResolveActive();
             if (resolved.IsFailure)
             {
                 if (resolved.Error is not null)
                 {
-                    _logger?.LogWarning(resolved.Error, "Rig reload skipped; active rig could not be resolved.");
+                    _logger?.LogWarning(
+                        resolved.Error,
+                        "Rig reload skipped; active rig could not be resolved. ForceRestart={ForceRestart}.",
+                        forceRestart);
                 }
                 else
                 {
-                    _logger?.LogWarning("Rig reload skipped; active rig could not be resolved.");
+                    _logger?.LogWarning(
+                        "Rig reload skipped; active rig could not be resolved. ForceRestart={ForceRestart}.",
+                        forceRestart);
                 }
 
                 return;
             }
 
             var rig = resolved.Value;
+            _logger?.LogInformation(
+                "Rig reload resolved active rig {RigName} with driver {DriverIdentifier}. ForceRestart={ForceRestart}.",
+                rig.Name,
+                rig.Camera.DriverIdentifier,
+                forceRestart);
             var reloadResult = await _rigAdapter
                 .ReloadAsync(rig, cancellationToken, forceRestart)
                 .ConfigureAwait(false);
 
             if (reloadResult.IsFailure)
             {
-                _logger?.LogError(reloadResult.Error, "Rig acquisition adapter reload failed for {RigName}.", rig.Name);
+                _logger?.LogError(
+                    reloadResult.Error,
+                    "Rig acquisition adapter reload failed for {RigName}. ForceRestart={ForceRestart}.",
+                    rig.Name,
+                    forceRestart);
                 return;
             }
 
             if (reloadResult.Value)
             {
-                _logger?.LogInformation("Rig acquisition adapter reloaded with rig {RigName}.", rig.Name);
+                _logger?.LogInformation(
+                    "Rig acquisition adapter reloaded with rig {RigName}. ForceRestart={ForceRestart}.",
+                    rig.Name,
+                    forceRestart);
             }
             else if (forceRestart)
             {
                 _logger?.LogInformation(
-                    "Rig acquisition adapter restart requested; rig {RigName} remained unchanged.",
-                    rig.Name);
+                    "Rig acquisition adapter restart requested; rig {RigName} remained unchanged. ForceRestart={ForceRestart}.",
+                    rig.Name,
+                    forceRestart);
             }
             else
             {
                 _logger?.LogDebug(
-                    "Rig acquisition adapter already aligned with rig {RigName}; no reload required.",
-                    rig.Name);
+                    "Rig acquisition adapter already aligned with rig {RigName}; no reload required. ForceRestart={ForceRestart}.",
+                    rig.Name,
+                    forceRestart);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -91,7 +116,7 @@ public sealed class RigRuntimeUpdater : IRigRuntimeUpdater
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Unhandled exception while reloading rig runtime state.");
+            _logger?.LogError(ex, "Unhandled exception while reloading rig runtime state. ForceRestart={ForceRestart}.", forceRestart);
         }
     }
 }

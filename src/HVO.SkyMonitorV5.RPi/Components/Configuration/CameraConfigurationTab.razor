@@ -3,38 +3,70 @@
 @using HVO.SkyMonitorV5.RPi.Cameras.Optics
 
 <div class="container py-4 text-light">
+    <header class="config-toolbar">
+        <div class="config-toolbar__info">
+            <h1 class="config-toolbar__title">Camera Configuration</h1>
+            <p class="config-toolbar__subtitle">Manage camera catalog entries and inspect telemetry metadata.</p>
+        </div>
+        <div class="config-toolbar__actions">
+            <button type="button"
+                    class="btn btn-sm btn-outline-info"
+                    @onclick="ReloadAsync"
+                    disabled="@(!CanReloadCatalog)">
+                <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                Refresh
+            </button>
+        </div>
+        <div class="config-toolbar__status @GetToolbarStatusCss()">
+            @if (IsBusy)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            }
+            @GetToolbarStatus()
+        </div>
+    </header>
+
     <div class="row g-4">
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
                 <div class="card-header border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-                        <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Camera Catalog
-                            <span class="label-tooltip" role="img" aria-label="Review registered cameras and manage lifecycle metadata." title="Review registered cameras and manage lifecycle metadata.">
-                                <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
-                            </span>
-                        </h2>
+                        <h2 class="h5 mb-1 config-card__title">Camera Catalog</h2>
                         <p class="mb-0 text-muted small">Create and maintain camera profiles available to rigs and adapters.</p>
                     </div>
-                    <div class="d-flex flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        <div class="input-group input-group-sm camera-filter">
+                            <span class="input-group-text bg-transparent border-secondary text-muted">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                            </span>
+                            <input type="search"
+                                   class="form-control"
+                                   placeholder="Filter cameras…"
+                                   @bind="SearchText"
+                                   @bind:event="oninput"
+                                   aria-label="Filter cameras by name, identifier, or driver" />
+                        </div>
                         <button type="button"
-                                class="btn btn-primary btn-sm"
-                                title="Create a new camera entry"
-                                @onclick="BeginCreate"
-                                disabled="@(_isLoading || _isSaving)">
-                            <i class="bi bi-plus-circle me-2"></i>
-                            New Camera
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-light btn-sm"
-                                @onclick="ReloadAsync"
-                                disabled="@(_isLoading || _isSaving)">
-                            <i class="bi bi-arrow-clockwise me-2"></i>
-                            Refresh
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleCatalogSection"
+                                aria-expanded="@(!_catalogCollapsed)"
+                                aria-controls="camera-catalog"
+                                title='@GetCollapseButtonTitle("Camera catalog", _catalogCollapsed)'>
+                            <i class="@GetCollapseIconCss(_catalogCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Camera catalog", _catalogCollapsed)</span>
                         </button>
                     </div>
                 </div>
-                <div class="card-body">
-                    @if (_isLoading)
+                <div id="camera-catalog"
+                     class="card-body @GetCollapseCss(_catalogCollapsed)"
+                     aria-hidden="@_catalogCollapsed">
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger mb-0" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (_isLoading && FilteredCameras.Count == 0)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
                             <div class="spinner-border text-secondary" role="status">
@@ -43,20 +75,14 @@
                             <span>Loading camera catalog…</span>
                         </div>
                     }
-                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    else if (FilteredCameras.Count == 0)
                     {
-                        <div class="alert alert-danger mb-0" role="alert">
-                            @_errorMessage
-                        </div>
-                    }
-                    else if (_cameras.Count == 0)
-                    {
-                        <p class="text-muted mb-0">No cameras are registered yet. Add a camera to make it available for rig assignments.</p>
+                        <p class="text-muted mb-0">@GetEmptyFilterMessage()</p>
                     }
                     else
                     {
                         <div class="table-responsive">
-                            <table class="table table-dark table-striped align-middle mb-0">
+                            <table class="table table-dark table-striped align-middle camera-table mb-0">
                                 <thead>
                                     <tr>
                                         <th scope="col">Camera</th>
@@ -70,10 +96,10 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var camera in _cameras)
+                                    @foreach (var camera in FilteredCameras)
                                     {
                                         var usage = GetCameraUsage(camera.Key);
-                                        var isSelected = _editModel?.Id == camera.Id && camera.Id != 0;
+                                        var isSelected = _selectedCameraId == camera.Id;
                                         <tr class="@(isSelected ? "table-active" : string.Empty)" @onclick="() => HandleRowSelection(camera)">
                                             <td>
                                                 <div class="d-flex flex-column">
@@ -127,6 +153,163 @@
 
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Telemetry &amp; Audit</h2>
+                        <p class="mb-0 text-muted small">Inspect lifecycle metadata and capabilities for the selected camera.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm config-card__collapse"
+                            @onclick="ToggleTelemetrySection"
+                            aria-expanded="@(!_telemetryCollapsed)"
+                            aria-controls="camera-telemetry"
+                            title='@GetCollapseButtonTitle("Camera telemetry", _telemetryCollapsed)'>
+                        <i class="@GetCollapseIconCss(_telemetryCollapsed)" aria-hidden="true"></i>
+                        <span class="visually-hidden">@GetCollapseButtonTitle("Camera telemetry", _telemetryCollapsed)</span>
+                    </button>
+                </div>
+                <div id="camera-telemetry"
+                     class="card-body @GetCollapseCss(_telemetryCollapsed)"
+                     aria-hidden="@_telemetryCollapsed">
+                    @if (SelectedCamera is null)
+                    {
+                        <p class="text-muted mb-0">Select a camera from the catalog to review telemetry and audit information.</p>
+                    }
+                    else
+                    {
+                        var driverDescriptor = ResolveDriverDescriptor(SelectedCamera.DriverId);
+                        var rigs = GetCameraUsage(SelectedCamera.Key);
+                        var capabilities = GetCapabilityLabels(SelectedCamera);
+                        var tags = GetAdditionalTags(SelectedCamera);
+                        var coolingTarget = GetCoolingTargetLabel(SelectedCamera);
+
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <dl class="row audit-list">
+                                    <dt class="col-sm-4 text-muted">Camera Key</dt>
+                                    <dd class="col-sm-8"><code>@SelectedCamera.Key</code></dd>
+
+                                    <dt class="col-sm-4 text-muted">Driver</dt>
+                                    <dd class="col-sm-8">
+                                        @if (driverDescriptor is not null)
+                                        {
+                                            <div>@driverDescriptor.DisplayName</div>
+                                            @if (!string.IsNullOrWhiteSpace(driverDescriptor.Description))
+                                            {
+                                                <div class="text-muted small">@driverDescriptor.Description</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-muted small">No driver description.</div>
+                                            }
+                                            <code class="d-block mt-1">@SelectedCamera.DriverId</code>
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(SelectedCamera.DriverId))
+                                        {
+                                            <code>@SelectedCamera.DriverId</code>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not assigned</span>
+                                        }
+                                    </dd>
+
+                                    <dt class="col-sm-4 text-muted">Driver Version</dt>
+                                    <dd class="col-sm-8 text-muted">@(!string.IsNullOrWhiteSpace(SelectedCamera.DriverVersion) ? SelectedCamera.DriverVersion : "Not specified")</dd>
+
+                                    <dt class="col-sm-4 text-muted">Adapter</dt>
+                                    <dd class="col-sm-8 text-muted">@(!string.IsNullOrWhiteSpace(SelectedCamera.AdapterName) ? SelectedCamera.AdapterName : "Not specified")</dd>
+
+                                    <dt class="col-sm-4 text-muted">Lifecycle</dt>
+                                    <dd class="col-sm-8 text-muted">@GetLifecycleSummary(SelectedCamera)</dd>
+
+                                    <dt class="col-sm-4 text-muted">Created</dt>
+                                    <dd class="col-sm-8 text-muted">@FormatAuditTimestamp(SelectedCamera.CreatedUtc)</dd>
+
+                                    <dt class="col-sm-4 text-muted">Updated</dt>
+                                    <dd class="col-sm-8 text-muted">@FormatAuditTimestamp(SelectedCamera.UpdatedUtc)</dd>
+                                </dl>
+                            </div>
+                            <div class="col-lg-6">
+                                <dl class="row audit-list">
+                                    <dt class="col-sm-4 text-muted">Sensor</dt>
+                                    <dd class="col-sm-8 text-muted">@GetSensorSummary(SelectedCamera)</dd>
+
+                                    <dt class="col-sm-4 text-muted">Color</dt>
+                                    <dd class="col-sm-8 text-muted">@GetColorSummary(SelectedCamera)</dd>
+
+                                    <dt class="col-sm-4 text-muted">Cooling</dt>
+                                    <dd class="col-sm-8 text-muted">
+                                        @GetCoolingSummary(SelectedCamera)
+                                        @if (coolingTarget is not null)
+                                        {
+                                            <span class="text-muted ms-2">(@coolingTarget)</span>
+                                        }
+                                    </dd>
+
+                                    <dt class="col-sm-4 text-muted">Capabilities</dt>
+                                    <dd class="col-sm-8">
+                                        @if (capabilities.Count == 0)
+                                        {
+                                            <span class="text-muted">No capabilities documented.</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="audit-badges">
+                                                @foreach (var capability in capabilities)
+                                                {
+                                                    <span class="badge bg-secondary-subtle text-secondary-emphasis audit-badge">@capability</span>
+                                                }
+                                            </div>
+                                        }
+                                    </dd>
+
+                                    <dt class="col-sm-4 text-muted">Additional Tags</dt>
+                                    <dd class="col-sm-8">
+                                        @if (tags.Count == 0)
+                                        {
+                                            <span class="text-muted">No additional tags.</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="audit-badges">
+                                                @foreach (var tag in tags)
+                                                {
+                                                    <span class="badge bg-secondary-subtle text-secondary-emphasis audit-badge">@tag</span>
+                                                }
+                                            </div>
+                                        }
+                                    </dd>
+
+                                    <dt class="col-sm-4 text-muted">Assigned Rigs</dt>
+                                    <dd class="col-sm-8 text-muted">
+                                        @if (rigs.Count == 0)
+                                        {
+                                            <span class="text-muted">Not assigned to any rig.</span>
+                                        }
+                                        else
+                                        {
+                                            <ul class="audit-rig-list mb-0">
+                                                @foreach (var rig in rigs)
+                                                {
+                                                    <li>
+                                                        <i class="bi bi-diagram-3 me-2" aria-hidden="true"></i>
+                                                        @rig.DisplayName
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
                 <div class="card-header border-secondary d-flex justify-content-between align-items-start flex-wrap gap-2">
                     <div>
                         <h2 class="h5 mb-1 d-flex align-items-center gap-2 config-card__title">Configure Camera
@@ -136,12 +319,25 @@
                         </h2>
                         <p class="mb-0 text-muted small">Update catalog details so rigs and adapters can reference accurate sensor data.</p>
                     </div>
-                    @if (_editModel is not null)
-                    {
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis">@(_editModel.Id > 0 ? $"ID {_editModel.Id} | Rev {_editModel.Revision}" : "New Camera Draft")</span>
-                    }
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        @if (_editModel is not null)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis">@(_editModel.Id > 0 ? $"ID {_editModel.Id} · Rev {_editModel.Revision}" : "New Camera Draft")</span>
+                        }
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleEditorSection"
+                                aria-expanded="@(!_editorCollapsed)"
+                                aria-controls="camera-editor"
+                                title='@GetCollapseButtonTitle("Camera editor", _editorCollapsed)'>
+                            <i class="@GetCollapseIconCss(_editorCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Camera editor", _editorCollapsed)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div id="camera-editor"
+                     class="card-body @GetCollapseCss(_editorCollapsed)"
+                     aria-hidden="@_editorCollapsed">
                     @if (!string.IsNullOrWhiteSpace(_successMessage))
                     {
                         <div class="alert alert-success" role="status">
@@ -149,9 +345,16 @@
                         </div>
                     }
 
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage) && !_isLoading)
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+
                     @if (_editContext is null || _editModel is null)
                     {
-                        <p class="text-muted mb-0">Select a camera from the catalog or create a new entry to begin editing.</p>
+                        <p class="text-muted mb-0">Select a camera from the catalog to begin editing.</p>
                     }
                     else
                     {
@@ -458,15 +661,11 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)" title="Save changes to the camera catalog.">
+                                    <button type="button" class="btn btn-sm btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)" title="Save changes to the camera catalog.">
                                     <i class="bi bi-save me-2"></i>
                                     Save Changes
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="BeginCreate" disabled="@(_isLoading || _isSaving)" title="Create a new camera entry.">
-                                    <i class="bi bi-plus-circle me-2"></i>
-                                    New
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" @onclick="ResetChanges" disabled="@(!_hasChanges || _isSaving)" title="Discard changes and revert to the saved values.">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ResetChanges" disabled="@(!_hasChanges || _isSaving)" title="Discard changes and revert to the saved values.">
                                     <i class="bi bi-arrow-counterclockwise me-2"></i>
                                     Reset
                                 </button>

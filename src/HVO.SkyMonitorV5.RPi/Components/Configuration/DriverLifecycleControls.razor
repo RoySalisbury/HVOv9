@@ -1,0 +1,147 @@
+@using HVO.SkyMonitorV5.RPi.Models.System
+@inherits DriverRuntimeComponentBase<DriverLifecycleControls>
+
+<section class="card bg-dark border-secondary shadow-sm config-card driver-lifecycle-card">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+            <div>
+                <h2 class="h5 mb-1">Driver Lifecycle</h2>
+                <p class="text-muted small mb-0">Start, pause, resume, or reload the active capture driver.</p>
+            </div>
+            <div class="ms-auto d-flex flex-wrap gap-2 justify-content-end align-items-center">
+                <button type="button"
+                        class="btn btn-sm btn-outline-info"
+                        @onclick="RefreshAsync"
+                        disabled="@(!CanRefresh)">
+                    <span class="bi bi-arrow-clockwise me-1" aria-hidden="true"></span>
+                    Refresh
+                </button>
+                <div class="btn-group flex-wrap" role="group" aria-label="Driver lifecycle controls">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-light"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Start)"
+                            disabled="@(!CanExecuteAction(RigRuntimeActionKind.Start))"
+                            title="Start capture driver">
+                        <span class="bi bi-play-fill me-1" aria-hidden="true"></span>
+                        Start
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-light"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Pause)"
+                            disabled="@(!CanExecuteAction(RigRuntimeActionKind.Pause))"
+                            title="Pause capturing">
+                        <span class="bi bi-pause-fill me-1" aria-hidden="true"></span>
+                        Pause
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-light"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Resume)"
+                            disabled="@(!CanExecuteAction(RigRuntimeActionKind.Resume))"
+                            title="Resume capturing">
+                        <span class="bi bi-play-circle me-1" aria-hidden="true"></span>
+                        Resume
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-light"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Stop)"
+                            disabled="@(!CanExecuteAction(RigRuntimeActionKind.Stop))"
+                            title="Stop capture driver">
+                        <span class="bi bi-stop-fill me-1" aria-hidden="true"></span>
+                        Stop
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-light"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Reload)"
+                            disabled="@(!CanExecuteAction(RigRuntimeActionKind.Reload))"
+                            title="Reload driver configuration">
+                        <span class="bi bi-arrow-repeat me-1" aria-hidden="true"></span>
+                        Reload
+                    </button>
+                </div>
+                @if (CanForceReload)
+                {
+                    <button type="button"
+                            class="btn btn-sm btn-outline-warning"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Reload, true)"
+                            disabled="@(!CanForceReload)"
+                            title="Force a full driver restart">
+                        <span class="bi bi-lightning-charge-fill me-1" aria-hidden="true"></span>
+                        Force Reload
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (ActionInFlight)
+        {
+            <div class="alert alert-info mt-3 mb-0 small" role="status">
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Executing driver action…
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(ActionError))
+        {
+            <div class="alert alert-danger mt-3 mb-0" role="alert">
+                <span class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></span>
+                @ActionError
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(ActionMessage))
+        {
+            <div class="alert alert-success mt-3 mb-0" role="status">
+                <span class="bi bi-check-circle-fill me-2" aria-hidden="true"></span>
+                @ActionMessage
+            </div>
+        }
+
+        <hr class="opacity-10 my-4" />
+
+        @if (!string.IsNullOrWhiteSpace(RuntimeError))
+        {
+            <div class="alert alert-danger" role="alert">
+                <span class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></span>
+                @RuntimeError
+            </div>
+        }
+        else if (Runtime is null)
+        {
+            <p class="text-muted mb-0">Driver runtime telemetry is unavailable. Refresh to try again.</p>
+        }
+        else
+        {
+            <dl class="metric-list driver-lifecycle-list">
+                <div class="metric-row">
+                    <dt>State</dt>
+                    <dd>
+                        <span class="@GetRuntimeStateBadgeCss()" aria-live="polite">@Runtime.State</span>
+                        <span class="d-block text-muted small mt-1">@GetRuntimeSubtitle()</span>
+                    </dd>
+                </div>
+                <div class="metric-row">
+                    <dt>Driver</dt>
+                    <dd>@GetDriverDisplayName()</dd>
+                </div>
+                <div class="metric-row">
+                    <dt>Driver Identifier</dt>
+                    <dd>@GetDriverVersion()</dd>
+                </div>
+                <div class="metric-row">
+                    <dt>Rig</dt>
+                    <dd>@GetRigName()</dd>
+                </div>
+                <div class="metric-row">
+                    <dt>Capabilities</dt>
+                    <dd>@GetCapabilitySummary()</dd>
+                </div>
+                <div class="metric-row">
+                    <dt>Capture State</dt>
+                    <dd>@GetCaptureState()</dd>
+                </div>
+                <div class="metric-row">
+                    <dt>Exposure</dt>
+                    <dd>@GetExposureSummary()</dd>
+                </div>
+            </dl>
+        }
+    </div>
+</section>

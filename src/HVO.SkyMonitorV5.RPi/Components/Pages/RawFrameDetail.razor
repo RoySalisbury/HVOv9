@@ -24,16 +24,16 @@
         else if (_viewModel is not null)
         {
             <div class="detail-actions">
-                <button type="button" class="btn btn-outline-light detail-actions__back" @onclick="NavigateBack">
+                <button type="button" class="btn btn-sm btn-outline-light detail-actions__back" @onclick="NavigateBack">
                     <i class="bi bi-arrow-left me-2"></i>Back to Monitor
                 </button>
                 <div class="detail-actions__downloads">
-                    <a class="btn btn-primary" href="@_viewModel.PngDownloadSource" download="@_viewModel.PngDownloadFileName">
+                    <a class="btn btn-sm btn-primary" href="@_viewModel.PngDownloadSource" download="@_viewModel.PngDownloadFileName">
                         <i class="bi bi-image me-2"></i>Download PNG
                     </a>
                     @if (_viewModel.HasRawDownload)
                     {
-                        <a class="btn btn-outline-info" href="@_viewModel.RawDownloadSource" download="@_viewModel.RawDownloadFileName">
+                        <a class="btn btn-sm btn-outline-info" href="@_viewModel.RawDownloadSource" download="@_viewModel.RawDownloadFileName">
                             <i class="bi bi-cloud-download me-2"></i>Download Raw (.skimg)
                         </a>
                     }

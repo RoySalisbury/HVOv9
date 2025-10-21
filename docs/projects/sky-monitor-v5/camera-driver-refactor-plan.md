@@ -70,18 +70,18 @@ public sealed class ZwoCameraAdapter : ICameraAdapter
 - [x] Keep the existing runtime reload hook but make it trigger on camera/rig changes only (adapter-specific logic becomes unnecessary).
 
 ### 7. Testing & Validation
-- [ ] Add unit tests for the registry (discovery success, duplicate id detection, configuration type binding).
-- [ ] Extend `EquipmentConfigurationService` tests to confirm driver metadata/settings flow end-to-end.
-- [ ] Add integration smoke test that the configuration UI returns the dynamic driver list and persists settings.
+- [x] Add unit tests for the registry (discovery success, duplicate id detection, configuration type binding).
+- [x] Extend `EquipmentConfigurationService` tests to confirm driver metadata/settings flow end-to-end.
+- [x] Add integration smoke test that the configuration UI returns the dynamic driver list and persists settings.
 
 ### 8. Documentation & Migration
-- [ ] Write a migration note covering removal of adapter catalog tables and the new camera driver settings column.
-- [ ] Update operator runbooks to explain how driver metadata is auto-discovered and how to configure device-specific settings.
-- [ ] Provide sample configuration JSON snippets for real hardware (e.g., ZWO device paths, gain defaults).
+- [x] Write a migration note covering removal of adapter catalog tables and the new camera driver settings column.
+- [x] Update operator runbooks to explain how driver metadata is auto-discovered and how to configure device-specific settings.
+- [x] Provide sample configuration JSON snippets for real hardware (e.g., ZWO device paths, gain defaults).
 
 ## Dependencies & Notes
 
-- Ensure the attribute assembly lives in a shared project available to both runtime drivers and the registry (likely `HVO.SkyMonitorV5.RPi`).
-- Create the necessary seed data EF logic to populate a blank database for new systems.  We can start the DB from scratch during this plan since there is no need for backwards compatiblity at this point.
-- Coordinate UI removal of the adapter tab with API changes to avoid temporary 404s.
-- Consider adding a dev-time analyzer to detect duplicate driver IDs at compile time (optional stretch goal).
+- Camera driver attributes and registry both live in `HVO.SkyMonitorV5.RPi`; keep future adapters in this assembly (or reference it) so discovery continues to succeed.
+- Fresh installs only require the standard configuration seed (camera/rig catalog); driver metadata now comes from code, so no additional EF seed logic is necessary.
+- UI/API coupling is in place—the adapter tab was removed alongside the new drivers endpoint—verify downstream consumers purge old caches during rollout.
+- (Optional) Future enhancement: author a Roslyn analyzer to detect duplicate driver identifiers at compile time.

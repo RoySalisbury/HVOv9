@@ -25,7 +25,7 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
     private readonly SemaphoreSlim _stateLock = new(1, 1);
     private readonly IDisposable? _optionsChangeRegistration;
 
-    private volatile AdapterState _state = AdapterState.Stopped;
+    private volatile RigAdapterLifecycleState _state = RigAdapterLifecycleState.Stopped;
     private RigSpec _activeRig;
     private ICameraAdapter? _driver;
     private bool _driverInitialized;
@@ -52,7 +52,9 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
 
     public RigSpec ActiveRig => _activeRig;
 
-    public bool IsRunning => _state == AdapterState.Running;
+    public bool IsRunning => _state == RigAdapterLifecycleState.Running;
+
+    public RigAdapterLifecycleState CurrentState => _state;
 
     public async Task<Result<bool>> StartAsync(CancellationToken cancellationToken)
     {
@@ -62,7 +64,12 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
             return initResult;
         }
 
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
+
         try
         {
             if (_disposed)
@@ -70,13 +77,13 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
             }
 
-            if (_state == AdapterState.Running)
+            if (_state == RigAdapterLifecycleState.Running)
             {
                 _logger?.LogDebug("StartAsync called while adapter already running for {RigName}.", _activeRig.Name);
                 return Result<bool>.Success(false);
             }
 
-            _state = AdapterState.Running;
+            _state = RigAdapterLifecycleState.Running;
             _logger?.LogInformation("Rig acquisition adapter started for {RigName}.", _activeRig.Name);
             return Result<bool>.Success(true);
         }
@@ -88,7 +95,12 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
 
     public async Task<Result<bool>> PauseAsync(CancellationToken cancellationToken)
     {
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
+
         try
         {
             if (_disposed)
@@ -96,13 +108,13 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
             }
 
-            if (_state != AdapterState.Running)
+            if (_state != RigAdapterLifecycleState.Running)
             {
                 _logger?.LogDebug("PauseAsync called while adapter not running for {RigName}.", _activeRig.Name);
                 return Result<bool>.Success(false);
             }
 
-            _state = AdapterState.Paused;
+            _state = RigAdapterLifecycleState.Paused;
             _logger?.LogInformation("Rig acquisition adapter paused for {RigName}.", _activeRig.Name);
             return Result<bool>.Success(true);
         }
@@ -120,7 +132,12 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
             return initResult;
         }
 
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
+
         try
         {
             if (_disposed)
@@ -128,13 +145,13 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
             }
 
-            if (_state != AdapterState.Paused)
+            if (_state != RigAdapterLifecycleState.Paused)
             {
                 _logger?.LogDebug("ResumeAsync called while adapter not paused for {RigName}.", _activeRig.Name);
                 return Result<bool>.Success(false);
             }
 
-            _state = AdapterState.Running;
+            _state = RigAdapterLifecycleState.Running;
             _logger?.LogInformation("Rig acquisition adapter resumed for {RigName}.", _activeRig.Name);
             return Result<bool>.Success(true);
         }
@@ -146,7 +163,12 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
 
     public async Task<Result<bool>> StopAsync(CancellationToken cancellationToken)
     {
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
+
         var alreadyStopped = false;
         try
         {
@@ -155,13 +177,13 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
             }
 
-            if (_state == AdapterState.Stopped)
+            if (_state == RigAdapterLifecycleState.Stopped)
             {
                 alreadyStopped = true;
             }
             else
             {
-                _state = AdapterState.Stopped;
+                _state = RigAdapterLifecycleState.Stopped;
             }
         }
         finally
@@ -190,7 +212,11 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
         ICameraAdapter? driverToReset = null;
         bool wasRunning;
 
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
         try
         {
             if (_disposed)
@@ -204,7 +230,7 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<bool>.Success(false);
             }
 
-            wasRunning = _state == AdapterState.Running;
+            wasRunning = _state == RigAdapterLifecycleState.Running;
             driverToReset = _driver;
             _driverInitialized = false;
             _driver = null;
@@ -226,10 +252,15 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
             var initResult = await EnsureDriverInitializedAsync(cancellationToken).ConfigureAwait(false);
             if (initResult.IsFailure)
             {
-                await _stateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                var reacquired = await TryEnterStateLockAsync(CancellationToken.None).ConfigureAwait(false);
+                if (!reacquired)
+                {
+                    return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+                }
+
                 try
                 {
-                    _state = AdapterState.Stopped;
+                    _state = RigAdapterLifecycleState.Stopped;
                 }
                 finally
                 {
@@ -240,12 +271,17 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return initResult;
             }
 
-            await _stateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            var resumeLock = await TryEnterStateLockAsync(CancellationToken.None).ConfigureAwait(false);
+            if (!resumeLock)
+            {
+                return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+            }
+
             try
             {
-                if (_state == AdapterState.Stopped)
+                if (_state == RigAdapterLifecycleState.Stopped)
                 {
-                    _state = AdapterState.Running;
+                    _state = RigAdapterLifecycleState.Running;
                 }
             }
             finally
@@ -272,7 +308,12 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
 
         ICameraAdapter? driver;
 
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<CapturedImage>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
+
         try
         {
             if (_disposed)
@@ -280,7 +321,7 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<CapturedImage>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
             }
 
-            if (_state != AdapterState.Running)
+            if (_state != RigAdapterLifecycleState.Running)
             {
                 return Result<CapturedImage>.Failure(new InvalidOperationException("Rig acquisition adapter is not running."));
             }
@@ -300,7 +341,11 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 return Result<CapturedImage>.Failure(initResult.Error ?? new InvalidOperationException("Unable to initialize camera driver."));
             }
 
-            await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var reacquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+            if (!reacquired)
+            {
+                return Result<CapturedImage>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+            }
             try
             {
                 driver = _driver;
@@ -337,7 +382,7 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
             }
 
             _disposed = true;
-            _state = AdapterState.Stopped;
+            _state = RigAdapterLifecycleState.Stopped;
             _logger?.LogDebug("Rig acquisition adapter disposed for {RigName}.", _activeRig.Name);
         }
         finally
@@ -352,7 +397,11 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
     {
         Task<Result<bool>> initTask;
 
-        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
         try
         {
             if (_disposed)
@@ -396,9 +445,14 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
             _stateLock.Release();
         }
 
-    var result = await initTask.ConfigureAwait(false);
+        var result = await initTask.ConfigureAwait(false);
 
-        await _stateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        var postInitLock = await TryEnterStateLockAsync(CancellationToken.None).ConfigureAwait(false);
+        if (!postInitLock)
+        {
+            return Result<bool>.Failure(new ObjectDisposedException(nameof(RigAcquisitionAdapter)));
+        }
+
         try
         {
             if (ReferenceEquals(_initializationTask, initTask))
@@ -449,7 +503,12 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
     {
         ICameraAdapter? driver;
 
-        await _stateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        var lockAcquired = await TryEnterStateLockAsync(CancellationToken.None).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return;
+        }
+
         try
         {
             driver = _driver;
@@ -474,19 +533,29 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
             var shutdownResult = await driver.ShutdownAsync(CancellationToken.None).ConfigureAwait(false);
             if (shutdownResult.IsFailure && logErrors)
             {
-                _logger?.LogWarning(shutdownResult.Error, "Camera driver shutdown reported an error for rig {RigName}.", _activeRig.Name);
+                _logger?.LogWarning(shutdownResult.Error, "Camera driver shutdown reported an error for {RigName}.", _activeRig.Name);
             }
         }
         catch (Exception ex) when (logErrors)
         {
-            _logger?.LogWarning(ex, "Camera driver shutdown threw an exception for rig {RigName}.", _activeRig.Name);
+            _logger?.LogWarning(ex, "Camera driver shutdown threw an exception for {RigName}.", _activeRig.Name);
         }
         finally
         {
             await driver.DisposeAsync().ConfigureAwait(false);
         }
 
-        await _stateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        if (_disposed)
+        {
+            return;
+        }
+
+        var lockAcquired = await TryEnterStateLockAsync(CancellationToken.None).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return;
+        }
+
         try
         {
             if (ReferenceEquals(_driver, driver))
@@ -499,6 +568,24 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
         finally
         {
             _stateLock.Release();
+        }
+    }
+
+    private async Task<bool> TryEnterStateLockAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed)
+        {
+            return false;
+        }
+
+        try
+        {
+            await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (ObjectDisposedException) when (_disposed)
+        {
+            return false;
         }
     }
 
@@ -543,12 +630,5 @@ public sealed class RigAcquisitionAdapter : IRigAcquisitionAdapter
                 _logger?.LogError(ex, "Unhandled exception while reloading rig acquisition adapter after catalog change.");
             }
         });
-    }
-
-    private enum AdapterState
-    {
-        Stopped = 0,
-        Running,
-        Paused
     }
 }

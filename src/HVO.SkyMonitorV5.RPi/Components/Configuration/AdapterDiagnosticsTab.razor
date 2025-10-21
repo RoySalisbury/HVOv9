@@ -1,0 +1,262 @@
+@using HVO.SkyMonitorV5.RPi.Models
+@using HVO.SkyMonitorV5.RPi.Models.System
+
+<div class="container py-4 text-light">
+    <header class="config-toolbar">
+        <div class="config-toolbar__info">
+            <h1 class="config-toolbar__title">Adapter Diagnostics</h1>
+            <p class="config-toolbar__subtitle">Inspect the active rig, camera adapter, and capture pipeline state.</p>
+        </div>
+        <div class="config-toolbar__actions">
+            <button type="button"
+                    class="btn btn-sm btn-outline-info"
+                    @onclick="RefreshAsync"
+                    disabled="@(!CanRefresh)">
+                <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                Refresh Status
+            </button>
+            <div class="btn-group flex-wrap ms-2" role="group" aria-label="Adapter lifecycle controls">
+                <button type="button"
+                        class="btn btn-sm btn-outline-light"
+                        @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Start)"
+                        disabled="@(!CanExecuteAction(RigRuntimeActionKind.Start))"
+                        title="Start the adapter">
+                    <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                    Start
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light"
+                        @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Pause)"
+                        disabled="@(!CanExecuteAction(RigRuntimeActionKind.Pause))"
+                        title="Pause capturing">
+                    <i class="bi bi-pause-fill me-1" aria-hidden="true"></i>
+                    Pause
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light"
+                        @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Resume)"
+                        disabled="@(!CanExecuteAction(RigRuntimeActionKind.Resume))"
+                        title="Resume capturing">
+                    <i class="bi bi-play-circle me-1" aria-hidden="true"></i>
+                    Resume
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light"
+                        @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Stop)"
+                        disabled="@(!CanExecuteAction(RigRuntimeActionKind.Stop))"
+                        title="Stop the adapter">
+                    <i class="bi bi-stop-fill me-1" aria-hidden="true"></i>
+                    Stop
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light"
+                        @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Reload)"
+                        disabled="@(!CanExecuteAction(RigRuntimeActionKind.Reload))"
+                        title="Reload adapter configuration">
+                    <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>
+                    Reload
+                </button>
+                @if (CanForceReload)
+                {
+                    <button type="button"
+                            class="btn btn-sm btn-outline-warning"
+                            @onclick="() => ExecuteActionAsync(RigRuntimeActionKind.Reload, true)"
+                            disabled="@(!CanForceReload)"
+                            title="Force a full adapter restart">
+                        <i class="bi bi-lightning-charge-fill me-1" aria-hidden="true"></i>
+                        Force Reload
+                    </button>
+                }
+            </div>
+            @if (_actionInFlight)
+            {
+                <span class="ms-3 text-muted d-inline-flex align-items-center gap-2">
+                    <span class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Executing adapter action…</span>
+                    </span>
+                    Executing…
+                </span>
+            }
+        </div>
+        <div class="config-toolbar__status @GetToolbarStatusCss()">
+            @GetToolbarStatus()
+        </div>
+    </header>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Runtime Overview</h2>
+                        <p class="mb-0 text-muted small">Summarizes capture state, recent frames, and adapter activity.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm config-card__collapse"
+                            @onclick="ToggleRuntimeSection"
+                            aria-expanded="@(!_runtimeCollapsed)"
+                            aria-controls="adapter-runtime"
+                            title='@GetCollapseButtonTitle("Runtime overview section", _runtimeCollapsed)'>
+                        <i class="@GetCollapseIconCss(_runtimeCollapsed)" aria-hidden="true"></i>
+                        <span class="visually-hidden">@GetCollapseButtonTitle("Runtime overview section", _runtimeCollapsed)</span>
+                    </button>
+                </div>
+                <div id="adapter-runtime"
+                     class="card-body @GetCollapseCss(_runtimeCollapsed)"
+                     aria-hidden="@_runtimeCollapsed">
+                    @if (!string.IsNullOrWhiteSpace(_actionError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_actionError
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_actionMessage))
+                    {
+                        <div class="alert alert-success" role="status">
+                            @_actionMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_runtimeError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_runtimeError
+                        </div>
+                    }
+                    else if (_runtime is not null)
+                    {
+                        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                            <span class="@GetRuntimeStateBadgeCss()" aria-live="polite">@_runtime.State</span>
+                            <span class="text-muted small">@GetRuntimeSubtitle()</span>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                    else if (_isLoading && _status is null)
+                    {
+                        <div class="d-flex align-items-center gap-3 text-muted py-2">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading adapter status…</span>
+                            </div>
+                            <span>Loading adapter status…</span>
+                        </div>
+                    }
+                    else if (_status is null)
+                    {
+                        <p class="text-muted mb-0">Adapter diagnostics are not available yet. Refresh to try again.</p>
+                    }
+                    else
+                    {
+                        <dl class="row adapter-detail-list">
+                            <dt class="col-sm-4 text-muted">Adapter State</dt>
+                            <dd class="col-sm-8">@GetAdapterStateSummary()</dd>
+
+                            <dt class="col-sm-4 text-muted">Capture State</dt>
+                            <dd class="col-sm-8">@GetCaptureState()</dd>
+
+                            <dt class="col-sm-4 text-muted">Last Frame</dt>
+                            <dd class="col-sm-8">@GetLastFrameSummary()</dd>
+
+                            <dt class="col-sm-4 text-muted">Exposure</dt>
+                            <dd class="col-sm-8">@GetExposureSummary()</dd>
+
+                            <dt class="col-sm-4 text-muted">Background Stacker</dt>
+                            <dd class="col-sm-8">@GetBackgroundStackerSummary()</dd>
+
+                            <dt class="col-sm-4 text-muted">Capture Pacing</dt>
+                            <dd class="col-sm-8">@GetCapturePacingSummary()</dd>
+
+                            <dt class="col-sm-4 text-muted">Processing Queue</dt>
+                            <dd class="col-sm-8">@GetProcessingQueueSummary()</dd>
+
+                            <dt class="col-sm-4 text-muted">Remote Dispatch</dt>
+                            <dd class="col-sm-8">@GetRemoteDispatchSummary()</dd>
+                        </dl>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <div class="col-12">
+            <section class="card bg-dark border-secondary shadow-sm config-card">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-1 config-card__title">Rig &amp; Adapter Details</h2>
+                        <p class="mb-0 text-muted small">Active rig, camera descriptor, and capability information.</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-light btn-sm config-card__collapse"
+                            @onclick="ToggleRigSection"
+                            aria-expanded="@(!_rigCollapsed)"
+                            aria-controls="adapter-rig"
+                            title='@GetCollapseButtonTitle("Rig and adapter section", _rigCollapsed)'>
+                        <i class="@GetCollapseIconCss(_rigCollapsed)" aria-hidden="true"></i>
+                        <span class="visually-hidden">@GetCollapseButtonTitle("Rig and adapter section", _rigCollapsed)</span>
+                    </button>
+                </div>
+                <div id="adapter-rig"
+                     class="card-body @GetCollapseCss(_rigCollapsed)"
+                     aria-hidden="@_rigCollapsed">
+                    @if (_status is null && _runtime is null)
+                    {
+                        <p class="text-muted mb-0">Rig and adapter details will appear after the first successful status refresh.</p>
+                    }
+                    else
+                    {
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <h3 class="h6 text-uppercase text-muted">Camera Adapter</h3>
+                                <ul class="list-unstyled adapter-list">
+                                    <li><span class="text-muted">Adapter:</span> <span>@GetAdapterName()</span></li>
+                                    <li><span class="text-muted">Driver Version:</span> <span>@GetDriverVersion()</span></li>
+                                    <li><span class="text-muted">Status:</span> <span>@GetAdapterStateSummary()</span></li>
+                                </ul>
+                                <h4 class="h6 text-uppercase text-muted mt-4">Pipeline Capabilities</h4>
+                                @if (GetPipelineCapabilities().Count == 0)
+                                {
+                                    <p class="text-muted small mb-0">No pipeline capabilities reported.</p>
+                                }
+                                else
+                                {
+                                    <ul class="adapter-capability-list">
+                                        @foreach (var capability in GetPipelineCapabilities())
+                                        {
+                                            <li>@capability</li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <h3 class="h6 text-uppercase text-muted">Rig</h3>
+                                <ul class="list-unstyled adapter-list">
+                                    <li><span class="text-muted">Name:</span> <span>@GetRigName()</span></li>
+                                    <li><span class="text-muted">Sensor:</span> <span>@GetSensorSummary()</span></li>
+                                    <li><span class="text-muted">Lens:</span> <span>@GetLensSummary()</span></li>
+                                </ul>
+                                <h4 class="h6 text-uppercase text-muted mt-4">Hardware Capabilities</h4>
+                                @if (GetHardwareCapabilities().Count == 0)
+                                {
+                                    <p class="text-muted small mb-0">No hardware capabilities reported.</p>
+                                }
+                                else
+                                {
+                                    <ul class="adapter-capability-list">
+                                        @foreach (var capability in GetHardwareCapabilities())
+                                        {
+                                            <li>@capability</li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

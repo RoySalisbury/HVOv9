@@ -150,7 +150,10 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             _snapshotInvalidator.InvalidateSnapshot();
 
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            await ReloadRigAdapterAsync(request.IsActive, CancellationToken.None).ConfigureAwait(false);
+            var createReason = request.IsActive
+                ? $"Rig {normalizedKey} created active"
+                : $"Rig {normalizedKey} created inactive";
+            await ReloadRigAdapterAsync(request.IsActive, CancellationToken.None, createReason).ConfigureAwait(false);
             return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
@@ -245,6 +248,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
             var camera = await context.CameraCatalog
+                .AsTracking()
                 .FirstOrDefaultAsync(entry => entry.Id == cameraId, cancellationToken)
                 .ConfigureAwait(false);
             if (camera is null)
@@ -366,6 +370,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
             var optics = await context.OpticsCatalog
+                .AsTracking()
                 .FirstOrDefaultAsync(entry => entry.Id == opticsId, cancellationToken)
                 .ConfigureAwait(false);
             if (optics is null)
@@ -416,9 +421,18 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             var cameraKey = NormalizeKey(request.CameraKey);
             var opticsKey = NormalizeKey(request.OpticsKey);
 
+            _logger?.LogInformation(
+                "UpdateRigAsync invoked. RigId={RigId}, RequestedRevision={RequestedRevision}, RequestedActive={RequestedActive}, CameraKey={CameraKey}, OpticsKey={OpticsKey}.",
+                rigId,
+                request.Revision,
+                request.IsActive,
+                cameraKey,
+                opticsKey);
+
             await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
             var rig = await context.RigCatalogEntries
+                .AsTracking()
                 .FirstOrDefaultAsync(entry => entry.Id == rigId, cancellationToken)
                 .ConfigureAwait(false);
             if (rig is null)
@@ -432,8 +446,15 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             }
 
             var wasActive = rig.IsActive;
+            _logger?.LogDebug(
+                "Updating rig {RigId} (Key={Key}). CurrentActive={WasActive}, RequestedActive={RequestedActive}.",
+                rig.Id,
+                rig.Key,
+                wasActive,
+                request.IsActive);
 
             var camera = await context.CameraCatalog
+                .AsTracking()
                 .FirstOrDefaultAsync(camera => camera.Key == cameraKey, cancellationToken)
                 .ConfigureAwait(false);
             if (camera is null)
@@ -442,6 +463,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             }
 
             var optics = await context.OpticsCatalog
+                .AsTracking()
                 .FirstOrDefaultAsync(optics => optics.Key == opticsKey, cancellationToken)
                 .ConfigureAwait(false);
             if (optics is null)
@@ -455,6 +477,11 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             rig.BoresightAltitudeDegrees = ClampAltitude(request.BoresightAltitudeDegrees);
             rig.BoresightAzimuthDegrees = ClampAzimuth(request.BoresightAzimuthDegrees);
             rig.IsActive = request.IsActive;
+            _logger?.LogDebug(
+                "Rig {RigId} flag set. NewActive={IsActive} (was {WasActive}).",
+                rig.Id,
+                rig.IsActive,
+                wasActive);
 
             if (wasActive && !request.IsActive)
             {
@@ -470,18 +497,114 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             }
 
             rig.Revision = NextRevision(rig.Revision);
+            _logger?.LogDebug(
+                "Rig {RigId} revision advanced to {Revision}.",
+                rig.Id,
+                rig.Revision);
 
             if (request.IsActive)
             {
                 await DeactivateOtherRigsAsync(context, rig.Id, cancellationToken).ConfigureAwait(false);
             }
 
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            var rigEntry = context.Entry(rig);
+            var activeProperty = rigEntry.Property(r => r.IsActive);
+            var revisionProperty = rigEntry.Property(r => r.Revision);
+            var hasChanges = context.ChangeTracker.HasChanges();
+
+            var pendingEntries = context.ChangeTracker.Entries<RigCatalogEntryEntity>()
+                .Select(entry => new
+                {
+                    entry.Entity.Id,
+                    entry.Entity.Key,
+                    State = entry.State,
+                    Active = entry.Entity.IsActive,
+                    ActiveModified = entry.Property(e => e.IsActive).IsModified,
+                    Revision = entry.Entity.Revision,
+                    RevisionModified = entry.Property(e => e.Revision).IsModified
+                })
+                .ToArray();
+            var pendingEntriesDescription = pendingEntries.Length == 0
+                ? "<none>"
+                : string.Join(
+                    "; ",
+                    pendingEntries.Select(entry =>
+                        $"Id={entry.Id},Key={entry.Key},State={entry.State},Active={entry.Active},ActiveModified={entry.ActiveModified},Revision={entry.Revision},RevisionModified={entry.RevisionModified}"));
+
+            _logger?.LogInformation(
+                "Saving rig {RigId}. ChangeTracker.HasChanges={HasChanges}. PendingEntries={Entries}.",
+                rig.Id,
+                hasChanges,
+                pendingEntriesDescription);
+
+            _logger?.LogInformation(
+                "Rig {RigId} entry state {State}. Active={Active} (Original={OriginalActive}, Modified={IsActiveModified}). Revision={Revision} (Original={OriginalRevision}, Modified={IsRevisionModified}).",
+                rig.Id,
+                rigEntry.State,
+                activeProperty.CurrentValue,
+                activeProperty.OriginalValue,
+                activeProperty.IsModified,
+                revisionProperty.CurrentValue,
+                revisionProperty.OriginalValue,
+                revisionProperty.IsModified);
+
+            string? debugView = null;
+            try
+            {
+                debugView = context.ChangeTracker.DebugView.ShortView;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to evaluate ChangeTracker.DebugView before save for rig {RigId}.", rig.Id);
+            }
+
+            if (debugView is not null)
+            {
+                _logger?.LogInformation(
+                    "Change tracker before save: {DebugView}.",
+                    debugView);
+            }
+
+            var rowsAffected = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _logger?.LogInformation(
+                "Rig {RigId} persisted. Active={IsActive}, Revision={Revision}, RowsAffected={RowsAffected}.",
+                rig.Id,
+                rig.IsActive,
+                rig.Revision,
+                rowsAffected);
+
+            var databaseValues = await rigEntry.GetDatabaseValuesAsync(cancellationToken).ConfigureAwait(false);
+            if (databaseValues is not null)
+            {
+                var dbActive = databaseValues.GetValue<bool>(nameof(RigCatalogEntryEntity.IsActive));
+                var dbRevision = databaseValues.GetValue<long>(nameof(RigCatalogEntryEntity.Revision));
+
+                _logger?.LogInformation(
+                    "Rig {RigId} database values after save. Active={DbActive}, Revision={DbRevision}.",
+                    rig.Id,
+                    dbActive,
+                    dbRevision);
+            }
+            else
+            {
+                _logger?.LogWarning(
+                    "Rig {RigId} database values could not be retrieved after save.",
+                    rig.Id);
+            }
 
             _snapshotInvalidator.InvalidateSnapshot();
 
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            await ReloadRigAdapterAsync(wasActive || request.IsActive, CancellationToken.None).ConfigureAwait(false);
+
+            string updateReason = (request.IsActive, wasActive) switch
+            {
+                (true, false) => $"Rig {rig.Key} activated",
+                (true, true) => $"Rig {rig.Key} updated while active",
+                (false, true) => $"Rig {rig.Key} deactivated",
+                _ => $"Rig {rig.Key} updated while inactive"
+            };
+
+            await ReloadRigAdapterAsync(wasActive || request.IsActive, CancellationToken.None, updateReason).ConfigureAwait(false);
             return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
@@ -532,7 +655,10 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
             _snapshotInvalidator.InvalidateSnapshot();
 
             var catalog = await BuildCatalogAsync(context, cancellationToken).ConfigureAwait(false);
-            await ReloadRigAdapterAsync(wasActive, CancellationToken.None).ConfigureAwait(false);
+            var deleteReason = wasActive
+                ? $"Rig {rig.Key} deleted while active"
+                : $"Rig {rig.Key} deleted while inactive";
+            await ReloadRigAdapterAsync(wasActive, CancellationToken.None, deleteReason).ConfigureAwait(false);
             return Result<EquipmentCatalogResponse>.Success(catalog);
         }
         catch (Exception ex)
@@ -638,6 +764,7 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
     {
         var others = await context.RigCatalogEntries
             .Where(rig => rig.Id != activeRigId && rig.IsActive)
+            .AsTracking()
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -648,11 +775,20 @@ public sealed class EquipmentConfigurationService : IEquipmentConfigurationServi
         }
     }
 
-    private async Task ReloadRigAdapterAsync(bool forceRestart, CancellationToken cancellationToken)
+    private async Task ReloadRigAdapterAsync(bool forceRestart, CancellationToken cancellationToken, string? reason = null)
     {
+        var reloadReason = string.IsNullOrWhiteSpace(reason) ? "unspecified" : reason;
+        _logger?.LogInformation(
+            "Requesting rig runtime reload (ForceRestart={ForceRestart}, Reason={Reason}).",
+            forceRestart,
+            reloadReason);
         try
         {
             await _runtimeUpdater.ReloadActiveRigAsync(forceRestart, cancellationToken).ConfigureAwait(false);
+            _logger?.LogDebug(
+                "Rig runtime reload completed (ForceRestart={ForceRestart}, Reason={Reason}).",
+                forceRestart,
+                reloadReason);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

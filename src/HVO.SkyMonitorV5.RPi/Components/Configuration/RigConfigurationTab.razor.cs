@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO;
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Models.Optics;
@@ -18,6 +19,7 @@ namespace HVO.SkyMonitorV5.RPi.Components.Configuration;
 public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly List<RigSummary> _filteredRigs = new();
 
     private IReadOnlyList<RigSummary> _rigs = Array.Empty<RigSummary>();
     private IReadOnlyList<CameraCatalogItem> _cameras = Array.Empty<CameraCatalogItem>();
@@ -31,8 +33,11 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
     private bool _isLoading;
     private bool _isSaving;
     private bool _hasChanges;
+    private bool _catalogCollapsed;
+    private bool _editorCollapsed;
     private string? _errorMessage;
     private string? _successMessage;
+    private string _searchText = string.Empty;
 
     [Inject]
     public ILocalApiClient LocalApiClient { get; set; } = default!;
@@ -50,9 +55,119 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
     private bool CanDelete => HasSelection && !IsNewSelection && !_isLoading && !_isSaving && _editModel is { IsActive: false };
 
+    private bool IsBusy => _isLoading || _isSaving;
+
+    private bool CanSaveSelection => CanSave;
+
+    private bool CanCancelEdit => HasSelection && !_isLoading && !_isSaving && _hasChanges;
+
+    private bool CanBeginCreate => !_isLoading && !_isSaving;
+
+    private bool CanReloadCatalog => !_isLoading && !_isSaving;
+
+    private bool CanDeleteSelection => CanDelete;
+
+    private IReadOnlyList<RigSummary> FilteredRigs => _filteredRigs;
+
+    private string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            var next = value ?? string.Empty;
+            if (!string.Equals(_searchText, next, StringComparison.Ordinal))
+            {
+                _searchText = next;
+                ApplyFilter();
+                _ = RequestRepaintAsync();
+            }
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadCatalogAsync().ConfigureAwait(false);
+    }
+
+    private async Task ReloadCatalogAsync()
+    {
+        if (!CanReloadCatalog)
+        {
+            return;
+        }
+
+        await LoadCatalogAsync().ConfigureAwait(false);
+    }
+
+    private async Task CancelEditAsync()
+    {
+        if (!CanCancelEdit || _baseline is null)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        _successMessage = null;
+
+        var restored = _baseline.Clone();
+        AttachEditContext(restored);
+        await RequestRepaintAsync().ConfigureAwait(false);
+    }
+
+    private void ToggleCatalogSection()
+    {
+        _catalogCollapsed = !_catalogCollapsed;
+        StateHasChanged();
+    }
+
+    private void ToggleEditorSection()
+    {
+        _editorCollapsed = !_editorCollapsed;
+        StateHasChanged();
+    }
+
+    private static string GetCollapseIconCss(bool collapsed)
+        => collapsed ? "bi bi-chevron-down" : "bi bi-chevron-up";
+
+    private static string GetCollapseCss(bool collapsed)
+        => collapsed ? "collapse-hidden" : string.Empty;
+
+    private static string GetCollapseButtonTitle(string sectionName, bool collapsed)
+        => collapsed ? $"Expand {sectionName}" : $"Collapse {sectionName}";
+
+    private string GetToolbarSelectionStatus()
+    {
+        if (!HasSelection)
+        {
+            return _rigs.Count == 0
+                ? "No rigs configured yet."
+                : "Select a rig to edit.";
+        }
+
+        if (IsNewSelection)
+        {
+            return "Drafting a new rig configuration.";
+        }
+
+        var name = _editModel?.DisplayName;
+        return string.IsNullOrWhiteSpace(name)
+            ? "Editing selected rig."
+            : $"Editing {name}";
+    }
+
+    private string GetEmptyFilterMessage()
+    {
+        if (_rigs.Count == 0)
+        {
+            return _isLoading ? "Loading rig catalog…" : "No rigs are configured yet. Use New Rig to add a configuration.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return "No rigs are available.";
+        }
+
+        return "No rigs match the current filter.";
     }
 
     public void Dispose()
@@ -74,14 +189,16 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Unable to load rig catalog from the local API.");
+
+            if (result.IsFailure)
             {
-                _errorMessage = "Unable to load rig catalog from the local API.";
+                _errorMessage = result.Error?.Message ?? "Unable to load rig catalog from the local API.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(result.Value);
 
             var preferred = ResolveSelectionAfterRefresh();
             if (preferred is not null)
@@ -115,6 +232,36 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
         _cameras = response.Cameras.OrderBy(camera => camera.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
         _optics = response.Optics.OrderBy(optics => optics.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
         _activeRigKey = response.ActiveRigKey;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredRigs.Clear();
+
+        if (_rigs.Count == 0)
+        {
+            return;
+        }
+
+        var filter = _searchText.Trim();
+        IEnumerable<RigSummary> query = _rigs;
+
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            query = query.Where(rig =>
+                rig.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || rig.Key.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || rig.CameraDisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || rig.CameraKey.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || rig.OpticsDisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || rig.OpticsKey.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        foreach (var rig in query)
+        {
+            _filteredRigs.Add(rig);
+        }
     }
 
     private void SelectRig(RigSummary rig)
@@ -132,6 +279,11 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
     private void BeginCreate()
     {
+        if (!CanBeginCreate)
+        {
+            return;
+        }
+
         _errorMessage = null;
         _successMessage = null;
 
@@ -221,24 +373,19 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            EquipmentCatalogResponse? response;
+            var result = _editModel.Id == 0
+                ? (await LocalApiClient.CreateRigAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false))
+                    .ToResult("The local API did not return updated rig data.")
+                : (await LocalApiClient.UpdateRigAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false))
+                    .ToResult("The local API did not return updated rig data.");
 
-            if (_editModel.Id == 0)
+            if (result.IsFailure)
             {
-                response = await LocalApiClient.CreateRigAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                response = await LocalApiClient.UpdateRigAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false);
-            }
-
-            if (response is null)
-            {
-                _errorMessage = "The local API did not return updated rig data.";
+                _errorMessage = result.Error?.Message ?? "The local API did not return updated rig data.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(result.Value);
             _successMessage = "Rig configuration saved.";
 
             if (_editModel.Id == 0)
@@ -295,14 +442,16 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.DeleteRigAsync(_editModel.Id, _editModel.Revision, CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.DeleteRigAsync(_editModel.Id, _editModel.Revision, CancellationToken).ConfigureAwait(false))
+                .ToResult("The local API did not confirm deletion.");
+
+            if (result.IsFailure)
             {
-                _errorMessage = "The local API did not confirm deletion.";
+                _errorMessage = result.Error?.Message ?? "The local API did not confirm deletion.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(result.Value);
             _successMessage = "Rig configuration removed.";
 
             DetachEditContext();
@@ -399,7 +548,7 @@ public sealed partial class RigConfigurationTab : ComponentBase, IDisposable
         if (_hasChanges && _editModel is not null && rig.Id != _editModel.Id)
         {
             // Preserve unsaved state; require explicit button when switching away with edits.
-            _errorMessage = "Save or discard your changes before switching rigs.";
+            _errorMessage = "Save or cancel your changes before switching rigs.";
             return;
         }
 

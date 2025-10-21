@@ -75,6 +75,24 @@ public sealed class SystemConfigurationController : ControllerBase
         return await ExecuteAsync(() => _configurationService.UpdateTelemetryRetentionAsync(request, cancellationToken)).ConfigureAwait(false);
     }
 
+    [HttpGet("runtime")]
+    [ProducesResponseType(typeof(RigRuntimeStatusResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RigRuntimeStatusResponse>> GetRigRuntimeStatusAsync(CancellationToken cancellationToken)
+        => await ExecuteAsync(() => _configurationService.GetRigRuntimeStatusAsync(cancellationToken)).ConfigureAwait(false);
+
+    [HttpPost("runtime/action")]
+    [ProducesResponseType(typeof(RigRuntimeActionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<RigRuntimeActionResponse>> ExecuteRigRuntimeActionAsync([FromBody] RigRuntimeActionRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return await ExecuteAsync(() => _configurationService.ExecuteRigRuntimeActionAsync(request, cancellationToken)).ConfigureAwait(false);
+    }
+
     private async Task<ActionResult<TResponse>> ExecuteAsync<TResponse>(Func<Task<HVO.Result<TResponse>>> operation)
     {
         var result = await operation().ConfigureAwait(false);

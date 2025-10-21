@@ -19,12 +19,14 @@ namespace HVO.SkyMonitorV5.RPi.Components.Configuration;
 public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly List<CameraCatalogItem> _filteredCameras = new();
 
     private IReadOnlyList<CameraCatalogItem> _cameras = Array.Empty<CameraCatalogItem>();
     private IReadOnlyList<RigSummary> _rigs = Array.Empty<RigSummary>();
     private IReadOnlyDictionary<string, IReadOnlyList<RigSummary>> _cameraUsage = new Dictionary<string, IReadOnlyList<RigSummary>>(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<CameraDriverDescriptorResponse> _driverDescriptors = Array.Empty<CameraDriverDescriptorResponse>();
 
+    private int? _selectedCameraId;
     private CameraEditModel? _editModel;
     private CameraEditModel? _baseline;
     private EditContext? _editContext;
@@ -35,14 +37,63 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     private string? _errorMessage;
     private string? _successMessage;
     private string? _lastUpdatedMessage;
+    private bool _catalogCollapsed;
+    private bool _telemetryCollapsed;
+    private bool _editorCollapsed;
+    private string _searchText = string.Empty;
 
     [Inject]
     public ILocalApiClient LocalApiClient { get; set; } = default!;
 
     [Inject]
+    public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
+
+    [Inject]
     public ILogger<CameraConfigurationTab>? Logger { get; set; }
 
     private CancellationToken CancellationToken => _lifetime.Token;
+
+    private bool IsBusy => _isLoading || _isSaving;
+
+    private bool CanReloadCatalog => !_isLoading && !_isSaving;
+
+    private IReadOnlyList<CameraCatalogItem> FilteredCameras => _filteredCameras;
+
+    private string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            var next = value ?? string.Empty;
+            if (!string.Equals(_searchText, next, StringComparison.Ordinal))
+            {
+                _searchText = next;
+                ApplyFilter();
+            }
+        }
+    }
+
+    private CameraCatalogItem? SelectedCamera
+    {
+        get
+        {
+            if (_selectedCameraId is int selectedId)
+            {
+                var match = _cameras.FirstOrDefault(camera => camera.Id == selectedId);
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+
+            if (_editModel is { Id: > 0 } model)
+            {
+                return _cameras.FirstOrDefault(camera => camera.Id == model.Id);
+            }
+
+            return null;
+        }
+    }
 
     private bool CanSave => _editModel is not null && !_isLoading && !_isSaving && _hasChanges;
 
@@ -60,7 +111,7 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     }
 
     private Task ReloadAsync()
-        => LoadCatalogAsync();
+        => CanReloadCatalog ? LoadCatalogAsync() : Task.CompletedTask;
 
     private async Task LoadCatalogAsync()
     {
@@ -123,6 +174,13 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
                 group => group.Key,
                 group => (IReadOnlyList<RigSummary>)group.ToList(),
                 StringComparer.OrdinalIgnoreCase);
+
+        if (_selectedCameraId is int selectedId && _cameras.All(camera => camera.Id != selectedId))
+        {
+            _selectedCameraId = null;
+        }
+
+        ApplyFilter();
     }
 
     private async Task LoadDriverCatalogAsync()
@@ -156,11 +214,69 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
             .ToList();
     }
 
+    private void ApplyFilter()
+    {
+        _filteredCameras.Clear();
+
+        if (_cameras.Count == 0)
+        {
+            return;
+        }
+
+        var filter = _searchText?.Trim();
+        IEnumerable<CameraCatalogItem> query = _cameras;
+
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            query = query.Where(camera =>
+                camera.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.Key.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.Manufacturer.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.Model.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.DriverId.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.DriverVersion.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.AdapterName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || camera.AdditionalTags.Any(tag => tag.Contains(filter, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        foreach (var camera in query)
+        {
+            _filteredCameras.Add(camera);
+        }
+
+        if (_filteredCameras.Count == 0)
+        {
+            return;
+        }
+
+        if (_selectedCameraId is int selectedId
+            && _filteredCameras.All(camera => camera.Id != selectedId)
+            && !_hasChanges)
+        {
+            var replacement = _filteredCameras[0];
+            _selectedCameraId = replacement.Id;
+
+            if (!_isLoading && !_isSaving)
+            {
+                SelectCamera(replacement);
+            }
+        }
+    }
+
     private CameraCatalogItem? ResolveSelectionAfterRefresh()
     {
         if (_cameras.Count == 0)
         {
             return null;
+        }
+
+        if (_selectedCameraId is int selectedId)
+        {
+            var match = _cameras.FirstOrDefault(camera => camera.Id == selectedId);
+            if (match is not null)
+            {
+                return match;
+            }
         }
 
         if (_editModel is not null)
@@ -179,22 +295,9 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     {
         _errorMessage = null;
         _successMessage = null;
+        _selectedCameraId = camera.Id;
 
         var model = CameraEditModel.FromCatalog(camera);
-        AttachEditContext(model);
-    }
-
-    private void BeginCreate()
-    {
-        if (_isSaving)
-        {
-            return;
-        }
-
-        _errorMessage = null;
-        _successMessage = null;
-
-        var model = CameraEditModel.CreateNew();
         AttachEditContext(model);
     }
 
@@ -223,7 +326,10 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     }
 
     private void ClearSelection()
-        => DetachEditContext();
+    {
+        _selectedCameraId = null;
+        DetachEditContext();
+    }
 
     private void ResetChanges()
     {
@@ -261,6 +367,90 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
 
         _hasChanges = !_editModel.EqualsByValue(_baseline);
     }
+
+    private string GetToolbarStatus()
+    {
+        if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            return "Camera catalog failed to load.";
+        }
+
+        if (_isSaving)
+        {
+            return "Saving camera catalog changes…";
+        }
+
+        if (_isLoading)
+        {
+            return "Loading camera catalog…";
+        }
+
+        if (_cameras.Count == 0)
+        {
+            return "No cameras registered.";
+        }
+
+        if (_filteredCameras.Count == _cameras.Count || string.IsNullOrWhiteSpace(_searchText))
+        {
+            return FormattableString.Invariant($"{_cameras.Count} camera{(_cameras.Count == 1 ? string.Empty : "s")} registered.");
+        }
+
+        return FormattableString.Invariant($"{_filteredCameras.Count} of {_cameras.Count} cameras match the filter.");
+    }
+
+    private string GetToolbarStatusCss()
+    {
+        if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            return "text-danger";
+        }
+
+        if (_isSaving || _isLoading)
+        {
+            return "text-muted";
+        }
+
+        return "text-muted";
+    }
+
+    private string GetEmptyFilterMessage()
+    {
+        if (_cameras.Count == 0)
+        {
+            return _isLoading ? "Loading camera catalog…" : "No cameras have been registered yet.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return "No cameras are available.";
+        }
+
+        return "No cameras match the current filter.";
+    }
+
+    private void ToggleCatalogSection()
+    {
+        _catalogCollapsed = !_catalogCollapsed;
+    }
+
+    private void ToggleTelemetrySection()
+    {
+        _telemetryCollapsed = !_telemetryCollapsed;
+    }
+
+    private void ToggleEditorSection()
+    {
+        _editorCollapsed = !_editorCollapsed;
+    }
+
+    private static string GetCollapseIconCss(bool collapsed)
+        => collapsed ? "bi bi-chevron-down" : "bi bi-chevron-up";
+
+    private static string GetCollapseCss(bool collapsed)
+        => collapsed ? "collapse-hidden" : string.Empty;
+
+    private static string GetCollapseButtonTitle(string sectionName, bool collapsed)
+        => collapsed ? $"Expand {sectionName}" : $"Collapse {sectionName}";
 
     private CameraDriverDescriptorResponse? ResolveDriverDescriptor(string? driverId)
     {
@@ -405,31 +595,174 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     private static string GetUsageBadgeText(int usageCount)
         => usageCount > 0 ? $"{usageCount} rig(s)" : "Not assigned";
 
-    private static string FormatLifecycleLabel(DateTime updatedUtc)
+    private string FormatLifecycleLabel(DateTime updatedUtc)
     {
-        var formatted = FormatTimestamp(updatedUtc);
-        return formatted == "—" ? "Updated —" : $"Updated {formatted}";
+        if (updatedUtc == default)
+        {
+            return "Updated —";
+        }
+
+        var relative = FormatRelativeTimestamp(updatedUtc);
+        var absolute = FormatAbsoluteTimestamp(updatedUtc);
+        return FormattableString.Invariant($"Updated {relative} ({absolute})");
     }
 
     private static string GetLifecycleTitle(CameraCatalogItem camera)
-        => $"Created {FormatTimestamp(camera.CreatedUtc)} | Updated {FormatTimestamp(camera.UpdatedUtc)}";
+        => FormattableString.Invariant($"Created {FormatAbsoluteTimestamp(camera.CreatedUtc)} | Updated {FormatAbsoluteTimestamp(camera.UpdatedUtc)}");
 
-    private static string FormatTimestamp(DateTime timestamp)
+    private string FormatAuditTimestamp(DateTime timestamp)
     {
         if (timestamp == default)
         {
             return "—";
         }
 
-        var utc = timestamp.Kind switch
+        var absolute = FormatAbsoluteTimestamp(timestamp);
+        var relative = FormatRelativeTimestamp(timestamp);
+        return FormattableString.Invariant($"{absolute} ({relative})");
+    }
+
+    private string GetLifecycleSummary(CameraCatalogItem camera)
+        => FormattableString.Invariant($"{(camera.IsActive ? "Active" : "Disabled")} · {GetCameraUsageSummary(camera.Key)}");
+
+    private static string GetSensorSummary(CameraCatalogItem camera)
+        => FormattableString.Invariant($"{camera.SensorWidthPixels:N0}×{camera.SensorHeightPixels:N0}px · {camera.PixelSizeMicrons:F2} µm · {(!string.IsNullOrWhiteSpace(camera.SensorTechnology) ? camera.SensorTechnology : "Sensor technology unspecified")}");
+
+    private static string GetColorSummary(CameraCatalogItem camera)
+    {
+        if (string.IsNullOrWhiteSpace(camera.ColorMode))
+        {
+            return "Color mode not specified.";
+        }
+
+        return FormattableString.Invariant($"{camera.ColorMode} sensor");
+    }
+
+    private static string GetCoolingSummary(CameraCatalogItem camera)
+    {
+        if (string.IsNullOrWhiteSpace(camera.Cooling))
+        {
+            return "Cooling profile not specified.";
+        }
+
+        return camera.Cooling;
+    }
+
+    private IReadOnlyList<string> GetCapabilityLabels(CameraCatalogItem camera)
+    {
+        var labels = new List<string>();
+
+        if (camera.SupportsGainControl)
+        {
+            labels.Add("Gain Control");
+        }
+
+        if (camera.SupportsExposureControl)
+        {
+            labels.Add("Exposure Control");
+        }
+
+        if (camera.SupportsTemperatureTelemetry)
+        {
+            labels.Add("Temperature Telemetry");
+        }
+
+        if (camera.SupportsSoftwareBinning)
+        {
+            labels.Add("Software Binning");
+        }
+
+        if (camera.IsSynthetic)
+        {
+            labels.Add("Synthetic Profile");
+        }
+
+        if (!string.IsNullOrWhiteSpace(camera.Cooling) && !string.Equals(camera.Cooling, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            labels.Add(FormattableString.Invariant($"{camera.Cooling} Cooling"));
+        }
+
+        return labels.Count == 0 ? Array.Empty<string>() : labels;
+    }
+
+    private IReadOnlyList<string> GetAdditionalTags(CameraCatalogItem camera)
+    {
+        if (camera.AdditionalTags.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        return camera.AdditionalTags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag) && !tag.StartsWith("CoolingTargetCelsius:", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private string? GetCoolingTargetLabel(CameraCatalogItem camera)
+    {
+        foreach (var tag in camera.AdditionalTags)
+        {
+            if (!tag.StartsWith("CoolingTargetCelsius:", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var payload = tag.Substring("CoolingTargetCelsius:".Length);
+            if (double.TryParse(payload, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                return FormattableString.Invariant($"{value:F1} °C target");
+            }
+        }
+
+        return null;
+    }
+
+    private string FormatRelativeTimestamp(DateTime timestamp)
+    {
+        if (timestamp == default)
+        {
+            return "—";
+        }
+
+        var utc = EnsureUtc(timestamp);
+        var local = utc.ToLocalTime();
+        var now = TimeProvider.GetLocalNow();
+        var diff = now - new DateTimeOffset(local);
+
+        if (diff < TimeSpan.Zero)
+        {
+            diff = TimeSpan.Zero;
+        }
+
+        return diff switch
+        {
+            { TotalSeconds: < 1 } => "just now",
+            { TotalMinutes: < 1 } => FormattableString.Invariant($"{diff.Seconds}s ago"),
+            { TotalHours: < 1 } => FormattableString.Invariant($"{(int)diff.TotalMinutes}m ago"),
+            { TotalDays: < 1 } => FormattableString.Invariant($"{(int)diff.TotalHours}h ago"),
+            { TotalDays: < 7 } => FormattableString.Invariant($"{(int)diff.TotalDays}d ago"),
+            _ => local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+        };
+    }
+
+    private static string FormatAbsoluteTimestamp(DateTime timestamp)
+    {
+        if (timestamp == default)
+        {
+            return "—";
+        }
+
+        var utc = EnsureUtc(timestamp);
+        return utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
+
+    private static DateTime EnsureUtc(DateTime timestamp)
+        => timestamp.Kind switch
         {
             DateTimeKind.Utc => timestamp,
             DateTimeKind.Local => timestamp.ToUniversalTime(),
             _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)
         };
-
-        return utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-    }
 
     private async Task RequestRepaintAsync()
     {
@@ -742,25 +1075,6 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
 
             return model;
         }
-
-        public static CameraEditModel CreateNew()
-            => new()
-            {
-                ColorMode = CameraColorMode.Color,
-                SensorTechnology = CameraSensorTechnology.Cmos,
-                CoolingType = CameraCoolingType.None,
-                IsSynthetic = false,
-                SupportsGainControl = true,
-                SupportsExposureControl = true,
-                SupportsTemperatureTelemetry = false,
-                SupportsSoftwareBinning = false,
-                IsActive = true,
-                SensorWidthPixels = 1,
-                SensorHeightPixels = 1,
-                PixelSizeMicrons = 1.0,
-                DriverSettingsJson = string.Empty
-            };
-
         private IReadOnlyList<string> BuildAdditionalTags()
         {
             var tokens = string.IsNullOrWhiteSpace(AdditionalTagsInput)

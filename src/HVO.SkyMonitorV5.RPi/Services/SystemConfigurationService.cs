@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Configurations.Entities;
+using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models.System;
 using HVO.SkyMonitorV5.RPi.Options;
@@ -29,6 +30,8 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
     private readonly IOptionsMonitorCache<LocalApiClientOptions> _localApiCache;
     private readonly IOptionsMonitorCache<SkyMonitorTelemetryRetentionOptions> _telemetryCache;
     private readonly TimeProvider _timeProvider;
+    private readonly IRigRuntimeUpdater _runtimeUpdater;
+    private readonly IRigAcquisitionAdapter _rigAdapter;
     private readonly ILogger<SystemConfigurationService>? _logger;
 
     public SystemConfigurationService(
@@ -41,6 +44,8 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         IOptionsMonitorCache<LocalApiClientOptions> localApiCache,
         IOptionsMonitorCache<SkyMonitorTelemetryRetentionOptions> telemetryCache,
         TimeProvider timeProvider,
+        IRigRuntimeUpdater runtimeUpdater,
+        IRigAcquisitionAdapter rigAdapter,
         ILogger<SystemConfigurationService>? logger = null)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
@@ -52,6 +57,8 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         _localApiCache = localApiCache ?? throw new ArgumentNullException(nameof(localApiCache));
         _telemetryCache = telemetryCache ?? throw new ArgumentNullException(nameof(telemetryCache));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _runtimeUpdater = runtimeUpdater ?? throw new ArgumentNullException(nameof(runtimeUpdater));
+        _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
         _logger = logger;
     }
 
@@ -269,10 +276,165 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         }
     }
 
+    public Task<Result<RigRuntimeStatusResponse>> GetRigRuntimeStatusAsync(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled<Result<RigRuntimeStatusResponse>>(cancellationToken);
+        }
+
+        try
+        {
+            var status = BuildRuntimeStatus("Runtime status retrieved.");
+            return Task.FromResult(Result<RigRuntimeStatusResponse>.Success(status));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(Result<RigRuntimeStatusResponse>.Failure(ex));
+        }
+    }
+
+    public async Task<Result<RigRuntimeActionResponse>> ExecuteRigRuntimeActionAsync(RigRuntimeActionRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            bool succeeded;
+            bool stateChanged;
+            string message;
+
+            _logger?.LogInformation(
+                "Rig runtime action requested. Action={Action}, ForceRestart={ForceRestart}.",
+                request.Action,
+                request.ForceRestart);
+
+            switch (request.Action)
+            {
+                case RigRuntimeActionKind.Start:
+                {
+                    var result = await _rigAdapter.StartAsync(cancellationToken).ConfigureAwait(false);
+                    if (result.IsFailure)
+                    {
+                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter start failed."));
+                    }
+
+                    succeeded = true;
+                    stateChanged = result.Value;
+                    var rigName = _rigAdapter.ActiveRig.Name;
+                    message = result.Value
+                        ? FormattableString.Invariant($"Adapter started for rig '{rigName}'.")
+                        : FormattableString.Invariant($"Adapter already running for rig '{rigName}'.");
+                    break;
+                }
+                case RigRuntimeActionKind.Pause:
+                {
+                    var result = await _rigAdapter.PauseAsync(cancellationToken).ConfigureAwait(false);
+                    if (result.IsFailure)
+                    {
+                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter pause failed."));
+                    }
+
+                    succeeded = true;
+                    stateChanged = result.Value;
+                    var rigName = _rigAdapter.ActiveRig.Name;
+                    message = result.Value
+                        ? FormattableString.Invariant($"Adapter paused for rig '{rigName}'.")
+                        : FormattableString.Invariant($"Adapter was not running for rig '{rigName}'.");
+                    break;
+                }
+                case RigRuntimeActionKind.Resume:
+                {
+                    var result = await _rigAdapter.ResumeAsync(cancellationToken).ConfigureAwait(false);
+                    if (result.IsFailure)
+                    {
+                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter resume failed."));
+                    }
+
+                    succeeded = true;
+                    stateChanged = result.Value;
+                    var rigName = _rigAdapter.ActiveRig.Name;
+                    message = result.Value
+                        ? FormattableString.Invariant($"Adapter resumed for rig '{rigName}'.")
+                        : FormattableString.Invariant($"Adapter was not paused for rig '{rigName}'.");
+                    break;
+                }
+                case RigRuntimeActionKind.Stop:
+                {
+                    var result = await _rigAdapter.StopAsync(cancellationToken).ConfigureAwait(false);
+                    if (result.IsFailure)
+                    {
+                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter stop failed."));
+                    }
+
+                    succeeded = true;
+                    stateChanged = result.Value;
+                    var rigName = _rigAdapter.ActiveRig.Name;
+                    message = result.Value
+                        ? FormattableString.Invariant($"Adapter stopped for rig '{rigName}'.")
+                        : FormattableString.Invariant($"Adapter already stopped for rig '{rigName}'.");
+                    break;
+                }
+                case RigRuntimeActionKind.Reload:
+                {
+                    await _runtimeUpdater.ReloadActiveRigAsync(request.ForceRestart, cancellationToken).ConfigureAwait(false);
+                    var rigName = _rigAdapter.ActiveRig.Name;
+                    succeeded = true;
+                    stateChanged = true;
+                    message = request.ForceRestart
+                        ? FormattableString.Invariant($"Reloaded rig '{rigName}' with force restart.")
+                        : FormattableString.Invariant($"Reloaded rig '{rigName}'.");
+                    break;
+                }
+                default:
+                {
+                    throw new ArgumentOutOfRangeException(nameof(request.Action), request.Action, "Unsupported adapter action.");
+                }
+            }
+
+            var status = BuildRuntimeStatus(message);
+            var completedAt = _timeProvider.GetUtcNow();
+            var response = new RigRuntimeActionResponse(
+                request.Action,
+                request.ForceRestart,
+                succeeded,
+                stateChanged,
+                message,
+                status,
+                completedAt);
+
+            _logger?.LogInformation(
+                "Rig runtime action completed. Action={Action}, ForceRestart={ForceRestart}, Succeeded={Succeeded}, StateChanged={StateChanged}, State={State}.",
+                request.Action,
+                request.ForceRestart,
+                succeeded,
+                stateChanged,
+                response.Status.State);
+
+            return Result<RigRuntimeActionResponse>.Success(response);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Result<RigRuntimeActionResponse>.Failure(ex);
+        }
+    }
+
     private async Task<long> UpsertSystemSettingAsync<T>(string key, T value, long expectedRevision, CancellationToken cancellationToken)
     {
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await context.SystemSettings.FirstOrDefaultAsync(s => s.Key == key, cancellationToken).ConfigureAwait(false);
+        var entity = await context.SystemSettings
+            .AsTracking()
+            .FirstOrDefaultAsync(s => s.Key == key, cancellationToken)
+            .ConfigureAwait(false);
 
         var serialized = JsonSerializer.Serialize(value, JsonOptions);
         var timestamp = _timeProvider.GetUtcNow();
@@ -312,7 +474,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
 
     private void InvalidateCaches(bool localApi = false, bool telemetry = false)
     {
-    _snapshotInvalidator.InvalidateSnapshot();
+        _snapshotInvalidator.InvalidateSnapshot();
         _observatoryCache.TryRemove(OptionsDefaults.DefaultName);
 
         if (localApi)
@@ -325,6 +487,48 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             _telemetryCache.TryRemove(OptionsDefaults.DefaultName);
         }
     }
+
+    private RigRuntimeStatusResponse BuildRuntimeStatus(string? message)
+    {
+        var state = _rigAdapter.CurrentState;
+        var rig = _rigAdapter.ActiveRig;
+        var camera = rig.Camera;
+        var descriptor = camera.Descriptor;
+
+        var driverIdentifier = string.IsNullOrWhiteSpace(camera.DriverIdentifier)
+            ? camera.DriverId.ToString()
+            : camera.DriverIdentifier;
+
+        var adapterName = string.IsNullOrWhiteSpace(descriptor.AdapterName)
+            ? (string.IsNullOrWhiteSpace(descriptor.Model) ? camera.Name : descriptor.Model)
+            : descriptor.AdapterName;
+
+        var timestamp = _timeProvider.GetUtcNow();
+        var detailMessage = string.IsNullOrWhiteSpace(message)
+            ? FormattableString.Invariant($"Adapter state is {state}.")
+            : message.Trim();
+
+        var capabilities = CalculateCapabilities(state);
+
+        return new RigRuntimeStatusResponse(
+            state,
+            capabilities,
+            rig.Name,
+            camera.Name,
+            driverIdentifier,
+            adapterName,
+            timestamp,
+            detailMessage);
+    }
+
+    private static RigRuntimeControlCapabilities CalculateCapabilities(RigAdapterLifecycleState state)
+        => new(
+            CanStart: state == RigAdapterLifecycleState.Stopped,
+            CanPause: state == RigAdapterLifecycleState.Running,
+            CanResume: state == RigAdapterLifecycleState.Paused,
+            CanStop: state is RigAdapterLifecycleState.Running or RigAdapterLifecycleState.Paused,
+            CanReload: true,
+            CanForceReload: true);
 
     private static bool TryValidateTimeZone(string? timeZoneId, out Exception? error)
     {

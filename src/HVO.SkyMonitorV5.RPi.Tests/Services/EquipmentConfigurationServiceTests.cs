@@ -9,6 +9,7 @@ using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.Data.Configurations;
+using HVO.SkyMonitorV5.Data.Configurations.Entities;
 using HVO.SkyMonitorV5.RPi.Cameras.Drivers;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 
@@ -182,6 +183,64 @@ public sealed class EquipmentConfigurationServiceTests
         StringAssert.Contains(result.Error.Message, "At least one rig must remain active");
         Assert.AreEqual(0, invalidator.CallCount);
         Assert.AreEqual(0, runtime.CallCount);
+    }
+
+    [TestMethod]
+    public async Task UpdateRigAsync_ActivatingNewRig_SetsActiveAndReloadsRuntime()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        SeedDatabase(databaseName);
+
+        await using (var context = CreateContext(databaseName))
+        {
+            context.RigCatalogEntries.Add(new RigCatalogEntryEntity
+            {
+                Id = 2,
+                Key = "SimulatedFisheye",
+                DisplayName = "Simulated Fisheye",
+                CameraId = 1,
+                LensId = 1,
+                BoresightAltitudeDegrees = 90.0,
+                BoresightAzimuthDegrees = 0.0,
+                IsActive = false,
+                Revision = 1
+            });
+
+            await context.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
+        var factory = new TestDbContextFactory<SkyMonitorConfigurationContext>(() => CreateContext(databaseName));
+        var invalidator = new StubInvalidator();
+        var runtime = new StubRigRuntimeUpdater();
+        var registry = new StubDriverRegistry();
+
+        var service = new EquipmentConfigurationService(factory, invalidator, runtime, registry, NullLogger<EquipmentConfigurationService>.Instance);
+
+        var request = new UpdateRigRequest
+        {
+            Revision = 1,
+            DisplayName = "Simulated Fisheye",
+            CameraKey = "MockASI174MM",
+            OpticsKey = "Fujinon_FE185C086HA_1",
+            BoresightAltitudeDegrees = 90,
+            BoresightAzimuthDegrees = 0,
+            IsActive = true
+        };
+
+        var result = await service.UpdateRigAsync(2, request, CancellationToken.None).ConfigureAwait(false);
+
+        Assert.IsTrue(result.IsSuccessful, "Expected rig activation to succeed.");
+        Assert.AreEqual(1, invalidator.CallCount);
+        Assert.AreEqual(1, runtime.CallCount);
+        Assert.IsTrue(runtime.LastForceRestart, "Rig runtime reload should be forced when activating a new rig.");
+
+        await using (var verify = CreateContext(databaseName))
+        {
+            var rigs = await verify.RigCatalogEntries.OrderBy(r => r.Id).ToListAsync().ConfigureAwait(false);
+            Assert.AreEqual(2, rigs.Count);
+            Assert.IsFalse(rigs[0].IsActive, "Original rig should be deactivated.");
+            Assert.IsTrue(rigs[1].IsActive, "New rig should be activated.");
+        }
     }
 
     [TestMethod]

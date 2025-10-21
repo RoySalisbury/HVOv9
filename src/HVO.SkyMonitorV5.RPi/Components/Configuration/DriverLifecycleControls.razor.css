@@ -1,0 +1,47 @@
+.driver-lifecycle-card .metric-list {
+    --metric-row-gap: 0.35rem;
+}
+
+.driver-lifecycle-card .metric-list .metric-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.35rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.driver-lifecycle-card .metric-list .metric-row:last-child {
+    border-bottom: none;
+}
+
+.driver-lifecycle-card .metric-list dt {
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0;
+}
+
+.driver-lifecycle-card .metric-list dd {
+    margin-bottom: 0;
+    text-align: right;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.driver-lifecycle-card .metric-list dd .badge {
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+}
+
+@media (max-width: 768px) {
+    .driver-lifecycle-card .metric-list .metric-row {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .driver-lifecycle-card .metric-list dd {
+        text-align: left;
+    }
+}

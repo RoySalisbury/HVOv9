@@ -23,6 +23,11 @@ public interface IRigAcquisitionAdapter : IAsyncDisposable
     bool IsRunning { get; }
 
     /// <summary>
+    /// Gets the current lifecycle state of the adapter.
+    /// </summary>
+    RigAdapterLifecycleState CurrentState { get; }
+
+    /// <summary>
     /// Starts acquisition for the active rig.
     /// </summary>
     Task<Result<bool>> StartAsync(CancellationToken cancellationToken);
@@ -53,4 +58,14 @@ public interface IRigAcquisitionAdapter : IAsyncDisposable
     /// Captures an image using the active rig for the supplied exposure settings.
     /// </summary>
     Task<Result<CapturedImage>> CaptureAsync(ExposureSettings exposure, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Represents the lifecycle state of the rig acquisition adapter.
+/// </summary>
+public enum RigAdapterLifecycleState
+{
+    Stopped = 0,
+    Running = 1,
+    Paused = 2
 }

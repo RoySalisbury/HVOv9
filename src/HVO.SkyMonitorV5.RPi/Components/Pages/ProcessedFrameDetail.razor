@@ -24,10 +24,10 @@
         else if (_viewModel is not null)
         {
             <div class="detail-actions">
-                <button type="button" class="btn btn-outline-light detail-actions__back" @onclick="NavigateBack">
+                <button type="button" class="btn btn-sm btn-outline-light detail-actions__back" @onclick="NavigateBack">
                     <i class="bi bi-arrow-left me-2"></i>Back to Monitor
                 </button>
-                <a class="btn btn-primary detail-actions__download" href="@_viewModel.ImageSource" download="@_viewModel.DownloadFileName">
+                <a class="btn btn-sm btn-primary detail-actions__download" href="@_viewModel.ImageSource" download="@_viewModel.DownloadFileName">
                     <i class="bi bi-download me-2"></i>Download Image
                 </a>
             </div>

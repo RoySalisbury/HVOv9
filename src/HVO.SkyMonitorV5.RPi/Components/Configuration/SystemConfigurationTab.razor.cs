@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO;
 using HVO.SkyMonitorV5.RPi.Models.System;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Components;
@@ -25,6 +26,7 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
     private bool _observatoryIsLoading;
     private bool _observatoryIsSaving;
     private bool _observatoryHasChanges;
+    private bool _observatoryCollapsed;
     private string? _observatoryError;
     private string? _observatorySuccessMessage;
 
@@ -34,6 +36,7 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
     private bool _localApiIsLoading;
     private bool _localApiIsSaving;
     private bool _localApiHasChanges;
+    private bool _localApiCollapsed;
     private string? _localApiError;
     private string? _localApiSuccessMessage;
 
@@ -43,6 +46,7 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
     private bool _telemetryIsLoading;
     private bool _telemetryIsSaving;
     private bool _telemetryHasChanges;
+    private bool _telemetryCollapsed;
     private string? _telemetryError;
     private string? _telemetrySuccessMessage;
 
@@ -74,6 +78,9 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
     private bool CanCancelTelemetry => !_telemetryIsLoading && !_telemetryIsSaving && HasTelemetryChanges;
     private bool CanReloadTelemetry => !_telemetryIsLoading && !_telemetryIsSaving;
 
+    private bool IsBusy => _observatoryIsLoading || _observatoryIsSaving || _localApiIsLoading || _localApiIsSaving || _telemetryIsLoading || _telemetryIsSaving;
+    private bool CanReloadAll => !_observatoryIsLoading && !_localApiIsLoading && !_telemetryIsLoading && !_observatoryIsSaving && !_localApiIsSaving && !_telemetryIsSaving;
+
     protected override async Task OnInitializedAsync()
     {
         _timeZones = TimeZoneInfo.GetSystemTimeZones()
@@ -85,9 +92,62 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
 
     private async Task ReloadAllAsync()
     {
+        if (!CanReloadAll)
+        {
+            return;
+        }
+
         await ReloadObservatoryAsync().ConfigureAwait(false);
         await ReloadLocalApiAsync().ConfigureAwait(false);
         await ReloadTelemetryAsync().ConfigureAwait(false);
+    }
+
+    private void ToggleObservatorySection()
+    {
+        _observatoryCollapsed = !_observatoryCollapsed;
+        StateHasChanged();
+    }
+
+    private void ToggleLocalApiSection()
+    {
+        _localApiCollapsed = !_localApiCollapsed;
+        StateHasChanged();
+    }
+
+    private void ToggleTelemetrySection()
+    {
+        _telemetryCollapsed = !_telemetryCollapsed;
+        StateHasChanged();
+    }
+
+    private static string GetCollapseIconCss(bool collapsed) => collapsed ? "bi bi-chevron-down" : "bi bi-chevron-up";
+
+    private static string GetCollapseCss(bool collapsed) => collapsed ? "collapse-hidden" : string.Empty;
+
+    private static string GetCollapseButtonTitle(string sectionName, bool collapsed) => collapsed ? $"Expand {sectionName}" : $"Collapse {sectionName}";
+
+    private string GetToolbarStatus()
+    {
+        if (!string.IsNullOrWhiteSpace(_observatoryError) ||
+            !string.IsNullOrWhiteSpace(_localApiError) ||
+            !string.IsNullOrWhiteSpace(_telemetryError))
+        {
+            return "Attention required.";
+        }
+
+        if ((_observatoryEditContext is null && !_observatoryIsLoading) ||
+            (_localApiEditContext is null && !_localApiIsLoading) ||
+            (_telemetryEditContext is null && !_telemetryIsLoading))
+        {
+            return "Awaiting configuration data.";
+        }
+
+        if (HasObservatoryChanges || HasLocalApiChanges || HasTelemetryChanges)
+        {
+            return "Unsaved changes pending.";
+        }
+
+        return "Ready.";
     }
 
     private async Task ReloadObservatoryAsync()
@@ -100,18 +160,20 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetSystemObservatoryAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.GetSystemObservatoryAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Observatory configuration is unavailable from the local API.");
+
+            if (result.IsFailure)
             {
                 _observatorySnapshot = null;
                 _observatoryBaseline = null;
                 _observatoryHasChanges = false;
                 DetachObservatoryEditContext();
-                _observatoryError = "Observatory configuration is unavailable from the local API.";
+                _observatoryError = result.Error?.Message ?? "Observatory configuration is unavailable from the local API.";
                 return;
             }
 
-            ApplyObservatoryResponse(response);
+            ApplyObservatoryResponse(result.Value);
         }
         catch (OperationCanceledException)
         {
@@ -143,18 +205,20 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetSystemLocalApiAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.GetSystemLocalApiAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Local API client settings are unavailable from the local API.");
+
+            if (result.IsFailure)
             {
                 _localApiSnapshot = null;
                 _localApiBaseline = null;
                 _localApiHasChanges = false;
                 DetachLocalApiEditContext();
-                _localApiError = "Local API client settings are unavailable from the local API.";
+                _localApiError = result.Error?.Message ?? "Local API client settings are unavailable from the local API.";
                 return;
             }
 
-            ApplyLocalApiResponse(response);
+            ApplyLocalApiResponse(result.Value);
         }
         catch (OperationCanceledException)
         {
@@ -185,18 +249,20 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetTelemetryRetentionAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.GetTelemetryRetentionAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Telemetry retention settings are unavailable from the local API.");
+
+            if (result.IsFailure)
             {
                 _telemetrySnapshot = null;
                 _telemetryBaseline = null;
                 _telemetryHasChanges = false;
                 DetachTelemetryEditContext();
-                _telemetryError = "Telemetry retention settings are unavailable from the local API.";
+                _telemetryError = result.Error?.Message ?? "Telemetry retention settings are unavailable from the local API.";
                 return;
             }
 
-            ApplyTelemetryResponse(response);
+            ApplyTelemetryResponse(result.Value);
         }
         catch (OperationCanceledException)
         {
@@ -252,14 +318,16 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
         try
         {
             var payload = Clone(_observatoryEdit);
-            var response = await LocalApiClient.UpdateSystemObservatoryAsync(payload, CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.UpdateSystemObservatoryAsync(payload, CancellationToken).ConfigureAwait(false))
+                .ToResult("The local API responded without data while saving observatory settings.");
+
+            if (result.IsFailure)
             {
-                _observatoryError = "The local API responded without data while saving observatory settings.";
+                _observatoryError = result.Error?.Message ?? "The local API responded without data while saving observatory settings.";
                 return;
             }
 
-            ApplyObservatoryResponse(response);
+            ApplyObservatoryResponse(result.Value);
             _observatorySuccessMessage = $"Saved {FormatTimestamp(TimeProvider.GetUtcNow())} (rev {_observatoryEdit.Revision}).";
         }
         catch (OperationCanceledException)
@@ -327,14 +395,16 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
         try
         {
             var payload = Clone(_localApiEdit);
-            var response = await LocalApiClient.UpdateSystemLocalApiAsync(payload, CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.UpdateSystemLocalApiAsync(payload, CancellationToken).ConfigureAwait(false))
+                .ToResult("The local API responded without data while saving client settings.");
+
+            if (result.IsFailure)
             {
-                _localApiError = "The local API responded without data while saving client settings.";
+                _localApiError = result.Error?.Message ?? "The local API responded without data while saving client settings.";
                 return;
             }
 
-            ApplyLocalApiResponse(response);
+            ApplyLocalApiResponse(result.Value);
             _localApiSuccessMessage = $"Saved {FormatTimestamp(TimeProvider.GetUtcNow())} (rev {_localApiEdit.Revision}).";
         }
         catch (OperationCanceledException)
@@ -402,14 +472,16 @@ public sealed partial class SystemConfigurationTab : ComponentBase, IDisposable
         try
         {
             var payload = Clone(_telemetryEdit);
-            var response = await LocalApiClient.UpdateTelemetryRetentionAsync(payload, CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var result = (await LocalApiClient.UpdateTelemetryRetentionAsync(payload, CancellationToken).ConfigureAwait(false))
+                .ToResult("The local API responded without data while saving telemetry retention settings.");
+
+            if (result.IsFailure)
             {
-                _telemetryError = "The local API responded without data while saving telemetry retention settings.";
+                _telemetryError = result.Error?.Message ?? "The local API responded without data while saving telemetry retention settings.";
                 return;
             }
 
-            ApplyTelemetryResponse(response);
+            ApplyTelemetryResponse(result.Value);
             _telemetrySuccessMessage = $"Saved {FormatTimestamp(TimeProvider.GetUtcNow())} (rev {_telemetryEdit.Revision}).";
         }
         catch (OperationCanceledException)

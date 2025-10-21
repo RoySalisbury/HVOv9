@@ -3,6 +3,40 @@
 @using Microsoft.AspNetCore.Components.Forms
 
 <div class="container py-4 text-light">
+    <header class="config-toolbar">
+        <div class="config-toolbar__info">
+            <h1 class="config-toolbar__title">Rig Configuration</h1>
+            <p class="config-toolbar__subtitle">Manage rig catalog entries and adapter-ready pairings for camera adapters.</p>
+        </div>
+        <div class="config-toolbar__actions">
+            <button type="button"
+                    class="btn btn-sm btn-outline-light"
+                    @onclick="BeginCreate"
+                    disabled="@(!CanBeginCreate)">
+                <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>
+                New Rig
+            </button>
+            <button type="button"
+                    class="btn btn-sm btn-outline-info"
+                    @onclick="ReloadCatalogAsync"
+                    disabled="@(!CanReloadCatalog)">
+                <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                Refresh Catalog
+            </button>
+        </div>
+        @if (IsBusy)
+        {
+            <div class="config-toolbar__status text-muted">
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Working…
+            </div>
+        }
+        else
+        {
+            <div class="config-toolbar__status text-muted">@GetToolbarSelectionStatus()</div>
+        }
+    </header>
+
     <div class="row g-4">
         <div class="col-12">
             <section class="card bg-dark border-secondary shadow-sm config-card">
@@ -15,17 +49,50 @@
                         </h2>
                         <p class="mb-0 text-muted small">Manage all-sky rig pairings that can be bound to camera adapters.</p>
                     </div>
-                    <button type="button"
-                            class="btn btn-primary"
-                            title="Create a new rig configuration"
-                            @onclick="BeginCreate"
-                            disabled="@(_isLoading || _isSaving)">
-                        <i class="bi bi-plus-circle me-2"></i>
-                        New Rig
-                    </button>
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        <div class="input-group input-group-sm rig-filter">
+                            <span class="input-group-text bg-transparent border-secondary text-muted">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                            </span>
+                            <input type="search"
+                                   class="form-control"
+                                   placeholder="Filter rigs…"
+                                   @bind="SearchText"
+                                   @bind:event="oninput"
+                                   aria-label="Filter rigs by name, key, camera, or optics" />
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_activeRigKey))
+                        {
+                            <span class="badge bg-success-subtle text-success-emphasis">Active @_activeRigKey</span>
+                        }
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleCatalogSection"
+                                aria-expanded="@(!_catalogCollapsed)"
+                                aria-controls="rig-catalog-card-body"
+                                title='@GetCollapseButtonTitle("Rig catalog section", _catalogCollapsed)'>
+                            <i class="@GetCollapseIconCss(_catalogCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Rig catalog section", _catalogCollapsed)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body">
-                    @if (_isLoading)
+                <div id="rig-catalog-card-body"
+                     class="card-body @GetCollapseCss(_catalogCollapsed)"
+                     aria-hidden="@_catalogCollapsed">
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-info"
+                                @onclick="ReloadCatalogAsync"
+                                disabled="@(!CanReloadCatalog)">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Retry Load
+                        </button>
+                    }
+                    else if (_isLoading && FilteredRigs.Count == 0)
                     {
                         <div class="d-flex align-items-center gap-3 text-muted py-2">
                             <div class="spinner-border text-secondary" role="status">
@@ -34,15 +101,9 @@
                             <span>Loading rig catalog…</span>
                         </div>
                     }
-                    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    else if (FilteredRigs.Count == 0)
                     {
-                        <div class="alert alert-danger" role="alert">
-                            @_errorMessage
-                        </div>
-                    }
-                    else if (_rigs.Count == 0)
-                    {
-                        <p class="text-muted">No rig definitions are configured yet. Create a rig to get started.</p>
+                        <p class="text-muted">@GetEmptyFilterMessage()</p>
                     }
                     else
                     {
@@ -60,7 +121,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var rig in _rigs)
+                                    @foreach (var rig in FilteredRigs)
                                     {
                                         var isSelected = _editModel?.Id == rig.Id && rig.Id != 0;
                                         <tr @onclick="() => HandleRowSelection(rig)"
@@ -147,19 +208,32 @@
                         </h2>
                         <p class="mb-0 text-muted small">Edit rig metadata and activation state used by downstream adapters.</p>
                     </div>
-                    @if (_editModel is not null)
-                    {
-                        if (_editModel.Id > 0)
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        @if (_editModel is not null)
                         {
-                            <span class="badge bg-secondary-subtle text-secondary-emphasis mt-1">ID @_editModel.Id · Rev @_editModel.Revision</span>
+                            if (_editModel.Id > 0)
+                            {
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis mt-1">ID @_editModel.Id · Rev @_editModel.Revision</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-info-subtle text-info-emphasis mt-1">New Rig Draft</span>
+                            }
                         }
-                        else
-                        {
-                            <span class="badge bg-info-subtle text-info-emphasis mt-1">New Rig Draft</span>
-                        }
-                    }
+                        <button type="button"
+                                class="btn btn-outline-light btn-sm config-card__collapse"
+                                @onclick="ToggleEditorSection"
+                                aria-expanded="@(!_editorCollapsed)"
+                                aria-controls="rig-editor-card-body"
+                                title='@GetCollapseButtonTitle("Rig editor section", _editorCollapsed)'>
+                            <i class="@GetCollapseIconCss(_editorCollapsed)" aria-hidden="true"></i>
+                            <span class="visually-hidden">@GetCollapseButtonTitle("Rig editor section", _editorCollapsed)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div id="rig-editor-card-body"
+                     class="card-body @GetCollapseCss(_editorCollapsed)"
+                     aria-hidden="@_editorCollapsed">
                     @if (!string.IsNullOrWhiteSpace(_successMessage))
                     {
                         <div class="alert alert-success" role="status">
@@ -262,15 +336,15 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!CanSave)">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="SaveAsync" disabled="@(!CanSaveSelection)">
                                     <i class="bi bi-save me-2"></i>
                                     Save Changes
                                 </button>
-                                <button type="button" class="btn btn-outline-light" @onclick="BeginCreate" disabled="@(_isLoading || _isSaving)">
-                                    <i class="bi bi-plus-circle me-2"></i>
-                                    New
+                                <button type="button" class="btn btn-sm btn-outline-light" @onclick="CancelEditAsync" disabled="@(!CanCancelEdit)">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Cancel
                                 </button>
-                                <button type="button" class="btn btn-outline-danger" @onclick="DeleteAsync" disabled="@(!CanDelete)">
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="DeleteAsync" disabled="@(!CanDeleteSelection)">
                                     <i class="bi bi-trash me-2"></i>
                                     Delete
                                 </button>

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Components.Shared;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Services;
@@ -24,6 +25,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private static readonly TimeSpan RemoteDispatchRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BackgroundRefreshInterval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan FrameExportRefreshInterval = TimeSpan.FromSeconds(5);
+    private const string DefaultTabKey = "system";
 
     private readonly List<double> _queueFillHistory = new();
     private readonly List<double> _queueLatencyHistory = new();
@@ -49,6 +51,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private string? _errorMessage;
     private bool _isLoading = true;
     private DiagnosticsTab _activeTab = DiagnosticsTab.System;
+    private string _activeTabKey = DefaultTabKey;
     private DateTimeOffset _lastSystemRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastQueueRefreshUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFilterRefreshUtc = DateTimeOffset.MinValue;
@@ -56,6 +59,10 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private DateTimeOffset _lastFrameExportRefreshUtc = DateTimeOffset.MinValue;
     private RemoteDispatchConfigSnapshot _remoteDispatchConfig = RemoteDispatchConfigSnapshot.Disabled;
     private IDisposable? _optionsChangeSubscription;
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? RequestedTabKey { get; set; }
 
     [Inject]
     private IDiagnosticsService DiagnosticsService { get; set; } = default!;
@@ -78,6 +85,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private string AutoRefreshStatus => _refreshCts is { IsCancellationRequested: false } ? $"{ActiveTab} metrics" : "Paused";
     private string DiagnosticsHealthDisplay => string.IsNullOrEmpty(_errorMessage) ? "Nominal" : "Needs attention";
     private DiagnosticsTab ActiveTab => _activeTab;
+    private IReadOnlyList<SkyMonitorTabDefinition> DiagnosticsTabs => SkyMonitorTabCatalog.DiagnosticsTabs;
+    private string ActiveTabKey => _activeTabKey;
     private string QueueFillGaugeStyle => BuildGaugeStyle(_stackerMetrics?.QueueFillPercentage ?? 0);
     private string QueueFillPercentageDisplay => _stackerMetrics is { } metrics ? FormatPercent(metrics.QueueFillPercentage) : "—";
     private string QueueDepthSummary => _stackerMetrics is { } metrics ? FormatDepth(metrics.QueueDepth, metrics.QueueCapacity) : "—";
@@ -238,6 +247,58 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private static string FormatRetryTooltip(DateTimeOffset timestamp)
         => timestamp.ToLocalTime().ToString("G", CultureInfo.CurrentCulture);
 
+    private string ResolveActiveTabKey(string? requestedKey)
+    {
+        if (string.IsNullOrWhiteSpace(requestedKey))
+        {
+            return DefaultTabKey;
+        }
+
+        foreach (var tab in DiagnosticsTabs)
+        {
+            if (string.Equals(tab.Key, requestedKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return tab.Key;
+            }
+        }
+
+        return DefaultTabKey;
+    }
+
+    private static DiagnosticsTab ResolveDiagnosticsTab(string tabKey)
+        => tabKey switch
+        {
+            "filters" => DiagnosticsTab.Filters,
+            "queue" => DiagnosticsTab.Queue,
+            _ => DiagnosticsTab.System
+        };
+
+    protected override void OnParametersSet()
+    {
+        var resolvedKey = ResolveActiveTabKey(RequestedTabKey);
+        var resolvedTab = ResolveDiagnosticsTab(resolvedKey);
+
+        var keyChanged = !string.Equals(resolvedKey, _activeTabKey, StringComparison.OrdinalIgnoreCase);
+        var tabChanged = _activeTab != resolvedTab;
+
+        if (keyChanged)
+        {
+            _activeTabKey = resolvedKey;
+        }
+
+        if (tabChanged)
+        {
+            _activeTab = resolvedTab;
+            ForceRefreshForTab(_activeTab);
+
+            if (_refreshCts is { } cts)
+            {
+                var token = cts.Token;
+                _ = InvokeAsync(async () => await RefreshAsync(token).ConfigureAwait(false));
+            }
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
@@ -267,28 +328,6 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
         ForceRefreshForTab(_activeTab);
         await RefreshAsync(_refreshCts.Token).ConfigureAwait(false);
     }
-
-    private void SetActiveTab(DiagnosticsTab tab)
-    {
-        if (_activeTab == tab)
-        {
-            return;
-        }
-
-        _activeTab = tab;
-        ForceRefreshForTab(tab);
-        _ = InvokeAsync(StateHasChanged);
-
-        if (_refreshCts is { } cts)
-        {
-            var token = cts.Token;
-            _ = InvokeAsync(async () => await RefreshAsync(token).ConfigureAwait(false));
-        }
-    }
-
-    private string GetTabCss(DiagnosticsTab tab) => _activeTab == tab ? "active" : string.Empty;
-
-    private string? GetAriaCurrent(DiagnosticsTab tab) => _activeTab == tab ? "page" : null;
 
     private void ForceRefreshForTab(DiagnosticsTab tab)
     {

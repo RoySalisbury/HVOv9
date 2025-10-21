@@ -35,8 +35,24 @@ internal sealed class SkyMonitorTelemetryIngestionQueue : ISkyMonitorTelemetryIn
 
     public async IAsyncEnumerable<TelemetryWorkItem> ReadAllAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+        while (true)
         {
+            bool canRead;
+
+            try
+            {
+                canRead = await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                yield break;
+            }
+
+            if (!canRead)
+            {
+                yield break;
+            }
+
             while (_channel.Reader.TryRead(out var workItem))
             {
                 Interlocked.Decrement(ref _pendingCount);

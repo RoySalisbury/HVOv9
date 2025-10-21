@@ -22,6 +22,11 @@
     color: var(--hvo-body-color);
 }
 
+.config-card .text-muted,
+.config-card small {
+    color: var(--hvo-muted-strong) !important;
+}
+
 .config-card .form-text {
     color: var(--hvo-muted);
 }
@@ -52,4 +57,79 @@
 
 :deep(.table tbody tr.table-active) {
     background-color: var(--hvo-surface-hover, rgba(255, 255, 255, 0.08));
+}
+
+.config-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1.25rem;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.config-toolbar__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.config-toolbar__title {
+    margin: 0;
+    font-size: 1.75rem;
+    color: var(--hvo-body-color);
+}
+
+.config-toolbar__subtitle {
+    margin: 0;
+    color: var(--hvo-muted);
+    font-size: 0.95rem;
+}
+
+.config-toolbar__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.config-toolbar__status {
+    grid-column: 1 / -1;
+    font-size: 0.9rem;
+}
+
+.config-card__collapse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem;
+}
+
+.rig-filter {
+    min-width: 240px;
+}
+
+:deep(.rig-filter .form-control) {
+    background-color: transparent;
+    color: var(--hvo-body-color);
+    border-color: var(--hvo-border-muted);
+}
+
+:deep(.rig-filter .form-control::placeholder) {
+    color: var(--hvo-muted);
+}
+
+.collapse-hidden {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .config-toolbar {
+        grid-template-columns: 1fr;
+        justify-items: flex-start;
+    }
+
+    .config-toolbar__actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
 }
