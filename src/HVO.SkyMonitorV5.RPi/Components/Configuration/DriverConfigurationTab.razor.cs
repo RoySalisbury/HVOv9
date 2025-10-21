@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Components;
@@ -87,16 +88,19 @@ public sealed partial class DriverConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetCameraDriverCatalogAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var driverResult = (await LocalApiClient.GetCameraDriverCatalogAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Unable to load the driver catalog from the local API.");
+
+            if (driverResult.IsFailure)
             {
-                _errorMessage = "Unable to load the driver catalog from the local API.";
+                Logger?.LogWarning(driverResult.Error, "Unable to load the driver catalog from the local API.");
+                _errorMessage = driverResult.Error?.Message ?? "Unable to load the driver catalog from the local API.";
                 _drivers = Array.Empty<CameraDriverDescriptorResponse>();
                 ApplyFilter();
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(driverResult.Value);
         }
         catch (OperationCanceledException)
         {

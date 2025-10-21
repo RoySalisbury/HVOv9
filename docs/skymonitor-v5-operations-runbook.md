@@ -1,6 +1,6 @@
 # SkyMonitor v5 Operations Runbook
 
-_Last updated: 2025-10-16_
+_Last updated: 2025-10-21_
 
 This runbook documents operational procedures for SkyMonitor v5 deployments that rely on the new configuration and telemetry data stores. It assumes the data root is `/var/hvo/datastores/` for Linux containers (or `%PROGRAMDATA%/HVO/datastores/` on Windows hosts) and that telemetry/configuration databases are managed by Entity Framework Core migrations.
 
@@ -76,6 +76,13 @@ This runbook documents operational procedures for SkyMonitor v5 deployments that
 - Whenever a toggle is disabled, the system increments the `feature_fallbacks` counter with the feature name (`raw-linear-payloads`, `processed-frame-encoder`). Alert if fallbacks appear unexpectedly.
 
 > Operational rollback playbook: flip the relevant toggle to `false`, restart the service (or trigger configuration reload), confirm payloads resume using PNG (`Content-Type: image/png`), and watch `feature_fallbacks` until the spike plateaus.
+
+## Configuration UI Workflow Notes
+
+- System, Rig, Driver, Camera, and Optics tabs now surface Local API availability using consistent inline alerts. Any missing payload returns a warning banner (“Unable to load … from the local API.”) and the backing logger records a `LogWarning` with the underlying exception when present.
+- Save operations on Camera and Optics catalogs run validation before dispatch and wrap Local API responses in the shared `Result<T>` helper. If the API responds without data, the UI keeps the current form populated, emits “The local API did not return updated … data.”, and no catalog rows change server-side.
+- When Local API calls succeed, the affected catalog rebinds immediately and refreshes selection state. Operators should see “Camera catalog entry saved.” or “Optics catalog entry saved.” along with the updated timestamp summaries.
+- Check `HVO.SkyMonitorV5.RPi.Components.Configuration.*` logs for `Warning` events whenever these alerts appear; they include the API route and exception details for troubleshooting.
 
 ### Development Object Storage (MinIO)
 

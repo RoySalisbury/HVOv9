@@ -40,8 +40,8 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 
 ### 4. Configuration Enhancements
 - [x] Surface camera adapter lifecycle actions (Start, Stop, Pause, Reload) within the System tab.
-- [ ] Audit configuration forms for Result<T> usage, validation, and logging alignment.
-- [ ] Update documentation/runbooks to reflect new configuration flows.
+- [x] Audit configuration forms for Result<T> usage, validation, and logging alignment.
+- [x] Update documentation/runbooks to reflect new configuration flows.
 
 ### 5. Diagnostics Modernization
 - [ ] Reorganize telemetry into grouped tabs, highlighting newly captured metrics.

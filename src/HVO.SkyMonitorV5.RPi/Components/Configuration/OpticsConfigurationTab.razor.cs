@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
@@ -102,14 +103,22 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var response = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
-            if (response is null)
+            var catalogResult = (await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Unable to load optics catalog from the local API.");
+
+            if (catalogResult.IsFailure)
             {
-                _errorMessage = "Unable to load optics catalog from the local API.";
+                Logger?.LogWarning(catalogResult.Error, "Unable to load optics catalog from the local API.");
+                _optics = Array.Empty<OpticsCatalogItem>();
+                _rigs = Array.Empty<RigSummary>();
+                _opticsUsage = new Dictionary<string, IReadOnlyList<RigSummary>>(StringComparer.OrdinalIgnoreCase);
+                _filteredOptics.Clear();
+                DetachEditContext();
+                _errorMessage = catalogResult.Error?.Message ?? "Unable to load optics catalog from the local API.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(catalogResult.Value);
             _lastUpdatedMessage = $"Updated {DateTimeOffset.Now:HH:mm:ss}";
 
             var preferred = ResolveSelectionAfterRefresh();
@@ -363,24 +372,26 @@ public sealed partial class OpticsConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            EquipmentCatalogResponse? response;
+            Result<EquipmentCatalogResponse> result;
 
             if (_editModel.Id == 0)
             {
-                response = await LocalApiClient.CreateOpticsAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false);
+                result = (await LocalApiClient.CreateOpticsAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false))
+                    .ToResult("The local API did not return updated optics data.");
             }
             else
             {
-                response = await LocalApiClient.UpdateOpticsAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false);
+                result = (await LocalApiClient.UpdateOpticsAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false))
+                    .ToResult("The local API did not return updated optics data.");
             }
 
-            if (response is null)
+            if (result.IsFailure)
             {
-                _errorMessage = "The local API did not return updated optics data.";
+                _errorMessage = result.Error?.Message ?? "The local API did not return updated optics data.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(result.Value);
 
             OpticsCatalogItem? refreshed = _editModel.Id == 0
                 ? _optics.FirstOrDefault(optics => string.Equals(optics.Key, _editModel.Key, StringComparison.OrdinalIgnoreCase))

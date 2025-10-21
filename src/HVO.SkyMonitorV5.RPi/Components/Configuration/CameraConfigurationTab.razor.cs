@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using HVO.SkyMonitorV5.RPi.Models.Catalog;
 using HVO.SkyMonitorV5.RPi.Models.Cameras;
@@ -122,14 +123,22 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            var catalogResponse = await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false);
-            if (catalogResponse is null)
+            var catalogResult = (await LocalApiClient.GetEquipmentCatalogAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("Unable to load camera catalog from the local API.");
+
+            if (catalogResult.IsFailure)
             {
-                _errorMessage = "Unable to load camera catalog from the local API.";
+                Logger?.LogWarning(catalogResult.Error, "Unable to load camera catalog from the local API.");
+                _cameras = Array.Empty<CameraCatalogItem>();
+                _rigs = Array.Empty<RigSummary>();
+                _cameraUsage = new Dictionary<string, IReadOnlyList<RigSummary>>(StringComparer.OrdinalIgnoreCase);
+                _filteredCameras.Clear();
+                _selectedCameraId = null;
+                _errorMessage = catalogResult.Error?.Message ?? "Unable to load camera catalog from the local API.";
                 return;
             }
 
-            ApplyCatalog(catalogResponse);
+            ApplyCatalog(catalogResult.Value);
             await LoadDriverCatalogAsync().ConfigureAwait(false);
             _lastUpdatedMessage = $"Updated {DateTimeOffset.Now:HH:mm:ss}";
 
@@ -187,15 +196,17 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
     {
         try
         {
-            var driverResponse = await LocalApiClient.GetCameraDriverCatalogAsync(CancellationToken).ConfigureAwait(false);
-            if (driverResponse is null)
+            var driverResult = (await LocalApiClient.GetCameraDriverCatalogAsync(CancellationToken).ConfigureAwait(false))
+                .ToResult("The local API returned no camera driver descriptors.");
+
+            if (driverResult.IsFailure)
             {
-                Logger?.LogWarning("Local API returned no camera driver descriptors.");
+                Logger?.LogWarning(driverResult.Error, "Local API returned no camera driver descriptors.");
                 _driverDescriptors = Array.Empty<CameraDriverDescriptorResponse>();
                 return;
             }
 
-            ApplyDriverCatalog(driverResponse);
+            ApplyDriverCatalog(driverResult.Value);
         }
         catch (OperationCanceledException)
         {
@@ -506,24 +517,26 @@ public sealed partial class CameraConfigurationTab : ComponentBase, IDisposable
 
         try
         {
-            EquipmentCatalogResponse? response;
+            Result<EquipmentCatalogResponse> result;
 
             if (_editModel.Id == 0)
             {
-                response = await LocalApiClient.CreateCameraAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false);
+                result = (await LocalApiClient.CreateCameraAsync(_editModel.ToCreateRequest(), CancellationToken).ConfigureAwait(false))
+                    .ToResult("The local API did not return updated camera data.");
             }
             else
             {
-                response = await LocalApiClient.UpdateCameraAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false);
+                result = (await LocalApiClient.UpdateCameraAsync(_editModel.Id, _editModel.ToUpdateRequest(), CancellationToken).ConfigureAwait(false))
+                    .ToResult("The local API did not return updated camera data.");
             }
 
-            if (response is null)
+            if (result.IsFailure)
             {
-                _errorMessage = "The local API did not return updated camera data.";
+                _errorMessage = result.Error?.Message ?? "The local API did not return updated camera data.";
                 return;
             }
 
-            ApplyCatalog(response);
+            ApplyCatalog(result.Value);
 
             CameraCatalogItem? refreshed = _editModel.Id == 0
                 ? _cameras.FirstOrDefault(camera => string.Equals(camera.Key, _editModel.Key, StringComparison.OrdinalIgnoreCase))
