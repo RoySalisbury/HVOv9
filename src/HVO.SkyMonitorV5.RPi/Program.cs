@@ -228,8 +228,8 @@ public static class Program
                     Description = "Camera capture and processing pipeline for the Hualapai Valley Observatory SkyMonitor v5 system",
                     Contact = new OpenApiContact
                     {
-                        Name = "HVO Engineering",
-                        Email = "admin@hualapai-valley-observatory.com"
+                        Name = "Administrator",
+                        Email = "admin@hualapaivalleyobservatory.org"
                     }
                 };
                 return Task.CompletedTask;
