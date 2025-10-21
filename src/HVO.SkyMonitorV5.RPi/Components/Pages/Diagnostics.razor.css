@@ -2,6 +2,47 @@
     display: block;
 }
 
+.system-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 0;
+}
+
+.system-status-list .metric-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+.system-status-list dt {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.7rem;
+    color: var(--hvo-muted-strong);
+    margin-bottom: 0;
+}
+
+.system-status-list dd {
+    margin-bottom: 0;
+    font-weight: 600;
+    color: var(--hvo-body-color);
+    text-align: right;
+}
+
+@media (max-width: 575.98px) {
+    .system-status-list .metric-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+    }
+
+    .system-status-list dd {
+        text-align: left;
+    }
+}
+
 .badge-status {
     display: inline-flex;
     align-items: center;

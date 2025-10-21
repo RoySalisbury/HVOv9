@@ -97,20 +97,19 @@
                                 <tbody>
                                     @foreach (var driver in _filteredDrivers)
                                     {
-                                        <tr class="@(string.Equals(_selectedDriverId, driver.Id, StringComparison.OrdinalIgnoreCase) ? "table-active" : null)">
+                                        var isSelected = string.Equals(_selectedDriverId, driver.Id, StringComparison.OrdinalIgnoreCase);
+                                        <tr class="@(isSelected ? "table-active" : null)"
+                                            @onclick="() => SelectDriver(driver.Id)">
                                             <th scope="row">
-                                                <button type="button"
-                                                        class="btn btn-link btn-sm text-start text-light p-0 driver-selection"
-                                                        @onclick="() => SelectDriver(driver.Id)"
-                                                        disabled="@IsBusy">
-                                                    <span class="d-block fw-semibold">@driver.DisplayName</span>
+                                                <div class="d-flex flex-column">
+                                                    <span class="fw-semibold">@driver.DisplayName</span>
                                                     @if (!string.IsNullOrWhiteSpace(driver.Description))
                                                     {
-                                                        <span class="d-block text-muted small">@driver.Description</span>
+                                                        <small class="text-muted">@driver.Description</small>
                                                     }
-                                                </button>
+                                                </div>
                                             </th>
-                                            <td class="text-monospace">@driver.Id</td>
+                                            <td class="font-monospace">@driver.Id</td>
                                             <td>
                                                 <span class="badge @((driver.SupportsConfiguration ? "bg-success" : "bg-secondary"))">
                                                     @(driver.SupportsConfiguration ? "Supported" : "Not supported")

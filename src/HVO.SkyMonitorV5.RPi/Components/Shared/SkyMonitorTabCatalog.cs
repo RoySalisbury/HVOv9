@@ -25,6 +25,7 @@ internal static class SkyMonitorTabCatalog
     public static IReadOnlyList<SkyMonitorTabDefinition> DiagnosticsTabs { get; } = new[]
     {
         new SkyMonitorTabDefinition("overview", "Overview", "/diagnostics?tab=overview", "bi bi-activity", NavLinkMatch.All),
+    new SkyMonitorTabDefinition("driver", "Driver", "/diagnostics?tab=driver", "bi bi-cpu", NavLinkMatch.All),
         new SkyMonitorTabDefinition("pipeline", "Pipeline", "/diagnostics?tab=pipeline", "bi bi-diagram-3", NavLinkMatch.All),
         new SkyMonitorTabDefinition("dispatch", "Dispatch", "/diagnostics?tab=dispatch", "bi bi-broadcast", NavLinkMatch.All),
         new SkyMonitorTabDefinition("exports", "Exports", "/diagnostics?tab=exports", "bi bi-cloud-upload", NavLinkMatch.All),

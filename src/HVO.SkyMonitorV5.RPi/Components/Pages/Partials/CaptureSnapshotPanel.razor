@@ -1,0 +1,76 @@
+@using HVO.SkyMonitorV5.RPi.Models
+@using HVO.SkyMonitorV5.RPi.Models.System
+@inherits DriverRuntimeComponentBase<CaptureSnapshotPanel>
+
+<section class="capture-snapshot-panel text-light">
+    <div class="card diagnostics-card">
+        <div class="card-body">
+            <div class="d-flex flex-column flex-lg-row gap-3 align-items-start align-items-lg-center">
+                <div class="flex-grow-1">
+                    <h2 class="section-title mb-1">Capture Snapshot</h2>
+                    <p class="text-muted small mb-0">Recent frames and capture pipeline signals from the all-sky adapter.</p>
+                </div>
+            </div>
+
+            <hr class="opacity-10 my-4" />
+
+            @if (!string.IsNullOrWhiteSpace(CaptureError))
+            {
+                <div class="alert alert-danger" role="alert">
+                    <span class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></span>
+                    @CaptureError
+                </div>
+            }
+            else if (IsLoading && Status is null)
+            {
+                <div class="d-flex align-items-center gap-3 text-muted py-2">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Loading capture snapshot…</span>
+                    </div>
+                    <span>Loading capture snapshot…</span>
+                </div>
+            }
+            else if (Status is null)
+            {
+                <p class="text-muted mb-0">Capture telemetry is not available yet. Refresh to try again.</p>
+            }
+            else
+            {
+                <dl class="metric-list capture-snapshot-list">
+                    <div class="metric-row">
+                        <dt>Capture State</dt>
+                        <dd>@GetCaptureState()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Last Frame</dt>
+                        <dd>@GetLastFrameSummary()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Exposure</dt>
+                        <dd>@GetExposureSummary()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Background Stacker</dt>
+                        <dd>@GetBackgroundStackerSummary()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Capture Pacing</dt>
+                        <dd>@GetCapturePacingSummary()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Processing Queue</dt>
+                        <dd>@GetProcessingQueueSummary()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Remote Dispatch</dt>
+                        <dd>@GetRemoteDispatchSummary()</dd>
+                    </div>
+                    <div class="metric-row">
+                        <dt>Hardware</dt>
+                        <dd>@GetHardwareSummary()</dd>
+                    </div>
+                </dl>
+            }
+        </div>
+    </div>
+</section>

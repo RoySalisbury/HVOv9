@@ -58,8 +58,6 @@
                 case DiagnosticsTab.Overview:
                 {
                     <div class="tab-pane active">
-                        <DriverRuntimePanel />
-
                         <div class="d-flex flex-wrap justify-content-end gap-2 mb-4">
                             <a class="btn btn-outline-info btn-sm"
                                href="@BuildDiagnosticsDownloadPath("system")"
@@ -71,34 +69,43 @@
                             </a>
                         </div>
 
-                        <div class="row g-4">
-                            <div class="col-xxl-4 col-lg-6">
+                        <div class="row g-4 mb-4">
+                            <div class="col-12">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body">
-                                        <h2 class="section-title">System status</h2>
-                                        <dl class="metric-list">
-                                            <div class="metric-row">
-                                                <dt>Health</dt>
-                                                <dd>@DiagnosticsHealthDisplay</dd>
+                                        <div class="row g-4 align-items-start">
+                                            <div class="col-lg-4">
+                                                <h2 class="section-title mb-1">System status</h2>
+                                                <p class="text-muted small mb-0">Overall diagnostics health and refresh cadence.</p>
                                             </div>
-                                            <div class="metric-row">
-                                                <dt>Last updated</dt>
-                                                <dd>@(LastUpdatedDisplay ?? "Pending update")</dd>
+                                            <div class="col-lg-8">
+                                                <dl class="metric-list system-status-list mb-0">
+                                                    <div class="metric-row">
+                                                        <dt>Health</dt>
+                                                        <dd>@DiagnosticsHealthDisplay</dd>
+                                                    </div>
+                                                    <div class="metric-row">
+                                                        <dt>Last updated</dt>
+                                                        <dd>@(LastUpdatedDisplay ?? "Pending update")</dd>
+                                                    </div>
+                                                    <div class="metric-row">
+                                                        <dt>Auto refresh</dt>
+                                                        <dd>@AutoRefreshStatus</dd>
+                                                    </div>
+                                                    <div class="metric-row">
+                                                        <dt>Refresh cadence</dt>
+                                                        <dd>@RefreshIntervalDisplay</dd>
+                                                    </div>
+                                                </dl>
                                             </div>
-                                            <div class="metric-row">
-                                                <dt>Auto refresh</dt>
-                                                <dd>@AutoRefreshStatus</dd>
-                                            </div>
-                                            <div class="metric-row">
-                                                <dt>Refresh cadence</dt>
-                                                <dd>@RefreshIntervalDisplay</dd>
-                                            </div>
-                                        </dl>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="col-xxl-4 col-lg-6">
+                        <div class="row g-4 mb-4 align-items-stretch">
+                            <div class="col-xxl-8 col-lg-7">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body d-flex flex-column">
                                         <div class="d-flex justify-content-between align-items-start gap-2">
@@ -156,7 +163,7 @@
                                 </div>
                             </div>
 
-                            <div class="col-xxl-4">
+                            <div class="col-xxl-4 col-lg-5">
                                 <div class="card diagnostics-card h-100">
                                     <div class="card-body d-flex flex-column">
                                         <div class="d-flex justify-content-between align-items-start gap-2">
@@ -223,6 +230,19 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <CaptureSnapshotPanel />
+                            </div>
+                        </div>
+                    </div>
+                    break;
+                }
+                case DiagnosticsTab.Driver:
+                {
+                    <div class="tab-pane active">
+                        <DriverRuntimePanel />
                     </div>
                     break;
                 }

@@ -89,6 +89,11 @@
     background-color: var(--hvo-surface-hover, rgba(255, 255, 255, 0.08));
 }
 
+:deep(.driver-table th),
+:deep(.driver-table td) {
+    vertical-align: middle;
+}
+
 .driver-detail-list {
     margin-bottom: 0;
 }
@@ -99,6 +104,7 @@
 
 .driver-detail-list dd {
     margin-bottom: 0.75rem;
+    color: var(--hvo-body-color);
 }
 
 .driver-detail-list dd:last-of-type {

@@ -303,6 +303,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private static DiagnosticsTab ResolveDiagnosticsTab(string tabKey)
         => tabKey switch
         {
+            "driver" => DiagnosticsTab.Driver,
             "pipeline" => DiagnosticsTab.Pipeline,
             "filters" => DiagnosticsTab.Pipeline,
             "queue" => DiagnosticsTab.Pipeline,
@@ -459,7 +460,8 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
 
     private TimeSpan GetCurrentLoopInterval() => _activeTab switch
     {
-        DiagnosticsTab.Overview => SystemRefreshInterval,
+    DiagnosticsTab.Overview => SystemRefreshInterval,
+    DiagnosticsTab.Driver => SystemRefreshInterval,
         DiagnosticsTab.Pipeline => QueueRefreshInterval,
         DiagnosticsTab.Dispatch => RemoteDispatchRefreshInterval,
         DiagnosticsTab.Exports => FrameExportRefreshInterval,
@@ -1551,6 +1553,7 @@ public sealed partial class Diagnostics : ComponentBase, IAsyncDisposable
     private enum DiagnosticsTab
     {
         Overview,
+        Driver,
         Pipeline,
         Dispatch,
         Exports,

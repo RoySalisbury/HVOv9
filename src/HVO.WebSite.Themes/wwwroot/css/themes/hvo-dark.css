@@ -1482,8 +1482,8 @@ body[data-theme="hvo-dark"] .filter-stats .value {
 
 body[data-theme="hvo-dark"] .cpu-core-list {
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
 }
 
 body[data-theme="hvo-dark"] .cpu-core-row {
@@ -1491,6 +1491,10 @@ body[data-theme="hvo-dark"] .cpu-core-row {
     grid-template-columns: minmax(70px, auto) 1fr minmax(60px, auto);
     align-items: center;
     gap: 0.75rem;
+    padding: 0.5rem 0.25rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    flex: 1 1 210px;
 }
 
 body[data-theme="hvo-dark"] .cpu-core-label {

@@ -1,0 +1,42 @@
+.capture-snapshot-panel .metric-list {
+    --metric-row-gap: 0.35rem;
+}
+
+.capture-snapshot-panel .metric-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.capture-snapshot-panel .metric-row:last-child {
+    border-bottom: none;
+}
+
+.capture-snapshot-panel dt {
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0;
+}
+
+.capture-snapshot-panel dd {
+    margin-bottom: 0;
+    text-align: right;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+@media (max-width: 768px) {
+    .capture-snapshot-panel .metric-row {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .capture-snapshot-panel dd {
+        text-align: left;
+    }
+}

@@ -243,7 +243,7 @@ public sealed partial class DriverConfigurationTab : ComponentBase, IDisposable
 
     private void SelectDriver(string driverId)
     {
-        if (string.IsNullOrWhiteSpace(driverId))
+        if (IsBusy || string.IsNullOrWhiteSpace(driverId))
         {
             return;
         }
