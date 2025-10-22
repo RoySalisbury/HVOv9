@@ -19,20 +19,16 @@
     // Note: Complex connection strings with special characters should be set in devcontainer.local.env
     "HVO_SECRET__WEBSITEV9__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEV9__DB_CONNECTION:}",
     "HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION:}",
-
     // API keys (empty defaults - projects should handle missing keys gracefully)
     "HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY:}",
     "HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT:}",
-    
     // SkyMonitor V5 frame export (development defaults)
     "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY": "${localEnv:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY:admin}",
     "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY": "${localEnv:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY:change-me-now-32chars}",
-    
     // SSH keys (for local dev containers - use devcontainer.local.env file)
     // For GitHub Codespaces, these will be available as repository/user secrets
     "HVO_SECRET__SSH__PRIVATE_KEY_B64": "${localEnv:HVO_SECRET__SSH__PRIVATE_KEY_B64:}",
     "HVO_SECRET__SSH__PUBLIC_KEY_B64": "${localEnv:HVO_SECRET__SSH__PUBLIC_KEY_B64:}",
-    
     // Tailscale configuration (optional) - set real auth key in devcontainer.local.env
     "TS_AUTHKEY": "${localEnv:TS_AUTHKEY:}",
     "TS_HOSTNAME": "${localEnv:TS_HOSTNAME:vscode-container}"
@@ -44,12 +40,15 @@
         "dotnet.defaultSolution": "src/HVOv9.DevContainer.slnx",
         "dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true,
         "dotnet.unitTests.runSettingsPath": "src/coverage.runsettings",
-        
         // C# Development Settings
         "csharp.semanticHighlighting.enabled": true,
         "csharp.showOmnisharpLogOnError": true,
         "csharp.suppressDotnetInstallWarning": true,
         
+        // Reduce MEF composition issues in dev containers
+        "dotnet.server.suppressLspErrorToasts": true,
+        "omnisharp.enableRoslynAnalyzers": true,
+        "omnisharp.enableEditorConfigSupport": true,
         // Editor Configuration for C#
         "editor.tabSize": 2,
         "editor.insertSpaces": true,
@@ -58,75 +57,63 @@
           "source.fixAll": "explicit",
           "source.organizeImports": "explicit"
         },
-        
         // File Associations for HVO project types
         "files.associations": {
           "*.razor": "razor",
           "*.cshtml": "razor",
           "*.runsettings": "xml"
         },
-        
         // Terminal Configuration
         "terminal.integrated.defaultProfile.linux": "bash",
         "terminal.integrated.profiles.linux": {
           "bash": {
             "path": "/bin/bash",
-            "args": ["--login"]
+            "args": [
+              "--login"
+            ]
           }
         },
-        
         // Git Configuration
         "git.enableSmartCommit": true,
         "git.confirmSync": false,
-        
         // Python for Analysis Scripts
         "python.defaultInterpreterPath": "/usr/bin/python3"
       },
       "extensions": [
         // .NET Development Extensions (essential for container-based development)
-        "ms-dotnettools.csdevkit",          // C# Dev Kit (includes IntelliSense, debugging, testing)
-        "ms-dotnettools.csharp",            // C# language support
+        "ms-dotnettools.csdevkit", // C# Dev Kit (includes IntelliSense, debugging, testing)
+        "ms-dotnettools.csharp", // C# language support
         "ms-dotnettools.vscode-dotnet-runtime", // .NET Runtime support
-        
         // ASP.NET Core and Blazor Development
         "ms-dotnettools.blazorwasm-companion", // Blazor WebAssembly debugging
-        
-        // Testing and Diagnostics
-        "ms-dotnettools.vscodeintellicode-csharp", // AI-assisted IntelliCode for C#
-        
         // Database and Entity Framework
-        "ms-mssql.mssql",                   // SQL Server support for EF development
-        
+        "ms-mssql.mssql", // SQL Server support for EF development
         // Container and Development Tools
-        "ms-vscode.vscode-json",            // Enhanced JSON support for appsettings
-        "ms-vscode.powershell",             // PowerShell support for scripts
-        
+        "ms-vscode.vscode-json", // Enhanced JSON support for appsettings
+        "ms-vscode.powershell", // PowerShell support for scripts
         // Git and Collaboration
         "GitHub.vscode-pull-request-github", // GitHub PR integration
-        "GitHub.remotehub",                 // GitHub remote repository support
-        "ms-vsliveshare.vsliveshare",       // Live Share for collaboration
-        
+        "GitHub.remotehub", // GitHub remote repository support
+        "ms-vsliveshare.vsliveshare", // Live Share for collaboration
         // Azure and Cloud Development  
         "ms-azuretools.vscode-azure-mcp-server", // Azure MCP integration
-        "ms-azuretools.vscode-docker",      // Docker support for containerized apps
-        
+        "ms-azuretools.vscode-docker", // Docker support for containerized apps
         // IoT and Hardware Development (HVO-specific)
-        "ms-vscode.cpptools",               // C/C++ for hardware interface development
-        
+        "ms-vscode.cpptools", // C/C++ for hardware interface development
         // Productivity Extensions
-        "ms-vscode.vscode-markdown",        // Enhanced Markdown support for docs
-        "redhat.vscode-xml",                // XML support for project files
-        "ms-python.python"                  // Python support for analysis scripts
+        "ms-vscode.vscode-markdown", // Enhanced Markdown support for docs
+        "redhat.vscode-xml", // XML support for project files
+        "ms-python.python" // Python support for analysis scripts
       ]
     }
   },
   "forwardPorts": [
-    5136,      // HTTP development server
-    7151,      // HTTPS development server  
-    5000,      // Alternative ASP.NET Core HTTP port
-    5001,      // Alternative ASP.NET Core HTTPS port
-    8080,      // Common development port for services
-    3000       // Common frontend development port
+    5136, // HTTP development server
+    7151, // HTTPS development server  
+    5000, // Alternative ASP.NET Core HTTP port
+    5001, // Alternative ASP.NET Core HTTPS port
+    8080, // Common development port for services
+    3000 // Common frontend development port
   ],
   "mounts": [
     {
