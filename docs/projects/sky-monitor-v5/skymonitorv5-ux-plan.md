@@ -5,6 +5,8 @@ This plan captures the scoped tasks for the SkyMonitor v5 user experience refres
 
 Recent work introduced an API-first media delivery path so the monitor and frame detail views stream imagery via the Local API with buffer fallbacks.
 
+> **Status (Oct 22, 2025):** Primary goals delivered; plan paused with remaining follow-ups tracked in `docs/TODO.md`. Resume this plan after validation milestones complete.
+
 ## Objectives
 - Separate the current dashboard experience into a future-ready landing page and a dedicated monitor view.
 - Deliver consistent navigation patterns using badge-style menu buttons and diagnostics-inspired tab rows.
@@ -13,9 +15,10 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 - Provide documented theme primitives so all HVO web properties can adopt the new patterns.
 
 ## Current Priority
-- **✅ Workstreams 3, 4, and 5 are COMPLETED** (as of Oct 21, 2025)
-- **🎯 Ready for Workstream 6: Validation & Release Readiness**
-- Continue with hardware validation, stress testing, and milestone preparation before resuming Workstream 7 items.
+- **✅ Workstreams 3, 4, and 5 COMPLETED** (Oct 21, 2025)
+- **✅ Workstream 7 (Image History UX) COMPLETED** (Oct 22, 2025)
+- **🎯 Active Focus: Workstream 6 — Validation & Release Readiness**
+- Plan is paused; monitor validation progress and revisit once Workstream 6 closes out. Outstanding enhancements live in `docs/TODO.md`.
 
 ## Workstreams & Tasks
 
@@ -108,14 +111,14 @@ Recent work introduced an API-first media delivery path so the monitor and frame
 
 Notes: The hardware validation checklist is intentionally concise — expand with lab-specific steps when hardware time is available.
 
-### 7. Media Streaming & Performance _(on hold until Workstreams 3–6 are complete)_
+### 7. Media Streaming & Performance _(Design & Image History UX complete; follow-ups tracked in TODO)_
 - [x] Introduce the `FrameMediaProvider` with API-first retrieval and frame-buffer fallback.
 - [x] Switch processed and raw detail pages to use the media provider and async loading flows.
 - [x] Update the Monitor page to reuse streamed media for the live tiles.
-- [ ] Begin design of the image history page.  Pause here for design discussion first as it may impact the `FrameMediaProvider` and the API calls.
-- [ ] Add unit coverage validating provider caching, API fallback, and native/raw descriptor handling.
-- [ ] Support format selection via the `type` query parameter on detail routes.
-- [ ] Surface quick-download actions on the Monitor cards using cached media URIs.
+- [x] Deliver Image History page design + implementation (filters, accessible rail, detail view, paging polish).
+- [ ] Add unit coverage validating provider caching, API fallback, and native/raw descriptor handling. _(Moved to TODO backlog)_
+- [ ] Support format selection via the `type` query parameter on detail routes. _(Moved to TODO backlog)_
+- [ ] Surface quick-download actions on the Monitor cards using cached media URIs. _(Moved to TODO backlog)_
 
 ## Milestones
 - **M1 – Theme Readiness:** Badge/tab tokens merged, documentation drafted.
@@ -131,7 +134,6 @@ Notes: The hardware validation checklist is intentionally concise — expand wit
 
 ## Next Steps
 1. Validate the read-only Driver and Adapter Diagnostics experiences cover required telemetry, and capture follow-up tasks for lifecycle command surfaces separately.
-2. Align Workstream 4 scope with stakeholders, prioritizing adapter lifecycle actions and validation updates now that the layouts are in place.
-3. Begin Workstream 4 implementation (configuration enhancements), ensuring Result<T> usage and logging follow the refreshed standards.
-4. Modernize Diagnostics (Workstream 5) and execute the validation/release readiness checklist (Workstream 6), capturing any follow-up documentation.
-5. Resume Workstream 7 follow-ons (media provider tests, format selection, download actions) only after Workstreams 3–6 are delivered.
+2. Maintain configuration enhancements from Workstream 4; capture any regression bugs as they appear during validation.
+3. Execute Workstream 6 validation tasks (simulators, stress harness, hardware when available) and close remaining release notes.
+4. Revisit this UX plan once Workstream 6 concludes; refer to `docs/TODO.md` for the queued follow-on items.

@@ -276,7 +276,8 @@ internal sealed class ImageFrameArchiveIngestionService : BackgroundService, IIm
                 var width = Math.Max(1, (int)Math.Round(image.Width * scale));
                 var height = Math.Max(1, (int)Math.Round(image.Height * scale));
                 var info = new SKImageInfo(width, height, bitmap.ColorType, bitmap.AlphaType, bitmap.ColorSpace);
-                resizedBitmap = bitmap.Resize(info, SKFilterQuality.Medium);
+                var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None);
+                resizedBitmap = bitmap.Resize(info, sampling);
             }
 
             var sourceBitmap = resizedBitmap ?? bitmap;

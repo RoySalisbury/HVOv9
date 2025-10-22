@@ -8,6 +8,7 @@ using HVO.SkyMonitorV5.RPi.Components.Shared;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models.ImageHistory;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.Components.Pages.Partials;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 
@@ -190,6 +191,88 @@ public sealed partial class ImageHistory : ComponentBase, IDisposable
         {
             _isLoadingDetail = false;
             await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        }
+    }
+
+    private async Task LoadMoreThumbnailsAsync()
+    {
+        if (string.IsNullOrEmpty(_nextCursor) || _isLoadingThumbnails)
+        {
+            return;
+        }
+
+        await LoadThumbnailsAsync(reset: false).ConfigureAwait(false);
+    }
+
+    private async Task HandleRailNavigateAsync(NavigationCommand command)
+    {
+        // Simple keyboard navigation: find index of selected frame and move next/previous.
+        if (_thumbnails.Count == 0)
+        {
+            return;
+        }
+
+        var currentIndex = _selectedFrameId is Guid frameId
+            ? _thumbnails.FindIndex(t => t.Entry.FrameId == frameId)
+            : -1;
+
+        var newIndex = currentIndex;
+
+        switch (command)
+        {
+            case NavigationCommand.Next:
+                newIndex = currentIndex >= 0
+                    ? Math.Min(_thumbnails.Count - 1, currentIndex + 1)
+                    : 0;
+                break;
+            case NavigationCommand.Previous:
+                newIndex = currentIndex > 0
+                    ? currentIndex - 1
+                    : 0;
+                break;
+            case NavigationCommand.First:
+                newIndex = 0;
+                break;
+            case NavigationCommand.Last:
+                newIndex = _thumbnails.Count - 1;
+                break;
+        }
+
+        if (newIndex < 0)
+        {
+            return;
+        }
+
+        var countBefore = _thumbnails.Count;
+        var hitListEnd = (command is NavigationCommand.Next or NavigationCommand.Last)
+            && newIndex == countBefore - 1
+            && !string.IsNullOrEmpty(_nextCursor);
+
+        if (hitListEnd)
+        {
+            await LoadMoreThumbnailsAsync().ConfigureAwait(false);
+
+            if (_thumbnails.Count > countBefore)
+            {
+                newIndex = countBefore;
+            }
+        }
+
+        if (_thumbnails.Count == 0)
+        {
+            return;
+        }
+
+        newIndex = Math.Min(newIndex, _thumbnails.Count - 1);
+
+        if (newIndex >= 0 && newIndex < _thumbnails.Count)
+        {
+            var next = _thumbnails[newIndex];
+            if (_selectedFrameId != next.Entry.FrameId)
+            {
+                _selectedFrameId = next.Entry.FrameId;
+                await LoadDetailAsync(_selectedFrameId.Value).ConfigureAwait(false);
+            }
         }
     }
 

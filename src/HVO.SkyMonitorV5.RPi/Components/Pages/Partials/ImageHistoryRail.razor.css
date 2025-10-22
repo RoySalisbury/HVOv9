@@ -163,6 +163,25 @@
     border-radius: 0.5rem;
 }
 
+.rail-loading,
+.rail-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: var(--hvo-text-muted, #9ca3af);
+    background: var(--hvo-panel-muted, rgba(31, 31, 35, 0.6));
+    border-radius: 0.5rem;
+}
+
+.rail-load-more {
+    margin-top: 0.75rem;
+    display: flex;
+    justify-content: center;
+}
+
 @media (max-width: 768px) {
     .rail-header {
         flex-direction: column;

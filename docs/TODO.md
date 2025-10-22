@@ -14,6 +14,10 @@
 - [ ] Provide CLI/support tooling (e.g., `scripts/export-frame-diagnostics.sh`) to inspect recent export attempts and replay failed envelopes.
 - [ ] Document the frame export operational runbook covering S3 prefixes, retention, troubleshooting steps, and retry workflows.
 - [ ] Perform a TODO sweep on the exporter/resilience code paths to ensure logging, Result<T> usage, and policy wiring match workspace standards.
+- [ ] Add a background job to backfill archive thumbnails for legacy processed frames once the Image History archive is live.
+- [ ] Add unit tests covering `FrameMediaProvider` caching behavior, API fallback, and native/raw descriptor handling.
+- [ ] Support processed/raw download format selection via `type` query parameter on frame detail routes.
+- [ ] Surface quick-download shortcuts on Monitor cards using cached media URIs from the archive provider.
 - [ ] Re-run stress harnesses to validate export channel capacity/backpressure defaults and capture tuning guidance in docs once hardware access resumes.
 - [ ] Tag the release milestone for the frame export project and capture final review notes from ops/support once the remaining docs/UI work lands.
 

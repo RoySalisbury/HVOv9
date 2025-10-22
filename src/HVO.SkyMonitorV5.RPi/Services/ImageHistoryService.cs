@@ -82,7 +82,7 @@ internal sealed class ImageHistoryService : IImageHistoryService
 
             if (hasMore)
             {
-                var cursorEntity = entities[pageSize];
+                var cursorEntity = entities[pageSize - 1];
                 nextCursor = EncodeCursor(cursorEntity.CapturedAtUtc, cursorEntity.FrameId);
                 entities.RemoveRange(pageSize, entities.Count - pageSize);
             }

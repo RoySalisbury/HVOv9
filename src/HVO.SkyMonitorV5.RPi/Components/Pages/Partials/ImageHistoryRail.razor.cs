@@ -4,8 +4,17 @@ using System.Linq;
 using System.Threading.Tasks;
 using HVO.SkyMonitorV5.RPi.Models.ImageHistory;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 
 namespace HVO.SkyMonitorV5.RPi.Components.Pages.Partials;
+
+public enum NavigationCommand
+{
+    Previous,
+    Next,
+    First,
+    Last
+}
 
 public sealed partial class ImageHistoryRail : ComponentBase
 {
@@ -28,6 +37,15 @@ public sealed partial class ImageHistoryRail : ComponentBase
 
     [Parameter]
     public EventCallback OnRefreshRequested { get; set; }
+
+    [Parameter]
+    public bool HasMoreItems { get; set; }
+
+    [Parameter]
+    public EventCallback OnLoadMoreRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<NavigationCommand> OnNavigate { get; set; }
 
     private IReadOnlyList<RailGroup> Groups => _groups;
 
@@ -91,6 +109,57 @@ public sealed partial class ImageHistoryRail : ComponentBase
         if (OnRefreshRequested.HasDelegate)
         {
             await OnRefreshRequested.InvokeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (OnLoadMoreRequested.HasDelegate)
+        {
+            await OnLoadMoreRequested.InvokeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs args, Guid frameId)
+    {
+        if (args is null)
+        {
+            return;
+        }
+
+        switch (args.Key)
+        {
+            case "ArrowRight":
+            case "ArrowDown":
+                await NavigateAsync(NavigationCommand.Next).ConfigureAwait(false);
+                break;
+
+            case "ArrowLeft":
+            case "ArrowUp":
+                await NavigateAsync(NavigationCommand.Previous).ConfigureAwait(false);
+                break;
+
+            case "Home":
+                await NavigateAsync(NavigationCommand.First).ConfigureAwait(false);
+                break;
+
+            case "End":
+                await NavigateAsync(NavigationCommand.Last).ConfigureAwait(false);
+                break;
+
+            case "Enter":
+            case " ":
+            case "Space":
+                await SelectAsync(frameId).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    private async Task NavigateAsync(NavigationCommand command)
+    {
+        if (OnNavigate.HasDelegate)
+        {
+            await OnNavigate.InvokeAsync(command).ConfigureAwait(false);
         }
     }
 

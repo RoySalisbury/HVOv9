@@ -24,6 +24,9 @@
                                SelectedFrameId="@_selectedFrameId"
                                OnSelectItem="HandleThumbnailSelectedAsync"
                                OnRefreshRequested="HandleRefreshRequestedAsync"
+                               HasMoreItems="@(!string.IsNullOrEmpty(_nextCursor))"
+                               OnLoadMoreRequested="LoadMoreThumbnailsAsync"
+                               OnNavigate="HandleRailNavigateAsync"
                                IsLoading="@_isLoadingThumbnails"
                                ErrorMessage="@_thumbnailError" />
 

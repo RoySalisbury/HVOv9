@@ -1,6 +1,12 @@
 # Workstream 7 — Image History (Design Sub-Plan)
 
-Status: In Progress (archive store + ingestion queue complete)
+Status: Completed (2025-10-22) — archive store, ingestion, and UI polish delivered
+
+## Progress (2025-10-22)
+- [x] Adopted `SKSamplingOptions` in thumbnail pipeline to clear SkiaSharp deprecation warnings.
+- [x] Corrected `ImageHistoryService` pagination cursor so second-page queries return the expected items.
+- [x] Completed Image History UI polish (loading states, keyboard navigation, load-more paging, rail accessibility).
+- [x] Documented workstream closure and hand-off back to the core SkyMonitor UX plan.
 
 ## Progress (2025-10-21)
 - [x] Task 1 — Author design sub-plan and review scope
@@ -8,7 +14,13 @@ Status: In Progress (archive store + ingestion queue complete)
 - [x] Task 3 — Implement processed-frame archive ingestion pipeline (`ImageFrameArchiveIngestionService`, queue wiring, thumbnails, options)
 - [x] Task 4 — Expand `FrameMediaProvider` lookup tiers to read from archive
 - [x] Task 5 — Expose Image History API endpoints and DTOs
-- [ ] Task 6 — Build Blazor Image History UI and integrate telemetry/tests
+- [x] Task 6 — Build Blazor Image History UI and integrate telemetry/tests
+
+## Closure Notes (2025-10-22)
+- UX polish wraps with accessible keyboard navigation, progressive loading, and visual feedback for the thumbnail rail.
+- Docs updated; outstanding backfill work tracked separately in `docs/TODO.md` for future follow-up.
+- All tests pass via `dotnet test HVO.SkyMonitorV5.RPi.Tests`; no SkiaSharp warnings remain.
+- Returning focus to the primary SkyMonitor UX overhaul plan (Workstreams 6+).
 
 ## Goal
 Provide a focused, performant "Image History" experience for operators to review recent composed (stacked) processed frames and drill into raw exposures on demand. Reuse existing media export and pre-processing sinks while adding a small archive catalog and provider changes so Monitor and History pages share a single frame lookup path.
@@ -73,6 +85,8 @@ All endpoints return `Result<T>` semantics and `ProblemDetails`-friendly HTTP re
 Implementation landed in `ImageHistoryController` + `ImageHistoryService` with MSTest coverage (`ImageHistoryServiceTests`) ensuring paging, fault handling, and aggregate stats.
 > Build note (2025-10-21): `ImageFrameArchiveIngestionService` still emits SkiaSharp deprecation warnings (`SKFilterQuality`/`SKBitmap.Resize`). Track follow-up to adopt `SKSamplingOptions` when thumbnail generation work resumes.
 
+> Update (2025-10-22): Thumbnail generation now uses `SKSamplingOptions`; no outstanding SkiaSharp deprecation warnings remain.
+
 ## Blazor UI components
 - `ImageHistoryFilters.razor` — date range picker, quick presets, rig/camera chips, pagination control.
 - `ImageHistoryRail.razor` — horizontal virtualized thumbnail rail grouped by hour/day with lazy fetch and keyboard accessibility.
@@ -108,4 +122,4 @@ UX Details
 ---
 
 Author: Draft by engineering pairing
-Date: 2025-10-21
+Date: 2025-10-22
