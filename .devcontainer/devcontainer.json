@@ -27,7 +27,8 @@
     "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY": "${localEnv:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY:admin}",
     "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY": "${localEnv:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY:change-me-now-32chars}",
     
-    // SSH keys (optional - will be empty if not provided)
+    // SSH keys (for local dev containers - use devcontainer.local.env file)
+    // For GitHub Codespaces, these will be available as repository/user secrets
     "HVO_SECRET__SSH__PRIVATE_KEY_B64": "${localEnv:HVO_SECRET__SSH__PRIVATE_KEY_B64:}",
     "HVO_SECRET__SSH__PUBLIC_KEY_B64": "${localEnv:HVO_SECRET__SSH__PUBLIC_KEY_B64:}",
     

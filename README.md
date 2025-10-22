@@ -110,6 +110,8 @@ This repo is configured for VS Code Dev Containers / GitHub Codespaces:
    ```
    Configure the same values as GitHub repository/Codespaces secrets so the devcontainer picks them up automatically.
 
+   For detailed setup instructions, see [Dev Container Secrets Setup Guide](docs/guides/devcontainer-secrets-setup.md).
+
 Notes
 - In Development, HTTPS redirection is disabled by default (configurable).
 - LocalApi HttpClient can trust dev certs in Development to avoid SSL errors over port forwarding.
