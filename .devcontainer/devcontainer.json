@@ -15,21 +15,26 @@
     }
   },
   "containerEnv": {
-    // Tailscale configuration (optional) - these can be set directly in container
+    // Database connections (fallback to example values if not provided)
+    "HVO_SECRET__WEBSITEV9__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEV9__DB_CONNECTION:Server=tcp:localhost,1433;Initial Catalog=HualapaiValleyObservatory;Persist Security Info=False;User ID=sa;Password=DevPassword123!;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=True;Connection Timeout=30;}",
+    "HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION:Server=tcp:localhost,1433;Initial Catalog=HualapaiValleyObservatory;Persist Security Info=False;User ID=sa;Password=DevPassword123!;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=True;Connection Timeout=30;}",
+    
+    // API keys (empty defaults - projects should handle missing keys gracefully)
+    "HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY:}",
+    "HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT:}",
+    
+    // SkyMonitor V5 frame export (development defaults)
+    "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY": "${localEnv:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY:admin}",
+    "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY": "${localEnv:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY:change-me-now-32chars}",
+    
+    // SSH keys (for local dev containers - use devcontainer.local.env file)
+    // For GitHub Codespaces, these will be available as repository/user secrets
+    "HVO_SECRET__SSH__PRIVATE_KEY_B64": "${localEnv:HVO_SECRET__SSH__PRIVATE_KEY_B64:}",
+    "HVO_SECRET__SSH__PUBLIC_KEY_B64": "${localEnv:HVO_SECRET__SSH__PUBLIC_KEY_B64:}",
+    
+    // Tailscale configuration (optional)
     "TS_AUTHKEY": "${localEnv:TS_AUTHKEY:tskey-auth-k77u3uBCXq11CNTRL-K88JKepZGaNJiLuAQLhEaN4qHZMyZST77}",
     "TS_HOSTNAME": "${localEnv:TS_HOSTNAME:vscode-container}"
-  },
-  "remoteEnv": {
-    // These environment variables are passed through from the host macOS environment
-    // Set these in your shell profile (e.g., ~/.zshrc, ~/.bash_profile) before launching VS Code
-    "HVO_SECRET__SSH__PRIVATE_KEY_B64": "${env:HVO_SECRET__SSH__PRIVATE_KEY_B64}",
-    "HVO_SECRET__SSH__PUBLIC_KEY_B64": "${env:HVO_SECRET__SSH__PUBLIC_KEY_B64}",
-    "HVO_SECRET__WEBSITEV9__DB_CONNECTION": "${env:HVO_SECRET__WEBSITEV9__DB_CONNECTION}",
-    "HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION": "${env:HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION}",
-    "HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY": "${env:HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY}",
-    "HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT": "${env:HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT}",
-    "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY": "${env:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY}",
-    "HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY": "${env:HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY}"
   },
   "customizations": {
     "vscode": {

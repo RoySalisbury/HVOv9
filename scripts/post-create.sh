@@ -171,6 +171,14 @@ main() {
     log "Warning: Failed to add vscode user to i2c group. Hardware features may not work."
   fi
 
+  # Try to fetch secrets from external sources (Azure Key Vault, AWS, etc.)
+  log "Attempting to fetch secrets from external sources..."
+  if bash "${REPO_ROOT}/scripts/advanced-secret-manager.sh"; then
+    log "Advanced secret management completed."
+  else
+    log "Advanced secret management failed or not configured - using local environment file."
+  fi
+
   install_dotnet_tools
 
   log "Setting up HTTPS development certificate."
