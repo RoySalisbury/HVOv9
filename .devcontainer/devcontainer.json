@@ -135,5 +135,6 @@
       "target": "/home/vscode/.dotnet/corefx/cryptography/x509stores"
     }
   ],
+  "postStartCommand": "sudo chown -R vscode:vscode /home/vscode/.dotnet 2>/dev/null || true",
   "postCreateCommand": "bash scripts/post-create.sh"
 }

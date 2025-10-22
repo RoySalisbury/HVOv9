@@ -53,12 +53,22 @@ fix_dotnet_permissions() {
   # The mcr.microsoft.com/devcontainers/dotnet:9.0 base image may create the .dotnet
   # directory with root ownership during initial setup, which prevents the vscode user
   # from using dotnet workloads and tools. This function ensures proper ownership.
-  if [[ -d "/home/vscode/.dotnet" ]]; then
-    log "Fixing .NET directory permissions for vscode user."
-    sudo chown -R vscode:vscode /home/vscode/.dotnet/
-  else
-    log ".NET directory not found; permissions will be set correctly on first use."
+  
+  # Create the directory with correct ownership if it doesn't exist
+  if [[ ! -d "/home/vscode/.dotnet" ]]; then
+    log "Creating .NET directory with correct permissions."
+    sudo mkdir -p /home/vscode/.dotnet
+    sudo chown vscode:vscode /home/vscode/.dotnet
   fi
+  
+  # Always fix permissions on existing directory and contents
+  log "Ensuring .NET directory permissions are correct for vscode user."
+  sudo chown -R vscode:vscode /home/vscode/.dotnet/
+  
+  # Set proper permissions on the directory
+  sudo chmod 755 /home/vscode/.dotnet/
+  
+  log ".NET directory permissions fixed."
 }
 
 setup_shell_environment() {
@@ -179,6 +189,9 @@ configure_git_identity() {
 }
 
 main() {
+  # Fix .NET permissions FIRST to prevent access issues during container setup
+  fix_dotnet_permissions
+  
   log "Copying catalog data."
   bash "${REPO_ROOT}/scripts/copy-catalog.sh"
 
