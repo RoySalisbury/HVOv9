@@ -1,81 +1,397 @@
-# TODO Catalog
+# HVOv9 Master TODO
+
+> **Document Status**: Master task tracker for the entire HVOv9 workspace  
+> **Last Updated**: 2025-10-22  
+> **Task Status Legend**:
+> - `[ ]` - Pending/Not Started
+> - `[x]` - Completed
+> - `[~]` - In Progress
+> - `[DEFERRED]` - Deferred to future release
+> - `[REMOVED]` - Removed/Not Applicable
+
+---
 
 ## Solution-Wide
 
-- _No open items tracked. Reserve for NuGet updates, global cleanup, or cross-project initiatives._
+### Active Tasks
+- [ ] NuGet package updates and dependency management
+- [ ] Global code cleanup and refactoring initiatives
+- [ ] Cross-project standardization efforts
+
+### Completed Tasks ✅
+- [x] Standardize EF Core dependencies to 9.0.9 across solution
+- [x] Deploy `dotnet-ef` global tool for migration support
+- [x] Establish workspace-wide Result<T> pattern for error handling
+
+---
 
 ## HVO.SkyMonitorV5.RPi
-- [ ] Perform full end-to-end validation against physical camera hardware once access is restored; capture notes on exposure behavior, queue pressure, and on-device telemetry before release.
-- [ ] Add a light-mode variant of the theme and expose a runtime toggle.
-- [ ] Migrate CelestialAnnotations filter configuration (DeepSkyObjects list, thresholds, labels) entirely into the database catalog and remove the unused legacy appsettings entries.
-- [ ] Regenerate `docs/projects/sky-monitor-v5/skymonitor-flow.svg` and `docs/projects/sky-monitor-v5/skymonitor-sequence.svg` with the updated architecture once the new diagrams are drafted.
-- [ ] Audit design diagrams in docs and rebuild any outdated folder structure illustrations inside the Markdown guides.
-- [ ] Expose `FrameExportOptions` in the admin configuration UI so operators can toggle sinks, prefixes, and manifest settings without editing JSON.
-- [ ] Provide CLI/support tooling (e.g., `scripts/export-frame-diagnostics.sh`) to inspect recent export attempts and replay failed envelopes.
-- [ ] Document the frame export operational runbook covering S3 prefixes, retention, troubleshooting steps, and retry workflows.
-- [ ] Perform a TODO sweep on the exporter/resilience code paths to ensure logging, Result<T> usage, and policy wiring match workspace standards.
-- [ ] Add a background job to backfill archive thumbnails for legacy processed frames once the Image History archive is live.
-- [ ] Add unit tests covering `FrameMediaProvider` caching behavior, API fallback, and native/raw descriptor handling.
-- [ ] Support processed/raw download format selection via `type` query parameter on frame detail routes.
-- [ ] Surface quick-download shortcuts on Monitor cards using cached media URIs from the archive provider.
-- [ ] Re-run stress harnesses to validate export channel capacity/backpressure defaults and capture tuning guidance in docs once hardware access resumes.
-- [ ] Tag the release milestone for the frame export project and capture final review notes from ops/support once the remaining docs/UI work lands.
 
-### UX Improvements _(deferred to upcoming UI overhaul project)_
-- [ ] Promote the current SkyMonitor landing page into a dedicated **Monitor** view and hold the root **Dashboard** route for a future minimal overview.
-- [ ] Refresh top-level navigation to use compact badge-styled buttons (matching diagnostics tabs) with entries for: Dashboard, Monitor, Image History, Configuration, Diagnostics.
-- [ ] Ensure non-dashboard pages expose secondary tab bars to group content (e.g., Configuration tabs for System, Rig, Cameras, Optics, Pipeline, Filters, etc.).
-- [ ] Provide per-tab Save / Reload / Cancel affordances so operators can safely edit configuration slices, including collections like rigs, cameras, and optics.
-- [ ] Introduce collapsible sections within dense cards to keep long forms and telemetry groupings scannable.
-- [ ] Add system-level controls (start, stop, pause, reload) for the active camera adapter within the Configuration area.
-- [ ] Reorganize Diagnostics layout to highlight the expanded telemetry set and add a real-time log viewer tab using the shared tab navigation pattern.
+### Camera & Hardware
+#### Active Tasks
+- [ ] Perform full end-to-end validation against physical camera hardware once access is restored
+- [ ] Capture notes on exposure behavior, queue pressure, and on-device telemetry before release
+- [ ] Exercise ZWO ASI174MM/ASI174MC with real hardware to verify zero-copy capture paths
+- [ ] Validate RAW16 down-conversion and RGB24 Bayer colour ordering on hardware
+- [ ] Measure end-to-end latency and dropped-frame behavior with real exposures (1-60s)
+- [ ] Exercise gain/exposure auto modes to ensure control caps align with rig configuration
+- [ ] Verify cooler/temperature telemetry for cooled camera bodies
+- [ ] Stress test ROI/binning reconfiguration for sensor windowing/downscaling
 
-### Dashboard _(deferred to upcoming UI overhaul project)_
-- [x] Display observatory-local time in the SkyMonitor footer instead of UTC.
-- [ ] Split the pipeline information into a two-column layout, presenting queue stats side-by-side and moving the filters section beneath the capabilities summary.
-- [ ] Surface end-to-end frame processing time (capture to pipeline completion) plus inter-frame delay alongside the existing pipeline duration metric.
+#### Completed Tasks ✅
+- [x] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD)
+- [x] Unify synthetic and physical camera adapters with `Synthetic` flag control
+- [x] Break camera adapter workflow into explicit pipeline stages
+- [x] Implement zero-copy capture via `SKPixmap` + `SKImage` wrappers
+- [x] Introduce `FrameContext` with rig/projector/engine metadata
+- [x] Implement camera driver attribute-based discovery system
+- [x] Remove adapter catalog layer in favor of driver metadata
 
-### Diagnostics _(deferred to upcoming UI overhaul project)_
-- [x] Add navigation affordance (tabs or sidebar) so queue diagnostics, filter diagnostics, and system diagnostics sub-views fit without cluttering the layout. The current theme is fine, but may need to slight modifactions in font size (smaller, like the dashbaord).
-- [x] Enable auto-refresh with per-tab throttling to ensure only the visible diagnostics pane polls for data, reducing CPU load.
-- [ ] Capture diagnostics snapshots to disk for offline analysis (JSON export triggered from the diagnostics page).
-- [ ] Factor the remote dispatch configuration editor into a reusable component consumed by SkyMonitor, Roof Controller, and future observatory apps.
+### Frame Processing & Pipeline
+#### Active Tasks
+- [ ] Re-run stress harnesses to validate export channel capacity/backpressure defaults
+- [ ] Add unit tests covering `FrameMediaProvider` caching behavior and API fallback
+- [ ] Benchmark GPU-backed surfaces vs CPU-only for overlays (if applicable)
+- [ ] Evaluate memory pressure of storing high-bit `SKImage` masters in queues at target frame rates
+- [DEFERRED] Re-evaluate partial parallel filter execution after profiling shows ~10ms gain matters
 
-### Camera
-- [x] Extend `CameraSpec`/`RigSpec` metadata with capability flags (Color, Monochrome, Cooled, DSLR, CMOS, CCD, etc.) and mirror those attributes in the dashboard camera section alongside pipeline capabilities to guide setup decisions.
-- [x] Evaluate unifying synthetic and physical camera adapters behind a single implementation controlled by a `Synthetic` flag, sourcing frames from either live hardware or the starfield engine, with hooks for exposure/contrast/gain adjustments pre-pipeline. Explore whether this can converge further into one `CameraAdapter` class that relies on `RigSpec` for behaviour and delegates device-specific calls to `ICamera` implementations. Would also need to be able to access the running CameraAdaptor from things like the UI and API.  We can confine the applicaiotn to a single running adaptor at a time, but multiple configuraitons available.
-- [x] Break the camera adapter workflow into explicit pipeline stages (exposure configuration, image acquisition, pre-processing, post-processing, framebuffer assembly) so overrides remain focused and discoverable.
+#### Completed Tasks ✅
+- [x] Implement `RollingFrameStacker` with linear `SKSurface` pooling
+- [x] Introduce `SkiaSurfacePool` for reusable linear RgbaF16 surfaces
+- [x] Migrate all filters to `IImageFrameFilter` with pooled surface support
+- [x] Implement overlay asset caching via `SKPicture` and pre-rasterized `SKImage`
+- [x] Complete SkiaSharp pipeline transition (Phases 1-7)
+- [x] Establish deterministic composition on linear surfaces
+- [x] Implement background stacker with adaptive queue capacity
+
+### Frame Export & Remote Dispatch
+#### Active Tasks
+- [ ] Expose `FrameExportOptions` in admin configuration UI
+- [ ] Provide CLI/support tooling (`scripts/export-frame-diagnostics.sh`) for export diagnostics
+- [ ] Document frame export operational runbook (S3 prefixes, retention, troubleshooting)
+- [ ] Perform TODO sweep on exporter/resilience code paths for standards compliance
+- [ ] Support processed/raw download format selection via `type` query parameter
+- [ ] Surface quick-download shortcuts on Monitor cards using cached media URIs
+- [ ] Tag release milestone for frame export project with ops/support review notes
+- [DEFERRED] FITS/TIFF encoder support for remote dispatch (pending data store completion)
+
+#### Completed Tasks ✅
+- [x] Implement `FrameExportPublisher` with bounded channel dispatcher
+- [x] Create `S3FrameExportSink` and `FilesystemFrameExportSink`
+- [x] Implement frame export telemetry and retry queue
+- [x] Integrate MinIO client with bucket auto-provisioning
+- [x] Implement raw frame dispatch through MinIO with configurable formats
+- [x] Add remote dispatch telemetry to dashboard and diagnostics
+- [x] Complete processed frame export with dual-scope (archive/delivery) support
+- [x] Implement encoder integration with payload metadata
+
+### Image History & Archive
+#### Active Tasks
+- [ ] Add background job to backfill archive thumbnails for legacy processed frames
+
+#### Completed Tasks ✅
+- [x] Implement `ImageFrameArchiveContext` with EF Core migration
+- [x] Create `ImageFrameArchiveIngestionService` with thumbnail generation
+- [x] Expand `FrameMediaProvider` to include archive lookup tier
+- [x] Build Image History API endpoints and DTOs
+- [x] Implement Image History Blazor UI with filters and pagination
+- [x] Complete keyboard navigation and progressive loading for thumbnail rail
+- [x] Adopt `SKSamplingOptions` to resolve SkiaSharp deprecation warnings
+
+### Data Store & Configuration
+#### Active Tasks
+- [ ] Finalize configuration UX for editing stored rigs/cameras/optics
+- [ ] Add diagnostics overlay entity/table to configuration store
+- [ ] Model retention policies in telemetry/configuration store
+
+#### Completed Tasks ✅
+- [x] Create `HVO.SkyMonitorV5.Data` project with EF Core contexts
+- [x] Migrate catalog contexts (HYG, Constellation, Deep Sky) to data project
+- [x] Implement `SkyMonitorConfigurationContext` with seed defaults
+- [x] Create telemetry database schema with retention helpers
+- [x] Implement `SkyMonitorTelemetryRecorder` and ingestion service
+- [x] Complete Phase 4: Observability & Operations deliverables
+- [x] Publish operations runbook and JSON migration guide
+- [x] Implement diagnostics endpoint for data store metrics
+- [x] Archive legacy `appsettings.json` content
+
+### UI/UX Improvements
+#### Active Tasks
+- [ ] Add light-mode theme variant with runtime toggle
+- [ ] Split pipeline information into two-column layout on dashboard
+- [ ] Surface end-to-end frame processing time metrics
+- [ ] Capture diagnostics snapshots to disk (JSON export)
+- [ ] Factor remote dispatch configuration editor into reusable component
+- [DEFERRED] Promote current landing page to dedicated Monitor view (pending validation)
+- [DEFERRED] Refresh top-level navigation with badge-styled buttons (pending validation)
+
+#### Completed Tasks ✅
+- [x] Display observatory-local time in footer
+- [x] Add diagnostics navigation tabs (queue, filter, system)
+- [x] Enable auto-refresh with per-tab throttling
+- [x] Implement camera adapter lifecycle controls (Start, Stop, Pause, Reload)
+- [x] Implement 4-row diagnostics layout with action buttons
+- [x] Add real-time log viewer with 2-second refresh
+- [x] Optimize polling intervals per diagnostics tab
+- [x] Add JSON export controls across all diagnostic tabs
+- [x] Introduce collapsible sections within configuration cards
+- [x] Implement secondary tab navigation component
+
+### Documentation & Diagrams
+#### Active Tasks
+- [ ] Regenerate `skymonitor-flow.svg` and `skymonitor-sequence.svg` with updated architecture
+- [ ] Audit design diagrams in docs and rebuild outdated folder structure illustrations
+- [ ] Migrate CelestialAnnotations filter configuration documentation
+
+#### Completed Tasks ✅
+- [x] Document frame context & rig integration architecture
+- [x] Publish SkiaSharp pipeline design notes and transition plan
+- [x] Create camera driver migration guide
+- [x] Document SkyMonitor V5 operations runbook
+- [x] Publish JSON configuration migration guide
+
+---
 
 ## HVO.SkyMonitorV5.RPi.Stress
 
-- _No open items tracked._
+### Active Tasks
+- [ ] Expand stress harness scenarios for hardware validation
+- [ ] Document stress testing procedures and baselines
+
+### Completed Tasks ✅
+- [x] Implement stress harness with duration/sample parameters
+- [x] Add automatic workspace data root injection
+- [x] Apply configuration/telemetry migrations before scenarios
+- [x] Complete 60-second stress validation runs
+
+---
 
 ## HVO.SkyMonitorV5.RPi.Tests
 
+### Active Tasks
 - _No open items tracked._
+
+### Completed Tasks ✅
+- [x] Establish MSTest standardization across test suite
+- [x] Add service mocking for integration tests
+- [x] Create enhanced TestWebApplicationFactory
+- [x] Suppress CS1030 warnings for clean builds
+- [x] Add FrameFilterPipeline deterministic output tests
+- [x] Implement FramePreprocessingOrchestrator coverage
+- [x] Add comprehensive filter regression tests
+- [x] Complete Image History service and controller tests
+
+---
 
 ## HVO.WebSite.v9
 
+### Active Tasks
 - _No open items tracked._
+
+### Completed Tasks ✅
+- [x] Establish base website structure
+- [x] Integrate shared HVO themes
+
+---
 
 ## HVO.RoofControllerV4.RPi
 
+### Active Tasks
 - _No open items tracked._
 
+### Completed Tasks ✅
+- [x] Complete Docker deployment guide
+- [x] Publish hardware overview documentation
+- [x] Create API reference documentation
+- [x] Establish logging reference
+- [x] Publish operator cheat sheet
+- [x] Complete troubleshooting guide
+
+---
+
 ## HVO.WebSite.Themes
-- [ ] Extend `hvo-dark.css` with shared badge-style navigation tokens so SkyMonitor, Roof Controller, and v9 sites can reuse the compact menu buttons.
-- [ ] Document recommended markup patterns for the new nav badges and diagnostics-style tab rows so consuming projects keep visuals consistent.
+
+### Active Tasks
+- [ ] Extend `hvo-dark.css` with shared badge-style navigation tokens
+- [ ] Document recommended markup patterns for nav badges and tab rows
+
+### Completed Tasks ✅
+- [x] Create base HVO Dark theme
+- [x] Establish CSS custom properties for theme values
+- [x] Implement theme utilities for dark backgrounds
+
+---
 
 ## HVO.NinaClient
 
+### Active Tasks
 - _No open items tracked._
+
+### Completed Tasks ✅
+- [x] Implement Result<T> pattern throughout client
+- [x] Create comprehensive resilience architecture (retry + circuit breaker)
+- [x] Document profile API usage patterns
+- [x] Establish NINA integration best practices
+
+---
 
 ## HVO.Iot.Devices
 
+### Active Tasks
 - _No open items tracked._
 
-## Future Projects
+### Completed Tasks ✅
+- [x] Implement GPIO dependency injection setup
+- [x] Create MemoryGpioControllerClient simulator
+- [x] Document DI-based testing patterns
+- [x] Establish hardware/mock switching patterns
 
-- [ ] Revisit FITS/TIFF encoder support for remote dispatch once the SkyMonitorV5 data store project is underway.
-- [ ] Stand up the SkyMonitorV5 data store: consolidate telemetry + configuration into the shared database, seed default rigs/cameras/filters when empty, provide diagnostics log persistence, and host an interim Deep Sky object catalog we control until a long-term source is selected.
-- [ ] Re-evaluate partial parallel filter execution (Phase 8) after the current freeze; revisit when profiling shows the ~10ms gain matters for upcoming workloads.
+---
+
+## Future Projects & Initiatives
+
+### .NET 10 Migration Readiness
+#### Planned Tasks
+- [ ] Introduce feature-gated SIMD paths for exposure analyzer
+- [ ] Add partial methods for hardware-accelerated pixel conversions
+- [ ] Document extension points for .NET 10 math helpers
+- [ ] Capture baseline metrics on Raspberry Pi 5 and x64 platforms
+- [ ] Add CI hooks for new benchmarks
+- [ ] Confirm target .NET 10 variant (LTS vs STS)
+- [ ] Evaluate GPU acceleration complementing CPU intrinsics
+
+#### Completed Prep Work ✅
+- [x] Introduce `ProjectionVector` struct with static-abstract math
+- [x] Extract `ExposureAccumulator` with span-based baseline
+- [x] Refactor pixel conversions to operate on `Span<byte>`/`Span<ushort>`
+- [x] Define `INativeBufferLease` interface for buffer abstraction
+- [x] Centralize allocation in factory for future native memory pool
+- [x] Introduce calibration pipeline interface for preprocessing
+- [x] Extend BenchmarkDotNet harnesses for projection and conversions
+
+### SkiaSharp Pipeline Future Work
+- [ ] Benchmark GPU-backed surfaces vs CPU-only overlays
+- [ ] Confirm third-party consumers can ingest SKImage-based outputs
+- [ ] Evaluate overlay asset memory usage and eviction policies
+- [ ] Add instrumentation for surface pool hit rates
+
+### Data Store Future Enhancements
+- [ ] Implement configuration versioning/audit metadata
+- [ ] Add UI for inspecting telemetry tables
+- [ ] Evaluate catalog DB versioning mechanism
+- [ ] Expand retention policy configurability
+- [ ] Plan multi-station replication architecture
+- [ ] Design cloud sync strategy
+
+### General Future Work
+- [ ] Revisit FITS/TIFF encoder support for scientific formats
+- [ ] Evaluate multi-tenant dispatch targets (multiple buckets/exchanges)
+- [ ] Design serialization format for S3 payload downstream consumers
+- [ ] Consider per-frame detail events for background stacker observability
+- [ ] Plan admin UI for editing configuration stored in database
+- [ ] Design frame history for raw exposure archive entries
+
+---
+
+## Completed Major Projects 🎉
+
+### Phase 3.3 - Remote Dispatch & Background Stacker ✅
+**Status**: Complete (2025-10-12)
+- Remote frame dispatch through MinIO with configurable formats
+- Background stacker with adaptive queue capacity
+- Comprehensive telemetry and diagnostics integration
+- Stress testing validation complete
+
+### Frame Context & Rig Integration ✅  
+**Status**: Complete (2025-10-11)
+- `FrameContext` record with rig/projector/engine metadata
+- Context-aware filter pipeline
+- Adaptive capture pacing with queue pressure response
+- Performance benchmark suite established
+
+### SkyMonitor V5 Data Store Project ✅
+**Status**: Phase 4 Complete (2025-10-12)
+- `HVO.SkyMonitorV5.Data` project with EF Core infrastructure
+- Configuration and telemetry contexts with migrations
+- Catalog integration (HYG, Constellation, Deep Sky)
+- Operations runbook and migration guides published
+- Diagnostics instrumentation complete
+
+### SkiaSharp Pipeline Transition ✅
+**Status**: Phase 7 Complete (2025-10-16)
+- Zero-copy capture with SKPixmap + SKImage
+- Linear surface pooling for preprocessing and filters
+- Overlay asset caching (SKPicture + pre-rasterized SKImage)
+- Deterministic composition and encoding
+- Comprehensive test coverage and benchmarks
+
+### Frame Export Project ✅
+**Status**: Core Delivery Complete (2025-10-14)
+- Unified export pipeline with S3 and filesystem sinks
+- Dual-scope (archive/delivery) export support
+- Telemetry, retry queue, and resilience policies
+- MinIO integration with auto-provisioning
+
+### Camera Driver Refactor ✅
+**Status**: Complete (2025-10-XX)
+- Attribute-driven driver discovery system
+- Removed adapter catalog layer
+- Strongly-typed driver configuration support
+- Runtime driver registry with validation
+
+### SkyMonitor V5 UX Overhaul ✅
+**Status**: Workstream 6 Complete (2025-10-21), Plan Paused
+- Theme foundation with badge navigation tokens
+- Navigation restructure with Monitor page
+- Secondary tab component across all views
+- Configuration lifecycle controls
+- Diagnostics modernization with real-time log viewer
+- Simulator and stress validation complete
+
+### Image History (Workstream 7) ✅
+**Status**: Complete (2025-10-22)
+- Archive store with EF Core integration
+- Processed frame ingestion pipeline with thumbnails
+- Image History API and Blazor UI
+- Keyboard navigation and progressive loading
+- SkiaSharp deprecation warnings resolved
+
+---
+
+## Notes & Follow-Ups
+
+### Hardware Validation Pending
+Several items await physical Raspberry Pi 5 hardware access:
+- ZWO camera adapter end-to-end validation
+- Long-duration stress testing
+- Exposure analysis behavior verification
+- Queue pressure tuning under real workloads
+
+### Documentation Maintenance
+- Keep `TODO.md` synchronized with completed work
+- Archive completed project plans to preserve history
+- Update architecture diagrams as major changes land
+- Maintain operations runbooks for deployment guidance
+
+### Code Quality Standards
+- Continue Result<T> pattern adoption across services
+- Maintain structured logging with ILogger<T>
+- Ensure automatic model validation in API controllers
+- Keep disposal patterns consistent in pipeline stages
+- Follow MSTest AAA pattern in test suites
+
+---
+
+**Document Consolidation Note**: This master TODO consolidates items from:
+- `docs/TODO.md` (original)
+- `docs/phase3_3-status.md`
+- `docs/skymonitor-frame-context-plan.md`
+- `docs/skymonitorv5-data-store-project.md`
+- `docs/projects/skia-sharp-pipeline-plan.md`
+- `docs/projects/sky-monitor-v5/processed-frame-export-plan.md`
+- `docs/projects/sky-monitor-v5/camera-driver-refactor-plan.md`
+- `docs/projects/sky-monitor-v5/skymonitorv5-ux-plan.md`
+- `docs/projects/sky-monitor-v5/workstream7-image-history.md`
+- `docs/projects/dotnet10-readiness-plan.md`
+
+Archived project plan documents can be found in `docs/archive/completed-projects/` for historical reference.
