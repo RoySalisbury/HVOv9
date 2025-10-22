@@ -15,10 +15,11 @@
     }
   },
   "containerEnv": {
-    // Database connections (fallback to example values if not provided)
-    "HVO_SECRET__WEBSITEV9__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEV9__DB_CONNECTION:Server=tcp:localhost,1433;Initial Catalog=HualapaiValleyObservatory;Persist Security Info=False;User ID=sa;Password=DevPassword123!;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=True;Connection Timeout=30;}",
-    "HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION:Server=tcp:localhost,1433;Initial Catalog=HualapaiValleyObservatory;Persist Security Info=False;User ID=sa;Password=DevPassword123!;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=True;Connection Timeout=30;}",
-    
+    // Database connections (fallback to simple localhost values if not provided)
+    // Note: Complex connection strings with special characters should be set in devcontainer.local.env
+    "HVO_SECRET__WEBSITEV9__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEV9__DB_CONNECTION:}",
+    "HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__DB_CONNECTION:}",
+
     // API keys (empty defaults - projects should handle missing keys gracefully)
     "HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__NINA_API_KEY:}",
     "HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT": "${localEnv:HVO_SECRET__WEBSITEPLAYGROUND__AZDO_PAT:}",
@@ -32,8 +33,8 @@
     "HVO_SECRET__SSH__PRIVATE_KEY_B64": "${localEnv:HVO_SECRET__SSH__PRIVATE_KEY_B64:}",
     "HVO_SECRET__SSH__PUBLIC_KEY_B64": "${localEnv:HVO_SECRET__SSH__PUBLIC_KEY_B64:}",
     
-    // Tailscale configuration (optional)
-    "TS_AUTHKEY": "${localEnv:TS_AUTHKEY:tskey-auth-k77u3uBCXq11CNTRL-K88JKepZGaNJiLuAQLhEaN4qHZMyZST77}",
+    // Tailscale configuration (optional) - set real auth key in devcontainer.local.env
+    "TS_AUTHKEY": "${localEnv:TS_AUTHKEY:}",
     "TS_HOSTNAME": "${localEnv:TS_HOSTNAME:vscode-container}"
   },
   "customizations": {
