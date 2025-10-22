@@ -3,9 +3,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APT_PACKAGES=(
-  gh
+  # IoT/Hardware development (HVO-specific)
   libgpiod-dev
   i2c-tools
+  
+  # Fonts for image processing and UI (HVO sky monitoring)
   fontconfig
   fonts-dejavu-core
   fonts-liberation2
@@ -14,30 +16,14 @@ APT_PACKAGES=(
   fonts-noto-color-emoji
   fonts-roboto
   fonts-open-sans
-  git
-  curl
-  wget
-  unzip
-  zip
-  tar
-  gzip
-  make
-  build-essential
-  pkg-config
-  libssl-dev
-  ca-certificates
-  jq
-  nano
-  python3
-  python3-pip
-  python3-venv
+  
+  # Python packages for analysis scripts (now handled by Python feature, but keep for completeness)
   python3-numpy
   python3-pil
-  lsb-release
-  net-tools
-  iproute2
+  
+  # Additional utilities not guaranteed in base image
+  wget
   ripgrep
-  iputils-ping
   sqlite3
 )
 
@@ -45,38 +31,49 @@ log() {
   echo "[post-create] $*"
 }
 
-add_github_cli_repo() {
-  if dpkg -s gh >/dev/null 2>&1; then
-    return
-  fi
-
-  if [[ -f /etc/apt/sources.list.d/github-cli.list ]]; then
-    return
-  fi
-
-  log "Adding GitHub CLI apt repository."
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg status=none
-  sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-}
+# GitHub CLI setup removed - now handled by dev container feature
 
 install_packages() {
   log "Updating apt package index."
   sudo apt-get update
 
   log "Installing apt packages: ${APT_PACKAGES[*]}."
-  sudo apt-get install -y "${APT_PACKAGES[@]}"
+  if sudo apt-get install -y "${APT_PACKAGES[@]}"; then
+    log "Successfully installed packages."
+  else
+    log "Warning: Some packages may have failed to install. Continuing..."
+  fi
+  
   log "Regenerating font cache."
   sudo fc-cache -f
 }
 
-install_dotnet_tools() {
-  log "Installing wasm-tools workload."
-  dotnet workload install wasm-tools
+fix_dotnet_permissions() {
+  # Fix .NET directory ownership for vscode user
+  # The mcr.microsoft.com/devcontainers/dotnet:9.0 base image may create the .dotnet
+  # directory with root ownership during initial setup, which prevents the vscode user
+  # from using dotnet workloads and tools. This function ensures proper ownership.
+  if [[ -d "/home/vscode/.dotnet" ]]; then
+    log "Fixing .NET directory permissions for vscode user."
+    sudo chown -R vscode:vscode /home/vscode/.dotnet/
+  else
+    log ".NET directory not found; permissions will be set correctly on first use."
+  fi
+}
 
+install_dotnet_tools() {
+  # Ensure .NET directory has correct permissions before installing tools
+  fix_dotnet_permissions
+  
+  # Install wasm-tools workload if not already present
+  if ! dotnet workload list | grep -q 'wasm-tools'; then
+    log "Installing wasm-tools workload."
+    dotnet workload install wasm-tools
+  else
+    log "wasm-tools workload already installed."
+  fi
+
+  # Entity Framework Core CLI tools
   if dotnet tool list -g | grep -q '^dotnet-ef\s'; then
     log "Updating dotnet-ef global tool."
     dotnet tool update --global dotnet-ef
@@ -85,6 +82,7 @@ install_dotnet_tools() {
     dotnet tool install --global dotnet-ef
   fi
 
+  # Diagnostic tools for production troubleshooting
   if dotnet tool list -g | grep -q '^dotnet-dump\s'; then
     log "Updating dotnet-dump global tool."
     dotnet tool update --global dotnet-dump
@@ -93,6 +91,7 @@ install_dotnet_tools() {
     dotnet tool install --global dotnet-dump
   fi
 
+  # C# scripting support (useful for automation)
   if dotnet tool list -g | grep -q '^dotnet-script\s'; then
     log "Updating dotnet-script global tool."
     dotnet tool update --global dotnet-script
@@ -162,14 +161,20 @@ main() {
   log "Copying catalog data."
   bash "${REPO_ROOT}/scripts/copy-catalog.sh"
 
-  add_github_cli_repo
   install_packages
   configure_git_identity
 
-  log "Adding vscode user to i2c group."
-  sudo usermod -aG i2c vscode
+  log "Adding vscode user to i2c group for hardware access."
+  if sudo usermod -aG i2c vscode; then
+    log "Successfully added vscode user to i2c group."
+  else
+    log "Warning: Failed to add vscode user to i2c group. Hardware features may not work."
+  fi
 
   install_dotnet_tools
+
+  log "Setting up HTTPS development certificate."
+  bash "${REPO_ROOT}/scripts/setup-dotnet-dev-cert.sh"
 
   log "Provisioning user secrets."
   bash "${REPO_ROOT}/scripts/setup-user-secrets.sh"

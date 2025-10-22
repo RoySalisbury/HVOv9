@@ -3,9 +3,7 @@
   "runArgs": [
     "--device=/dev/i2c-1",
     "--device=/dev/gpiomem",
-    "--device=/dev/net/tun",
-    "--env-file",
-    "${localWorkspaceFolder}/.devcontainer/devcontainer.local.env"
+    "--device=/dev/net/tun"
   ],
   "mounts": [
     {

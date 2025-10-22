@@ -1,0 +1,41 @@
+{
+  "recommendations": [
+    // Core Development Tools (useful on host for any .NET work)
+    "ms-dotnettools.csdevkit",
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.vscode-dotnet-runtime",
+    
+    // GitHub Integration & Workflow (essential for host development)
+    "GitHub.vscode-pull-request-github",
+    "GitHub.vscode-github-actions",
+    
+    // AI Development & Code Quality (valuable on host)
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "ms-azuretools.vscode-azure-github-copilot",
+    "visualstudioexptteam.vscodeintellicode",
+    "ms-dotnettools.vscodeintellicode-csharp",
+    "sonarsource.sonarlint-vscode",
+    
+    // Configuration & Infrastructure (useful for editing configs on host)
+    "redhat.vscode-yaml",
+    
+    // Host Development Tools
+    "ms-vscode-remote.remote-containers",
+    "ms-vscode-remote.remote-ssh", 
+    "ms-vscode-remote.vscode-remote-extensionpack",
+    
+    // Azure Development (useful on host for resource management)
+    "ms-azuretools.azure-dev",
+    "ms-azuretools.vscode-azureresourcegroups",
+    "ms-azuretools.vscode-azurefunctions",
+    "ms-azuretools.vscode-azureappservice",
+    
+    // Docker (host needs this for dev container management)
+    "ms-azuretools.vscode-docker"
+  ],
+  "unwantedRecommendations": [
+    // Platform-specific extensions that shouldn't be recommended universally
+    "ms-windows-ai-studio.windows-ai-studio"
+  ]
+}
