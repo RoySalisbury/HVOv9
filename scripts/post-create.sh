@@ -25,6 +25,7 @@ APT_PACKAGES=(
   wget
   ripgrep
   sqlite3
+  iputils-ping
 )
 
 log() {
