@@ -27,7 +27,9 @@ validate_env_var() {
   
   # Validate base64 encoded values
   if [[ "${expected_type}" == "base64" ]]; then
-    if echo "${value}" | base64 -d >/dev/null 2>&1; then
+    # Remove common URL encoding artifacts (% at end)
+    local clean_value="${value%\%}"
+    if echo "${clean_value}" | base64 -d >/dev/null 2>&1; then
       log "✅ VALID: ${var_name} (${description}) - base64 encoded, ${#value} chars"
     else
       log "❌ INVALID: ${var_name} (${description}) - not valid base64"

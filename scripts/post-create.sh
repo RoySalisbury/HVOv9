@@ -61,6 +61,27 @@ fix_dotnet_permissions() {
   fi
 }
 
+setup_shell_environment() {
+  # Set up automatic environment variable loading for all new shells
+  # This ensures that environment variables from devcontainer.local.env
+  # are available in every terminal session without manual intervention
+  
+  local bashrc_file="/home/vscode/.bashrc"
+  local init_script="${REPO_ROOT}/scripts/init-shell-env.sh"
+  local source_line="source '${init_script}'"
+  
+  # Check if the source line is already present
+  if ! grep -Fq "${source_line}" "${bashrc_file}"; then
+    log "Adding automatic environment loading to .bashrc"
+    echo "" >> "${bashrc_file}"
+    echo "# HVO Dev Container: Load environment variables automatically" >> "${bashrc_file}"
+    echo "${source_line}" >> "${bashrc_file}"
+    log "Shell environment setup complete. Environment variables will be available in new shells."
+  else
+    log "Shell environment already configured."
+  fi
+}
+
 install_dotnet_tools() {
   # Ensure .NET directory has correct permissions before installing tools
   fix_dotnet_permissions
@@ -176,7 +197,15 @@ main() {
   if bash "${REPO_ROOT}/scripts/advanced-secret-manager.sh"; then
     log "Advanced secret management completed."
   else
-    log "Advanced secret management failed or not configured - using local environment file."
+    log "Advanced secret management failed or not configured - loading local environment file manually."
+    
+    # Fallback: use dedicated environment loading script
+    log "Loading environment variables using dedicated loader..."
+    if source "${REPO_ROOT}/scripts/load-local-env.sh"; then
+      log "Environment variables loaded successfully via dedicated loader."
+    else
+      log "Failed to load environment variables. Manual setup may be required."
+    fi
   fi
 
   install_dotnet_tools
@@ -198,6 +227,9 @@ main() {
   else
     log "Docker CLI not found; skipping Docker context setup."
   fi
+
+  log "Setting up persistent shell environment loading."
+  setup_shell_environment
 
   log "Post-create provisioning complete."
 }
