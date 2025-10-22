@@ -44,7 +44,6 @@
         "csharp.semanticHighlighting.enabled": true,
         "csharp.showOmnisharpLogOnError": true,
         "csharp.suppressDotnetInstallWarning": true,
-        
         // Reduce MEF composition issues in dev containers
         "dotnet.server.suppressLspErrorToasts": true,
         "omnisharp.enableRoslynAnalyzers": true,
