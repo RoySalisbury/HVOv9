@@ -7,7 +7,8 @@ public sealed record DataStoreMetricsSnapshot(
     DateTimeOffset GeneratedAtUtc,
     DateTimeOffset GeneratedAtLocal,
     DataStoreInstanceMetrics ConfigurationStore,
-    DataStoreInstanceMetrics TelemetryStore);
+    DataStoreInstanceMetrics TelemetryStore,
+    DataStoreInstanceMetrics ImageArchiveStore);
 
 public sealed record DataStoreInstanceMetrics(
     string DatabasePath,

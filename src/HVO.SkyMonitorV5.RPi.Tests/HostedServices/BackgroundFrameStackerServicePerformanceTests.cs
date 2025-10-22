@@ -12,6 +12,7 @@ using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.ImageHistory;
 using HVO.SkyMonitorV5.RPi.Telemetry;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -365,12 +366,18 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         var optionsMonitor = new Mock<IOptionsMonitor<SkiaPipelineFeatureOptions>>();
         optionsMonitor.SetupGet(o => o.CurrentValue).Returns(new SkiaPipelineFeatureOptions());
         var featureMonitor = new Mock<ISkiaPipelineFeatureToggleMonitor>();
+        var archiveQueue = new Mock<IImageFrameArchiveIngestionQueue>();
+        archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
+        var imageHistoryOptions = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
+        imageHistoryOptions.SetupGet(o => o.CurrentValue).Returns(new ImageHistoryOptions());
 
         return new FrameExportPublisher(
             dispatcher,
             encoder,
             NullLogger<FrameExportPublisher>.Instance,
             optionsMonitor.Object,
-            featureMonitor.Object);
+            featureMonitor.Object,
+            archiveQueue.Object,
+            imageHistoryOptions.Object);
     }
 }

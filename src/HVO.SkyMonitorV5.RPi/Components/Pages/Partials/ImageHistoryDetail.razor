@@ -1,0 +1,166 @@
+@using HVO.SkyMonitorV5.RPi.Components.Shared
+@using HVO.SkyMonitorV5.RPi.Models.ImageHistory
+
+<div class="image-history-detail card shadow-sm">
+    <div class="card-body">
+        <header class="detail-header d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h2 class="h5 text-light mb-1">Frame detail</h2>
+                <p class="text-muted small mb-0">@HeaderSubtitle</p>
+            </div>
+            @if (!string.IsNullOrEmpty(FrameSummaryBadge))
+            {
+                <span class="badge bg-outline">@FrameSummaryBadge</span>
+            }
+        </header>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>@ErrorMessage
+            </div>
+        }
+        else if (IsLoading)
+        {
+            <div class="detail-loading text-muted">
+                <div class="spinner-border me-3" role="status" aria-hidden="true"></div>
+                Loading frame detail…
+            </div>
+        }
+        else if (Detail is null)
+        {
+            <div class="detail-empty text-muted">
+                <i class="bi bi-image me-2"></i>
+                Select a frame from the archive list to view its details.
+            </div>
+        }
+        else
+        {
+            <div class="detail-content">
+                <section class="detail-preview">
+                    <div class="preview-frame">
+                        @if (Detail.Detail.MediaAvailable)
+                        {
+                            <img src="@Detail.ProcessedMediaUri"
+                                 alt="@BuildPreviewAlt(Detail)"
+                                 loading="lazy"
+                                 class="preview-image" />
+                        }
+                        else if (Detail.Detail.ThumbnailAvailable && !string.IsNullOrEmpty(Detail.ThumbnailDownloadUri))
+                        {
+                            <img src="@Detail.ThumbnailDownloadUri"
+                                 alt="@BuildPreviewAlt(Detail)"
+                                 loading="lazy"
+                                 class="preview-image" />
+                        }
+                        else
+                        {
+                            <div class="preview-placeholder text-muted">
+                                <i class="bi bi-image" aria-hidden="true"></i>
+                                <span>No preview available</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (DownloadLinks.Count > 0)
+                    {
+                        <div class="preview-downloads">
+                            @foreach (var link in DownloadLinks)
+                            {
+                                <a class="btn btn-outline-light btn-sm"
+                                   href="@link.Uri"
+                                              target="@(link.OpenInNewTab ? "_blank" : null)"
+                                              rel="@(link.OpenInNewTab ? "noopener" : null)"
+                                   download="@GetDownloadValue(link)">
+                                    <i class="bi @(link.ForceDownload ? "bi-download" : "bi-eye") me-2"></i>@link.Label
+                                </a>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="detail-metadata">
+                    <div class="detail-section">
+                        <h3 class="section-title">Capture</h3>
+                        <dl class="detail-grid">
+                            <div>
+                                <dt>Local</dt>
+                                <dd>@Detail.CaptureLocalDisplay</dd>
+                            </div>
+                            <div>
+                                <dt>UTC</dt>
+                                <dd>@Detail.CaptureUtcDisplay</dd>
+                            </div>
+                            <div>
+                                <dt>Archived (local)</dt>
+                                <dd>@Detail.ArchivedLocalDisplay</dd>
+                            </div>
+                            <div>
+                                <dt>Archived (UTC)</dt>
+                                <dd>@Detail.ArchivedUtcDisplay</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">Equipment</h3>
+                        <ul class="detail-list">
+                            <li>@Detail.RigSummary</li>
+                            <li>@Detail.CameraSummary</li>
+                            <li>@Detail.EncodingSummary</li>
+                        </ul>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">Processing</h3>
+                        <p class="detail-processing-summary mb-2">@Detail.ProcessingSummary</p>
+                        @if (Detail.AppliedFilters.Count > 0)
+                        {
+                            <div class="filter-chips" role="list">
+                                @foreach (var filter in Detail.AppliedFilters)
+                                {
+                                    <span class="badge bg-secondary-subtle text-light" role="listitem">@filter</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted small">No optical filters recorded.</span>
+                        }
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">Metadata</h3>
+                        <ul class="detail-hints">
+                            @foreach (var hint in Detail.MetadataHints)
+                            {
+                                <li>@hint</li>
+                            }
+                        </ul>
+                    </div>
+                </section>
+
+                @if (ChartSeries.Count > 0)
+                {
+                    <section class="detail-charts">
+                        <h3 class="section-title">Latency trends</h3>
+                        <div class="chart-list">
+                            @foreach (var series in ChartSeries)
+                            {
+                                <div class="chart-card">
+                                    <HistoryLineChart Values="@series.Values"
+                                                      DatasetLabel="@series.Title"
+                                                      Color="@series.Color"
+                                                      YAxisLabel="@series.YAxisLabel"
+                                                      ValueSuffix="@series.ValueSuffix"
+                                                      XAxisLabel="Frames"
+                                                      EmptyMessage="Chart data will appear after multiple frames are loaded." />
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+            </div>
+        }
+    </div>
+</div>

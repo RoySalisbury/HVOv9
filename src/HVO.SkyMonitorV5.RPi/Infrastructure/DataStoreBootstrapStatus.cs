@@ -12,6 +12,10 @@ public interface IDataStoreBootstrapStatus
 
     void ReportTelemetryFailure(string databasePath, DateTimeOffset startedAtUtc, Exception exception);
 
+    void ReportImageArchiveSuccess(string databasePath, DateTimeOffset startedAtUtc, DateTimeOffset completedAtUtc);
+
+    void ReportImageArchiveFailure(string databasePath, DateTimeOffset startedAtUtc, Exception exception);
+
     DataStoreBootstrapSnapshot GetSnapshot();
 }
 
@@ -20,11 +24,13 @@ public sealed class DataStoreBootstrapStatus : IDataStoreBootstrapStatus
     private readonly object _sync = new();
     private DataStoreBootstrapState _configuration;
     private DataStoreBootstrapState _telemetry;
+    private DataStoreBootstrapState _imageArchive;
 
     public DataStoreBootstrapStatus()
     {
         _configuration = DataStoreBootstrapState.NotRun("configuration/sm-config.db");
         _telemetry = DataStoreBootstrapState.NotRun("telemetry/sm-telemetry.db");
+        _imageArchive = DataStoreBootstrapState.NotRun("telemetry/image_frame_archive.sqlite");
     }
 
     public void ReportConfigurationSuccess(string databasePath, DateTimeOffset startedAtUtc, DateTimeOffset completedAtUtc)
@@ -65,16 +71,35 @@ public sealed class DataStoreBootstrapStatus : IDataStoreBootstrapStatus
         }
     }
 
+    public void ReportImageArchiveSuccess(string databasePath, DateTimeOffset startedAtUtc, DateTimeOffset completedAtUtc)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(databasePath);
+        lock (_sync)
+        {
+            _imageArchive = DataStoreBootstrapState.Success(databasePath, startedAtUtc, completedAtUtc);
+        }
+    }
+
+    public void ReportImageArchiveFailure(string databasePath, DateTimeOffset startedAtUtc, Exception exception)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(databasePath);
+        ArgumentNullException.ThrowIfNull(exception);
+        lock (_sync)
+        {
+            _imageArchive = DataStoreBootstrapState.Failure(databasePath, startedAtUtc, exception.Message);
+        }
+    }
+
     public DataStoreBootstrapSnapshot GetSnapshot()
     {
         lock (_sync)
         {
-            return new DataStoreBootstrapSnapshot(_configuration, _telemetry);
+            return new DataStoreBootstrapSnapshot(_configuration, _telemetry, _imageArchive);
         }
     }
 }
 
-public readonly record struct DataStoreBootstrapSnapshot(DataStoreBootstrapState Configuration, DataStoreBootstrapState Telemetry);
+public readonly record struct DataStoreBootstrapSnapshot(DataStoreBootstrapState Configuration, DataStoreBootstrapState Telemetry, DataStoreBootstrapState ImageArchive);
 
 public sealed record DataStoreBootstrapState(
     string DatabasePath,

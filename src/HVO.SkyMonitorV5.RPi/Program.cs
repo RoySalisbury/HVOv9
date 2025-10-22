@@ -30,6 +30,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Zwo;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Skia;
+using HVO.SkyMonitorV5.RPi.ImageHistory;
 using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Infrastructure.NativeMemory;
@@ -106,7 +107,9 @@ public static class Program
 
     services.AddHostedService<ConfigurationStoreBootstrapper>();
 
-        services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
+    services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
+    services.AddSkyMonitorImageFrameArchive(relativePath: "telemetry/image_frame_archive.sqlite");
+    services.AddHostedService<ImageFrameArchiveBootstrapper>();
         services.AddHostedService<TelemetryStoreBootstrapper>();
 
         services.AddOptions<SkyMonitorTelemetryRetentionOptions>()
@@ -173,6 +176,28 @@ public static class Program
                     options.Timeout = TimeSpan.FromSeconds(10);
                 }
             });
+
+        services.AddOptions<ImageHistoryOptions>()
+            .Bind(configuration.GetSection(ImageHistoryOptions.SectionName))
+            .ValidateDataAnnotations()
+            .PostConfigure(options =>
+            {
+                if (string.IsNullOrWhiteSpace(options.ThumbnailsRelativePath))
+                {
+                    options.ThumbnailsRelativePath = "telemetry/image-history/thumbnails";
+                }
+
+                if (options.ThumbnailMaxAxisPixels <= 0)
+                {
+                    options.ThumbnailMaxAxisPixels = 320;
+                }
+
+                if (options.ThumbnailQuality <= 0)
+                {
+                    options.ThumbnailQuality = 86;
+                }
+            })
+            .ValidateOnStart();
 
         services.AddHttpClient<ILocalApiClient, LocalApiClient>((sp, client) =>
         {
@@ -310,6 +335,7 @@ public static class Program
 
     services.AddSingleton<IFrameStateStore, FrameStateStore>();
     services.AddScoped<IFrameMediaProvider, FrameMediaProvider>();
+    services.AddScoped<IImageHistoryService, ImageHistoryService>();
 
     services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
     services.AddSingleton<IExposureController, AdaptiveExposureController>();
@@ -327,6 +353,8 @@ public static class Program
         services.AddOptions<FrameExportOptions>()
             .Bind(configuration.GetSection(FrameExportOptions.SectionName))
             .PostConfigure(options => options.Normalize());
+
+        services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, ImageHistoryFrameExportOptionsConfigurator>();
 
         services.AddOptions<FrameExportResilienceOptions>()
             .Bind(configuration.GetSection(FrameExportResilienceOptions.SectionName))
@@ -394,6 +422,10 @@ public static class Program
     services.AddHostedService(sp => sp.GetRequiredService<FrameExportDispatcher>());
         services.AddSingleton<IProcessedFrameEncoder, ProcessedFrameEncoder>();
     services.AddSingleton<ISkiaPipelineFeatureToggleMonitor, SkiaPipelineFeatureToggleMonitor>();
+
+        services.AddSingleton<ImageFrameArchiveIngestionService>();
+        services.AddSingleton<IImageFrameArchiveIngestionQueue>(sp => sp.GetRequiredService<ImageFrameArchiveIngestionService>());
+        services.AddHostedService(sp => sp.GetRequiredService<ImageFrameArchiveIngestionService>());
         services.AddSingleton<FrameExportPublisher>();
         services.AddSingleton<BackgroundFrameStackerService>();
         services.AddSingleton<IBackgroundFrameStacker>(sp => sp.GetRequiredService<BackgroundFrameStackerService>());

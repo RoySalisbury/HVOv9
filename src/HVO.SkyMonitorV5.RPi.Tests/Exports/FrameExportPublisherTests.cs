@@ -1,6 +1,7 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Exports;
+using HVO.SkyMonitorV5.RPi.ImageHistory;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -105,11 +106,15 @@ public sealed class FrameExportPublisherTests
             .Returns(delivery);
 
         var monitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
+        var archiveQueue = new Mock<IImageFrameArchiveIngestionQueue>(MockBehavior.Strict);
+        archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
+
         var publisher = CreatePublisher(
             dispatcher.Object,
             encoder.Object,
             new SkiaPipelineFeatureOptions(),
-            monitor.Object);
+            monitor.Object,
+            archiveQueue.Object);
 
         using var stackedBitmap = new SKBitmap(8, 8, SKColorType.Rgba8888, SKAlphaType.Premul);
         using var originalBitmap = new SKBitmap(8, 8, SKColorType.Rgba8888, SKAlphaType.Premul);
@@ -172,6 +177,80 @@ public sealed class FrameExportPublisherTests
     }
 
     [TestMethod]
+    public void PublishProcessedFrame_WhenArchiveEnabled_QueuesIngestionRequest()
+    {
+        var dispatcher = new Mock<IFrameExportDispatcher>(MockBehavior.Strict);
+        dispatcher
+            .Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>()))
+            .Returns(true);
+
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var payload = new byte[] { 5, 4, 3, 2, 1 };
+        encoder
+            .Setup(e => e.Encode(It.IsAny<ProcessedFrame>()))
+            .Returns(new ProcessedFrameDelivery(payload, "image/jpeg", "jpg"));
+
+        var queue = new Mock<IImageFrameArchiveIngestionQueue>(MockBehavior.Strict);
+        queue
+            .Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>()))
+            .Returns(true)
+            .Verifiable();
+
+        var publisher = CreatePublisher(
+            dispatcher.Object,
+            encoder.Object,
+            new SkiaPipelineFeatureOptions(),
+            Mock.Of<ISkiaPipelineFeatureToggleMonitor>(),
+            queue.Object,
+            new ImageHistoryOptions { EnableArchive = true });
+
+        using var surface = SKSurface.Create(new SKImageInfo(4, 4, SKColorType.Rgba8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.White);
+        using var immutableImage = surface.Snapshot();
+        using var stackedBitmap = new SKBitmap(4, 4, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var originalBitmap = new SKBitmap(4, 4, SKColorType.Rgba8888, SKAlphaType.Premul);
+
+        var exposure = new ExposureSettings(ExposureMilliseconds: 500, Gain: 100, AutoExposure: false, AutoGain: false);
+        var processedFrame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 90),
+            "image/jpeg",
+            FileExtension: "jpg",
+            FramesStacked: 1,
+            IntegrationMilliseconds: 500,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 10,
+            ImmutableImage: immutableImage);
+
+        var stackResult = new FrameStackResult(
+            processedFrame.FrameId,
+            stackedBitmap,
+            originalBitmap,
+            processedFrame.Timestamp,
+            exposure,
+            Context: null,
+            FramesStacked: processedFrame.FramesStacked,
+            IntegrationMilliseconds: processedFrame.IntegrationMilliseconds)
+        {
+            StackedImmutableImage = immutableImage,
+            OriginalImmutableImage = immutableImage
+        };
+
+        publisher.PublishProcessedFrame(
+            frameNumber: 99,
+            stackResult,
+            processedFrame,
+            RigPresets.MockAsi174_Fujinon,
+            queueLatencyMilliseconds: 2.5,
+            processingMilliseconds: 10.0,
+            stageTimestampUtc: DateTimeOffset.UtcNow);
+
+        queue.Verify(q => q.TryEnqueue(It.Is<ImageFrameArchiveIngestionRequest>(request => request.FrameId == processedFrame.FrameId)), Times.Once);
+    }
+
+    [TestMethod]
     public void PublishRawFrame_RawLinearDisabledFallsBackToPng()
     {
         var dispatcher = new Mock<IFrameExportDispatcher>(MockBehavior.Strict);
@@ -191,7 +270,7 @@ public sealed class FrameExportPublisherTests
         monitor.Setup(m => m.RecordFallback(SkiaPipelineFeatureNames.RawLinearPayloads));
 
         var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-        var publisher = CreatePublisher(dispatcher.Object, encoder, featureOptions, monitor.Object);
+    var publisher = CreatePublisher(dispatcher.Object, encoder, featureOptions, monitor.Object);
 
         var exposure = new ExposureSettings(ExposureMilliseconds: 500, Gain: 120, AutoExposure: false, AutoGain: false);
         var info = new SKImageInfo(8, 8, SKColorType.RgbaF16, SKAlphaType.Premul, SKColorSpace.CreateSrgbLinear());
@@ -247,11 +326,15 @@ public sealed class FrameExportPublisherTests
         var monitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
         monitor.Setup(m => m.RecordFallback(SkiaPipelineFeatureNames.ProcessedFrameEncoder));
 
+        var archiveQueue = new Mock<IImageFrameArchiveIngestionQueue>(MockBehavior.Strict);
+        archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
+
         var publisher = CreatePublisher(
             dispatcher.Object,
             encoder.Object,
             featureOptions,
-            monitor.Object);
+            monitor.Object,
+            archiveQueue.Object);
 
         using var surface = SKSurface.Create(new SKImageInfo(10, 10, SKColorType.Rgba8888, SKAlphaType.Premul));
         surface.Canvas.Clear(SKColors.DarkSlateBlue);
@@ -311,16 +394,25 @@ public sealed class FrameExportPublisherTests
         IFrameExportDispatcher dispatcher,
         IProcessedFrameEncoder encoder,
         SkiaPipelineFeatureOptions options,
-        ISkiaPipelineFeatureToggleMonitor monitor)
+        ISkiaPipelineFeatureToggleMonitor monitor,
+        IImageFrameArchiveIngestionQueue? archiveQueue = null,
+        ImageHistoryOptions? imageHistoryOptions = null)
     {
         var optionsMonitor = new Mock<IOptionsMonitor<SkiaPipelineFeatureOptions>>();
         optionsMonitor.SetupGet(m => m.CurrentValue).Returns(options);
+
+        var imageHistoryMonitor = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
+        imageHistoryMonitor.SetupGet(m => m.CurrentValue).Returns(imageHistoryOptions ?? new ImageHistoryOptions());
+
+        var queue = archiveQueue ?? Mock.Of<IImageFrameArchiveIngestionQueue>(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>()) == true);
 
         return new FrameExportPublisher(
             dispatcher,
             encoder,
             NullLogger<FrameExportPublisher>.Instance,
             optionsMonitor.Object,
-            monitor);
+            monitor,
+            queue,
+            imageHistoryMonitor.Object);
     }
 }

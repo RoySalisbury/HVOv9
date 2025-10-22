@@ -16,6 +16,8 @@ using HVO.SkyMonitorV5.RPi.Storage;
 using HVO.SkyMonitorV5.RPi.Telemetry;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.Data.Abstractions;
+using HVO.SkyMonitorV5.Data.Archive;
+using HVO.SkyMonitorV5.Data.Archive.Entities;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Telemetry;
 using HVO.SkyMonitorV5.Data.Telemetry.Entities;
@@ -532,7 +534,8 @@ public sealed class DiagnosticsServiceTests
         var dataPathProvider = new TestDataPathProvider(rootPath);
 
         var configurationPath = dataPathProvider.ResolvePath("configuration/sm-config.db");
-        var telemetryPath = dataPathProvider.ResolvePath("telemetry/sm-telemetry.db");
+    var telemetryPath = dataPathProvider.ResolvePath("telemetry/sm-telemetry.db");
+    var imageArchivePath = dataPathProvider.ResolvePath("telemetry/image_frame_archive.sqlite");
 
         static SkyMonitorConfigurationContext CreateConfigurationContext(string path)
         {
@@ -552,6 +555,17 @@ public sealed class DiagnosticsServiceTests
                 .Options;
 
             var context = new SkyMonitorTelemetryContext(options);
+            context.Database.EnsureCreated();
+            return context;
+        }
+
+        static ImageFrameArchiveContext CreateImageArchiveContext(string path)
+        {
+            var options = new DbContextOptionsBuilder<ImageFrameArchiveContext>()
+                .UseSqlite(new SqliteConnectionStringBuilder { DataSource = path }.ToString())
+                .Options;
+
+            var context = new ImageFrameArchiveContext(options);
             context.Database.EnsureCreated();
             return context;
         }
@@ -587,8 +601,31 @@ public sealed class DiagnosticsServiceTests
             telemetryContext.SaveChanges();
         }
 
+        await using (var imageArchiveContext = CreateImageArchiveContext(imageArchivePath))
+        {
+            imageArchiveContext.FrameArchives.Add(new FrameArchiveEntity
+            {
+                FrameId = Guid.NewGuid(),
+                CapturedAtUtc = DateTimeOffset.UtcNow,
+                RigName = "Test Rig",
+                CameraName = "Test Camera",
+                FramesStacked = 1,
+                IntegrationMilliseconds = 1200,
+                AppliedFilters = new[] { "L" },
+                QueueLatencyMilliseconds = 10,
+                ProcessingMilliseconds = 20,
+                FullPipelineMilliseconds = 30,
+                PayloadContentType = "image/jpeg",
+                PayloadExtension = "jpg",
+                ArchivedAtUtc = DateTimeOffset.UtcNow
+            });
+
+            await imageArchiveContext.SaveChangesAsync();
+        }
+
         var configurationFactory = new TestDbContextFactory<SkyMonitorConfigurationContext>(() => CreateConfigurationContext(configurationPath));
         var telemetryFactory = new TestDbContextFactory<SkyMonitorTelemetryContext>(() => CreateTelemetryContext(telemetryPath));
+        var imageArchiveFactory = new TestDbContextFactory<ImageFrameArchiveContext>(() => CreateImageArchiveContext(imageArchivePath));
 
         var telemetryQueue = new TestTelemetryQueue { PendingCount = 3 };
         var telemetryMetrics = CreateTelemetryMetrics(telemetryQueue);
@@ -612,7 +649,8 @@ public sealed class DiagnosticsServiceTests
         var bootstrapStatus = new Mock<IDataStoreBootstrapStatus>();
         bootstrapStatus.Setup(status => status.GetSnapshot()).Returns(new DataStoreBootstrapSnapshot(
             DataStoreBootstrapState.Success(configurationPath, retentionStarted, retentionCompleted),
-            DataStoreBootstrapState.Success(telemetryPath, retentionStarted, retentionCompleted)));
+            DataStoreBootstrapState.Success(telemetryPath, retentionStarted, retentionCompleted),
+            DataStoreBootstrapState.Success(imageArchivePath, retentionStarted, retentionCompleted)));
 
         var clock = CreateDefaultClockMock();
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
@@ -628,6 +666,7 @@ public sealed class DiagnosticsServiceTests
             clock,
             configurationFactory,
             telemetryFactory,
+            imageArchiveFactory,
             dataPathProvider,
             telemetryQueue,
             telemetryMetrics,
@@ -640,16 +679,20 @@ public sealed class DiagnosticsServiceTests
         var snapshot = result.Value;
         Assert.AreEqual(configurationPath, snapshot.ConfigurationStore.DatabasePath, "Configuration path should match resolved location.");
         Assert.AreEqual(telemetryPath, snapshot.TelemetryStore.DatabasePath, "Telemetry path should match resolved location.");
+    Assert.AreEqual(imageArchivePath, snapshot.ImageArchiveStore.DatabasePath, "Image archive path should match resolved location.");
         Assert.IsTrue(snapshot.ConfigurationStore.Exists, "Configuration database should exist.");
         Assert.IsTrue(snapshot.TelemetryStore.Exists, "Telemetry database should exist.");
+    Assert.IsTrue(snapshot.ImageArchiveStore.Exists, "Image archive database should exist.");
         Assert.IsTrue(snapshot.ConfigurationStore.FileBytes > 0, "Configuration database size should be reported.");
         Assert.IsTrue(snapshot.TelemetryStore.FileBytes > 0, "Telemetry database size should be reported.");
+    Assert.IsTrue(snapshot.ImageArchiveStore.FileBytes > 0, "Image archive database size should be reported.");
 
     Assert.IsTrue(snapshot.ConfigurationStore.Tables.Any(t => t.Table == "observatory_site" && t.RowCount > 0), "Seeded configuration tables should report row counts.");
 
     Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "remote_dispatch_attempt" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
     Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "background_stacker_sample" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
     Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "frame_export_attempt" && t.RowCount == 0), "Telemetry table counts should include export attempts even when empty.");
+    Assert.IsTrue(snapshot.ImageArchiveStore.Tables.Any(t => t.Table == "image_frame_archive" && t.RowCount == 1), "Image archive table counts should reflect inserted rows.");
 
     var telemetryIngestion = snapshot.TelemetryStore.TelemetryIngestion;
     Assert.IsNotNull(telemetryIngestion, "Telemetry ingestion metrics should be present.");
@@ -668,6 +711,7 @@ public sealed class DiagnosticsServiceTests
 
         Assert.IsTrue(snapshot.TelemetryStore.Bootstrap.Ran && snapshot.TelemetryStore.Bootstrap.Succeeded, "Bootstrap status should indicate success.");
         Assert.IsTrue(snapshot.ConfigurationStore.Bootstrap.Ran && snapshot.ConfigurationStore.Bootstrap.Succeeded, "Configuration bootstrap status should indicate success.");
+    Assert.IsTrue(snapshot.ImageArchiveStore.Bootstrap.Ran && snapshot.ImageArchiveStore.Bootstrap.Succeeded, "Image archive bootstrap status should indicate success.");
     }
 
     private static DiagnosticsService CreateService(
@@ -676,6 +720,7 @@ public sealed class DiagnosticsServiceTests
         Mock<IObservatoryClock>? clockMock = null,
         IDbContextFactory<SkyMonitorConfigurationContext>? configurationContextFactory = null,
         IDbContextFactory<SkyMonitorTelemetryContext>? telemetryContextFactory = null,
+        IDbContextFactory<ImageFrameArchiveContext>? imageArchiveContextFactory = null,
         ISkyMonitorDataPathProvider? dataPathProvider = null,
         TestTelemetryQueue? telemetryQueue = null,
         SkyMonitorTelemetryMetrics? telemetryMetrics = null,
@@ -685,6 +730,7 @@ public sealed class DiagnosticsServiceTests
         var clock = clockMock ?? CreateDefaultClockMock();
         configurationContextFactory ??= new TestDbContextFactory<SkyMonitorConfigurationContext>(CreateInMemoryConfigurationContext);
         telemetryContextFactory ??= new TestDbContextFactory<SkyMonitorTelemetryContext>(CreateInMemoryTelemetryContext);
+    imageArchiveContextFactory ??= new TestDbContextFactory<ImageFrameArchiveContext>(CreateInMemoryImageArchiveContext);
         dataPathProvider ??= new TestDataPathProvider(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
 
         telemetryQueue ??= new TestTelemetryQueue();
@@ -698,6 +744,7 @@ public sealed class DiagnosticsServiceTests
             pipeline,
             configurationContextFactory,
             telemetryContextFactory,
+            imageArchiveContextFactory,
             dataPathProvider,
             telemetryMetrics,
             bootstrapStatus,
@@ -727,6 +774,17 @@ public sealed class DiagnosticsServiceTests
         return context;
     }
 
+    private static ImageFrameArchiveContext CreateInMemoryImageArchiveContext()
+    {
+        var options = new DbContextOptionsBuilder<ImageFrameArchiveContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        var context = new ImageFrameArchiveContext(options);
+        context.Database.EnsureCreated();
+        return context;
+    }
+
     private static SkyMonitorTelemetryMetrics CreateTelemetryMetrics(TestTelemetryQueue queue)
     {
         return new SkyMonitorTelemetryMetrics(new TestMeterFactory(), queue, NullLogger<SkyMonitorTelemetryMetrics>.Instance);
@@ -736,7 +794,8 @@ public sealed class DiagnosticsServiceTests
     {
         var snapshot = new DataStoreBootstrapSnapshot(
             DataStoreBootstrapState.NotRun("configuration/sm-config.db"),
-            DataStoreBootstrapState.NotRun("telemetry/sm-telemetry.db"));
+            DataStoreBootstrapState.NotRun("telemetry/sm-telemetry.db"),
+            DataStoreBootstrapState.NotRun("telemetry/image_frame_archive.sqlite"));
 
         var mock = new Mock<IDataStoreBootstrapStatus>();
         mock.Setup(status => status.GetSnapshot()).Returns(snapshot);

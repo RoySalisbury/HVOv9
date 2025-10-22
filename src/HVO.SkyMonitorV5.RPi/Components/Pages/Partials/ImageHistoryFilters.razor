@@ -1,0 +1,83 @@
+@using HVO.SkyMonitorV5.RPi.Models.ImageHistory
+@using Microsoft.AspNetCore.Components.Forms
+
+<div class="image-history-filters card shadow-sm">
+    <div class="card-body">
+        <h2 class="card-title h5 text-light mb-3">Filters</h2>
+
+        <fieldset class="filter-section" aria-describedby="image-history-lookback-help">
+            <legend class="visually-hidden">Select lookback window</legend>
+            <p id="image-history-lookback-help" class="form-text text-muted mb-2">
+                Choose the time window for archived frames.
+            </p>
+
+            @foreach (var option in LookbackOptions)
+            {
+                <div class="form-check form-check-dark">
+                    <input class="form-check-input"
+                           type="radio"
+                           id="lookback-@option.Key"
+                           name="image-history-lookback"
+                           value="@option.Key"
+                           checked="@(_model.SelectedLookback == option.Key)"
+                           @onchange="() => SelectLookback(option.Key)"
+                           disabled="@IsBusy" />
+                    <label class="form-check-label text-light" for="lookback-@option.Key">
+                        <span class="option-label">@option.Label</span>
+                        <span class="option-description">@option.Description</span>
+                    </label>
+                </div>
+            }
+        </fieldset>
+
+        <div class="filter-section">
+            <label class="form-label text-light" for="history-filter-rig">Rig</label>
+            <input id="history-filter-rig"
+                   class="form-control form-control-sm"
+                   placeholder="All rigs"
+                   @bind="_model.Rig"
+                   @bind:event="oninput"
+                   disabled="@IsBusy" />
+        </div>
+
+        <div class="filter-section">
+            <label class="form-label text-light" for="history-filter-camera">Camera</label>
+            <input id="history-filter-camera"
+                   class="form-control form-control-sm"
+                   placeholder="All cameras"
+                   @bind="_model.Camera"
+                   @bind:event="oninput"
+                   disabled="@IsBusy" />
+        </div>
+
+        <div class="filter-section">
+            <label class="form-label text-light" for="history-filter-page-size">Page size</label>
+            <InputSelect id="history-filter-page-size"
+                         class="form-select form-select-sm"
+                         @bind-Value="_model.PageSize"
+                         disabled="@IsBusy">
+                @foreach (var size in PageSizeOptions)
+                {
+                    <option value="@size">@size thumbnails</option>
+                }
+            </InputSelect>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+            <button type="button"
+                    class="btn btn-primary btn-sm"
+                    @onclick="ApplyAsync"
+                    disabled="@IsBusy">
+                <i class="bi bi-funnel me-1"></i>
+                Apply filters
+            </button>
+            <button type="button"
+                    class="btn btn-outline-light btn-sm"
+                    @onclick="RefreshAsync"
+                    disabled="@IsBusy">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+</div>

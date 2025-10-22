@@ -158,16 +158,12 @@ public sealed class S3FrameExportSink : IFrameExportSink
 
         await EnsureBucketExistsAsync(client, bucket, configuration, cancellationToken).ConfigureAwait(false);
 
-        var timestampUtc = envelope.Metadata.StageTimestampUtc;
-        if (timestampUtc == default)
-        {
-            timestampUtc = DateTimeOffset.UtcNow;
-        }
+        var timestampUtc = FrameExportPathUtilities.ResolveStageTimestamp(envelope.Metadata);
 
         var prefix = configuration.BuildObjectPrefix(role, timestampUtc);
-        var baseName = BuildBaseFileName(timestampUtc, envelope.FrameId);
+        var baseName = FrameExportPathUtilities.BuildBaseFileName(timestampUtc, envelope.FrameId);
         var metadataExtension = envelope.Metadata.PayloadExtension;
-        var extension = ResolveExtension(string.IsNullOrWhiteSpace(metadataExtension) ? envelope.FileExtension : metadataExtension);
+        var extension = FrameExportPathUtilities.ResolveExtension(string.IsNullOrWhiteSpace(metadataExtension) ? envelope.FileExtension : metadataExtension);
         var objectKey = FormattableString.Invariant($"{prefix}/{baseName}.{extension}");
         var metadataContentType = envelope.Metadata.PayloadContentType;
         var contentType = string.IsNullOrWhiteSpace(metadataContentType)
@@ -408,25 +404,6 @@ public sealed class S3FrameExportSink : IFrameExportSink
         }
 
         return headers;
-    }
-
-    private static string BuildBaseFileName(DateTimeOffset timestampUtc, Guid frameId)
-        => FormattableString.Invariant($"{timestampUtc:HHmmssfff}-{frameId:N}");
-
-    private static string ResolveExtension(string? extension)
-    {
-        if (string.IsNullOrWhiteSpace(extension))
-        {
-            return "bin";
-        }
-
-        var trimmed = extension.Trim();
-        if (trimmed.Length > 0 && trimmed[0] == '.')
-        {
-            trimmed = trimmed[1..];
-        }
-
-        return trimmed.Length == 0 ? "bin" : trimmed;
     }
 
     private static string SanitizeMetadataValue(string? value)

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HVO;
 using HVO.SkyMonitorV5.Data.Abstractions;
+using HVO.SkyMonitorV5.Data.Archive;
 using HVO.SkyMonitorV5.Data.Configurations;
 using HVO.SkyMonitorV5.Data.Telemetry;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
@@ -33,6 +34,7 @@ internal sealed class DiagnosticsService : IDiagnosticsService
     private readonly IFrameFilterPipeline _frameFilterPipeline;
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _configurationContextFactory;
     private readonly IDbContextFactory<SkyMonitorTelemetryContext> _telemetryContextFactory;
+    private readonly IDbContextFactory<ImageFrameArchiveContext> _imageArchiveContextFactory;
     private readonly ISkyMonitorDataPathProvider _dataPathProvider;
     private readonly SkyMonitorTelemetryMetrics _telemetryMetrics;
     private readonly IDataStoreBootstrapStatus _bootstrapStatus;
@@ -44,12 +46,14 @@ internal sealed class DiagnosticsService : IDiagnosticsService
     private TimeSpan _lastProcessCpuTotalProcessorTime;
     private const string ConfigurationDatabaseRelativePath = "configuration/sm-config.db";
     private const string TelemetryDatabaseRelativePath = "telemetry/sm-telemetry.db";
+    private const string ImageArchiveDatabaseRelativePath = "telemetry/image_frame_archive.sqlite";
 
     public DiagnosticsService(
         IFrameStateStore frameStateStore,
         IFrameFilterPipeline frameFilterPipeline,
         IDbContextFactory<SkyMonitorConfigurationContext> configurationContextFactory,
-        IDbContextFactory<SkyMonitorTelemetryContext> telemetryContextFactory,
+    IDbContextFactory<SkyMonitorTelemetryContext> telemetryContextFactory,
+    IDbContextFactory<ImageFrameArchiveContext> imageArchiveContextFactory,
         ISkyMonitorDataPathProvider dataPathProvider,
         SkyMonitorTelemetryMetrics telemetryMetrics,
         IDataStoreBootstrapStatus bootstrapStatus,
@@ -59,7 +63,8 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         _frameStateStore = frameStateStore ?? throw new ArgumentNullException(nameof(frameStateStore));
         _frameFilterPipeline = frameFilterPipeline ?? throw new ArgumentNullException(nameof(frameFilterPipeline));
         _configurationContextFactory = configurationContextFactory ?? throw new ArgumentNullException(nameof(configurationContextFactory));
-        _telemetryContextFactory = telemetryContextFactory ?? throw new ArgumentNullException(nameof(telemetryContextFactory));
+    _telemetryContextFactory = telemetryContextFactory ?? throw new ArgumentNullException(nameof(telemetryContextFactory));
+    _imageArchiveContextFactory = imageArchiveContextFactory ?? throw new ArgumentNullException(nameof(imageArchiveContextFactory));
         _dataPathProvider = dataPathProvider ?? throw new ArgumentNullException(nameof(dataPathProvider));
         _telemetryMetrics = telemetryMetrics ?? throw new ArgumentNullException(nameof(telemetryMetrics));
         _bootstrapStatus = bootstrapStatus ?? throw new ArgumentNullException(nameof(bootstrapStatus));
@@ -668,12 +673,14 @@ internal sealed class DiagnosticsService : IDiagnosticsService
 
             var configurationStore = await CreateConfigurationStoreMetricsAsync(bootstrapSnapshot.Configuration, cancellationToken).ConfigureAwait(false);
             var telemetryStore = await CreateTelemetryStoreMetricsAsync(bootstrapSnapshot.Telemetry, retentionSnapshot, cancellationToken).ConfigureAwait(false);
+            var imageArchiveStore = await CreateImageArchiveStoreMetricsAsync(bootstrapSnapshot.ImageArchive, cancellationToken).ConfigureAwait(false);
 
             var snapshot = new DataStoreMetricsSnapshot(
                 GeneratedAtUtc: generatedAtUtc,
                 GeneratedAtLocal: generatedAtLocal,
                 ConfigurationStore: configurationStore,
-                TelemetryStore: telemetryStore);
+                TelemetryStore: telemetryStore,
+                ImageArchiveStore: imageArchiveStore);
 
             return Result<DataStoreMetricsSnapshot>.Success(snapshot);
         }
@@ -791,6 +798,30 @@ internal sealed class DiagnosticsService : IDiagnosticsService
             TelemetryRetention: MapRetentionMetrics(retentionSnapshot));
     }
 
+    private async Task<DataStoreInstanceMetrics> CreateImageArchiveStoreMetricsAsync(
+        DataStoreBootstrapState bootstrapState,
+        CancellationToken cancellationToken)
+    {
+        var databasePath = ResolveDatabasePath(ImageArchiveDatabaseRelativePath, bootstrapState.DatabasePath);
+        var fileStats = await CaptureFileStatsAsync(databasePath, cancellationToken).ConfigureAwait(false);
+        var tables = fileStats.Exists
+            ? await CaptureImageArchiveTableMetricsAsync(cancellationToken).ConfigureAwait(false)
+            : Array.Empty<DataStoreTableMetric>();
+
+        return new DataStoreInstanceMetrics(
+            DatabasePath: databasePath,
+            Exists: fileStats.Exists,
+            FileBytes: fileStats.LengthBytes,
+            FileMegabytes: fileStats.Megabytes,
+            PageCount: fileStats.PageCount,
+            PageSizeBytes: fileStats.PageSizeBytes,
+            FreePages: fileStats.FreePages,
+            Tables: tables,
+            Bootstrap: MapBootstrapState(bootstrapState),
+            TelemetryIngestion: null,
+            TelemetryRetention: null);
+    }
+
     private string ResolveDatabasePath(string relativePath, string bootstrapReportedPath)
     {
         if (!string.IsNullOrWhiteSpace(bootstrapReportedPath) && Path.IsPathRooted(bootstrapReportedPath))
@@ -858,6 +889,28 @@ internal sealed class DiagnosticsService : IDiagnosticsService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to gather telemetry store table metrics.");
+            return Array.Empty<DataStoreTableMetric>();
+        }
+    }
+
+    private async Task<IReadOnlyList<DataStoreTableMetric>> CaptureImageArchiveTableMetricsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var context = await _imageArchiveContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var count = await context.FrameArchives.LongCountAsync(cancellationToken).ConfigureAwait(false);
+            return new List<DataStoreTableMetric>
+            {
+                new("image_frame_archive", count)
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to gather image frame archive metrics.");
             return Array.Empty<DataStoreTableMetric>();
         }
     }

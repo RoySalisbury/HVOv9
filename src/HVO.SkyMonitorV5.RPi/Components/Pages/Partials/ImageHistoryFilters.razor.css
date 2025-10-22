@@ -1,0 +1,50 @@
+.image-history-filters {
+    background-color: var(--hvo-panel-bg, rgba(20, 25, 39, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+}
+
+.image-history-filters .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-check-dark {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.4rem 0.25rem;
+    border-radius: 0.5rem;
+}
+
+.form-check-dark:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.form-check-dark .form-check-input {
+    margin-top: 0.45rem;
+}
+
+.option-label {
+    font-weight: 600;
+    display: block;
+}
+
+.option-description {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--bs-gray-400);
+}
+
+@media (max-width: 768px) {
+    .image-history-filters {
+        border-radius: 0.5rem;
+    }
+}

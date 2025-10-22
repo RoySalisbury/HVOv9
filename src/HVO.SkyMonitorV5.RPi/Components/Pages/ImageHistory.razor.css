@@ -1,0 +1,35 @@
+.image-history-shell {
+    padding-bottom: 3rem;
+}
+
+.image-history-layout {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 2rem;
+}
+
+.image-history-content {
+    display: grid;
+    grid-template-rows: minmax(220px, 1fr) minmax(360px, auto);
+    gap: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+    .image-history-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .image-history-content {
+        grid-template-rows: repeat(2, minmax(0, auto));
+    }
+}
+
+@media (max-width: 768px) {
+    .image-history-shell {
+        padding: 0 1rem 2rem 1rem;
+    }
+
+    .image-history-content {
+        gap: 1rem;
+    }
+}

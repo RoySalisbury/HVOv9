@@ -10,6 +10,7 @@ using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Exports.Sinks;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
+using HVO.SkyMonitorV5.RPi.ImageHistory;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -274,13 +275,19 @@ public sealed class FrameExportGoldenFixturesTests
             var featureOptions = new Mock<IOptionsMonitor<SkiaPipelineFeatureOptions>>();
             featureOptions.SetupGet(o => o.CurrentValue).Returns(new SkiaPipelineFeatureOptions());
             var featureMonitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
+            var archiveQueue = new Mock<IImageFrameArchiveIngestionQueue>(MockBehavior.Strict);
+            archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
+            var imageHistoryOptions = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
+            imageHistoryOptions.SetupGet(o => o.CurrentValue).Returns(new ImageHistoryOptions());
 
             var publisher = new FrameExportPublisher(
                 dispatcher,
                 encoder,
                 NullLogger<FrameExportPublisher>.Instance,
                 featureOptions.Object,
-                featureMonitor.Object);
+                featureMonitor.Object,
+                archiveQueue.Object,
+                imageHistoryOptions.Object);
 
             publisher.PublishRawFrame(
                 frameNumber: 1,

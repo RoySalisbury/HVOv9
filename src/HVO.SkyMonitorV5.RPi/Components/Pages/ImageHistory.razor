@@ -1,8 +1,8 @@
 @page "/image-history"
-@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Routing
-@using Microsoft.AspNetCore.Components.Web
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using HVO.SkyMonitorV5.RPi.Components.Shared
+@using HVO.SkyMonitorV5.RPi.Models.ImageHistory
+@using HVO.SkyMonitorV5.RPi.Components.Pages.Partials
 
 <PageTitle>SkyMonitor v5 · Image History</PageTitle>
 
@@ -12,23 +12,25 @@
                              ActiveTabKey="@ActiveTabKey" />
 </section>
 
-<section class="container py-5 text-light">
-    <div class="row justify-content-center">
-        <div class="col-lg-8 text-center">
-            <h1 class="display-5 fw-semibold mb-3">Image History (Preview)</h1>
-            <p class="lead text-muted">
-                Archived frame browsing and telemetry overlays are in development. Return soon to review captured imagery and performance trends.
-            </p>
-            <NavLink class="btn btn-sm btn-outline-light" href="/monitor">
-                <i class="bi bi-broadcast-pin me-2"></i>
-                Go to Monitor
-            </NavLink>
-        </div>
+<main class="container-fluid image-history-shell" data-theme="hvo-dark">
+    <div class="image-history-layout">
+        <ImageHistoryFilters Filters="@_filters"
+                              OnFiltersApplied="HandleFiltersAppliedAsync"
+                              OnRefreshRequested="HandleRefreshRequestedAsync"
+                              IsBusy="@IsBusy" />
+
+        <section class="image-history-content" aria-live="polite">
+            <ImageHistoryRail Items="@_thumbnails"
+                               SelectedFrameId="@_selectedFrameId"
+                               OnSelectItem="HandleThumbnailSelectedAsync"
+                               OnRefreshRequested="HandleRefreshRequestedAsync"
+                               IsLoading="@_isLoadingThumbnails"
+                               ErrorMessage="@_thumbnailError" />
+
+            <ImageHistoryDetail Detail="@_selectedDetail"
+                                Charts="@_chartSeries"
+                                IsLoading="@_isLoadingDetail"
+                                ErrorMessage="@_detailError" />
+        </section>
     </div>
-</section>
-
-@code {
-    private IReadOnlyList<SkyMonitorTabDefinition> HistoryTabs => SkyMonitorTabCatalog.ImageHistoryTabs;
-
-    private string ActiveTabKey => "image-history-overview";
-}
+</main>

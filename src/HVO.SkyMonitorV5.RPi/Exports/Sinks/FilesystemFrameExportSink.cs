@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -131,13 +129,12 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
             timestampUtc = DateTimeOffset.UtcNow;
         }
 
-        var stageDirectory = GetRoleDirectoryName(role);
-        var pathSegments = BuildPathSegments(configuration, stageDirectory, timestampUtc);
-        var directory = Path.Combine(pathSegments);
+    var pathSegments = FrameExportFilesystemPathHelper.BuildPathSegments(configuration, role, timestampUtc);
+    var directory = Path.Combine(pathSegments);
         Directory.CreateDirectory(directory);
 
-        var baseName = BuildBaseFileName(timestampUtc, envelope.FrameId);
-        var extension = ResolveExtension(envelope.FileExtension);
+    var baseName = FrameExportPathUtilities.BuildBaseFileName(timestampUtc, envelope.FrameId);
+    var extension = FrameExportPathUtilities.ResolveExtension(envelope.FileExtension);
         var payloadPath = Path.Combine(directory, FormattableString.Invariant($"{baseName}.{extension}"));
         await WriteFileAtomicAsync(payloadPath, envelope.Payload, cancellationToken).ConfigureAwait(false);
 
@@ -156,46 +153,6 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
                 envelope.Stage,
                 payloadPath);
         }
-    }
-
-    private static string[] BuildPathSegments(FilesystemFrameExportSinkOptions configuration, string scopeDirectory, DateTimeOffset timestampUtc)
-    {
-        var segments = new List<string>(8)
-        {
-            configuration.RootPath!
-        };
-
-        var prefixSegments = configuration.EnumeratePrefixSegments().ToArray();
-        segments.AddRange(prefixSegments);
-
-        if (prefixSegments.Length == 0 || !string.Equals(prefixSegments[^1], scopeDirectory, StringComparison.OrdinalIgnoreCase))
-        {
-            segments.Add(scopeDirectory);
-        }
-        segments.Add(timestampUtc.ToString("yyyy", CultureInfo.InvariantCulture));
-        segments.Add(timestampUtc.ToString("MM", CultureInfo.InvariantCulture));
-        segments.Add(timestampUtc.ToString("dd", CultureInfo.InvariantCulture));
-
-        return segments.ToArray();
-    }
-
-    private static string BuildBaseFileName(DateTimeOffset timestampUtc, Guid frameId)
-        => FormattableString.Invariant($"{timestampUtc:HHmmssfff}-{frameId:N}");
-
-    private static string ResolveExtension(string? extension)
-    {
-        if (string.IsNullOrWhiteSpace(extension))
-        {
-            return "bin";
-        }
-
-        var trimmed = extension.Trim();
-        if (trimmed.Length > 0 && trimmed[0] == '.')
-        {
-            trimmed = trimmed[1..];
-        }
-
-        return trimmed.Length == 0 ? "bin" : trimmed;
     }
 
     private static async Task WriteFileAtomicAsync(string path, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
@@ -226,11 +183,4 @@ public sealed class FilesystemFrameExportSink : IFrameExportSink
             throw;
         }
     }
-
-    private static string GetRoleDirectoryName(FrameExportPayloadRole role) => role switch
-    {
-        FrameExportPayloadRole.Archive => "archive",
-        FrameExportPayloadRole.Delivery => "delivery",
-        _ => "unknown"
-    };
 }

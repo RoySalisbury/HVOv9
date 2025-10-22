@@ -1,0 +1,80 @@
+@using HVO.SkyMonitorV5.RPi.Models.ImageHistory
+
+<div class="image-history-rail card shadow-sm">
+    <div class="card-body">
+        <div class="rail-header">
+            <div class="rail-header-title">
+                <h2 class="h5 text-light mb-0">Archive</h2>
+                <span class="rail-header-subtitle">@ThumbnailCountLabel</span>
+            </div>
+            <button type="button"
+                    class="btn btn-outline-light btn-sm rail-refresh"
+                    @onclick="RefreshAsync"
+                    disabled="@IsLoading">
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                Refresh
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>@ErrorMessage
+            </div>
+        }
+        else if (Groups.Count == 0 && !IsLoading)
+        {
+            <div class="text-muted empty-state">
+                <i class="bi bi-image-alt me-2"></i>
+                No archived frames were found for the selected filters.
+            </div>
+        }
+        else
+        {
+            <div class="rail-groups" aria-live="polite">
+                @foreach (var group in Groups)
+                {
+                    <section class="rail-group">
+                        <header class="rail-group-header text-muted">@group.Label</header>
+                        <div class="rail-strip" role="list">
+                            @foreach (var item in group.Items)
+                            {
+                                var isSelected = SelectedFrameId == item.Entry.FrameId;
+                                <button type="button"
+                                        class="rail-tile @(isSelected ? "active" : string.Empty)"
+                                        @onclick="() => SelectAsync(item.Entry.FrameId)"
+                                        aria-pressed="@(isSelected.ToString().ToLowerInvariant())"
+                                        title="@item.MetadataSummary"
+                                        role="listitem">
+                                    <div class="rail-thumb">
+                                        @if (item.Entry.ThumbnailAvailable)
+                                        {
+                                            <img src="@item.ThumbnailUri"
+                                                 alt="@BuildThumbnailAlt(item)"
+                                                 loading="lazy"
+                                                 class="rail-thumb-img" />
+                                        }
+                                        else
+                                        {
+                                            <div class="rail-thumb-placeholder text-muted">
+                                                <i class="bi bi-image" aria-hidden="true"></i>
+                                                <span>No thumbnail</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="rail-caption">
+                                        <span class="rail-caption-primary">@item.CaptureLabel</span>
+                                        @if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                                        {
+                                            <span class="rail-caption-secondary">@item.Subtitle</span>
+                                        }
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
+            </div>
+        }
+    </div>
+</div>

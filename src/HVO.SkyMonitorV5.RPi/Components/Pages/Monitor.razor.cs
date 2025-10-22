@@ -158,6 +158,12 @@ public sealed partial class Monitor : ComponentBase, IDisposable
             _processedFrameId = null;
             _processedImageSource = null;
             _processedFrameDetailUri = null;
+
+            if (await TryPopulateProcessedFromArchiveAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
             return;
         }
 
@@ -192,6 +198,12 @@ public sealed partial class Monitor : ComponentBase, IDisposable
             _processedImageSource = null;
             _processedFrameId = null;
             _processedFrameDetailUri = null;
+
+            if (await TryPopulateProcessedFromArchiveAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
             return;
         }
 
@@ -207,6 +219,45 @@ public sealed partial class Monitor : ComponentBase, IDisposable
             processedFrame.FrameId,
             media.Timestamp,
             detailExtension);
+    }
+
+    private async Task<bool> TryPopulateProcessedFromArchiveAsync(CancellationToken cancellationToken)
+    {
+        FrameMedia? archiveMedia = null;
+
+        try
+        {
+            archiveMedia = await FrameMediaProvider.GetLatestProcessedFrameAsync(preferArchive: true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to hydrate processed frame from archive for the monitor view.");
+            archiveMedia = null;
+        }
+
+        if (archiveMedia is null || string.IsNullOrWhiteSpace(archiveMedia.DataUri))
+        {
+            return false;
+        }
+
+        _processedImageSource = archiveMedia.DataUri;
+        _processedFrameId = archiveMedia.FrameId;
+
+        var extension = !string.IsNullOrWhiteSpace(archiveMedia.FileExtension)
+            ? archiveMedia.FileExtension
+            : "jpg";
+
+        _processedFrameDetailUri = BuildFrameDetailUrl(
+            "processed-frame",
+            archiveMedia.FrameId,
+            archiveMedia.Timestamp,
+            extension);
+
+        return true;
     }
 
     private async Task UpdateRawFrameAsync(RawFrameSnapshot? rawFrame, CancellationToken cancellationToken)

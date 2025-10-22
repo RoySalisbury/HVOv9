@@ -1,0 +1,122 @@
+@page "/image-history/frame/{FrameId:guid}"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>SkyMonitor v5 · Archived Frame</PageTitle>
+
+<section class="history-frame-detail">
+    <div class="container-fluid history-frame-detail__container py-5 text-light">
+        @if (_isLoading)
+        {
+            <div class="history-frame-detail__status text-center py-5">
+                <div class="spinner-border text-info" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-4 mb-0">Retrieving archived frame…</p>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+            </div>
+        }
+        else if (_viewModel is not null)
+        {
+            <div class="history-frame-detail__actions">
+                <button type="button" class="btn btn-sm btn-outline-light history-frame-detail__back" @onclick="NavigateBack">
+                    <i class="bi bi-arrow-left me-2"></i>Back to History
+                </button>
+                <div class="history-frame-detail__downloads">
+                    @if (!string.IsNullOrWhiteSpace(_viewModel.ProcessedDownloadUri))
+                    {
+                        <a class="btn btn-sm btn-primary" href="@_viewModel.ProcessedDownloadUri" target="_blank" rel="noopener" download>
+                            <i class="bi bi-download me-2"></i>Download Processed
+                        </a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_viewModel.RawDownloadUri))
+                    {
+                        <a class="btn btn-sm btn-outline-light" href="@_viewModel.RawDownloadUri" target="_blank" rel="noopener" download>
+                            <i class="bi bi-file-earmark-zip me-2"></i>Download Raw
+                        </a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_viewModel.ThumbnailDownloadUri))
+                    {
+                        <a class="btn btn-sm btn-outline-light" href="@_viewModel.ThumbnailDownloadUri" target="_blank" rel="noopener" download>
+                            <i class="bi bi-image me-2"></i>Download Thumbnail
+                        </a>
+                    }
+                </div>
+            </div>
+
+            <div class="history-frame-detail__grid">
+                <div class="history-frame-detail__preview">
+                    <div class="history-frame-detail__preview-frame">
+                        <img src="@_viewModel.ProcessedMediaUri" alt="Archived frame preview" class="history-frame-detail__preview-image" />
+                    </div>
+                </div>
+
+                <div class="history-frame-detail__meta">
+                    <section class="history-frame-detail__section">
+                        <h2 class="history-frame-detail__section-title">Capture</h2>
+                        <dl class="history-frame-detail__grid-list">
+                            <div>
+                                <dt>Local</dt>
+                                <dd>@_viewModel.CaptureLocalDisplay</dd>
+                            </div>
+                            <div>
+                                <dt>UTC</dt>
+                                <dd>@_viewModel.CaptureUtcDisplay</dd>
+                            </div>
+                            <div>
+                                <dt>Archived (local)</dt>
+                                <dd>@_viewModel.ArchivedLocalDisplay</dd>
+                            </div>
+                            <div>
+                                <dt>Archived (UTC)</dt>
+                                <dd>@_viewModel.ArchivedUtcDisplay</dd>
+                            </div>
+                        </dl>
+                    </section>
+
+                    <section class="history-frame-detail__section">
+                        <h2 class="history-frame-detail__section-title">Equipment</h2>
+                        <ul class="history-frame-detail__list">
+                            <li>@_viewModel.RigSummary</li>
+                            <li>@_viewModel.CameraSummary</li>
+                            <li>@_viewModel.EncodingSummary</li>
+                        </ul>
+                    </section>
+
+                    <section class="history-frame-detail__section">
+                        <h2 class="history-frame-detail__section-title">Processing</h2>
+                        <p class="history-frame-detail__processing">@_viewModel.ProcessingSummary</p>
+                        @if (_viewModel.AppliedFilters.Count > 0)
+                        {
+                            <div class="history-frame-detail__filter-chips" role="list">
+                                @foreach (var filter in _viewModel.AppliedFilters)
+                                {
+                                    <span class="badge bg-secondary-subtle text-light" role="listitem">@filter</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted small">No optical filters recorded.</span>
+                        }
+                    </section>
+
+                    <section class="history-frame-detail__section">
+                        <h2 class="history-frame-detail__section-title">Metadata</h2>
+                        <ul class="history-frame-detail__hints">
+                            @foreach (var hint in _viewModel.MetadataHints)
+                            {
+                                <li>@hint</li>
+                            }
+                        </ul>
+                    </section>
+                </div>
+            </div>
+        }
+    </div>
+</section>

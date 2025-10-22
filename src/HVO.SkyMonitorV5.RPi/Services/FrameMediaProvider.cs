@@ -1,13 +1,20 @@
 using System;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.Data.Archive;
+using HVO.SkyMonitorV5.Data.Archive.Entities;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Infrastructure;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Storage;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
@@ -17,6 +24,8 @@ public interface IFrameMediaProvider
     Task<FrameMedia?> GetProcessedFrameAsync(Guid frameId, DateTimeOffset timestamp, CancellationToken cancellationToken);
 
     Task<FrameMedia?> GetRawFrameAsync(Guid frameId, DateTimeOffset timestamp, RawFrameMediaFormat format, CancellationToken cancellationToken);
+
+    Task<FrameMedia?> GetLatestProcessedFrameAsync(bool preferArchive, CancellationToken cancellationToken);
 }
 
 public enum RawFrameMediaFormat
@@ -45,6 +54,8 @@ internal sealed class FrameMediaProvider : IFrameMediaProvider
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
     private readonly ILogger<FrameMediaProvider> _logger;
     private readonly IMemoryCache _cache;
+    private readonly IDbContextFactory<ImageFrameArchiveContext> _archiveContextFactory;
+    private readonly IOptionsMonitor<ImageHistoryOptions> _imageHistoryOptions;
 
     private static readonly MemoryCacheEntryOptions CacheOptions = new MemoryCacheEntryOptions()
         .SetSize(1)
@@ -55,13 +66,17 @@ internal sealed class FrameMediaProvider : IFrameMediaProvider
         IFrameStateStore frameStateStore,
         IProcessedFrameEncoder processedFrameEncoder,
         IMemoryCache cache,
-        ILogger<FrameMediaProvider> logger)
+        ILogger<FrameMediaProvider> logger,
+        IDbContextFactory<ImageFrameArchiveContext> archiveContextFactory,
+        IOptionsMonitor<ImageHistoryOptions> imageHistoryOptions)
     {
         _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         _frameStateStore = frameStateStore ?? throw new ArgumentNullException(nameof(frameStateStore));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _archiveContextFactory = archiveContextFactory ?? throw new ArgumentNullException(nameof(archiveContextFactory));
+        _imageHistoryOptions = imageHistoryOptions ?? throw new ArgumentNullException(nameof(imageHistoryOptions));
     }
 
     public Task<FrameMedia?> GetProcessedFrameAsync(Guid frameId, DateTimeOffset timestamp, CancellationToken cancellationToken)
@@ -76,9 +91,184 @@ internal sealed class FrameMediaProvider : IFrameMediaProvider
         return _cache.GetOrCreateAsync(cacheKey, entry => FetchRawFrameAsync(entry, frameId, timestamp, format, cancellationToken));
     }
 
+    public async Task<FrameMedia?> GetLatestProcessedFrameAsync(bool preferArchive, CancellationToken cancellationToken)
+    {
+        if (preferArchive)
+        {
+            var archiveMedia = await TryLoadLatestFromArchiveAsync(cancellationToken).ConfigureAwait(false);
+            if (archiveMedia is not null)
+            {
+                return archiveMedia;
+            }
+        }
+
+        var latest = _frameStateStore.LatestProcessedFrame;
+        if (latest is not null)
+        {
+            return await GetProcessedFrameAsync(latest.FrameId, latest.Timestamp, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!preferArchive)
+        {
+            return await TryLoadLatestFromArchiveAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return null;
+    }
+
+    private async Task<FrameMedia?> TryLoadArchiveFrameAsync(Guid frameId, CancellationToken cancellationToken, bool cacheResult)
+    {
+        if (!IsArchiveEnabled())
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var context = await _archiveContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var entity = await context.FrameArchives
+                .AsNoTracking()
+                .FirstOrDefaultAsync(frame => frame.FrameId == frameId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (entity is null)
+            {
+                return null;
+            }
+
+            return cacheResult
+                ? await CacheArchiveEntityAsync(entity, cancellationToken).ConfigureAwait(false)
+                : await BuildMediaFromArchiveAsync(entity, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load processed frame {FrameId} from the archive store.", frameId);
+            return null;
+        }
+    }
+
+    private async Task<FrameMedia?> TryLoadLatestFromArchiveAsync(CancellationToken cancellationToken)
+    {
+        if (!IsArchiveEnabled())
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var context = await _archiveContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var entity = await context.FrameArchives
+                .AsNoTracking()
+                .OrderByDescending(frame => frame.CapturedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (entity is null)
+            {
+                return null;
+            }
+
+            return await CacheArchiveEntityAsync(entity, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load the latest processed frame from the archive store.");
+            return null;
+        }
+    }
+
+    private async Task<FrameMedia?> CacheArchiveEntityAsync(FrameArchiveEntity entity, CancellationToken cancellationToken)
+    {
+        var cacheKey = FrameCacheKey.Processed(entity.FrameId);
+        if (_cache.TryGetValue(cacheKey, out FrameMedia? existing) && existing is not null)
+        {
+            return existing;
+        }
+
+        using var entry = _cache.CreateEntry(cacheKey);
+        ConfigureCacheEntry(entry);
+
+        var media = await BuildMediaFromArchiveAsync(entity, cancellationToken).ConfigureAwait(false);
+        if (media is null)
+        {
+            return null;
+        }
+
+        entry.Value = media;
+        return media;
+    }
+
+    private async Task<FrameMedia?> BuildMediaFromArchiveAsync(FrameArchiveEntity entity, CancellationToken cancellationToken)
+    {
+        var timestamp = entity.CapturedAtUtc != default
+            ? entity.CapturedAtUtc
+            : (entity.ArchivedAtUtc != default ? entity.ArchivedAtUtc : DateTimeOffset.UtcNow);
+
+        var contentType = !string.IsNullOrWhiteSpace(entity.PayloadContentType)
+            ? entity.PayloadContentType
+            : "image/jpeg";
+
+        var extension = !string.IsNullOrWhiteSpace(entity.PayloadExtension)
+            ? FrameExportPathUtilities.ResolveExtension(entity.PayloadExtension)
+            : "jpg";
+
+        if (!string.IsNullOrWhiteSpace(entity.MediaFilePath) && File.Exists(entity.MediaFilePath))
+        {
+            try
+            {
+                var payload = await File.ReadAllBytesAsync(entity.MediaFilePath, cancellationToken).ConfigureAwait(false);
+                return BuildFrameMedia(entity.FrameId, timestamp, payload, contentType, extension, descriptor: null);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read archived media from path {Path} for frame {FrameId}.", entity.MediaFilePath, entity.FrameId);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(entity.MediaObjectKey))
+        {
+            _logger.LogDebug(
+                "Archive record for frame {FrameId} references object storage ({Bucket}/{Key}) which is not yet implemented for retrieval.",
+                entity.FrameId,
+                entity.MediaBucket,
+                entity.MediaObjectKey);
+        }
+
+        return null;
+    }
+
+    private bool IsArchiveEnabled()
+    {
+        var options = _imageHistoryOptions.CurrentValue;
+        return options is not null && options.EnableArchive;
+    }
+
     private async Task<FrameMedia?> FetchProcessedFrameAsync(ICacheEntry cacheEntry, Guid frameId, DateTimeOffset timestamp, CancellationToken cancellationToken)
     {
         ConfigureCacheEntry(cacheEntry);
+
+        var processedFrame = _frameStateStore.LatestProcessedFrame;
+        if (processedFrame is not null && processedFrame.FrameId == frameId)
+        {
+            var delivery = _processedFrameEncoder.Encode(processedFrame);
+            var payload = delivery.Payload.ToArray();
+            var contentType = delivery.ContentType;
+            var extension = delivery.FileExtension ?? processedFrame.FileExtension ?? "png";
+
+            return BuildFrameMedia(frameId, processedFrame.Timestamp, payload, contentType, extension, descriptor: null);
+        }
 
         LocalApiFrameResponse? apiResponse = null;
         try
@@ -104,19 +294,14 @@ internal sealed class FrameMediaProvider : IFrameMediaProvider
             _logger.LogDebug("Discarding processed frame from API due to mismatched frame id. Expected {ExpectedId}, received {ReceivedId}.", frameId, apiResponse.FrameId);
         }
 
-        var processedFrame = _frameStateStore.LatestProcessedFrame;
-        if (processedFrame is null || processedFrame.FrameId != frameId)
+        var archiveMedia = await TryLoadArchiveFrameAsync(frameId, cancellationToken, cacheResult: false).ConfigureAwait(false);
+        if (archiveMedia is not null)
         {
-            _logger.LogWarning("Processed frame {FrameId} is no longer available in the frame buffer.", frameId);
-            return null;
+            return archiveMedia;
         }
 
-        var delivery = _processedFrameEncoder.Encode(processedFrame);
-        var payload = delivery.Payload.ToArray();
-        var contentType = delivery.ContentType;
-        var extension = delivery.FileExtension ?? processedFrame.FileExtension ?? "png";
-
-        return BuildFrameMedia(frameId, processedFrame.Timestamp, payload, contentType, extension, descriptor: null);
+        _logger.LogWarning("Processed frame {FrameId} is no longer available in the frame buffer or archive.", frameId);
+        return null;
     }
 
     private async Task<FrameMedia?> FetchRawFrameAsync(ICacheEntry cacheEntry, Guid frameId, DateTimeOffset timestamp, RawFrameMediaFormat format, CancellationToken cancellationToken)

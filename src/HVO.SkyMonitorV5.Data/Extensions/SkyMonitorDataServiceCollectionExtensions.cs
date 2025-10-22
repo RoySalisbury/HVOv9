@@ -1,6 +1,7 @@
 using System;
 using HVO.SkyMonitorV5.Data.Abstractions;
 using HVO.SkyMonitorV5.Data.Configurations;
+using HVO.SkyMonitorV5.Data.Archive;
 using HVO.SkyMonitorV5.Data.Options;
 using HVO.SkyMonitorV5.Data.Services;
 using HVO.SkyMonitorV5.Data.Telemetry;
@@ -199,6 +200,39 @@ public static class SkyMonitorDataServiceCollectionExtensions
             enableMigrations: true);
 
         services.TryAddScoped<ISkyMonitorTelemetryRepository, SkyMonitorTelemetryRepository>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the image frame archive store which backs the Image History experience.
+    /// </summary>
+    /// <param name="services">The service collection to update.</param>
+    /// <param name="relativePath">Relative path (beneath the data root) for the archive database.</param>
+    /// <param name="configureSqlite">Optional SQLite configuration callback.</param>
+    /// <param name="configureOptions">Optional DbContext configuration callback.</param>
+    /// <param name="openMode">SQLite open mode used when creating connections.</param>
+    /// <returns>The original service collection for chaining.</returns>
+    public static IServiceCollection AddSkyMonitorImageFrameArchive(
+        this IServiceCollection services,
+        string relativePath = "telemetry/image_frame_archive.sqlite",
+        Action<SqliteDbContextOptionsBuilder>? configureSqlite = null,
+        Action<DbContextOptionsBuilder>? configureOptions = null,
+        SqliteOpenMode openMode = SqliteOpenMode.ReadWriteCreate)
+    {
+        services.AddSkyMonitorSqliteDbContext<ImageFrameArchiveContext>(
+            relativePath,
+            configureSqlite,
+            configureOptions,
+            openMode,
+            enableMigrations: true);
+
+        services.AddSkyMonitorSqliteDbContextFactory<ImageFrameArchiveContext>(
+            relativePath,
+            configureSqlite,
+            configureOptions,
+            openMode,
+            enableMigrations: true);
 
         return services;
     }

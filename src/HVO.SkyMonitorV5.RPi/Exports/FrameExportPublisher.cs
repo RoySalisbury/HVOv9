@@ -1,5 +1,6 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
+using HVO.SkyMonitorV5.RPi.ImageHistory;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -25,19 +26,25 @@ public sealed class FrameExportPublisher
     private readonly ILogger<FrameExportPublisher> _logger;
     private readonly IOptionsMonitor<SkiaPipelineFeatureOptions> _featureOptions;
     private readonly ISkiaPipelineFeatureToggleMonitor _featureMonitor;
+    private readonly IImageFrameArchiveIngestionQueue _archiveQueue;
+    private readonly IOptionsMonitor<ImageHistoryOptions> _imageHistoryOptions;
 
     public FrameExportPublisher(
         IFrameExportDispatcher dispatcher,
         IProcessedFrameEncoder processedFrameEncoder,
         ILogger<FrameExportPublisher> logger,
         IOptionsMonitor<SkiaPipelineFeatureOptions> featureOptions,
-        ISkiaPipelineFeatureToggleMonitor featureMonitor)
+        ISkiaPipelineFeatureToggleMonitor featureMonitor,
+        IImageFrameArchiveIngestionQueue archiveQueue,
+        IOptionsMonitor<ImageHistoryOptions> imageHistoryOptions)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _featureOptions = featureOptions ?? throw new ArgumentNullException(nameof(featureOptions));
         _featureMonitor = featureMonitor ?? throw new ArgumentNullException(nameof(featureMonitor));
+        _archiveQueue = archiveQueue ?? throw new ArgumentNullException(nameof(archiveQueue));
+        _imageHistoryOptions = imageHistoryOptions ?? throw new ArgumentNullException(nameof(imageHistoryOptions));
     }
 
     public void PublishRawFrame(
@@ -191,7 +198,10 @@ public sealed class FrameExportPublisher
                     payloadContentType: contentType,
                     payloadExtension: fileExtension);
 
-                var payload = delivery.Payload;
+                var payloadBuffer = delivery.Payload.ToArray();
+                QueueArchiveIngestion(metadata, payloadBuffer, contentType, fileExtension);
+
+                var payload = new ReadOnlyMemory<byte>(payloadBuffer);
                 var envelope = new FrameExportEnvelope(
                     processedFrame.FrameId,
                     FrameExportStage.Processed,
@@ -240,6 +250,8 @@ public sealed class FrameExportPublisher
                 payloadContentType: fallbackContentType,
                 payloadExtension: fallbackExtension);
 
+            QueueArchiveIngestion(fallbackMetadata, fallbackPayload, fallbackContentType, fallbackExtension);
+
             var fallbackEnvelope = new FrameExportEnvelope(
                 processedFrame.FrameId,
                 FrameExportStage.Processed,
@@ -272,5 +284,30 @@ public sealed class FrameExportPublisher
         "image/jpeg" => "jpg",
         _ => null
     };
+
+    private void QueueArchiveIngestion(FrameExportMetadata metadata, byte[] payload, string contentType, string? fileExtension)
+    {
+        var options = _imageHistoryOptions.CurrentValue;
+        if (options is null || !options.EnableArchive)
+        {
+            return;
+        }
+
+        var extension = fileExtension ?? metadata.PayloadExtension ?? TryGetFileExtension(contentType) ?? "jpg";
+        var request = new ImageFrameArchiveIngestionRequest(
+            metadata.FrameId,
+            metadata,
+            payload,
+            contentType,
+            extension,
+            FrameExportPayloadRole.Archive);
+
+        if (!_archiveQueue.TryEnqueue(request))
+        {
+            _logger.LogDebug(
+                "Image frame archive ingestion queue rejected processed frame {FrameId}.",
+                metadata.FrameId);
+        }
+    }
 
 }
