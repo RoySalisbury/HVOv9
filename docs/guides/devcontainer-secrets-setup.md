@@ -35,8 +35,17 @@ The following SSH key secrets are required for Docker remote contexts and deploy
 
 **Quick Setup:**
 ```bash
-# Run the setup script for guided configuration
+# 1. Run the setup script to create the local environment file
 bash scripts/setup-local-dev-secrets.sh
+
+# 2. Edit the file with your actual secrets
+code .devcontainer/devcontainer.local.env
+
+# 3. Export the variables to your shell environment
+source scripts/export-local-env.sh
+
+# 4. Launch VS Code from the same shell
+code .
 ```
 
 **Manual Setup:**
@@ -51,9 +60,29 @@ bash scripts/setup-local-dev-secrets.sh
    code .devcontainer/devcontainer.local.env
    ```
 
-3. **The file is git-ignored** - your secrets won't be committed
+3. **Export environment variables before launching VS Code**:
+   ```bash
+   # Option A: Use the helper script
+   source scripts/export-local-env.sh
+   
+   # Option B: Add to your shell profile (~/.zshrc, ~/.bash_profile)
+   export HVO_SECRET__SSH__PRIVATE_KEY_B64='your_base64_key'
+   # ... other variables
+   
+   # Option C: Export manually in your current shell
+   export $(cat .devcontainer/devcontainer.local.env | grep -v '^#' | xargs)
+   ```
 
-**Important Note:** GitHub repository secrets are NOT automatically available in local dev containers. You must use the `devcontainer.local.env` file for local development.
+4. **Launch VS Code from the same shell**:
+   ```bash
+   code .
+   ```
+
+**Important Notes:**
+- GitHub repository secrets are NOT automatically available in local dev containers
+- Environment variables must be set in your macOS/host environment before launching VS Code
+- The dev container uses `remoteEnv` to pass variables from the host to the container
+- The `devcontainer.local.env` file is git-ignored and won't be committed
 
 ### For GitHub Codespaces
 
