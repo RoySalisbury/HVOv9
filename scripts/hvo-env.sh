@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Note: Do NOT enable set -euo globally at top-level when this script is sourced from .bashrc.
+# We'll temporarily enable strict mode during execution and restore the caller's shell options.
+
+# Detect if this script is being sourced (common when called from .bashrc)
+__HVO_ENV_SOURCED=0
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  __HVO_ENV_SOURCED=1
+fi
+
+# Save caller shell options so we can restore after running
+__HVO_ENV_ORIG_SET_OPTS=""
+if (( __HVO_ENV_SOURCED )); then
+  __HVO_ENV_ORIG_SET_OPTS="$(set +o)"
+fi
 
 # HVO environment helper
 # Usage:
@@ -56,12 +69,19 @@ cmd_export() {
     return 1
   fi
   while IFS= read -r line; do
+    # Skip comments and blank lines
     if [[ "${line}" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
       continue
     fi
-    if [[ "${line}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-      export "${line?}"
-      echo "[hvo-env] export: ${line%%=*}"
+    # Only process KEY=VALUE lines, capture key as everything before first '=' and value as the rest
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      # Trim optional surrounding quotes in value
+      if [[ "${val}" =~ ^\"(.*)\"$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      if [[ "${val}" =~ ^'(.*)'$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      export "${key}=${val}"
+      echo "[hvo-env] export: ${key}"
     fi
   done < "${LOCAL_ENV_FILE}"
   echo "[hvo-env] export complete."
@@ -73,19 +93,38 @@ cmd_load() {
     echo "[hvo-env] Run: cp .devcontainer/devcontainer.local.env.example .devcontainer/devcontainer.local.env"
     return 1
   fi
-  set -a
-  # shellcheck disable=SC1090
-  source "${LOCAL_ENV_FILE}"
-  set +a
+  # Parse the env file safely without executing it (supports spaces/semicolons)
+  while IFS= read -r line; do
+    # Skip comments and blank lines
+    if [[ "${line}" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+      continue
+    fi
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      # Trim optional surrounding quotes in value
+      if [[ "${val}" =~ ^\"(.*)\"$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      if [[ "${val}" =~ ^'(.*)'$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      export "${key}=${val}"
+    fi
+  done < "${LOCAL_ENV_FILE}"
   print_report
 }
 
 cmd_auto() {
   if [[ -z "${HVO_SECRET__SSH__PRIVATE_KEY_B64:-}" && -f "${LOCAL_ENV_FILE}" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "${LOCAL_ENV_FILE}" 2>/dev/null || true
-    set +a
+    while IFS= read -r line; do
+      if [[ "${line}" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+        continue
+      fi
+      if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+        key="${BASH_REMATCH[1]}"
+        val="${BASH_REMATCH[2]}"
+        if [[ "${val}" =~ ^\"(.*)\"$ ]]; then val="${BASH_REMATCH[1]}"; fi
+        if [[ "${val}" =~ ^'(.*)'$ ]]; then val="${BASH_REMATCH[1]}"; fi
+        export "${key}=${val}"
+      fi
+    done < "${LOCAL_ENV_FILE}"
   fi
 }
 
@@ -108,4 +147,16 @@ main() {
   esac
 }
 
-main "$@"
+(
+  # Execute main logic in a subshell-like scope that enables strict mode,
+  # but still exports variables into the parent shell since we use export.
+  # We can't use a real subshell if we want exports to persist, so we just
+  # group the strict mode with the call, and restoration happens after.
+  set -euo pipefail
+  main "$@"
+)
+
+# Restore caller shell options if we were sourced
+if (( __HVO_ENV_SOURCED )) && [[ -n "${__HVO_ENV_ORIG_SET_OPTS}" ]]; then
+  eval "${__HVO_ENV_ORIG_SET_OPTS}"
+fi

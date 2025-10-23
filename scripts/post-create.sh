@@ -91,6 +91,26 @@ setup_shell_environment() {
   else
     log "Shell environment already configured."
   fi
+  
+  # Fix VS Code Python extension and prompt (Starship/Oh-My-Posh) unbound variable errors
+  # This prevents errors when bash is run with set -u (nounset) option
+  if ! grep -q "VSCODE_PYTHON_AUTOACTIVATE_GUARD" "${bashrc_file}"; then
+    log "Adding VS Code Python and prompt variable guards to .bashrc"
+    cat >> "${bashrc_file}" << 'EOF'
+
+# Fix VS Code Python extension unbound variable errors
+# Set default empty values if not already set to prevent bash set -u errors
+export VSCODE_PYTHON_AUTOACTIVATE_GUARD="${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}"
+export VSCODE_PYTHON_BASH_ACTIVATE="${VSCODE_PYTHON_BASH_ACTIVATE:-}"
+
+# Fix Starship prompt unbound variable error
+export STARSHIP_SESSION_KEY="${STARSHIP_SESSION_KEY:-}"
+
+# Fix Oh-My-Posh prompt unbound variable error
+export POSH_SESSION_ID="${POSH_SESSION_ID:-}"
+EOF
+    log "VS Code Python and prompt variable guards applied."
+  fi
 }
 
 install_dotnet_tools() {
