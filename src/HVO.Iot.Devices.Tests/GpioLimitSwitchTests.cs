@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -146,17 +147,21 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithNullGpioController_ShouldThrowArgumentNullException()
         {
-            // Act & Assert
-            Assert.ThrowsException<ArgumentNullException>(() =>
-                new GpioLimitSwitch((IGpioControllerClient)null!, TestPin));
+            // Act
+            Action act = () => new GpioLimitSwitch((IGpioControllerClient)null!, TestPin);
+            
+            // Assert
+            act.Should().Throw<ArgumentNullException>();
         }
 
         [TestMethod]
         public void Constructor_WithInvalidPinNumber_ShouldThrowArgumentOutOfRangeException()
         {
-            // Act & Assert
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
-                new GpioLimitSwitch(_gpioController!, 0));
+            // Act
+            Action act = () => new GpioLimitSwitch(_gpioController!, 0);
+            
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
         }
 
         [TestMethod]

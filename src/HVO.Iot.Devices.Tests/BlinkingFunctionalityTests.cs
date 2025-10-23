@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using FluentAssertions;
 using HVO.Iot.Devices;
 using HVO.Iot.Devices.Implementation;
 using System.Threading;
@@ -69,25 +70,29 @@ namespace HVO.Iot.Devices.Tests
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ArgumentOutOfRangeException))]
         public void StartBlinking_WithInvalidFrequency_ThrowsException()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
 
-            // Act & Assert
-            _buttonWithLed.StartBlinking(15.0); // Above 10 Hz limit
+            // Act
+            Action act = () => _buttonWithLed.StartBlinking(15.0); // Above 10 Hz limit
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ArgumentOutOfRangeException))]
         public void StartBlinking_WithZeroFrequency_ThrowsException()
         {
             // Arrange
             _buttonWithLed = CreateButtonWithLed();
 
-            // Act & Assert
-            _buttonWithLed.StartBlinking(0.0);
+            // Act
+            Action act = () => _buttonWithLed.StartBlinking(0.0);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
         }
 
         private GpioButtonWithLed CreateButtonWithLed(int buttonPin = 18, int? ledPin = 24)

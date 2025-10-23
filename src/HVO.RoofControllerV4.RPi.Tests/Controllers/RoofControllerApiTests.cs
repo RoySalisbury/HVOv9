@@ -433,7 +433,7 @@ public class RoofControllerApiTests
         Assert.IsTrue(problem!.Errors.ContainsKey(nameof(RoofConfigurationRequest.SafetyWatchdogTimeoutSeconds)));
         Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest.DigitalInputPollIntervalMilliseconds)));
         Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest.EnablePeriodicVerificationWhileMoving)));
-        Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest)));
+    Assert.IsTrue(problem.Errors.ContainsKey(nameof(RoofConfigurationRequest.OpenRelayId)));
         _roofServiceMock.Verify(s => s.UpdateConfiguration(It.IsAny<RoofControllerOptionsV4>()), Times.Never);
     }
 

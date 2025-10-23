@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -170,9 +171,11 @@ namespace HVO.Iot.Devices.Tests
         [TestMethod]
         public void Constructor_WithSameButtonAndLedPin_ThrowsArgumentException()
         {
-            // Arrange & Act & Assert
-            Assert.ThrowsException<ArgumentException>(() =>
-                CreateButtonWithLed(buttonPin: TestPin, ledPin: TestPin));
+            // Arrange
+            Action act = () => CreateButtonWithLed(buttonPin: TestPin, ledPin: TestPin);
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
         }
 
         [TestMethod]

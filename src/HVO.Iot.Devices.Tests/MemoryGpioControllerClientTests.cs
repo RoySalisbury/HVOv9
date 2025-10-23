@@ -2,6 +2,7 @@ using System;
 using System.Device.Gpio;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using FluentAssertions;
 using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Implementation;
 using HVO.Iot.Devices.Tests.TestHelpers;
@@ -54,7 +55,7 @@ public class MemoryGpioControllerClientTests : IDisposable
         var isSupported = _gpioController.IsPinModeSupported(pinNumber, mode);
 
         // Assert
-        Assert.AreEqual(isSupported, expectedSupport);
+    Assert.AreEqual(expectedSupport, isSupported);
     }
 
     [TestMethod]
@@ -105,21 +106,23 @@ public class MemoryGpioControllerClientTests : IDisposable
     [TestMethod]
     public void OpenPin_WithInvalidPin_ShouldThrowArgumentException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<ArgumentException>(() => 
-            _gpioController.OpenPin(InvalidPin, PinMode.Input));
+        // Act
+        Action act = () => _gpioController.OpenPin(InvalidPin, PinMode.Input);
         
-        Assert.IsTrue(exception.Message.Contains("not a valid GPIO pin"));
+        // Assert
+        var exception = act.Should().Throw<ArgumentException>().Which;
+        exception.Message.Should().Contain("not a valid GPIO pin");
     }
 
     [TestMethod]
     public void OpenPin_WithUnsupportedMode_ShouldThrowArgumentException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<ArgumentException>(() => 
-            _gpioController.OpenPin(ValidPin, (PinMode)999));
+        // Act
+        Action act = () => _gpioController.OpenPin(ValidPin, (PinMode)999);
         
-        Assert.IsTrue(exception.Message.Contains("not supported"));
+        // Assert
+        var exception = act.Should().Throw<ArgumentException>().Which;
+        exception.Message.Should().Contain("not supported");
     }
 
     [TestMethod]
@@ -128,11 +131,12 @@ public class MemoryGpioControllerClientTests : IDisposable
         // Arrange
         _gpioController.OpenPin(ValidPin, PinMode.Input);
 
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _gpioController.OpenPin(ValidPin, PinMode.Output));
+        // Act
+        Action act = () => _gpioController.OpenPin(ValidPin, PinMode.Output);
         
-        Assert.IsTrue(exception.Message.Contains("already open"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("already open");
     }
 
     [TestMethod]
@@ -207,21 +211,23 @@ public class MemoryGpioControllerClientTests : IDisposable
     [TestMethod]
     public void Read_FromClosedPin_ShouldThrowInvalidOperationException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _gpioController.Read(ValidPin));
+        // Act
+        Action act = () => _gpioController.Read(ValidPin);
         
-        Assert.IsTrue(exception.Message.Contains("not open"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("not open");
     }
 
     [TestMethod]
     public void Read_FromInvalidPin_ShouldThrowArgumentException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<ArgumentException>(() => 
-            _gpioController.Read(InvalidPin));
+        // Act
+        Action act = () => _gpioController.Read(InvalidPin);
         
-        Assert.IsTrue(exception.Message.Contains("not a valid GPIO pin"));
+        // Assert
+        var exception = act.Should().Throw<ArgumentException>().Which;
+        exception.Message.Should().Contain("not a valid GPIO pin");
     }
 
     [TestMethod]
@@ -243,31 +249,34 @@ public class MemoryGpioControllerClientTests : IDisposable
         // Arrange
         _gpioController.OpenPin(ValidPin, PinMode.Input);
 
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _gpioController.Write(ValidPin, PinValue.High));
+        // Act
+        Action act = () => _gpioController.Write(ValidPin, PinValue.High);
         
-        Assert.IsTrue(exception.Message.Contains("not configured as output"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("not configured as output");
     }
 
     [TestMethod]
     public void Write_ToClosedPin_ShouldThrowInvalidOperationException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _gpioController.Write(ValidPin, PinValue.High));
+        // Act
+        Action act = () => _gpioController.Write(ValidPin, PinValue.High);
         
-        Assert.IsTrue(exception.Message.Contains("not open"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("not open");
     }
 
     [TestMethod]
     public void Write_ToInvalidPin_ShouldThrowArgumentException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<ArgumentException>(() => 
-            _gpioController.Write(InvalidPin, PinValue.High));
+        // Act
+        Action act = () => _gpioController.Write(InvalidPin, PinValue.High);
         
-        Assert.IsTrue(exception.Message.Contains("not a valid GPIO pin"));
+        // Assert
+        var exception = act.Should().Throw<ArgumentException>().Which;
+        exception.Message.Should().Contain("not a valid GPIO pin");
     }
 
     #endregion
@@ -293,31 +302,34 @@ public class MemoryGpioControllerClientTests : IDisposable
         // Arrange
         _gpioController.OpenPin(ValidPin, PinMode.Output);
 
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _memoryController.SimulatePinValueChange(ValidPin, PinValue.High));
+        // Act
+        Action act = () => _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
         
-        Assert.IsTrue(exception.Message.Contains("output pin"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("output pin");
     }
 
     [TestMethod]
     public void SimulatePinValueChange_OnClosedPin_ShouldThrowInvalidOperationException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _memoryController.SimulatePinValueChange(ValidPin, PinValue.High));
+        // Act
+        Action act = () => _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
         
-        Assert.IsTrue(exception.Message.Contains("not open"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("not open");
     }
 
     [TestMethod]
     public void SimulatePinValueChange_OnInvalidPin_ShouldThrowArgumentException()
     {
-        // Act & Assert
-        var exception = Assert.ThrowsException<ArgumentException>(() => 
-            _memoryController.SimulatePinValueChange(InvalidPin, PinValue.High));
+        // Act
+        Action act = () => _memoryController.SimulatePinValueChange(InvalidPin, PinValue.High);
         
-        Assert.IsTrue(exception.Message.Contains("not a valid GPIO pin"));
+        // Assert
+        var exception = act.Should().Throw<ArgumentException>().Which;
+        exception.Message.Should().Contain("not a valid GPIO pin");
     }
 
     #endregion
@@ -347,8 +359,9 @@ public class MemoryGpioControllerClientTests : IDisposable
         _gpioController.OpenPin(ValidPin, PinMode.Input);
 
         // Act & Assert
-        Assert.ThrowsException<ArgumentNullException>(() => 
-            _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Rising, null!));
+        Action act = () => 
+            _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Rising, null!);
+        act.Should().Throw<ArgumentNullException>();
     }
 
     [TestMethod]
@@ -357,11 +370,12 @@ public class MemoryGpioControllerClientTests : IDisposable
         // Arrange
         PinChangeEventHandler callback = (sender, args) => { };
 
-        // Act & Assert
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => 
-            _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Rising, callback));
+        // Act
+        Action act = () => _gpioController.RegisterCallbackForPinValueChangedEvent(ValidPin, PinEventTypes.Rising, callback);
         
-        Assert.IsTrue(exception.Message.Contains("not open"));
+        // Assert
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("not open");
     }
 
     [TestMethod]
@@ -387,8 +401,8 @@ public class MemoryGpioControllerClientTests : IDisposable
 
         // Assert
         Assert.IsTrue(eventTriggered);
-        Assert.AreEqual(capturedEventType, PinEventTypes.Rising);
-        Assert.AreEqual(capturedPinNumber, ValidPin);
+    Assert.AreEqual(PinEventTypes.Rising, capturedEventType);
+    Assert.AreEqual(ValidPin, capturedPinNumber);
     }
 
     [TestMethod]
@@ -412,7 +426,7 @@ public class MemoryGpioControllerClientTests : IDisposable
 
         // Assert
         Assert.IsTrue(eventTriggered);
-        Assert.AreEqual(capturedEventType, PinEventTypes.Falling);
+    Assert.AreEqual(PinEventTypes.Falling, capturedEventType);
     }
 
     [TestMethod]
@@ -520,10 +534,12 @@ public class MemoryGpioControllerClientTests : IDisposable
         // Act
         _memoryController.Dispose();
 
-        // Assert - After disposal, operations should throw ObjectDisposedException
-        // This verifies that dispose properly cleaned up
-        Assert.ThrowsException<ObjectDisposedException>(() => _gpioController.IsPinOpen(18));
-        Assert.ThrowsException<ObjectDisposedException>(() => _gpioController.IsPinOpen(19));
+    // Assert - After disposal, operations should throw ObjectDisposedException
+    // This verifies that dispose properly cleaned up
+    Action act1 = () => _gpioController.IsPinOpen(18);
+    act1.Should().Throw<ObjectDisposedException>();
+    Action act2 = () => _gpioController.IsPinOpen(19);
+    act2.Should().Throw<ObjectDisposedException>();
     }
 
     [TestMethod]
@@ -533,26 +549,26 @@ public class MemoryGpioControllerClientTests : IDisposable
         _memoryController.Dispose();
 
         // Act & Assert
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _gpioController.IsPinModeSupported(ValidPin, PinMode.Input));
+        Action a1 = () => _gpioController.IsPinModeSupported(ValidPin, PinMode.Input);
+        a1.Should().Throw<ObjectDisposedException>();
 
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _gpioController.IsPinOpen(ValidPin));
+        Action a2 = () => _gpioController.IsPinOpen(ValidPin);
+        a2.Should().Throw<ObjectDisposedException>();
 
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _gpioController.OpenPin(ValidPin, PinMode.Input));
+        Action a3 = () => _gpioController.OpenPin(ValidPin, PinMode.Input);
+        a3.Should().Throw<ObjectDisposedException>();
 
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _gpioController.ClosePin(ValidPin));
+        Action a4 = () => _gpioController.ClosePin(ValidPin);
+        a4.Should().Throw<ObjectDisposedException>();
 
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _gpioController.Read(ValidPin));
+        Action a5 = () => _gpioController.Read(ValidPin);
+        a5.Should().Throw<ObjectDisposedException>();
 
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _gpioController.Write(ValidPin, PinValue.High));
+        Action a6 = () => _gpioController.Write(ValidPin, PinValue.High);
+        a6.Should().Throw<ObjectDisposedException>();
 
-        Assert.ThrowsException<ObjectDisposedException>(() => 
-            _memoryController.SimulatePinValueChange(ValidPin, PinValue.High));
+        Action a7 = () => _memoryController.SimulatePinValueChange(ValidPin, PinValue.High);
+        a7.Should().Throw<ObjectDisposedException>();
     }
 
     #endregion
