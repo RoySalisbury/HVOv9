@@ -78,8 +78,8 @@ setup_shell_environment() {
   # are available in every terminal session without manual intervention
   
   local bashrc_file="/home/vscode/.bashrc"
-  local init_script="${REPO_ROOT}/scripts/init-shell-env.sh"
-  local source_line="source '${init_script}'"
+  local init_script="${REPO_ROOT}/scripts/hvo-env.sh"
+  local source_line="source '${init_script}' auto"
   
   # Check if the source line is already present
   if ! grep -Fq "${source_line}" "${bashrc_file}"; then
@@ -206,20 +206,12 @@ main() {
     log "Warning: Failed to add vscode user to i2c group. Hardware features may not work."
   fi
 
-  # Try to fetch secrets from external sources (Azure Key Vault, AWS, etc.)
-  log "Attempting to fetch secrets from external sources..."
-  if bash "${REPO_ROOT}/scripts/advanced-secret-manager.sh"; then
-    log "Advanced secret management completed."
+  # Load environment variables using consolidated helper
+  log "Loading environment variables using consolidated helper (hvo-env)..."
+  if source "${REPO_ROOT}/scripts/hvo-env.sh" load; then
+    log "Environment variables loaded successfully via hvo-env."
   else
-    log "Advanced secret management failed or not configured - loading local environment file manually."
-    
-    # Fallback: use dedicated environment loading script
-    log "Loading environment variables using dedicated loader..."
-    if source "${REPO_ROOT}/scripts/load-local-env.sh"; then
-      log "Environment variables loaded successfully via dedicated loader."
-    else
-      log "Failed to load environment variables. Manual setup may be required."
-    fi
+    log "Failed to load environment variables. Manual setup may be required."
   fi
 
   install_dotnet_tools

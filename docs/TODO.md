@@ -11,6 +11,34 @@
 
 ---
 
+## Documentation index (quick links)
+
+- Guides (cross-cutting): `docs/guides/`
+	- Dev container env: `docs/guides/devcontainer-environment-setup.md`
+	- Dev container extensions: `docs/guides/dev-container-extensions.md`
+	- Copilot/tools strategy: `docs/guides/github-copilot-tools-setup.md`
+	- Blazor best practices: `docs/guides/blazor-component-best-practices.md`
+- Projects:
+	- RoofController V4 (RPi): `docs/projects/roof-controller-v4-rpi/`
+		- Quick start: `docker-quick-start.md`
+		- Reference: `docker-reference.md`
+		- API, hardware, logging, ops: see folder docs
+	- SkyMonitor V5: `docs/projects/sky-monitor-v5/`
+		- Deployment: `docker-deployment-guide.md`
+		- Operations: `skymonitor-v5-operations-runbook.md`
+		- Migration: `skymonitor-v5-json-migration-guide.md`
+		- Design notes: `rig-catalog-design.md`, `background-stacker-design.md`, `skia-sharp-pipeline-notes.md`, `sky-monitor-starfield.md`
+	- NINA client: `docs/projects/nina-client/`
+		- Resilience architecture: `resilience-architecture.md`
+		- Profile API usage: `profile-api-usage.md`
+	- IoT devices: `docs/projects/iot-devices/gpio-di-setup.md`
+	- Website Playground: `docs/projects/website-playground/weather-api-guide.md`
+- Testing: `docs/testing/mstest-standardization.md`
+- Benchmarks overview: `docs/performance-benchmarks.md`
+ - Scripts index: `scripts/README.md`
+
+---
+
 ## Solution-Wide
 
 ### Active Tasks

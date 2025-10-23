@@ -16,18 +16,18 @@ else
   exit 1
 fi
 
-# Test 2: Verify init script exists and is executable
-echo "Test 2: Checking init script..."
-if [[ -x "/workspaces/HVOv9/scripts/init-shell-env.sh" ]]; then
-  echo "✅ Init script exists and is executable"
+# Test 2: Verify env helper exists and is executable
+echo "Test 2: Checking env helper..."
+if [[ -x "/workspaces/HVOv9/scripts/hvo-env.sh" ]]; then
+  echo "✅ Env helper exists and is executable"
 else
-  echo "❌ Init script missing or not executable"
+  echo "❌ Env helper missing or not executable"
   exit 1
 fi
 
 # Test 3: Verify .bashrc has been updated
 echo "Test 3: Checking .bashrc configuration..."
-if grep -q "init-shell-env.sh" /home/vscode/.bashrc; then
+if grep -q "hvo-env.sh" /home/vscode/.bashrc; then
   echo "✅ .bashrc configured for automatic loading"
 else
   echo "❌ .bashrc not configured"
@@ -39,8 +39,8 @@ echo "Test 4: Testing manual environment loading..."
 # Clear environment first
 unset HVO_SECRET__SSH__PRIVATE_KEY_B64 HVO_SECRET__SSH__PUBLIC_KEY_B64 2>/dev/null || true
 
-# Load via init script
-if source /workspaces/HVOv9/scripts/init-shell-env.sh; then
+# Load via consolidated helper
+if source /workspaces/HVOv9/scripts/hvo-env.sh load; then
   echo "✅ Manual loading successful"
 else
   echo "❌ Manual loading failed"
