@@ -39,7 +39,7 @@ public sealed class ProcessedFrameEncoderTests
 
         Assert.AreEqual("image/png", delivery.ContentType, "PNG encoding should advertise image/png content type.");
         Assert.AreEqual("png", delivery.FileExtension, "PNG delivery should use png file extension.");
-        Assert.IsTrue(delivery.Payload.Length > 0, "Encoder should emit non-empty payload.");
+        Assert.IsGreaterThan(0, delivery.Payload.Length, "Encoder should emit non-empty payload.");
     }
 
     [TestMethod]
@@ -80,10 +80,10 @@ public sealed class ProcessedFrameEncoderTests
 
         var delivery = encoder.Encode(frame);
 
-    var hash = SHA256.HashData(delivery.Payload.Span);
+        var hash = SHA256.HashData(delivery.Payload.Span);
         var hashHex = Convert.ToHexString(hash);
 
-    const string expectedHash = "C22A5C3A47ACA7F5A8E2A146E34ED5DDF5D3F68AAB129054A6758C36C225D196";
-    Assert.AreEqual(expectedHash, hashHex, "Deterministic PNG encoding should produce the expected hash.");
+        const string expectedHash = "C22A5C3A47ACA7F5A8E2A146E34ED5DDF5D3F68AAB129054A6758C36C225D196";
+        Assert.AreEqual(expectedHash, hashHex, "Deterministic PNG encoding should produce the expected hash.");
     }
 }

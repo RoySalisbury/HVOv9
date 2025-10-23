@@ -128,11 +128,26 @@ public sealed class DiagnosticsOverlayFilterTests
         Assert.IsTrue(changeDetected, "Diagnostics overlay should modify pixels within the overlay bounds.");
         var centerX = (minX + maxX) / 2.0f;
         var overlayHeight = maxY - minY;
-        Assert.IsTrue(centerX > width / 2f, "Diagnostics overlay should be anchored on the right half for TopRight corner.");
-        Assert.IsTrue(maxX > width * 0.75f, "Diagnostics overlay should reach near the right edge for TopRight corner.");
-        Assert.IsTrue(minY <= options.Margin + 6f, $"Diagnostics overlay should start near the configured margin; observed top {minY} with margin {options.Margin}.");
-        Assert.IsTrue(overlayHeight < height - options.Margin, $"Diagnostics overlay height {overlayHeight} should leave space below the block for TopRight corner.");
-        Assert.IsTrue(partiallyBlendedEdgePixels > 0, "Expected partially blended edge pixels validating antialiasing on linear surfaces.");
+        Assert.IsGreaterThan(
+            width / 2f,
+            centerX,
+            "Diagnostics overlay should be anchored on the right half for TopRight corner.");
+        Assert.IsGreaterThan(
+            width * 0.75f,
+            (float)maxX,
+            "Diagnostics overlay should reach near the right edge for TopRight corner.");
+        Assert.IsLessThanOrEqualTo(
+            options.Margin + 6f,
+            (float)minY,
+            $"Diagnostics overlay should start near the configured margin; observed top {minY} with margin {options.Margin}.");
+        Assert.IsLessThan(
+            height - options.Margin,
+            (float)overlayHeight,
+            $"Diagnostics overlay height {overlayHeight} should leave space below the block for TopRight corner.");
+        Assert.IsGreaterThan(
+            0,
+            partiallyBlendedEdgePixels,
+            "Expected partially blended edge pixels validating antialiasing on linear surfaces.");
 
         for (var y = 0; y < height; y++)
         {
@@ -149,7 +164,10 @@ public sealed class DiagnosticsOverlayFilterTests
                 {
                     var index = pixelOffset + channel;
                     var delta = Math.Abs(baseline[index] - processed[index]);
-                    Assert.IsTrue(delta <= tolerance, $"Gradient deviation {delta:F4} at ({x}, {y}) channel {channel} exceeded tolerance {tolerance:F4}.");
+                    Assert.IsLessThanOrEqualTo(
+                        tolerance,
+                        delta,
+                        $"Gradient deviation {delta:F4} at ({x}, {y}) channel {channel} exceeded tolerance {tolerance:F4}.");
                 }
             }
         }
@@ -209,7 +227,7 @@ public sealed class DiagnosticsOverlayFilterTests
         for (var i = 0; i < baseline.Length; i++)
         {
             var delta = Math.Abs(baseline[i] - processed[i]);
-            Assert.IsTrue(delta <= 1e-6f, $"Expected no change when render context is missing, observed delta {delta} at index {i}.");
+            Assert.IsLessThanOrEqualTo(1e-6f, delta, $"Expected no change when render context is missing, observed delta {delta} at index {i}.");
         }
     }
 

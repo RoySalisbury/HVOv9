@@ -320,7 +320,7 @@ public sealed class FrameExportDispatcherTests
 
         lock (syncRoot)
         {
-            Assert.AreEqual(1, scheduledRetries.Count, "Original retry should remain scheduled until external completion.");
+            Assert.HasCount(1, scheduledRetries, "Original retry should remain scheduled until external completion.");
         }
 
         retryQueue.Verify(queue => queue.ScheduleRetryAsync(It.IsAny<FrameExportRetryRequest>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce());

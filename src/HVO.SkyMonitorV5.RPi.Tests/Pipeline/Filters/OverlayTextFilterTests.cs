@@ -77,13 +77,13 @@ public sealed class OverlayTextFilterTests
             FramesStacked: 3,
             IntegrationMilliseconds: 3600);
 
-    using var baselineImage = filterFrame.SnapshotImage();
-    var baseline = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(baselineImage, SKColorType.Bgra8888);
+        using var baselineImage = filterFrame.SnapshotImage();
+        var baseline = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(baselineImage, SKColorType.Bgra8888);
 
         await filter.ApplyAsync(filterFrame, stackResult, configuration, renderContext: null, CancellationToken.None);
 
-    using var processedImage = filterFrame.SnapshotImage();
-    var processed = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(processedImage, SKColorType.Bgra8888);
+        using var processedImage = filterFrame.SnapshotImage();
+        var processed = SkiaTestImageFactory.GetNormalizedFloatPixelBuffer(processedImage, SKColorType.Bgra8888);
 
         filterFrame.Dispose();
 
@@ -157,7 +157,7 @@ public sealed class OverlayTextFilterTests
                 {
                     var index = pixelOffset + channel;
                     var delta = Math.Abs(baseline[index] - processed[index]);
-                    Assert.IsTrue(delta <= tolerance, $"Gradient deviation {delta:F4} at ({x}, {y}) channel {channel} exceeded tolerance {tolerance:F4}.");
+                    Assert.IsLessThanOrEqualTo(tolerance, delta, $"Gradient deviation {delta:F4} at ({x}, {y}) channel {channel} exceeded tolerance {tolerance:F4}.");
                 }
             }
         }

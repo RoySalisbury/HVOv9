@@ -104,7 +104,7 @@ public sealed class FramePreprocessingOrchestratorTests
 
         var processedSpan = processed.PixelLease!.GetPixelSpan();
         Assert.AreEqual(processed.Bitmap.RowBytes, processed.PixelLease.Pixmap.RowBytes, "Lease stride should match bitmap stride.");
-        Assert.IsTrue(processedSpan.Length > 0, "Processed pixel lease should expose pixel data.");
+        Assert.IsGreaterThan(0, processedSpan.Length, "Processed pixel lease should expose pixel data.");
 
         processed.PixelLease.Dispose();
         processed.ImmutableImage?.Dispose();
@@ -155,7 +155,7 @@ public sealed class FramePreprocessingOrchestratorTests
         Assert.IsNotNull(processed.ImmutableImage, "Processed immutable image should be present.");
 
         var processedFloats = SkiaTestImageFactory.GetFloatPixelBuffer(processed.ImmutableImage!);
-        Assert.AreEqual(expectedLinear.Length, processedFloats.Length, "Expected linearized buffer length must match processed buffer length.");
+        Assert.HasCount(expectedLinear.Length, processedFloats, "Expected linearized buffer length must match processed buffer length.");
 
         const float tolerance = 1e-3f;
         for (var i = 0; i < expectedLinear.Length; i++)
@@ -192,7 +192,7 @@ public sealed class FramePreprocessingOrchestratorTests
         Assert.IsNotNull(processed.ImmutableImage, "Processed immutable image should be produced.");
 
         var actual = SkiaTestImageFactory.GetFloatPixelBuffer(processed.ImmutableImage!);
-        Assert.AreEqual(expected.Length, actual.Length, "Expected buffer length must match processed buffer length.");
+        Assert.HasCount(expected.Length, actual, "Expected buffer length must match processed buffer length.");
 
         const float tolerance = 1e-3f;
         for (var i = 0; i < actual.Length; i += 4)
@@ -202,12 +202,12 @@ public sealed class FramePreprocessingOrchestratorTests
             var actualG = actual[i + 1];
             var actualB = actual[i + 2];
 
-            Assert.IsTrue(Math.Abs(expectedValue - actualR) <= tolerance, $"Monochrome channel R deviated by {Math.Abs(expectedValue - actualR):F4} at pixel {i / 4}.");
-            Assert.IsTrue(Math.Abs(expectedValue - actualG) <= tolerance, $"Monochrome channel G deviated by {Math.Abs(expectedValue - actualG):F4} at pixel {i / 4}.");
-            Assert.IsTrue(Math.Abs(expectedValue - actualB) <= tolerance, $"Monochrome channel B deviated by {Math.Abs(expectedValue - actualB):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(expectedValue - actualR), $"Monochrome channel R deviated by {Math.Abs(expectedValue - actualR):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(expectedValue - actualG), $"Monochrome channel G deviated by {Math.Abs(expectedValue - actualG):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(expectedValue - actualB), $"Monochrome channel B deviated by {Math.Abs(expectedValue - actualB):F4} at pixel {i / 4}.");
 
-            Assert.IsTrue(Math.Abs(actualR - actualG) <= tolerance, $"Monochrome R/G mismatch {Math.Abs(actualR - actualG):F4} at pixel {i / 4}.");
-            Assert.IsTrue(Math.Abs(actualR - actualB) <= tolerance, $"Monochrome R/B mismatch {Math.Abs(actualR - actualB):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(actualR - actualG), $"Monochrome R/G mismatch {Math.Abs(actualR - actualG):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(actualR - actualB), $"Monochrome R/B mismatch {Math.Abs(actualR - actualB):F4} at pixel {i / 4}.");
         }
 
         processed.PixelLease?.Dispose();

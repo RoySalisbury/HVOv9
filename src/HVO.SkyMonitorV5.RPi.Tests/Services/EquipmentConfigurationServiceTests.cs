@@ -46,7 +46,7 @@ public sealed class EquipmentConfigurationServiceTests
 
         Assert.IsTrue(result.IsSuccessful, "Expected successful result.");
         var catalog = result.Value;
-        Assert.AreEqual(1, catalog.Rigs.Count);
+        Assert.HasCount(1, catalog.Rigs);
         Assert.AreEqual("Mock Fisheye", catalog.Rigs[0].DisplayName);
         Assert.AreEqual("MockFisheye", catalog.Rigs[0].Key);
         Assert.AreEqual("MockASI174MM", catalog.Rigs[0].CameraKey);
@@ -74,7 +74,7 @@ public sealed class EquipmentConfigurationServiceTests
 
         Assert.IsTrue(result.IsSuccessful, result.Error?.Message);
         var payload = result.Value;
-        Assert.AreEqual(2, payload.Drivers.Count);
+        Assert.HasCount(2, payload.Drivers);
         Assert.AreEqual("Alpha Driver", payload.Drivers[0].DisplayName, "Expected alphabetical ordering by display name.");
         Assert.IsTrue(payload.Drivers[0].SupportsConfiguration);
         Assert.IsFalse(string.IsNullOrWhiteSpace(payload.Drivers[0].ConfigurationType));
@@ -110,7 +110,7 @@ public sealed class EquipmentConfigurationServiceTests
 
         Assert.IsTrue(result.IsSuccessful, result.Error?.Message);
         var catalog = result.Value;
-        Assert.AreEqual(2, catalog.Rigs.Count);
+        Assert.HasCount(2, catalog.Rigs);
         Assert.AreEqual(1, invalidator.CallCount);
 
         var created = catalog.Rigs.Single(rig => string.Equals(rig.Key, "NewRig", StringComparison.Ordinal));
@@ -237,7 +237,7 @@ public sealed class EquipmentConfigurationServiceTests
         await using (var verify = CreateContext(databaseName))
         {
             var rigs = await verify.RigCatalogEntries.OrderBy(r => r.Id).ToListAsync().ConfigureAwait(false);
-            Assert.AreEqual(2, rigs.Count);
+            Assert.HasCount(2, rigs);
             Assert.IsFalse(rigs[0].IsActive, "Original rig should be deactivated.");
             Assert.IsTrue(rigs[1].IsActive, "New rig should be activated.");
         }

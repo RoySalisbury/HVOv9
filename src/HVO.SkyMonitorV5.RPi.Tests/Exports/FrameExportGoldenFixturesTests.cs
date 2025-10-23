@@ -332,7 +332,7 @@ public sealed class FrameExportGoldenFixturesTests
             ValidateManifest(processedDeliveryPayloads[0], expectedDelivery.ContentType, expectedDelivery.FileExtension, stageTimestampUtc);
 
             var manifests = Directory.GetFiles(rootPath, "*.json", SearchOption.AllDirectories);
-            Assert.AreEqual(4, manifests.Length, "Each payload role should emit a metadata manifest.");
+            Assert.HasCount(4, manifests, "Each payload role should emit a metadata manifest.");
         }
         finally
         {

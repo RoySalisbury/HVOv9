@@ -5,6 +5,7 @@
   <Project Path="HVO.RoofControllerV4.Common/HVO.RoofControllerV4.Common.csproj" />
   </Folder>
   <Folder Name="/SkyMonitor/">
+    <Project Path="HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj" />
   <Project Path="HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj" />
   <Project Path="HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
   <Project Path="HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj" />

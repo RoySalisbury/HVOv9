@@ -66,14 +66,14 @@ public sealed class FrameStateStoreTests
         store.UpdateFrame(rawSnapshot, processedFrame);
 
         var history = store.GetComposedFrameHistory();
-        Assert.AreEqual(1, history.Count, "History should contain the most recent composition.");
+        Assert.HasCount(1, history, "History should contain the most recent composition.");
 
         var composed = history[0];
         Assert.AreEqual(frameId, composed.FrameId, "Frame IDs should match the processed frame.");
         Assert.AreEqual(now, composed.Timestamp, "Timestamp should reflect localized capture time.");
-        Assert.AreEqual(1, composed.AppliedFilters.Count, "Applied filters should be preserved.");
+        Assert.HasCount(1, composed.AppliedFilters, "Applied filters should be preserved.");
         Assert.AreEqual("TestFilter", composed.AppliedFilters[0], "Filter order should be stable.");
-        Assert.AreEqual(1, composed.FilterExecutions.Count, "Filter execution metadata should be present.");
+        Assert.HasCount(1, composed.FilterExecutions, "Filter execution metadata should be present.");
     Assert.AreEqual(0.5, composed.SurfaceMilliseconds, 1e-6, "Surface preparation timing should be captured.");
         Assert.AreNotSame(processedImage, composed.Image, "History should own an independent SKImage instance.");
         Assert.IsTrue(composed.Image.Width > 0 && composed.Image.Height > 0, "Snapshot should contain pixel data.");

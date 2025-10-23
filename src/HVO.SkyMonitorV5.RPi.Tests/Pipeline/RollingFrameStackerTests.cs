@@ -116,7 +116,7 @@ public sealed class RollingFrameStackerTests
         stacker.Dispose();
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(SKColorType.Rgba8888)]
     [DataRow(SKColorType.Bgra8888)]
     public void Accumulate_WithLinear8BitFrames_PreservesExpectedAverage(SKColorType colorType)
@@ -262,7 +262,7 @@ public sealed class RollingFrameStackerTests
 
         var actual = SkiaTestImageFactory.GetFloatPixelBuffer(stackedResult.StackedImmutableImage!);
         const float tolerance = 1e-3f;
-        Assert.AreEqual(expected.Length, actual.Length, "Expected buffer length should match actual buffer length.");
+        Assert.HasCount(expected.Length, actual, "Expected buffer length should match actual buffer length.");
 
         for (var i = 0; i < expected.Length; i++)
         {
@@ -332,12 +332,12 @@ public sealed class RollingFrameStackerTests
             var actualG = stackedData[i + 1];
             var actualB = stackedData[i + 2];
 
-            Assert.IsTrue(Math.Abs(expected - actualR) <= tolerance, $"Monochrome R deviation {Math.Abs(expected - actualR):F4} at pixel {i / 4}.");
-            Assert.IsTrue(Math.Abs(expected - actualG) <= tolerance, $"Monochrome G deviation {Math.Abs(expected - actualG):F4} at pixel {i / 4}.");
-            Assert.IsTrue(Math.Abs(expected - actualB) <= tolerance, $"Monochrome B deviation {Math.Abs(expected - actualB):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(expected - actualR), $"Monochrome R deviation {Math.Abs(expected - actualR):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(expected - actualG), $"Monochrome G deviation {Math.Abs(expected - actualG):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(expected - actualB), $"Monochrome B deviation {Math.Abs(expected - actualB):F4} at pixel {i / 4}.");
 
-            Assert.IsTrue(Math.Abs(actualR - actualG) <= tolerance, $"Monochrome stacked R/G mismatch {Math.Abs(actualR - actualG):F4} at pixel {i / 4}.");
-            Assert.IsTrue(Math.Abs(actualR - actualB) <= tolerance, $"Monochrome stacked R/B mismatch {Math.Abs(actualR - actualB):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(actualR - actualG), $"Monochrome stacked R/G mismatch {Math.Abs(actualR - actualG):F4} at pixel {i / 4}.");
+            Assert.IsLessThanOrEqualTo(tolerance, Math.Abs(actualR - actualB), $"Monochrome stacked R/B mismatch {Math.Abs(actualR - actualB):F4} at pixel {i / 4}.");
         }
 
         DisposeFrameResult(stackedResult);

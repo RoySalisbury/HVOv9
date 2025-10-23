@@ -15,7 +15,7 @@ public sealed class HGlobalNativeBufferLeaseFactoryTests
         var factory = HGlobalNativeBufferLeaseFactory.Shared;
         using var lease = factory.Rent(64);
 
-        Assert.AreEqual(64, lease.Length);
+        Assert.AreEqual(64L, lease.Length);
         Assert.AreNotEqual(IntPtr.Zero, lease.Pointer);
         Assert.IsTrue(lease.IsAllocated);
     }

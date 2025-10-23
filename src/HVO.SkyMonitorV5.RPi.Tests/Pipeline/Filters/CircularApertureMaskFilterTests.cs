@@ -35,8 +35,8 @@ public sealed class CircularApertureMaskFilterTests
             MaskOpacity = 220
         });
 
-    using var assetCache = new OverlayAssetCache();
-    using var filter = new CircularApertureMaskFilter(optionsMonitor, assetCache);
+        using var assetCache = new OverlayAssetCache();
+        using var filter = new CircularApertureMaskFilter(optionsMonitor, assetCache);
 
         var (frameContext, renderContext) = CreateRenderContext(latitude, longitude, timestamp);
         var projector = renderContext.Projector;
@@ -106,8 +106,8 @@ public sealed class CircularApertureMaskFilterTests
         var centerDelta = SampleDelta(baseline, processed, rowStride, centerX, centerY, channels);
         var cornerDelta = SampleDelta(baseline, processed, rowStride, 5, 5, channels);
 
-        Assert.IsTrue(cornerDelta > tolerance, $"Mask should darken pixels outside the aperture (delta observed {cornerDelta:F6}).");
-        Assert.IsTrue(centerDelta < tolerance, $"Mask should keep the core aperture unchanged (delta observed {centerDelta:F6}).");
+        Assert.IsGreaterThan(tolerance, cornerDelta, $"Mask should darken pixels outside the aperture (delta observed {cornerDelta:F6}).");
+        Assert.IsLessThan(tolerance, centerDelta, $"Mask should keep the core aperture unchanged (delta observed {centerDelta:F6}).");
 
         frameContext.Dispose();
     }

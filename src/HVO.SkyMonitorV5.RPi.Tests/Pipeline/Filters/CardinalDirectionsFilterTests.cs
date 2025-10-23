@@ -156,24 +156,30 @@ public sealed class CardinalDirectionsFilterTests
         var overlayCenterY = (minY + maxY) / 2f;
         const float centerTolerancePixels = 12f;
 
-        Assert.IsTrue(
-            Math.Abs(overlayCenterX - expectedCenter.X) <= centerTolerancePixels,
+        Assert.IsLessThanOrEqualTo(
+            centerTolerancePixels,
+            Math.Abs(overlayCenterX - expectedCenter.X),
             $"Overlay center X deviated from projector center: expected {expectedCenter.X:F2}, observed {overlayCenterX:F2}.");
-        Assert.IsTrue(
-            Math.Abs(overlayCenterY - expectedCenter.Y) <= centerTolerancePixels,
+        Assert.IsLessThanOrEqualTo(
+            centerTolerancePixels,
+            Math.Abs(overlayCenterY - expectedCenter.Y),
             $"Overlay center Y deviated from projector center: expected {expectedCenter.Y:F2}, observed {overlayCenterY:F2}.");
 
-        Assert.IsTrue(
-            maxX >= expectedCenter.X + expectedRadius * 0.5f,
+        Assert.IsGreaterThanOrEqualTo(
+            expectedCenter.X + expectedRadius * 0.5f,
+            (float)maxX,
             "Overlay should extend toward the eastern edge consistent with the configured radius.");
-        Assert.IsTrue(
-            minX <= expectedCenter.X - expectedRadius * 0.5f,
+        Assert.IsLessThanOrEqualTo(
+            expectedCenter.X - expectedRadius * 0.5f,
+            (float)minX,
             "Overlay should extend toward the western edge consistent with the configured radius.");
-        Assert.IsTrue(
-            maxY >= expectedCenter.Y + expectedRadius * 0.35f,
+        Assert.IsGreaterThanOrEqualTo(
+            expectedCenter.Y + expectedRadius * 0.35f,
+            (float)maxY,
             "Overlay should extend toward the southern edge consistent with the configured radius.");
-        Assert.IsTrue(
-            minY <= expectedCenter.Y - expectedRadius * 0.35f,
+        Assert.IsLessThanOrEqualTo(
+            expectedCenter.Y - expectedRadius * 0.35f,
+            (float)minY,
             "Overlay should extend toward the northern edge consistent with the configured radius.");
 
         frameContext.Dispose();

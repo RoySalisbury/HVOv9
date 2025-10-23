@@ -24,7 +24,7 @@ public sealed class SkiaRawFrameHelperTests
         Assert.IsNotNull(descriptor, "Descriptor should accompany the raw payload.");
         Assert.AreEqual(info.Width, descriptor.Width, "Descriptor width should match source image.");
         Assert.AreEqual(info.Height, descriptor.Height, "Descriptor height should match source image.");
-        Assert.AreEqual(descriptor.RowBytes * descriptor.Height, payload.Length, "Payload length should match row bytes.");
+        Assert.HasCount(descriptor.RowBytes * descriptor.Height, payload, "Payload length should match row bytes.");
         Assert.IsTrue(descriptor.GammaIsLinear, "Linear color space should be preserved in descriptor.");
     }
 
@@ -32,9 +32,9 @@ public sealed class SkiaRawFrameHelperTests
     public void TryCreateDescriptor_FromBitmapReturnsMetadata()
     {
         var info = new SKImageInfo(4, 2, SKColorType.Bgra8888, SKAlphaType.Premul);
-    using var bitmap = new SKBitmap(info);
-    using var canvas = new SKCanvas(bitmap);
-    canvas.Clear(SKColors.SkyBlue);
+        using var bitmap = new SKBitmap(info);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.SkyBlue);
 
         var descriptor = SkiaRawFrameHelper.TryCreateDescriptor(bitmap);
 
@@ -126,12 +126,12 @@ public sealed class SkiaRawFrameHelperTests
         Assert.IsNotNull(descriptor, "Descriptor should accompany raw payload.");
 
         var expectedLength = descriptor.RowBytes * descriptor.Height;
-        Assert.AreEqual(expectedLength, payload.Length, "Payload length should match descriptor row bytes.");
+        Assert.HasCount(expectedLength, payload, "Payload length should match descriptor row bytes.");
 
         var hash = SHA256.HashData(payload);
         var hashHex = Convert.ToHexString(hash);
 
-    const string expectedHash = "062DBE6DC896E8CD19F3B6C3EAD6B5FA12D86860AED68ED2D8E412A85B8C6C89";
-    Assert.AreEqual(expectedHash, hashHex, "Raw payload hash should remain stable.");
+        const string expectedHash = "062DBE6DC896E8CD19F3B6C3EAD6B5FA12D86860AED68ED2D8E412A85B8C6C89";
+        Assert.AreEqual(expectedHash, hashHex, "Raw payload hash should remain stable.");
     }
 }

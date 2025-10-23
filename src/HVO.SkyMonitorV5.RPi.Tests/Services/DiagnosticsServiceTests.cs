@@ -67,17 +67,17 @@ public sealed class DiagnosticsServiceTests
         frameStateStore.SetupGet(s => s.BackgroundStackerStatus).Returns((BackgroundStackerStatus?)null);
         frameStateStore.SetupGet(s => s.LastFrameTimestamp).Returns(lastFrameLocal);
 
-    var pipeline = new Mock<IFrameFilterPipeline>();
+        var pipeline = new Mock<IFrameFilterPipeline>();
 
-    var clock = new Mock<IObservatoryClock>();
-    clock.SetupGet(c => c.UtcNow).Returns(nowLocal);
-    clock.SetupGet(c => c.LocalNow).Returns(nowLocal);
-    clock.SetupGet(c => c.TimeZone).Returns(TimeZoneInfo.Utc);
-    clock.SetupGet(c => c.TimeZoneDisplayName).Returns("UTC");
-    clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
-    clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
+        var clock = new Mock<IObservatoryClock>();
+        clock.SetupGet(c => c.UtcNow).Returns(nowLocal);
+        clock.SetupGet(c => c.LocalNow).Returns(nowLocal);
+        clock.SetupGet(c => c.TimeZone).Returns(TimeZoneInfo.Utc);
+        clock.SetupGet(c => c.TimeZoneDisplayName).Returns("UTC");
+        clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
+        clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
 
-    var service = CreateService(frameStateStore.Object, pipeline.Object, clock);
+        var service = CreateService(frameStateStore.Object, pipeline.Object, clock);
 
         var result = await service.GetBackgroundStackerMetricsAsync();
 
@@ -154,9 +154,9 @@ public sealed class DiagnosticsServiceTests
         Assert.AreEqual(status.QueueMemoryMegabytes, metrics.QueueMemoryMegabytes);
         Assert.AreEqual(status.PeakQueueMemoryMegabytes, metrics.PeakQueueMemoryMegabytes);
         Assert.AreEqual(status.LastEnqueuedAt, metrics.LastEnqueuedAt);
-    Assert.AreEqual(status.LastCompletedAt, metrics.LastCompletedAt);
-    Assert.IsNotNull(metrics.SecondsSinceLastCompleted);
-    Assert.AreEqual(expectedSeconds, metrics.SecondsSinceLastCompleted!.Value, 0.0001);
+        Assert.AreEqual(status.LastCompletedAt, metrics.LastCompletedAt);
+        Assert.IsNotNull(metrics.SecondsSinceLastCompleted);
+        Assert.AreEqual(expectedSeconds, metrics.SecondsSinceLastCompleted!.Value, 0.0001);
         Assert.AreEqual(status.LastFrameNumber, metrics.LastFrameNumber);
         Assert.AreEqual(status.LastQueueLatencyMilliseconds, metrics.LastQueueLatencyMilliseconds);
         Assert.AreEqual(status.AverageQueueLatencyMilliseconds, metrics.AverageQueueLatencyMilliseconds);
@@ -184,7 +184,7 @@ public sealed class DiagnosticsServiceTests
         var result = await service.GetFilterMetricsAsync();
 
         Assert.IsTrue(result.IsSuccessful, "Expected successful snapshot retrieval.");
-        Assert.AreEqual(0, result.Value.Filters.Count, "New pipeline telemetry should start empty.");
+        Assert.HasCount(0, result.Value.Filters, "New pipeline telemetry should start empty.");
     }
 
     [TestMethod]
@@ -198,7 +198,7 @@ public sealed class DiagnosticsServiceTests
         var result = await service.GetFilterMetricsAsync();
 
         Assert.IsTrue(result.IsSuccessful, "Fallback pipeline should still succeed.");
-        Assert.AreEqual(0, result.Value.Filters.Count, "Fallback snapshot should be empty.");
+        Assert.HasCount(0, result.Value.Filters, "Fallback snapshot should be empty.");
     }
 
     [TestMethod]
@@ -240,7 +240,7 @@ public sealed class DiagnosticsServiceTests
 
         var response = result.Value;
         Assert.AreEqual(timestamp, response.GeneratedAt, "Snapshot timestamp should match clock local time.");
-        Assert.AreEqual(1, response.Frames.Count, "History should contain the enqueued frame.");
+        Assert.HasCount(1, response.Frames, "History should contain the enqueued frame.");
 
         var sample = response.Frames[0];
         Assert.AreEqual(composedFrame.FrameId, sample.FrameId);
@@ -249,9 +249,9 @@ public sealed class DiagnosticsServiceTests
         Assert.AreEqual(bitmap.Height, sample.Height);
         Assert.AreEqual(3, sample.FramesStacked);
         Assert.AreEqual(1_200, sample.IntegrationMilliseconds);
-    CollectionAssert.AreEquivalent(composedFrame.AppliedFilters.ToArray(), sample.AppliedFilters.ToArray());
+        CollectionAssert.AreEquivalent(composedFrame.AppliedFilters.ToArray(), sample.AppliedFilters.ToArray());
         Assert.AreEqual(0.9, sample.SurfaceMilliseconds, 1e-6);
-        Assert.AreEqual(2, sample.FilterExecutions.Count);
+        Assert.HasCount(2, sample.FilterExecutions);
         Assert.AreEqual("Overlay", sample.FilterExecutions[0].FilterName);
     }
 
@@ -270,9 +270,9 @@ public sealed class DiagnosticsServiceTests
         var snapshot = result.Value;
         Assert.AreEqual(0, snapshot.TotalAttemptCount, "Empty snapshot should report zero attempts.");
         Assert.AreEqual(0, snapshot.TotalSuccessCount, "Empty snapshot should report zero successes.");
-        Assert.AreEqual(0, snapshot.Sinks.Count, "No sinks should be returned when telemetry is absent.");
+        Assert.HasCount(0, snapshot.Sinks, "No sinks should be returned when telemetry is absent.");
         Assert.AreEqual(0d, snapshot.SuccessRatePercent, "Success rate should be zero with no attempts.");
-    Assert.AreEqual(0, snapshot.PendingRetries.Count, "Empty snapshot should not include pending retries.");
+        Assert.HasCount(0, snapshot.PendingRetries, "Empty snapshot should not include pending retries.");
     }
 
     [TestMethod]
@@ -361,8 +361,8 @@ public sealed class DiagnosticsServiceTests
         Assert.AreEqual(3, snapshot.TotalAttemptCount, "Total attempt count should include all attempts.");
         Assert.AreEqual(2, snapshot.TotalSuccessCount, "Total success count should reflect successful attempts.");
         Assert.AreEqual(1, snapshot.TotalFailureCount, "Total failure count should reflect failed attempts.");
-        Assert.AreEqual(2, snapshot.Sinks.Count, "Each stage/sink pair should produce a summary row.");
-    Assert.AreEqual(0, snapshot.PendingRetries.Count, "No retries should be returned when none exist.");
+        Assert.HasCount(2, snapshot.Sinks, "Each stage/sink pair should produce a summary row.");
+        Assert.HasCount(0, snapshot.PendingRetries, "No retries should be returned when none exist.");
 
         var rawSink = snapshot.Sinks.Single(s => s.SinkName == "raw-s3" && s.Stage == FrameExportStage.Raw);
         Assert.AreEqual(2, rawSink.AttemptCount, "Raw sink should aggregate both attempts.");
@@ -370,28 +370,28 @@ public sealed class DiagnosticsServiceTests
         Assert.AreEqual(1, rawSink.FailureCount, "Raw sink failure count should match failed attempts.");
         Assert.IsTrue(rawSink.LastAttemptSucceeded.HasValue && !rawSink.LastAttemptSucceeded.Value, "Last attempt should expose success flag.");
         Assert.AreEqual("Upload failed", rawSink.LastFailureMessage, "Failure message should flow through telemetry snapshot.");
-    Assert.IsNotNull(rawSink.LastAttemptLatencyMilliseconds, "Last attempt latency should be populated.");
-    Assert.AreEqual(250d, rawSink.LastAttemptLatencyMilliseconds!.Value, 0.001, "Last attempt latency should be mapped.");
-    Assert.IsNotNull(rawSink.LastAttemptQueueLatencyMilliseconds, "Last attempt queue latency should be populated.");
-    Assert.AreEqual(60d, rawSink.LastAttemptQueueLatencyMilliseconds!.Value, 0.001, "Last attempt queue latency should be mapped.");
-    Assert.IsNotNull(rawSink.LastAttemptProcessingMilliseconds, "Last attempt processing latency should be populated.");
-    Assert.AreEqual(55d, rawSink.LastAttemptProcessingMilliseconds!.Value, 0.001, "Last attempt processing time should be mapped.");
-    Assert.IsNotNull(rawSink.LastAttemptFullPipelineMilliseconds, "Last attempt full pipeline duration should be visible.");
-    Assert.AreEqual(5500d, rawSink.LastAttemptFullPipelineMilliseconds!.Value, 0.001, "Full pipeline duration should reflect last attempt.");
-    Assert.AreEqual(baselineUtc.AddMinutes(2), rawSink.LastFailureAtUtc, "Failure timestamp should match latest raw attempt.");
-    Assert.AreEqual(baselineUtc.AddMinutes(2), rawSink.LastAttemptAtLocal, "Local timestamp should map latest attempt.");
+        Assert.IsNotNull(rawSink.LastAttemptLatencyMilliseconds, "Last attempt latency should be populated.");
+        Assert.AreEqual(250d, rawSink.LastAttemptLatencyMilliseconds!.Value, 0.001, "Last attempt latency should be mapped.");
+        Assert.IsNotNull(rawSink.LastAttemptQueueLatencyMilliseconds, "Last attempt queue latency should be populated.");
+        Assert.AreEqual(60d, rawSink.LastAttemptQueueLatencyMilliseconds!.Value, 0.001, "Last attempt queue latency should be mapped.");
+        Assert.IsNotNull(rawSink.LastAttemptProcessingMilliseconds, "Last attempt processing latency should be populated.");
+        Assert.AreEqual(55d, rawSink.LastAttemptProcessingMilliseconds!.Value, 0.001, "Last attempt processing time should be mapped.");
+        Assert.IsNotNull(rawSink.LastAttemptFullPipelineMilliseconds, "Last attempt full pipeline duration should be visible.");
+        Assert.AreEqual(5500d, rawSink.LastAttemptFullPipelineMilliseconds!.Value, 0.001, "Full pipeline duration should reflect last attempt.");
+        Assert.AreEqual(baselineUtc.AddMinutes(2), rawSink.LastFailureAtUtc, "Failure timestamp should match latest raw attempt.");
+        Assert.AreEqual(baselineUtc.AddMinutes(2), rawSink.LastAttemptAtLocal, "Local timestamp should map latest attempt.");
 
         var processedSink = snapshot.Sinks.Single(s => s.Stage == FrameExportStage.Processed);
         Assert.AreEqual(1, processedSink.AttemptCount, "Processed sink should include single attempt.");
         Assert.AreEqual(1, processedSink.SuccessCount, "Processed sink should count success.");
         Assert.IsNull(processedSink.LastFailureMessage, "Processed sink should not report failure message for successful attempts.");
-    Assert.IsNotNull(processedSink.AverageLatencyMilliseconds, "Average latency should be calculated for the processed sink.");
-    Assert.AreEqual(300d, processedSink.AverageLatencyMilliseconds!.Value, 0.001, "Average latency should match lone attempt.");
-    Assert.IsNotNull(processedSink.AverageFullPipelineMilliseconds, "Average full pipeline duration should be calculated.");
-    Assert.AreEqual(18750d, processedSink.AverageFullPipelineMilliseconds!.Value, 0.001, "Average full pipeline duration should flow through telemetry.");
+        Assert.IsNotNull(processedSink.AverageLatencyMilliseconds, "Average latency should be calculated for the processed sink.");
+        Assert.AreEqual(300d, processedSink.AverageLatencyMilliseconds!.Value, 0.001, "Average latency should match lone attempt.");
+        Assert.IsNotNull(processedSink.AverageFullPipelineMilliseconds, "Average full pipeline duration should be calculated.");
+        Assert.AreEqual(18750d, processedSink.AverageFullPipelineMilliseconds!.Value, 0.001, "Average full pipeline duration should flow through telemetry.");
 
         Assert.AreEqual(66.67d, snapshot.SuccessRatePercent, 0.01, "Overall success rate should round to two decimals.");
-        Assert.AreEqual(0, snapshot.PendingRetries.Count, "No pending retries should be returned when none exist.");
+        Assert.HasCount(0, snapshot.PendingRetries, "No pending retries should be returned when none exist.");
     }
 
     [TestMethod]
@@ -433,7 +433,7 @@ public sealed class DiagnosticsServiceTests
         var snapshot = result.Value;
 
         Assert.AreEqual(12, snapshot.PendingRetryCount, "Pending retry count should reflect total queue depth.");
-        Assert.AreEqual(10, snapshot.PendingRetries.Count, "Diagnostics should include a preview of pending retries.");
+        Assert.HasCount(10, snapshot.PendingRetries, "Diagnostics should include a preview of pending retries.");
 
         var first = snapshot.PendingRetries.First();
         var last = snapshot.PendingRetries.Last();
@@ -498,15 +498,15 @@ public sealed class DiagnosticsServiceTests
         Assert.IsTrue(result.IsSuccessful, "Frame export history should be retrieved successfully.");
 
         var history = result.Value.Attempts;
-        Assert.AreEqual(2, history.Count, "History should include all attempts.");
+        Assert.HasCount(2, history, "History should include all attempts.");
 
         Assert.IsTrue(history[0].AttemptedAtLocal <= history[1].AttemptedAtLocal, "Attempts should be sorted by local timestamp ascending.");
         Assert.AreEqual("Timeout", history[0].ErrorMessage, "The earliest attempt should expose its error details.");
         Assert.IsTrue(history[1].Success, "The latest attempt should retain success state.");
-    Assert.IsNotNull(history[0].FullPipelineMilliseconds, "Failed attempt should capture full pipeline duration.");
-    Assert.IsNotNull(history[1].FullPipelineMilliseconds, "Successful attempt should capture full pipeline duration.");
-    Assert.AreEqual(7200d, history[0].FullPipelineMilliseconds!.Value, 0.001, "Failed attempt should retain full pipeline duration.");
-    Assert.AreEqual(6350d, history[1].FullPipelineMilliseconds!.Value, 0.001, "Successful attempt should retain full pipeline duration.");
+        Assert.IsNotNull(history[0].FullPipelineMilliseconds, "Failed attempt should capture full pipeline duration.");
+        Assert.IsNotNull(history[1].FullPipelineMilliseconds, "Successful attempt should capture full pipeline duration.");
+        Assert.AreEqual(7200d, history[0].FullPipelineMilliseconds!.Value, 0.001, "Failed attempt should retain full pipeline duration.");
+        Assert.AreEqual(6350d, history[1].FullPipelineMilliseconds!.Value, 0.001, "Successful attempt should retain full pipeline duration.");
     }
 
     [TestMethod]
@@ -523,8 +523,8 @@ public sealed class DiagnosticsServiceTests
 
         var snapshot = result.Value;
         Assert.IsNotNull(snapshot);
-        Assert.IsTrue(snapshot.ThreadCount >= 0, "Thread count should be non-negative.");
-        Assert.IsTrue(snapshot.ProcessWorkingSetMegabytes >= 0, "Working set should be non-negative.");
+        Assert.IsGreaterThanOrEqualTo(0, snapshot.ThreadCount, "Thread count should be non-negative.");
+        Assert.IsGreaterThanOrEqualTo(0d, snapshot.ProcessWorkingSetMegabytes, "Working set should be non-negative.");
     }
 
     [TestMethod]
@@ -534,8 +534,8 @@ public sealed class DiagnosticsServiceTests
         var dataPathProvider = new TestDataPathProvider(rootPath);
 
         var configurationPath = dataPathProvider.ResolvePath("configuration/sm-config.db");
-    var telemetryPath = dataPathProvider.ResolvePath("telemetry/sm-telemetry.db");
-    var imageArchivePath = dataPathProvider.ResolvePath("telemetry/image_frame_archive.sqlite");
+        var telemetryPath = dataPathProvider.ResolvePath("telemetry/sm-telemetry.db");
+        var imageArchivePath = dataPathProvider.ResolvePath("telemetry/image_frame_archive.sqlite");
 
         static SkyMonitorConfigurationContext CreateConfigurationContext(string path)
         {
@@ -679,39 +679,39 @@ public sealed class DiagnosticsServiceTests
         var snapshot = result.Value;
         Assert.AreEqual(configurationPath, snapshot.ConfigurationStore.DatabasePath, "Configuration path should match resolved location.");
         Assert.AreEqual(telemetryPath, snapshot.TelemetryStore.DatabasePath, "Telemetry path should match resolved location.");
-    Assert.AreEqual(imageArchivePath, snapshot.ImageArchiveStore.DatabasePath, "Image archive path should match resolved location.");
+        Assert.AreEqual(imageArchivePath, snapshot.ImageArchiveStore.DatabasePath, "Image archive path should match resolved location.");
         Assert.IsTrue(snapshot.ConfigurationStore.Exists, "Configuration database should exist.");
         Assert.IsTrue(snapshot.TelemetryStore.Exists, "Telemetry database should exist.");
-    Assert.IsTrue(snapshot.ImageArchiveStore.Exists, "Image archive database should exist.");
-        Assert.IsTrue(snapshot.ConfigurationStore.FileBytes > 0, "Configuration database size should be reported.");
-        Assert.IsTrue(snapshot.TelemetryStore.FileBytes > 0, "Telemetry database size should be reported.");
-    Assert.IsTrue(snapshot.ImageArchiveStore.FileBytes > 0, "Image archive database size should be reported.");
+        Assert.IsTrue(snapshot.ImageArchiveStore.Exists, "Image archive database should exist.");
+        Assert.IsGreaterThan(0L, snapshot.ConfigurationStore.FileBytes ?? 0L, "Configuration database size should be reported.");
+        Assert.IsGreaterThan(0L, snapshot.TelemetryStore.FileBytes ?? 0L, "Telemetry database size should be reported.");
+        Assert.IsGreaterThan(0L, snapshot.ImageArchiveStore.FileBytes ?? 0L, "Image archive database size should be reported.");
 
-    Assert.IsTrue(snapshot.ConfigurationStore.Tables.Any(t => t.Table == "observatory_site" && t.RowCount > 0), "Seeded configuration tables should report row counts.");
+        Assert.IsTrue(snapshot.ConfigurationStore.Tables.Any(t => t.Table == "observatory_site" && t.RowCount > 0), "Seeded configuration tables should report row counts.");
 
-    Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "remote_dispatch_attempt" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
-    Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "background_stacker_sample" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
-    Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "frame_export_attempt" && t.RowCount == 0), "Telemetry table counts should include export attempts even when empty.");
-    Assert.IsTrue(snapshot.ImageArchiveStore.Tables.Any(t => t.Table == "image_frame_archive" && t.RowCount == 1), "Image archive table counts should reflect inserted rows.");
+        Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "remote_dispatch_attempt" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
+        Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "background_stacker_sample" && t.RowCount == 1), "Telemetry table counts should reflect inserted rows.");
+        Assert.IsTrue(snapshot.TelemetryStore.Tables.Any(t => t.Table == "frame_export_attempt" && t.RowCount == 0), "Telemetry table counts should include export attempts even when empty.");
+        Assert.IsTrue(snapshot.ImageArchiveStore.Tables.Any(t => t.Table == "image_frame_archive" && t.RowCount == 1), "Image archive table counts should reflect inserted rows.");
 
-    var telemetryIngestion = snapshot.TelemetryStore.TelemetryIngestion;
-    Assert.IsNotNull(telemetryIngestion, "Telemetry ingestion metrics should be present.");
-    Assert.AreEqual(telemetryQueue.PendingCount, telemetryIngestion!.QueueDepth, "Queue depth should match telemetry metrics snapshot.");
-    Assert.AreEqual(87d, telemetryIngestion.LastIngestionLatencyMilliseconds, 0.001, "Ingestion latency should reflect latest metric.");
-    var expectedTelemetryMegabytes = snapshot.TelemetryStore.FileMegabytes ?? 0d;
-    Assert.AreEqual(expectedTelemetryMegabytes, telemetryIngestion.TelemetryDatabaseMegabytes, 0.001, "Telemetry database size gauge should align with file statistics.");
-    var expectedTelemetryRows = snapshot.TelemetryStore.Tables.Sum(table => table.RowCount);
-    Assert.AreEqual(expectedTelemetryRows, telemetryIngestion.TotalTelemetryRows, "Telemetry row count gauge should match aggregated table row totals.");
+        var telemetryIngestion = snapshot.TelemetryStore.TelemetryIngestion;
+        Assert.IsNotNull(telemetryIngestion, "Telemetry ingestion metrics should be present.");
+        Assert.AreEqual(telemetryQueue.PendingCount, telemetryIngestion!.QueueDepth, "Queue depth should match telemetry metrics snapshot.");
+        Assert.AreEqual(87d, telemetryIngestion.LastIngestionLatencyMilliseconds, 0.001, "Ingestion latency should reflect latest metric.");
+        var expectedTelemetryMegabytes = snapshot.TelemetryStore.FileMegabytes ?? 0d;
+        Assert.AreEqual(expectedTelemetryMegabytes, telemetryIngestion.TelemetryDatabaseMegabytes, 0.001, "Telemetry database size gauge should align with file statistics.");
+        var expectedTelemetryRows = snapshot.TelemetryStore.Tables.Sum(table => table.RowCount);
+        Assert.AreEqual(expectedTelemetryRows, telemetryIngestion.TotalTelemetryRows, "Telemetry row count gauge should match aggregated table row totals.");
 
-    var telemetryRetention = snapshot.TelemetryStore.TelemetryRetention;
-    Assert.IsNotNull(telemetryRetention, "Telemetry retention snapshot should be present.");
-    Assert.AreEqual(retentionSummary.FrameExportsPurged, telemetryRetention!.FrameExportsPurged, "Retention summary should propagate frame export purges.");
-    Assert.AreEqual(retentionSummary.TotalPurged, telemetryRetention.TotalPurged, "Retention summary should propagate purge totals.");
-    Assert.AreEqual(retentionCompleted, telemetryRetention.LastCompletedAtUtc, "Retention completion timestamp should propagate.");
+        var telemetryRetention = snapshot.TelemetryStore.TelemetryRetention;
+        Assert.IsNotNull(telemetryRetention, "Telemetry retention snapshot should be present.");
+        Assert.AreEqual(retentionSummary.FrameExportsPurged, telemetryRetention!.FrameExportsPurged, "Retention summary should propagate frame export purges.");
+        Assert.AreEqual(retentionSummary.TotalPurged, telemetryRetention.TotalPurged, "Retention summary should propagate purge totals.");
+        Assert.AreEqual(retentionCompleted, telemetryRetention.LastCompletedAtUtc, "Retention completion timestamp should propagate.");
 
         Assert.IsTrue(snapshot.TelemetryStore.Bootstrap.Ran && snapshot.TelemetryStore.Bootstrap.Succeeded, "Bootstrap status should indicate success.");
         Assert.IsTrue(snapshot.ConfigurationStore.Bootstrap.Ran && snapshot.ConfigurationStore.Bootstrap.Succeeded, "Configuration bootstrap status should indicate success.");
-    Assert.IsTrue(snapshot.ImageArchiveStore.Bootstrap.Ran && snapshot.ImageArchiveStore.Bootstrap.Succeeded, "Image archive bootstrap status should indicate success.");
+        Assert.IsTrue(snapshot.ImageArchiveStore.Bootstrap.Ran && snapshot.ImageArchiveStore.Bootstrap.Succeeded, "Image archive bootstrap status should indicate success.");
     }
 
     private static DiagnosticsService CreateService(
@@ -730,7 +730,7 @@ public sealed class DiagnosticsServiceTests
         var clock = clockMock ?? CreateDefaultClockMock();
         configurationContextFactory ??= new TestDbContextFactory<SkyMonitorConfigurationContext>(CreateInMemoryConfigurationContext);
         telemetryContextFactory ??= new TestDbContextFactory<SkyMonitorTelemetryContext>(CreateInMemoryTelemetryContext);
-    imageArchiveContextFactory ??= new TestDbContextFactory<ImageFrameArchiveContext>(CreateInMemoryImageArchiveContext);
+        imageArchiveContextFactory ??= new TestDbContextFactory<ImageFrameArchiveContext>(CreateInMemoryImageArchiveContext);
         dataPathProvider ??= new TestDataPathProvider(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
 
         telemetryQueue ??= new TestTelemetryQueue();

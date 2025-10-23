@@ -96,11 +96,11 @@ public sealed class FilesystemFrameExportSinkTests
             Assert.IsTrue(Directory.Exists(stageDirectory), "Expected stage directory to be created.");
 
             var imageFiles = Directory.GetFiles(stageDirectory, "*.skimg");
-            Assert.AreEqual(1, imageFiles.Length, "Expected exactly one image to be written.");
+            Assert.HasCount(1, imageFiles, "Expected exactly one image to be written.");
             CollectionAssert.AreEqual(payload.ToArray(), await File.ReadAllBytesAsync(imageFiles[0]));
 
             var manifestFiles = Directory.GetFiles(stageDirectory, "*.json");
-            Assert.AreEqual(1, manifestFiles.Length, "Expected JSON manifest to be written.");
+            Assert.HasCount(1, manifestFiles, "Expected JSON manifest to be written.");
 
             var manifestJson = await File.ReadAllTextAsync(manifestFiles[0]);
             using var document = JsonDocument.Parse(manifestJson);
@@ -196,8 +196,8 @@ public sealed class FilesystemFrameExportSinkTests
             var archiveFiles = Directory.GetFiles(archivePath, "*.skimg");
             var deliveryFiles = Directory.GetFiles(deliveryPath, "*.skimg");
 
-            Assert.AreEqual(1, archiveFiles.Length, "Archive scope should produce one file.");
-            Assert.AreEqual(1, deliveryFiles.Length, "Delivery scope should produce one file.");
+            Assert.HasCount(1, archiveFiles, "Archive scope should produce one file.");
+            Assert.HasCount(1, deliveryFiles, "Delivery scope should produce one file.");
 
             CollectionAssert.AreEqual(payload.ToArray(), await File.ReadAllBytesAsync(archiveFiles[0]));
             CollectionAssert.AreEqual(payload.ToArray(), await File.ReadAllBytesAsync(deliveryFiles[0]));

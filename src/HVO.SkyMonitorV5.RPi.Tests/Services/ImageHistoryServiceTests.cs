@@ -43,7 +43,7 @@ public sealed class ImageHistoryServiceTests
             Assert.IsTrue(firstPageResult.IsSuccessful, firstPageResult.Error?.Message);
 
             var firstPage = firstPageResult.Value;
-            Assert.AreEqual(2, firstPage.Items.Count);
+            Assert.HasCount(2, firstPage.Items);
             Assert.AreEqual(entities[0].FrameId, firstPage.Items[0].FrameId);
             Assert.AreEqual(entities[1].FrameId, firstPage.Items[1].FrameId);
             Assert.AreEqual(localOffset, firstPage.Items[0].CapturedAtLocal.Offset);
@@ -55,7 +55,7 @@ public sealed class ImageHistoryServiceTests
             Assert.IsTrue(secondPageResult.IsSuccessful, secondPageResult.Error?.Message);
 
             var secondPage = secondPageResult.Value;
-            Assert.AreEqual(1, secondPage.Items.Count);
+            Assert.HasCount(1, secondPage.Items);
             Assert.AreEqual(entities[2].FrameId, secondPage.Items[0].FrameId);
             Assert.IsNull(secondPage.NextCursor);
         }

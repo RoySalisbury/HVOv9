@@ -113,7 +113,7 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         method.Invoke(service, new object[] { workItem1, 10.0, 25.0, 40.0 });
         method.Invoke(service, new object[] { workItem2, 18.0, 35.0, 55.0 });
 
-        Assert.AreEqual(2, capturedStatuses.Count, "Telemetry should be published for each work item.");
+        Assert.HasCount(2, capturedStatuses, "Telemetry should be published for each work item.");
 
         var latest = capturedStatuses[^1];
         Assert.AreEqual(2, latest.ProcessedFrameCount, "Processed frame count should accumulate.");

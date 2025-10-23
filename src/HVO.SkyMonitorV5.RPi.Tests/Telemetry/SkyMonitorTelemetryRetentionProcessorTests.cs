@@ -44,13 +44,13 @@ public sealed class SkyMonitorTelemetryRetentionProcessorTests
             await context.SaveChangesAsync().ConfigureAwait(false);
         }
 
-    var clock = new TestClock(now);
+        var clock = new TestClock(now);
 
-    using var meter = new Meter("HVO.SkyMonitor.Telemetry.RetentionTests");
-    var meterFactory = new TestMeterFactory(meter);
-    using var metrics = new SkyMonitorTelemetryMetrics(meterFactory, new SkyMonitorTelemetryIngestionQueue(), NullLogger<SkyMonitorTelemetryMetrics>.Instance);
+        using var meter = new Meter("HVO.SkyMonitor.Telemetry.RetentionTests");
+        var meterFactory = new TestMeterFactory(meter);
+        using var metrics = new SkyMonitorTelemetryMetrics(meterFactory, new SkyMonitorTelemetryIngestionQueue(), NullLogger<SkyMonitorTelemetryMetrics>.Instance);
 
-    var processor = new SkyMonitorTelemetryRetentionProcessor(harness.ContextFactory, clock, metrics, NullLogger<SkyMonitorTelemetryRetentionProcessor>.Instance);
+        var processor = new SkyMonitorTelemetryRetentionProcessor(harness.ContextFactory, clock, metrics, NullLogger<SkyMonitorTelemetryRetentionProcessor>.Instance);
         var options = new SkyMonitorTelemetryRetentionOptions
         {
             RemoteDispatch = TelemetryRetentionPolicy.Create(TimeSpan.FromDays(30), null),
@@ -71,7 +71,7 @@ public sealed class SkyMonitorTelemetryRetentionProcessorTests
 
         await using var verification = await harness.CreateContextAsync().ConfigureAwait(false);
         var remaining = await verification.RemoteDispatchAttempts.ToListAsync().ConfigureAwait(false);
-        Assert.AreEqual(1, remaining.Count);
+        Assert.HasCount(1, remaining);
         Assert.AreEqual("Recent", remaining[0].Message);
     }
 

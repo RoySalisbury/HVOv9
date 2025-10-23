@@ -22,14 +22,14 @@ public sealed class AllSkyControllerTests
     [TestMethod]
     public void GetLatestFrame_WithRawFormatPng_ReturnsPngWithDescriptorHeaders()
     {
-    using var context = new RawFrameTestContext();
-    var controller = CreateController(context.Frame);
+        using var context = new RawFrameTestContext();
+        var controller = CreateController(context.Frame);
 
         var result = controller.GetLatestFrame(raw: true, rawFormat: "png") as FileContentResult;
 
         Assert.IsNotNull(result, "Controller should return a file result for raw frames.");
         Assert.AreEqual("image/png", result.ContentType, "PNG format should be returned when requested.");
-        Assert.IsTrue(result.FileContents.Length > 0, "PNG payload should not be empty.");
+        Assert.IsNotEmpty(result.FileContents, "PNG payload should not be empty.");
 
         var headers = controller.Response.Headers;
         Assert.AreEqual(context.Descriptor.Width.ToString(CultureInfo.InvariantCulture), headers["X-HVO-Raw-Width"].ToString(), "Width header should match descriptor.");
@@ -41,14 +41,14 @@ public sealed class AllSkyControllerTests
     [TestMethod]
     public void GetLatestFrame_DefaultRawFormat_ReturnsRawPayload()
     {
-    using var context = new RawFrameTestContext();
-    var controller = CreateController(context.Frame);
+        using var context = new RawFrameTestContext();
+        var controller = CreateController(context.Frame);
 
         var result = controller.GetLatestFrame(raw: true) as FileContentResult;
 
         Assert.IsNotNull(result, "Controller should return a file result for raw frames.");
         Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Raw content type should be preserved when format not specified.");
-        Assert.AreEqual(context.ExpectedRawPayloadLength, result.FileContents.Length, "Raw payload length should match descriptor dimensions.");
+        Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
 
         var headers = controller.Response.Headers;
         Assert.AreEqual(context.Descriptor.PixelFormatHint, headers["X-HVO-Raw-PixelFormat"].ToString(), "Pixel format hint should be emitted for raw payloads.");
@@ -57,14 +57,14 @@ public sealed class AllSkyControllerTests
     [TestMethod]
     public void GetLatestFrame_WithExplicitRawFormat_ReturnsRawPayload()
     {
-    using var context = new RawFrameTestContext();
-    var controller = CreateController(context.Frame);
+        using var context = new RawFrameTestContext();
+        var controller = CreateController(context.Frame);
 
         var result = controller.GetLatestFrame(raw: true, rawFormat: "raw") as FileContentResult;
 
         Assert.IsNotNull(result, "Controller should return a file result for raw frames.");
         Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Raw content type should be preserved when explicitly requested.");
-        Assert.AreEqual(context.ExpectedRawPayloadLength, result.FileContents.Length, "Raw payload length should match descriptor dimensions.");
+        Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
     }
 
     private static AllSkyController CreateController(RawFrameSnapshot frame)
@@ -76,9 +76,9 @@ public sealed class AllSkyControllerTests
         var optionsMonitor = new Mock<IOptionsMonitor<CameraPipelineOptions>>();
         optionsMonitor.SetupGet(options => options.CurrentValue).Returns(new CameraPipelineOptions());
 
-    var encoder = new Mock<IProcessedFrameEncoder>();
+        var encoder = new Mock<IProcessedFrameEncoder>();
 
-    var controller = new AllSkyController(frameStateStore.Object, optionsMonitor.Object, encoder.Object, NullLogger<AllSkyController>.Instance)
+        var controller = new AllSkyController(frameStateStore.Object, optionsMonitor.Object, encoder.Object, NullLogger<AllSkyController>.Instance)
         {
             ControllerContext = new ControllerContext
             {

@@ -22,7 +22,7 @@ public class LoggerExtensionsTests
         var result = logger.TryLogOperationCanceled(exception, cts.Token, "Cancelled {Operation}", "ingestion");
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, logger.Entries.Count);
+        Assert.HasCount(1, logger.Entries);
         var entry = logger.Entries[0];
         Assert.AreEqual(LogLevel.Debug, entry.LogLevel);
         Assert.AreEqual(exception, entry.Exception);
@@ -39,7 +39,7 @@ public class LoggerExtensionsTests
         var result = logger.TryLogOperationCanceled(exception, cts.Token, "Cancelled");
 
         Assert.IsFalse(result);
-        Assert.AreEqual(0, logger.Entries.Count);
+        Assert.IsEmpty(logger.Entries);
     }
 
     [TestMethod]
@@ -53,7 +53,7 @@ public class LoggerExtensionsTests
         var result = logger.TryLogOperationCanceled(exception, cts.Token, "Cancelled");
 
         Assert.IsFalse(result);
-        Assert.AreEqual(0, logger.Entries.Count);
+        Assert.IsEmpty(logger.Entries);
     }
 
     private sealed class TestLogger : ILogger

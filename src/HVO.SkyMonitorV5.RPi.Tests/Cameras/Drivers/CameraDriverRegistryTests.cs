@@ -49,7 +49,7 @@ public sealed class CameraDriverRegistryTests
             .Where(descriptor => string.Equals(descriptor.Id, TestCameraDrivers.DuplicateDriverId, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
-        Assert.AreEqual(1, matches.Length, "Registry should expose only one descriptor when duplicate ids are discovered.");
+        Assert.HasCount(1, matches, "Registry should expose only one descriptor when duplicate ids are discovered.");
 
         var descriptor = matches[0];
         Assert.IsTrue(descriptor.ImplementationType.Name.Contains("DuplicateTestCameraAdapter", StringComparison.Ordinal));

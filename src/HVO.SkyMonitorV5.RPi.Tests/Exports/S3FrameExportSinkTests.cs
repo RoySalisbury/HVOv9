@@ -44,10 +44,10 @@ public sealed class S3FrameExportSinkTests
         using var optionsMonitor = new TestOptionsMonitor<FrameExportOptions>(options);
 
         var clientProvider = new Mock<IMinioClientProvider>(MockBehavior.Strict);
-    var minioClient = new Mock<IMinioClient>(MockBehavior.Strict);
-    var capturedCalls = new List<PutObjectArgs>();
-    var capturedBodies = new List<byte[]>();
-    var resilienceProvider = new TestResiliencePolicyProvider();
+        var minioClient = new Mock<IMinioClient>(MockBehavior.Strict);
+        var capturedCalls = new List<PutObjectArgs>();
+        var capturedBodies = new List<byte[]>();
+        var resilienceProvider = new TestResiliencePolicyProvider();
 
         clientProvider
             .Setup(provider => provider.GetClient("play.min.io", "access", "secret", true))
@@ -145,7 +145,7 @@ public sealed class S3FrameExportSinkTests
 
         Assert.IsTrue(result.IsSuccessful, "Expected upload to succeed.");
         Assert.IsTrue(result.Value, "Expected sink to report persistence.");
-        Assert.AreEqual(2, capturedCalls.Count, "Expected payload and manifest uploads.");
+        Assert.HasCount(2, capturedCalls, "Expected payload and manifest uploads.");
 
         var payloadCall = capturedCalls[0];
         var objectName = (string?)payloadCall.GetType().GetProperty("ObjectName", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(payloadCall);
@@ -294,12 +294,12 @@ public sealed class S3FrameExportSinkTests
         var result = await sink.ExportAsync(envelope, CancellationToken.None);
 
         Assert.IsTrue(result.IsSuccessful && result.Value, "Expected export to succeed when dual scope configured.");
-        Assert.AreEqual(4, capturedCalls.Count, "Dual scope should upload two payloads and two manifests.");
+        Assert.HasCount(4, capturedCalls, "Dual scope should upload two payloads and two manifests.");
 
-    var archivePayload = capturedCalls[0];
-    var archiveManifest = capturedCalls[1];
-    var deliveryPayload = capturedCalls[2];
-    var deliveryManifest = capturedCalls[3];
+        var archivePayload = capturedCalls[0];
+        var archiveManifest = capturedCalls[1];
+        var deliveryPayload = capturedCalls[2];
+        var deliveryManifest = capturedCalls[3];
 
         StringAssert.Contains(GetObjectName(archivePayload.Args), "/archive/", "First payload should target archive prefix.");
         StringAssert.Contains(GetObjectName(deliveryPayload.Args), "/delivery/", "Second payload should target delivery prefix.");
@@ -307,17 +307,17 @@ public sealed class S3FrameExportSinkTests
         CollectionAssert.AreEqual(payload.ToArray(), archivePayload.Body, "Archive payload contents should match source payload.");
         CollectionAssert.AreEqual(payload.ToArray(), deliveryPayload.Body, "Delivery payload contents should match source payload.");
 
-    var archiveHeaders = GetPropertyValue<IDictionary<string, string>>(archivePayload.Args, "Headers");
-    Assert.IsNotNull(archiveHeaders, "Archive payload should include metadata headers.");
-    Assert.AreEqual("archive", GetHeaderValue(archiveHeaders!, "payload-role"), "Archive payload header should note role.");
-    Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(archiveHeaders!, "payload-content-type"), "Archive payload should carry content type header.");
-    Assert.AreEqual("skimg", GetHeaderValue(archiveHeaders!, "payload-extension"), "Archive payload should carry extension header.");
+        var archiveHeaders = GetPropertyValue<IDictionary<string, string>>(archivePayload.Args, "Headers");
+        Assert.IsNotNull(archiveHeaders, "Archive payload should include metadata headers.");
+        Assert.AreEqual("archive", GetHeaderValue(archiveHeaders!, "payload-role"), "Archive payload header should note role.");
+        Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(archiveHeaders!, "payload-content-type"), "Archive payload should carry content type header.");
+        Assert.AreEqual("skimg", GetHeaderValue(archiveHeaders!, "payload-extension"), "Archive payload should carry extension header.");
 
-    var deliveryHeaders = GetPropertyValue<IDictionary<string, string>>(deliveryPayload.Args, "Headers");
-    Assert.IsNotNull(deliveryHeaders, "Delivery payload should include metadata headers.");
-    Assert.AreEqual("delivery", GetHeaderValue(deliveryHeaders!, "payload-role"), "Delivery payload header should note role.");
-    Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(deliveryHeaders!, "payload-content-type"), "Delivery payload should carry content type header.");
-    Assert.AreEqual("skimg", GetHeaderValue(deliveryHeaders!, "payload-extension"), "Delivery payload should carry extension header.");
+        var deliveryHeaders = GetPropertyValue<IDictionary<string, string>>(deliveryPayload.Args, "Headers");
+        Assert.IsNotNull(deliveryHeaders, "Delivery payload should include metadata headers.");
+        Assert.AreEqual("delivery", GetHeaderValue(deliveryHeaders!, "payload-role"), "Delivery payload header should note role.");
+        Assert.AreEqual("application/vnd.hvo.skia.raw", GetHeaderValue(deliveryHeaders!, "payload-content-type"), "Delivery payload should carry content type header.");
+        Assert.AreEqual("skimg", GetHeaderValue(deliveryHeaders!, "payload-extension"), "Delivery payload should carry extension header.");
 
         Assert.AreEqual("application/json", GetContentType(archiveManifest.Args), "Archive manifest should be JSON.");
         Assert.AreEqual("application/json", GetContentType(deliveryManifest.Args), "Delivery manifest should be JSON.");

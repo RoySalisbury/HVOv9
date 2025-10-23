@@ -157,14 +157,16 @@ public sealed class ConstellationFigureFilterTests
         var lineMidpointX = (primaryX + secondaryX) / 2f;
         var lineMidpointY = (primaryY + secondaryY) / 2f;
 
-        Assert.IsTrue(
-            Math.Abs(overlayCenterX - lineMidpointX) <= centerTolerancePixels,
+        Assert.IsLessThanOrEqualTo(
+            centerTolerancePixels,
+            Math.Abs(overlayCenterX - lineMidpointX),
             $"Overlay center X deviated from projected segment midpoint: expected {lineMidpointX:F2}, observed {overlayCenterX:F2}.");
-        Assert.IsTrue(
-            Math.Abs(overlayCenterY - lineMidpointY) <= centerTolerancePixels,
+        Assert.IsLessThanOrEqualTo(
+            centerTolerancePixels,
+            Math.Abs(overlayCenterY - lineMidpointY),
             $"Overlay center Y deviated from projected segment midpoint: expected {lineMidpointY:F2}, observed {overlayCenterY:F2}.");
 
-    frameContext.Dispose();
+        frameContext.Dispose();
     }
 
     private static FrameStackResult CreateStackResult(SKBitmap stackedBitmap, FrameContext frameContext)

@@ -26,16 +26,16 @@ public sealed class FrameFilterPipelineTests
         using var stackResult = CreateStackResult();
 
         var filter = new CapturingTestFilter("TestFilter");
-    using var surfacePool = new SkiaSurfacePool();
-    var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
-    var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
+        using var surfacePool = new SkiaSurfacePool();
+        var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
 
         var processed = await pipeline.ProcessAsync(stackResult.Result, configuration, CancellationToken.None);
 
-        Assert.AreEqual(1, processed.AppliedFilters.Count, "Pipeline should record applied filters.");
+        Assert.HasCount(1, processed.AppliedFilters, "Pipeline should record applied filters.");
         Assert.AreEqual("TestFilter", processed.AppliedFilters[0]);
-    Assert.AreEqual(1, processed.FilterExecutions.Count, "Pipeline should capture filter execution metadata.");
-    Assert.IsTrue(processed.SurfaceMilliseconds >= 0, "Surface preparation timing should be captured.");
+        Assert.HasCount(1, processed.FilterExecutions, "Pipeline should capture filter execution metadata.");
+        Assert.IsGreaterThanOrEqualTo(0.0, processed.SurfaceMilliseconds, "Surface preparation timing should be captured.");
 
         Assert.IsNotNull(filter.LastContext, "Filter should receive a render context instance.");
         Assert.AreEqual(TestLatitude, filter.LastContext!.LatitudeDeg, 1e-6, "Latitude should flow through render context.");
@@ -45,11 +45,11 @@ public sealed class FrameFilterPipelineTests
         Assert.IsTrue(stackResult.WasDisposed(), "FrameContext should be disposed after processing.");
 
         var metrics = pipeline.GetMetricsSnapshot();
-        Assert.AreEqual(1, metrics.Filters.Count, "Telemetry should contain one filter entry.");
+        Assert.HasCount(1, metrics.Filters, "Telemetry should contain one filter entry.");
         var entry = metrics.Filters[0];
         Assert.AreEqual("TestFilter", entry.FilterName);
         Assert.AreEqual(1, entry.AppliedCount);
-        Assert.IsTrue(entry.LastDurationMilliseconds >= 0);
+        Assert.IsGreaterThanOrEqualTo(0.0, entry.LastDurationMilliseconds ?? 0.0);
 
         processed.ImmutableImage?.Dispose();
     }
@@ -62,26 +62,26 @@ public sealed class FrameFilterPipelineTests
         {
             await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken).ConfigureAwait(false);
         });
-    using var surfacePool = new SkiaSurfacePool();
-    var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
-    var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
+        using var surfacePool = new SkiaSurfacePool();
+        var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
 
         using (var stack1 = CreateStackResult())
         {
             var processed = await pipeline.ProcessAsync(stack1.Result, configuration, CancellationToken.None);
-            Assert.AreEqual(1, processed.FilterExecutions.Count, "Filter execution timings should be recorded per invocation.");
+            Assert.HasCount(1, processed.FilterExecutions, "Filter execution timings should be recorded per invocation.");
             processed.ImmutableImage?.Dispose();
         }
 
         using (var stack2 = CreateStackResult())
         {
             var processed = await pipeline.ProcessAsync(stack2.Result, configuration, CancellationToken.None);
-            Assert.AreEqual(1, processed.FilterExecutions.Count, "Filter execution timings should be recorded per invocation.");
+            Assert.HasCount(1, processed.FilterExecutions, "Filter execution timings should be recorded per invocation.");
             processed.ImmutableImage?.Dispose();
         }
 
         var metrics = pipeline.GetMetricsSnapshot();
-        Assert.AreEqual(1, metrics.Filters.Count, "Telemetry should aggregate per-filter.");
+        Assert.HasCount(1, metrics.Filters, "Telemetry should aggregate per-filter.");
         var entry = metrics.Filters[0];
         Assert.AreEqual(2, entry.AppliedCount, "Running the pipeline twice should increment applied count.");
         Assert.IsTrue(entry.LastDurationMilliseconds is >= 0, "Last duration should be populated.");
@@ -93,17 +93,17 @@ public sealed class FrameFilterPipelineTests
     {
         var configuration = CreateConfiguration("SurfaceFilter");
         var filter = new SurfaceFillFilter();
-    using var surfacePool = new SkiaSurfacePool();
-    var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
-    var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
+        using var surfacePool = new SkiaSurfacePool();
+        var composer = new FrameComposer(surfacePool, NullLogger<FrameComposer>.Instance);
+        var pipeline = new FrameFilterPipeline(new IFrameFilter[] { filter }, composer, NullLogger<FrameFilterPipeline>.Instance);
 
         using var stack = CreateStackResult();
         var processed = await pipeline.ProcessAsync(stack.Result, configuration, CancellationToken.None);
 
-        Assert.AreEqual(1, processed.AppliedFilters.Count, "Surface filter should be recorded as applied.");
+        Assert.HasCount(1, processed.AppliedFilters, "Surface filter should be recorded as applied.");
         Assert.AreEqual("SurfaceFilter", processed.AppliedFilters[0]);
         Assert.AreEqual(1, filter.InvocationCount, "Image-based filter should be invoked exactly once.");
-    Assert.AreEqual(1, processed.FilterExecutions.Count, "Surface filter execution timing should be captured.");
+        Assert.HasCount(1, processed.FilterExecutions, "Surface filter execution timing should be captured.");
 
         Assert.IsNotNull(processed.ImmutableImage, "Pipeline should materialize an immutable output image.");
         var snapshot = processed.ImmutableImage!;
@@ -112,9 +112,9 @@ public sealed class FrameFilterPipelineTests
         Assert.IsTrue(snapshot.ReadPixels(info, bitmap.GetPixels(), bitmap.RowBytes), "Processed immutable image should be readable.");
 
         var pixel = bitmap.GetPixel(0, 0);
-    Assert.IsTrue(pixel.Red >= 200, "Surface filter should produce a strong red component.");
-    Assert.IsTrue(pixel.Green <= 10, "Surface filter should suppress the green channel.");
-    Assert.IsTrue(pixel.Blue <= 10, "Surface filter should suppress the blue channel.");
+        Assert.IsGreaterThanOrEqualTo(200, (int)pixel.Red, "Surface filter should produce a strong red component.");
+        Assert.IsLessThanOrEqualTo(10, (int)pixel.Green, "Surface filter should suppress the green channel.");
+        Assert.IsLessThanOrEqualTo(10, (int)pixel.Blue, "Surface filter should suppress the blue channel.");
 
         snapshot.Dispose();
     }
@@ -311,10 +311,10 @@ public sealed class FrameFilterPipelineTests
 
                 foreach (var execution in processed.FilterExecutions)
                 {
-                    Assert.IsTrue(execution.DurationMilliseconds >= 0, "Filter execution timings must be non-negative.");
+                    Assert.IsGreaterThanOrEqualTo(0.0, execution.DurationMilliseconds, "Filter execution timings must be non-negative.");
                 }
 
-                Assert.IsTrue(processed.SurfaceMilliseconds >= 0, "Surface preparation timing must be non-negative.");
+                Assert.IsGreaterThanOrEqualTo(0.0, processed.SurfaceMilliseconds, "Surface preparation timing must be non-negative.");
 
                 using var data = SKData.CreateCopy(payload);
                 using var encodedImage = SKImage.FromEncodedData(data);
@@ -323,9 +323,9 @@ public sealed class FrameFilterPipelineTests
                 Assert.IsTrue(encodedImage.ReadPixels(info, decodedBitmap.GetPixels(), decodedBitmap.RowBytes), "Encoded payload should decode successfully.");
 
                 var centerColor = decodedBitmap.GetPixel(info.Width / 2, info.Height / 2);
-                Assert.IsTrue(centerColor.Red >= 180, "Overlay filter should render a strong red accent in the center pixel.");
-                Assert.IsTrue(centerColor.Green <= 20, "Overlay filter should keep the center pixel's green channel low.");
-                Assert.IsTrue(centerColor.Blue <= 20, "Overlay filter should keep the center pixel's blue channel low.");
+                Assert.IsGreaterThanOrEqualTo(180, (int)centerColor.Red, "Overlay filter should render a strong red accent in the center pixel.");
+                Assert.IsLessThanOrEqualTo(20, (int)centerColor.Green, "Overlay filter should keep the center pixel's green channel low.");
+                Assert.IsLessThanOrEqualTo(20, (int)centerColor.Blue, "Overlay filter should keep the center pixel's blue channel low.");
             }
             finally
             {
