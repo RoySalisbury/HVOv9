@@ -141,4 +141,3 @@ The GitHub CLI is automatically installed via the dev container's `github-cli` f
 ## Related Documentation
 - [Blazor Component Best Practices](blazor-component-best-practices.md)
 - [Dev Container Environment Setup](devcontainer-environment-setup.md)
-- [Hardware Simulation Improvements](hardware-simulation-improvements.md)
