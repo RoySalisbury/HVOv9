@@ -1,6 +1,12 @@
-# Running HVO RoofController V4 in Docker on Raspberry Pi 5
+# Docker Quick Start - HVO RoofController V4
 
-This guide documents how to build and run the `HVO.RoofControllerV4.RPi` web application inside a Docker container on a Raspberry Pi 5. The application interacts with GPIO pins, I²C peripherals, and reads the CPU temperature sensor, so the container must be granted access to those hardware resources.
+This guide provides a quick start for deploying the `HVO.RoofControllerV4.RPi` application using the automated deployment script.
+
+> **For comprehensive Docker reference** including manual building, Docker Compose, troubleshooting, and advanced configuration, see [Docker Reference Guide](docker-reference.md).
+
+## Overview
+
+The `HVO.RoofControllerV4.RPi` web application runs in a Docker container on a Raspberry Pi 5. The application interacts with GPIO pins, I²C peripherals, and reads the CPU temperature sensor, so the container must be granted access to those hardware resources.
 
 ## Prerequisites
 

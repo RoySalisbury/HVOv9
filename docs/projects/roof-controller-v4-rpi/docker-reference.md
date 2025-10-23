@@ -1,6 +1,8 @@
-# Docker Build & Deployment Guide
+# Docker Reference Guide - HVO RoofController V4
 
-This guide captures the end-to-end workflow for building and running the `HVO.RoofControllerV4.RPi` application in Docker while keeping access to Raspberry Pi hardware peripherals (GPIO, I²C, and temperature telemetry).
+This comprehensive reference covers building, deploying, and troubleshooting the `HVO.RoofControllerV4.RPi` application in Docker while maintaining access to Raspberry Pi hardware peripherals (GPIO, I²C, and temperature telemetry).
+
+> **For quick deployment** using the automated script, see [Docker Quick Start](docker-quick-start.md).
 
 > **TL;DR** – the container must either run with `--privileged` **or** receive explicit device mounts for `/dev/i2c-1` and `/dev/gpiomem0` (plus any other sensors you need). Without that access the roof controller will fall back to simulation and the hardware relays will not actuate.
 
