@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using HVO.SkyMonitorV5.RPi.Cameras;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
@@ -248,7 +249,8 @@ public sealed class FramePreprocessingOrchestratorTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(() => orchestrator.ProcessAsync(frame, cts.Token));
+        Func<Task> act = async () => await orchestrator.ProcessAsync(frame, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
 
         bitmap.Dispose();
         engine.Dispose();
@@ -270,13 +272,13 @@ public sealed class FramePreprocessingOrchestratorTests
         Assert.IsTrue(result.IsSuccessful, "Preprocessing should succeed when calibration pipeline is registered.");
         Assert.AreEqual(1, stage.InvocationCount, "Calibration stage should execute exactly once.");
 
-    Assert.IsTrue(stage.SurfacePeeked, "Calibration stage should have accessed surface pixels.");
+        Assert.IsTrue(stage.SurfacePeeked, "Calibration stage should have accessed surface pixels.");
 
-    var processed = result.Value;
-    processed.PixelLease?.Dispose();
-    processed.ImmutableImage?.Dispose();
-    processed.Bitmap.Dispose();
-    engine.Dispose();
+        var processed = result.Value;
+        processed.PixelLease?.Dispose();
+        processed.ImmutableImage?.Dispose();
+        processed.Bitmap.Dispose();
+        engine.Dispose();
     }
 
     private static async Task AssertLinear8BitColorRoundTripAsync(SKColorType colorType)
@@ -300,7 +302,7 @@ public sealed class FramePreprocessingOrchestratorTests
 
         var processed = result.Value;
         Assert.IsNotNull(processed.ImmutableImage, "Immutable image should be materialized after preprocessing.");
-    Assert.IsNotNull(processed.PixelLease, "Processed frame should expose a refreshed pixel lease.");
+        Assert.IsNotNull(processed.PixelLease, "Processed frame should expose a refreshed pixel lease.");
 
         var processedBytes = SkiaTestImageFactory.GetBytePixelBuffer(processed.ImmutableImage!, colorType);
         AssertBuffersWithinTolerance(expectedBytes, processedBytes, tolerance: 2, context: $"linear {colorType}");

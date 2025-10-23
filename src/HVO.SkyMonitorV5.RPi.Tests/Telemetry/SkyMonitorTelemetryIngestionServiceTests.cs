@@ -21,7 +21,7 @@ public sealed class SkyMonitorTelemetryIngestionServiceTests
     {
         await using var harness = await TelemetryTestHarness.CreateAsync().ConfigureAwait(false);
 
-    var queue = new SkyMonitorTelemetryIngestionQueue();
+        var queue = new SkyMonitorTelemetryIngestionQueue();
         using var meter = new Meter("HVO.SkyMonitor.Telemetry.Tests");
         var meterFactory = new TestMeterFactory(meter);
         var metricsLogger = NullLogger<SkyMonitorTelemetryMetrics>.Instance;
@@ -130,6 +130,6 @@ public sealed class SkyMonitorTelemetryIngestionServiceTests
             await Task.Delay(pollInterval.Value).ConfigureAwait(false);
         }
 
-        Assert.Fail("Condition was not satisfied within the allotted timeout of {0}.", timeout);
+        Assert.Fail($"Condition was not satisfied within the allotted timeout of {timeout}.");
     }
 }
