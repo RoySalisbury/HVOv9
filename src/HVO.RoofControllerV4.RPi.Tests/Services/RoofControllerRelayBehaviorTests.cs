@@ -61,25 +61,25 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task IdlePowerUp_ShouldReflectRelaySafeState_AndStatusMatchesLimits()
     {
-    var hat = new FakeRoofHat();
+        var hat = new FakeRoofHat();
         // Scenario 1: Mid-travel (both HIGH) -> expect Stopped
-        hat.SetInputs(true,true,false,false);
+        hat.SetInputs(true, true, false, false);
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
         hat.RelayMask.Should().Be(0x00, "all relays de-energized, STOP asserted (fail-safe) at idle");
         svc.Status.Should().Be(RoofControllerStatus.Stopped);
 
         // Scenario 2: Open limit engaged (IN1 LOW, IN2 HIGH)
-    var hat2 = new FakeRoofHat();
-        hat2.SetInputs(false,true,false,false);
+        var hat2 = new FakeRoofHat();
+        hat2.SetInputs(false, true, false, false);
         var svc2 = Create(hat2);
         (await svc2.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
         svc2.Status.Should().Be(RoofControllerStatus.Open);
         hat2.RelayMask.Should().Be(0x00);
 
         // Scenario 3: Closed limit engaged (IN1 HIGH, IN2 LOW)
-    var hat3 = new FakeRoofHat();
-        hat3.SetInputs(true,false,false,false);
+        var hat3 = new FakeRoofHat();
+        hat3.SetInputs(true, false, false, false);
         var svc3 = Create(hat3);
         (await svc3.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
         svc3.Status.Should().Be(RoofControllerStatus.Closed);
@@ -89,8 +89,8 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task LimitSwitchDebounce_ShouldIgnoreRapidRepeatedLimitEvents()
     {
-    var hat = new FakeRoofHat();
-        hat.SetInputs(true,true,false,false); // mid-travel
+        var hat = new FakeRoofHat();
+        hat.SetInputs(true, true, false, false); // mid-travel
         var svc = Create(hat, debounce: TimeSpan.FromMilliseconds(30));
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
@@ -115,7 +115,7 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task StopCommand_ShouldDropDirectionBeforeDisableStopRelay()
     {
-    var hat = new FakeRoofHat();
+        var hat = new FakeRoofHat();
         hat.SetInputs(true, true, false, false);
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
@@ -145,7 +145,7 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task BothLimitGlitch_ShouldTriggerErrorOnceAndDropAllRelays()
     {
-    var hat = new FakeRoofHat();
+        var hat = new FakeRoofHat();
         hat.SetInputs(true, true, false, false); // mid-travel baseline
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
@@ -200,15 +200,15 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task OpenSequence_ShouldEnergizeStopAndOpenRelays_ThenDropAtLimit()
     {
-    var hat = new FakeRoofHat();
-        hat.SetInputs(true,true,false,false); // mid-travel
+        var hat = new FakeRoofHat();
+        hat.SetInputs(true, true, false, false); // mid-travel
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
         hat.ClearRelayWriteLog();
         var openResult = svc.Open();
         openResult.IsSuccessful.Should().BeTrue();
-    hat.RelayMask.Should().Be(StopPlusOpenMask, "Stop + Open relays energized");
+        hat.RelayMask.Should().Be(StopPlusOpenMask, "Stop + Open relays energized");
         svc.Status.Should().Be(RoofControllerStatus.Opening);
 
         var openWrites = hat.RelayWriteLog;
@@ -223,13 +223,13 @@ public class RoofControllerRelayBehaviorTests
         }, "Open command should enable STOP before establishing direction");
 
         // Simulate limit reached: raw LOW on IN1 for NC
-	    hat.ClearRelayWriteLog();
-	    hat.SetInputs(false, true, false, false); // hardware now shows open limit engaged
-    svc.SimForwardLimitRaw(false);
-    // Force a status refresh to ensure cached evaluation consistent in test context
-    svc.ForceStatusRefresh(true);
-    hat.RelayMask.Should().Be(0x00, "All relays de-energized after limit stop");
-    svc.Status.Should().Be(RoofControllerStatus.Open);
+        hat.ClearRelayWriteLog();
+        hat.SetInputs(false, true, false, false); // hardware now shows open limit engaged
+        svc.SimForwardLimitRaw(false);
+        // Force a status refresh to ensure cached evaluation consistent in test context
+        svc.ForceStatusRefresh(true);
+        hat.RelayMask.Should().Be(0x00, "All relays de-energized after limit stop");
+        svc.Status.Should().Be(RoofControllerStatus.Open);
 
         var stopWrites = hat.RelayWriteLog;
         stopWrites.Should().NotBeNull();
@@ -246,7 +246,7 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task OpenCommand_WhenAlreadyOpening_ShouldAvoidRedundantWrites()
     {
-    var hat = new FakeRoofHat();
+        var hat = new FakeRoofHat();
         hat.SetInputs(true, true, false, false);
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
@@ -268,15 +268,15 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task CloseSequence_ShouldEnergizeStopAndCloseRelays_ThenDropAtLimit()
     {
-    var hat = new FakeRoofHat();
-        hat.SetInputs(true,true,false,false); // mid-travel
+        var hat = new FakeRoofHat();
+        hat.SetInputs(true, true, false, false); // mid-travel
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
         hat.ClearRelayWriteLog();
         var closeResult = svc.Close();
         closeResult.IsSuccessful.Should().BeTrue();
-    hat.RelayMask.Should().Be(StopPlusCloseMask, "Stop + Close relays energized");
+        hat.RelayMask.Should().Be(StopPlusCloseMask, "Stop + Close relays energized");
         svc.Status.Should().Be(RoofControllerStatus.Closing);
 
         var closeWrites = hat.RelayWriteLog;
@@ -291,12 +291,12 @@ public class RoofControllerRelayBehaviorTests
         }, "Close command should enable STOP before aligning direction");
 
         // Simulate reverse/closed limit reached: raw LOW on IN2
-	    hat.ClearRelayWriteLog();
-	    hat.SetInputs(true, false, false, false); // hardware closed limit engaged
-    svc.SimReverseLimitRaw(false);
-    svc.ForceStatusRefresh(true);
-    hat.RelayMask.Should().Be(0x00);
-    svc.Status.Should().Be(RoofControllerStatus.Closed);
+        hat.ClearRelayWriteLog();
+        hat.SetInputs(true, false, false, false); // hardware closed limit engaged
+        svc.SimReverseLimitRaw(false);
+        svc.ForceStatusRefresh(true);
+        hat.RelayMask.Should().Be(0x00);
+        svc.Status.Should().Be(RoofControllerStatus.Closed);
 
         var closeStopWrites = hat.RelayWriteLog;
         closeStopWrites.Should().NotBeNull();
@@ -314,7 +314,7 @@ public class RoofControllerRelayBehaviorTests
     public async Task CloseCommand_WhenAlreadyClosing_ShouldAvoidRedundantWrites()
     {
         // Arrange
-    var hat = new FakeRoofHat();
+        var hat = new FakeRoofHat();
         hat.SetInputs(true, true, false, false);
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
@@ -338,20 +338,20 @@ public class RoofControllerRelayBehaviorTests
     [TestMethod]
     public async Task ManualStopMidTravel_ShouldDeenergizeRelaysAndSetPartialStatuses()
     {
-    var hat = new FakeRoofHat();
-        hat.SetInputs(true,true,false,false); // mid-travel
+        var hat = new FakeRoofHat();
+        hat.SetInputs(true, true, false, false); // mid-travel
         var svc = Create(hat);
         (await svc.Initialize(CancellationToken.None)).IsSuccessful.Should().BeTrue();
 
         svc.Open().IsSuccessful.Should().BeTrue();
-    hat.RelayMask.Should().Be(StopPlusOpenMask);
+        hat.RelayMask.Should().Be(StopPlusOpenMask);
         svc.Stop(RoofControllerStopReason.NormalStop).IsSuccessful.Should().BeTrue();
         hat.RelayMask.Should().Be(0x00);
         svc.Status.Should().Be(RoofControllerStatus.PartiallyOpen);
 
         // Now issue Close then manual stop
         svc.Close().IsSuccessful.Should().BeTrue();
-    hat.RelayMask.Should().Be(StopPlusCloseMask);
+        hat.RelayMask.Should().Be(StopPlusCloseMask);
         svc.Stop(RoofControllerStopReason.NormalStop).IsSuccessful.Should().BeTrue();
         hat.RelayMask.Should().Be(0x00);
         svc.Status.Should().Be(RoofControllerStatus.PartiallyClose);

@@ -17,8 +17,8 @@ namespace HVO.Iot.Devices.Tests
     public class GpioButtonWithLedTests : IDisposable
     {
         private ServiceProvider? _serviceProvider;
-    private IGpioControllerClient? _gpioController;
-    private MemoryGpioControllerClient? _memoryGpioController;
+        private IGpioControllerClient? _gpioController;
+        private MemoryGpioControllerClient? _memoryGpioController;
         private ILogger<GpioButtonWithLed>? _logger;
         private GpioButtonWithLed? _buttonWithLed;
         private const int ButtonPin = 18;
@@ -65,7 +65,7 @@ namespace HVO.Iot.Devices.Tests
         /// <summary>
         /// Creates a GpioButtonWithLed instance for testing
         /// </summary>
-        private GpioButtonWithLed CreateButtonWithLed(int buttonPin = TestPin, int? ledPin = TestLedPin, 
+        private GpioButtonWithLed CreateButtonWithLed(int buttonPin = TestPin, int? ledPin = TestLedPin,
             TimeSpan? doublePress = null, TimeSpan? holding = null, bool isPullUp = true, bool hasExternalResistor = false,
             TimeSpan? debounceTime = null)
         {
@@ -136,7 +136,7 @@ namespace HVO.Iot.Devices.Tests
             // Assert
             Assert.IsNotNull(_buttonWithLed);
             Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
-            
+
             // Verify pins are configured correctly
             VerifyPinMode(TestPin, PinMode.InputPullUp);
             VerifyPinMode(TestLedPin, PinMode.Output);
@@ -150,7 +150,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.IsNotNull(_buttonWithLed);
-            
+
             // Verify pin is configured with pull-down
             VerifyPinMode(TestPin, PinMode.InputPullDown);
         }
@@ -163,7 +163,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.IsNotNull(_buttonWithLed);
-            
+
             // Verify pin is configured as simple input when external resistor is used
             VerifyPinMode(TestPin, PinMode.Input);
         }
@@ -232,7 +232,7 @@ namespace HVO.Iot.Devices.Tests
             _buttonWithLed = CreateButtonWithLed();
             int downEventCount = 0;
             int upEventCount = 0;
-            
+
             _buttonWithLed.ButtonDown += (sender, args) => downEventCount++;
             _buttonWithLed.ButtonDown += (sender, args) => downEventCount++;
             _buttonWithLed.ButtonUp += (sender, args) => upEventCount++;
@@ -262,7 +262,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.AreEqual(PushButtonLedState.On, _buttonWithLed.LedState);
-            
+
             // Verify LED pin state for mock controller
             if (_memoryGpioController != null)
             {
@@ -283,7 +283,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.AreEqual(PushButtonLedState.Off, _buttonWithLed.LedState);
-            
+
             // Verify LED pin state for mock controller
             if (_memoryGpioController != null)
             {

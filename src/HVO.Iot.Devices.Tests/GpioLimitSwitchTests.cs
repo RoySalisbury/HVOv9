@@ -17,9 +17,9 @@ namespace HVO.Iot.Devices.Tests
     [TestClass]
     public class GpioLimitSwitchTests : IDisposable
     {
-    private ServiceProvider? _serviceProvider;
-    private IGpioControllerClient? _gpioController;
-    private MemoryGpioControllerClient? _memoryGpioController;
+        private ServiceProvider? _serviceProvider;
+        private IGpioControllerClient? _gpioController;
+        private MemoryGpioControllerClient? _memoryGpioController;
         private ILogger<GpioLimitSwitch>? _logger;
         private GpioLimitSwitch? _limitSwitch;
         private const int TestPin = 18;
@@ -63,7 +63,7 @@ namespace HVO.Iot.Devices.Tests
         /// <summary>
         /// Creates a limit switch instance using the configured GPIO controller
         /// </summary>
-        private GpioLimitSwitch CreateLimitSwitch(bool isPullup = true, bool hasExternalResistor = false, 
+        private GpioLimitSwitch CreateLimitSwitch(bool isPullup = true, bool hasExternalResistor = false,
                                                  TimeSpan debounceTime = default, ILogger<GpioLimitSwitch>? logger = null)
         {
             return new GpioLimitSwitch(
@@ -101,7 +101,7 @@ namespace HVO.Iot.Devices.Tests
             Assert.IsTrue(_limitSwitch.IsPullup);
             Assert.IsFalse(_limitSwitch.HasExternalResistor);
             Assert.AreEqual(TimeSpan.Zero, _limitSwitch.DebounceTime);
-            
+
             // Verify initial pin value based on pin mode
             // InputPullUp should initialize to High
             Assert.AreEqual(_limitSwitch.CurrentPinValue, PinValue.High);
@@ -149,7 +149,7 @@ namespace HVO.Iot.Devices.Tests
         {
             // Act
             Action act = () => new GpioLimitSwitch((IGpioControllerClient)null!, TestPin);
-            
+
             // Assert
             act.Should().Throw<ArgumentNullException>();
         }
@@ -159,7 +159,7 @@ namespace HVO.Iot.Devices.Tests
         {
             // Act
             Action act = () => new GpioLimitSwitch(_gpioController!, 0);
-            
+
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
@@ -359,7 +359,7 @@ namespace HVO.Iot.Devices.Tests
             // Arrange
             _limitSwitch = CreateLimitSwitch();
             var eventCount = 0;
-            
+
             void EventHandler(object? sender, LimitSwitchTriggeredEventArgs e) => eventCount++;
 
             _limitSwitch.LimitSwitchTriggered += EventHandler;
@@ -457,7 +457,7 @@ namespace HVO.Iot.Devices.Tests
             // Arrange
             var debounceTime = TimeSpan.FromMilliseconds(100);
             _limitSwitch = CreateLimitSwitch(debounceTime: debounceTime);
-            
+
             var eventCount = 0;
             _limitSwitch.LimitSwitchTriggered += (sender, e) => eventCount++;
 
@@ -679,7 +679,7 @@ namespace HVO.Iot.Devices.Tests
         {
             // This test is difficult to implement directly due to the nature of finalizers
             // We'll test that creating and abandoning an object doesn't cause issues
-            
+
             // Act & Assert - Creating and abandoning should work
             try
             {
