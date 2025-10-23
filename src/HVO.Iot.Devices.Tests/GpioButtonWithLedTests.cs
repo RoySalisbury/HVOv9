@@ -430,8 +430,8 @@ namespace HVO.Iot.Devices.Tests
             Thread.Sleep(500); // Allow all events to process
 
             // Assert
-            Assert.IsGreaterThan(eventCount, 0, "At least some button events should have been processed");
-            Assert.IsLessThanOrEqualTo(eventCount, 50, "Event count should not exceed number of presses");
+            Assert.IsGreaterThan(0, eventCount, "At least some button events should have been processed");
+            Assert.IsLessThanOrEqualTo(50, eventCount, "Event count should not exceed number of presses");
         }
 
         [TestMethod]

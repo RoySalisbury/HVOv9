@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
+using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HVO.WebSite.Playground;
 using HVO.WebSite.Playground.Tests.TestHelpers;
@@ -36,12 +37,12 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v1.0/weather/latest");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.OK);
+          Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         
         var content = await response.Content.ReadAsStringAsync();
         Assert.IsNotNull(content);
-        Assert.IsTrue(content.Contains("timestamp"));
-        Assert.IsTrue(content.Contains("data"));
+          content.Should().Contain("timestamp");
+          content.Should().Contain("data");
     }
 
     [TestMethod]
@@ -51,7 +52,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v1.0/weather/latest");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.OK);
+    Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         
         var content = await response.Content.ReadAsStringAsync();
         using var jsonDoc = JsonDocument.Parse(content);
@@ -64,7 +65,7 @@ public class ApiVersioningTests
         Assert.IsNotNull(machineNameElement.GetString());
         
         Assert.IsTrue(root.TryGetProperty("data", out var dataElement));
-        Assert.AreNotEqual(dataElement.ValueKind, JsonValueKind.Null);
+          Assert.AreNotEqual(JsonValueKind.Null, dataElement.ValueKind);
     }
 
     [TestMethod]
@@ -74,7 +75,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v2.0/weather/latest");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -84,7 +85,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/weather/latest");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     #region Weather API Versioning Tests
@@ -96,14 +97,14 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v1.0/weather/latest");
 
         // Assert - We expect this to succeed even if data is not available (404 is valid business logic)
-        Assert.IsTrue(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NotFound);
+            Assert.IsTrue(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NotFound);
         
         // Verify it's not a versioning issue (which would be 404 with different error structure)
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             var content = await response.Content.ReadAsStringAsync();
             // Should contain weather-specific error, not a generic not found
-            Assert.IsTrue(content.Contains("Weather"));
+                content.Should().Contain("Weather");
         }
     }
 
@@ -114,7 +115,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v2.0/weather/latest");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -124,7 +125,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/weather/latest");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -134,14 +135,14 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v1.0/weather/highs-lows");
 
         // Assert - We expect this to succeed even if data is not available (404 is valid business logic)
-        Assert.IsTrue(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NotFound);
+            Assert.IsTrue(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NotFound);
         
         // Verify it's not a versioning issue
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             var content = await response.Content.ReadAsStringAsync();
             // Should contain weather-specific error, not a generic not found
-            Assert.IsTrue(content.Contains("Weather"));
+                content.Should().Contain("Weather");
         }
     }
 
@@ -152,7 +153,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v2.0/weather/highs-lows");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -162,7 +163,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/weather/highs-lows");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -172,14 +173,14 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v1.0/weather/current");
 
         // Assert - We expect this to succeed even if data is not available (404 is valid business logic)
-        Assert.IsTrue(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NotFound);
+            Assert.IsTrue(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NotFound);
         
         // Verify it's not a versioning issue
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             var content = await response.Content.ReadAsStringAsync();
             // Should contain weather-specific error, not a generic not found
-            Assert.IsTrue(content.Contains("Weather"));
+                content.Should().Contain("Weather");
         }
     }
 
@@ -190,7 +191,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/v2.0/weather/current");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -200,7 +201,7 @@ public class ApiVersioningTests
         var response = await _client.GetAsync("/api/weather/current");
 
         // Assert
-        Assert.AreEqual(response.StatusCode, HttpStatusCode.NotFound);
+          Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [TestMethod]
@@ -221,18 +222,18 @@ public class ApiVersioningTests
             
             // Should not return 404 due to versioning issues
             // Business logic 404s are acceptable (no data available)
-            Assert.IsTrue(
-                response.StatusCode == HttpStatusCode.OK || 
-                response.StatusCode == HttpStatusCode.NotFound ||
-                response.StatusCode == HttpStatusCode.InternalServerError, // Acceptable for complex operations
-                $"Endpoint {endpoint} returned unexpected status: {response.StatusCode}"
-            );
+                Assert.IsTrue(
+                    response.StatusCode == HttpStatusCode.OK || 
+                    response.StatusCode == HttpStatusCode.NotFound ||
+                    response.StatusCode == HttpStatusCode.InternalServerError, // Acceptable for complex operations
+                    $"Endpoint {endpoint} returned unexpected status: {response.StatusCode}"
+                );
             
             // Verify Content-Type header is set for JSON API
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 var contentType = response.Content.Headers.ContentType?.ToString() ?? "";
-                Assert.IsTrue(contentType.Contains("application/json"));
+                    contentType.Should().Contain("application/json");
             }
         }
     }

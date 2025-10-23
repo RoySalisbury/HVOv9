@@ -78,9 +78,12 @@ namespace HVO.WebSite.Playground.Tests.Core;
         var originalException = new InvalidOperationException("Original error");
         var result = Result<string>.Failure(originalException);
 
-        // Act & Assert
-        var thrownException = Assert.ThrowsException<InvalidOperationException>(() => result.Value);
-        thrownException.Should().Be(originalException);
+        // Act
+        Action act = () => { var _ = result.Value; };
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+           .Which.Should().BeSameAs(originalException);
     }
 
     #endregion
@@ -152,9 +155,12 @@ namespace HVO.WebSite.Playground.Tests.Core;
         var exception = new InvalidOperationException("Test error");
         var result = Result<string>.Failure(exception);
 
-        // Act & Assert
-        var thrownException = Assert.ThrowsException<InvalidOperationException>(() => (string)result);
-        thrownException.Should().Be(exception);
+        // Act
+        Action act = () => { var _ = (string)result; };
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+           .Which.Should().BeSameAs(exception);
     }
 
     [TestMethod]

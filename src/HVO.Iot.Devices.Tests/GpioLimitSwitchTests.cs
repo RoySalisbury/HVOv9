@@ -366,13 +366,15 @@ namespace HVO.Iot.Devices.Tests
 
             // Act
             SimulatePinStateChange(PinEventTypes.Falling);
+            Thread.Sleep(50); // Allow event processing
             var countAfterFirst = eventCount;
 
             _limitSwitch.LimitSwitchTriggered -= EventHandler;
             SimulatePinStateChange(PinEventTypes.Rising);
+            Thread.Sleep(50); // Allow event processing
 
             // Assert
-            Assert.IsGreaterThanOrEqualTo(countAfterFirst, 0); // Event may or may not fire depending on timing
+            Assert.IsGreaterThanOrEqualTo(0, countAfterFirst); // Event count should be non-negative
             Assert.AreEqual(countAfterFirst, eventCount); // Should not increase after unsubscription
         }
 
@@ -465,9 +467,10 @@ namespace HVO.Iot.Devices.Tests
             SimulatePinStateChange(PinEventTypes.Rising);
             SimulatePinStateChange(PinEventTypes.Rising);
             SimulatePinStateChange(PinEventTypes.Rising);
+            Thread.Sleep(150); // Allow debounce window to settle and events to process
 
             // Assert - Should only fire once due to debouncing
-            Assert.IsLessThanOrEqualTo(eventCount, 3, $"Expected at most 3 events, but got {eventCount}");
+            Assert.IsLessThanOrEqualTo(3, eventCount, $"Expected at most 3 events, but got {eventCount}");
         }
 
         [TestMethod]
@@ -481,11 +484,11 @@ namespace HVO.Iot.Devices.Tests
             Assert.AreEqual(PinValue.High, _limitSwitch.CurrentPinValue);
             // Act - Test High→Low→High sequence
             SimulatePinStateChange(PinEventTypes.Falling); // High→Low
-            Thread.Sleep(25);
+            Thread.Sleep(50);
             SimulatePinStateChange(PinEventTypes.Rising);  // Low→High
-            Thread.Sleep(25);
+            Thread.Sleep(50);
             // Assert
-            Assert.IsGreaterThanOrEqualTo(events.Count, 1, "At least one event should have fired");
+            Assert.IsGreaterThanOrEqualTo(1, events.Count, "At least one event should have fired");
             if (events.Count >= 1)
             {
                 Assert.AreEqual(PinEventTypes.Falling, events[0], "First event should be Falling");
