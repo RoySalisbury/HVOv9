@@ -12,17 +12,18 @@ All test projects have been standardized to use **MSTest** instead of xUnit for 
 - **HVO.Iot.Devices.Tests** - Already using MSTest with comprehensive dependency injection setup
 - **HVO.WebSite.Playground.Tests** - Successfully converted to MSTest
 
-### 🔄 Conversion in Progress
-- **HVO.RoofControllerV4.RPi.Tests** - Partially converted, requires manual syntax fixes
+### ✅ Completed Across Solution
+- All active test projects are on MSTest and pass in CI/local runs
 
 ## Project Configuration
 
 ### Package References
-All test projects now use:
+All test projects use centrally-managed versions (CPVM) and the MSTest meta-package:
 ```xml
-<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-<PackageReference Include="MSTest" Version="3.6.4" />
-<PackageReference Include="Moq" Version="4.20.72" />
+<PackageReference Include="Microsoft.NET.Test.Sdk" />
+<PackageReference Include="MSTest" />
+<PackageReference Include="FluentAssertions" />
+<PackageReference Include="Moq" />
 ```
 
 ### Using Statements
@@ -55,7 +56,7 @@ Global using statement for MSTest:
 | `Assert.NotNull(value)` | `Assert.IsNotNull(value)` |
 | `Assert.Null(value)` | `Assert.IsNull(value)` |
 | `Assert.Contains(item, collection)` | `Assert.IsTrue(collection.Contains(item))` |
-| `Assert.Throws<T>(() => ...)` | `Assert.ThrowsException<T>(() => ...)` |
+| `Assert.Throws<T>(() => ...)` | Prefer `FluentAssertions`: `act.Should().Throw<T>()` |
 
 ## Test Initialization Patterns
 
@@ -120,6 +121,18 @@ public class MemoryGpioControllerClientTests : IDisposable
 
 ## Special Considerations
 
+### Parallelization Control
+- Use `[assembly: DoNotParallelize]` when a test assembly has global side effects or shared resources. Example: `HVO.WebSite.Playground.Tests/AssemblyInfo.cs`.
+- Apply `[DoNotParallelize]` to specific classes that manipulate shared hardware simulators or cross-cutting singletons. Examples exist in IoT and RoofController test suites.
+
+### FluentAssertions Best Practices
+- Prefer FluentAssertions for expressive assertions and exception testing:
+```csharp
+Action act = () => SomeMethod();
+act.Should().Throw<InvalidOperationException>()
+    .WithMessage("expected message fragment");
+```
+
 ### bUnit TestContext Conflict
 When using bUnit for Blazor component testing:
 ```csharp
@@ -180,18 +193,13 @@ dotnet test --filter "DisplayName~MockGpio"
 4. **Features**: Rich assertion library and extensive tooling support
 5. **Dependency Injection**: Seamless integration with .NET DI container
 
-## Migration Status
+## Current Status
 
 ### Completed ✅
-- Package references updated
-- Global using statements configured  
-- Basic attribute conversion completed
-- Dependency injection patterns established
-
-### Remaining Tasks 🔄
-- Manual syntax fixes for RoofControllerV4.Tests
-- Verification of all assertion conversions
-- Test execution validation
+- All test projects use MSTest and run clean
+- Package references are centrally managed
+- FluentAssertions integrated across projects
+- Parallelization controls applied where required
 
 ## Best Practices
 
