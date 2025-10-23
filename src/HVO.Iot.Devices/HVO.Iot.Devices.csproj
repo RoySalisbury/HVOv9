@@ -9,10 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Device.Gpio" Version="3.2.0" />
-    <PackageReference Include="Iot.Device.Bindings" Version="3.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+    <PackageReference Include="System.Device.Gpio" />
+    <PackageReference Include="Iot.Device.Bindings" />
+  <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
   <ItemGroup>
