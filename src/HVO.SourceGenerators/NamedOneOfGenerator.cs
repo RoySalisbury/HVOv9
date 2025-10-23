@@ -1,72 +1,92 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 
 namespace HVO
 {
     [Generator]
-    public class NamedOneOfGenerator : ISourceGenerator
+    public class NamedOneOfGenerator : IIncrementalGenerator
     {
-        public void Initialize(GeneratorInitializationContext context) =>
-            context.RegisterForSyntaxNotifications(() => new NamedOneOfReceiver());
-
-        public void Execute(GeneratorExecutionContext context)
+        public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            if (context.SyntaxReceiver is not NamedOneOfReceiver receiver)
-                return;
+            // Find all partial types with attributes
+            var provider = context.SyntaxProvider
+                .CreateSyntaxProvider(
+                    predicate: static (node, _) => node is TypeDeclarationSyntax tds
+                        && (tds is ClassDeclarationSyntax || tds is StructDeclarationSyntax)
+                        && tds.AttributeLists.Count > 0
+                        && tds.Modifiers.Any(m => m.ValueText == "partial"),
+                    transform: static (ctx, _) => GetTypeSymbolOrNull(ctx))
+                .Where(static m => m is not null);
 
-            foreach (var candidate in receiver.Candidates)
-            {
-                var model = context.Compilation.GetSemanticModel(candidate.SyntaxTree);
-                if (model.GetDeclaredSymbol(candidate) is not INamedTypeSymbol symbol)
-                    continue;
-
-                // Find attribute by fully qualified name
-                var attr = symbol.GetAttributes()
-                                 .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "HVO.NamedOneOfAttribute");
-                if (attr == null) continue;
-
-                // Extract arguments - handle both typeof() expressions and strings
-                if (attr.ConstructorArguments.Length == 0) continue;
-                
-                var arrayArgs = attr.ConstructorArguments[0].Values;
-                if (arrayArgs.Length % 2 != 0) continue;
-
-                var cases = new (string Name, string TypeName)[arrayArgs.Length / 2];
-
-                for (int i = 0; i < arrayArgs.Length; i += 2)
-                {
-                    var name = arrayArgs[i].Value?.ToString() ?? string.Empty;
-                    
-                    // Handle both typeof() and string type names
-                    string typeName;
-                    var typeArg = arrayArgs[i + 1];
-                    
-                    if (typeArg.Value is ITypeSymbol typeSymbol)
-                    {
-                        // Handle typeof() expressions
-                        typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    }
-                    else
-                    {
-                        // Handle string type names
-                        typeName = typeArg.Value?.ToString() ?? string.Empty;
-                    }
-                    
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(typeName))
-                        continue;
-
-                    cases[i / 2] = (name, typeName);
-                }
-
-                var namespaceName = symbol.ContainingNamespace.IsGlobalNamespace ? "" : symbol.ContainingNamespace.ToDisplayString();
-                var code = GenerateOneOfClass(symbol.Name, namespaceName, cases);
-                context.AddSource($"{symbol.Name}_NamedOneOf.g.cs", code);
-            }
+            // Generate source for each type
+            context.RegisterSourceOutput(provider, static (spc, symbol) => Execute(spc, symbol!));
         }
 
-        private string GenerateOneOfClass(string className, string namespaceName, (string Name, string TypeName)[] cases)
+        private static INamedTypeSymbol? GetTypeSymbolOrNull(GeneratorSyntaxContext context)
+        {
+            var tds = (TypeDeclarationSyntax)context.Node;
+            var symbol = context.SemanticModel.GetDeclaredSymbol(tds);
+
+            if (symbol is not INamedTypeSymbol namedSymbol)
+                return null;
+
+            // Check if it has the NamedOneOfAttribute
+            var hasAttribute = symbol.GetAttributes()
+                .Any(a => a.AttributeClass?.ToDisplayString() == "HVO.NamedOneOfAttribute");
+
+            return hasAttribute ? namedSymbol : null;
+        }
+
+        private static void Execute(SourceProductionContext context, INamedTypeSymbol symbol)
+        {
+            // Find attribute by fully qualified name
+            var attr = symbol.GetAttributes()
+                             .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "HVO.NamedOneOfAttribute");
+            if (attr == null) return;
+
+            // Extract arguments - handle both typeof() expressions and strings
+            if (attr.ConstructorArguments.Length == 0) return;
+
+            var arrayArgs = attr.ConstructorArguments[0].Values;
+            if (arrayArgs.Length % 2 != 0) return;
+
+            var cases = new (string Name, string TypeName)[arrayArgs.Length / 2];
+
+            for (int i = 0; i < arrayArgs.Length; i += 2)
+            {
+                var name = arrayArgs[i].Value?.ToString() ?? string.Empty;
+
+                // Handle both typeof() and string type names
+                string typeName;
+                var typeArg = arrayArgs[i + 1];
+
+                if (typeArg.Value is ITypeSymbol typeSymbol)
+                {
+                    // Handle typeof() expressions
+                    typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                }
+                else
+                {
+                    // Handle string type names
+                    typeName = typeArg.Value?.ToString() ?? string.Empty;
+                }
+
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(typeName))
+                    continue;
+
+                cases[i / 2] = (name, typeName);
+            }
+
+            var namespaceName = symbol.ContainingNamespace.IsGlobalNamespace ? "" : symbol.ContainingNamespace.ToDisplayString();
+            var code = GenerateOneOfClass(symbol.Name, namespaceName, cases);
+            context.AddSource($"{symbol.Name}_NamedOneOf.g.cs", code);
+        }
+
+        private static string GenerateOneOfClass(string className, string namespaceName, (string Name, string TypeName)[] cases)
         {
             var sb = new StringBuilder();
             sb.AppendLine("#nullable enable");
@@ -163,7 +183,7 @@ namespace HVO
                 var cleanTypeName = c.TypeName.Replace("global::", "");
                 sb.AppendLine($"{indent}        try");
                 sb.AppendLine($"{indent}        {{");
-                
+
                 // Handle value types vs reference types differently for null check
                 if (IsValueType(cleanTypeName))
                 {
@@ -175,7 +195,7 @@ namespace HVO
                     sb.AppendLine($"{indent}            var val = element.Deserialize<{cleanTypeName}>(options);");
                     sb.AppendLine($"{indent}            if (val != null) return new {className}(val) {{ RawJson = element }};");
                 }
-                
+
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        catch {{ }}");
                 sb.AppendLine();
@@ -210,7 +230,7 @@ namespace HVO
         {
             // Clean up fully qualified names for comparison
             var cleanTypeName = typeName.Replace("global::", "").Replace("System.", "");
-            
+
             // Common value types
             return cleanTypeName switch
             {
