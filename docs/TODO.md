@@ -139,11 +139,11 @@
 
 ### Data Store & Configuration
 #### Active Tasks
-- [ ] Finalize configuration UX for editing stored rigs/cameras/optics
 - [ ] Add diagnostics overlay entity/table to configuration store
 - [ ] Model retention policies in telemetry/configuration store
 
 #### Completed Tasks ✅
+- [x] Finalize configuration UX for editing stored rigs/cameras/optics
 - [x] Create `HVO.SkyMonitorV5.Data` project with EF Core contexts
 - [x] Migrate catalog contexts (HYG, Constellation, Deep Sky) to data project
 - [x] Implement `SkyMonitorConfigurationContext` with seed defaults
