@@ -430,8 +430,8 @@ namespace HVO.Iot.Devices.Tests
             Thread.Sleep(500); // Allow all events to process
 
             // Assert
-            Assert.IsTrue(eventCount > 0, "At least some button events should have been processed");
-            Assert.IsTrue(eventCount <= 50, "Event count should not exceed number of presses");
+            Assert.IsGreaterThan(eventCount, 0, "At least some button events should have been processed");
+            Assert.IsLessThanOrEqualTo(eventCount, 50, "Event count should not exceed number of presses");
         }
 
         [TestMethod]
@@ -474,8 +474,7 @@ namespace HVO.Iot.Devices.Tests
             // Wait for all tasks to complete
             Task.WaitAll(tasks, TimeSpan.FromSeconds(5));
 
-            // Assert
-            Assert.IsNotNull(_buttonWithLed.LedState); // Should have some valid state
+            // Assert - test completes successfully if no exceptions thrown
         }
 
         #endregion

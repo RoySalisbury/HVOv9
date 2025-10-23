@@ -97,10 +97,10 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert
             Assert.IsNotNull(_limitSwitch);
-            Assert.AreEqual(_limitSwitch.GpioPinNumber, TestPin);
+            Assert.AreEqual(TestPin, _limitSwitch.GpioPinNumber);
             Assert.IsTrue(_limitSwitch.IsPullup);
             Assert.IsFalse(_limitSwitch.HasExternalResistor);
-            Assert.AreEqual(_limitSwitch.DebounceTime, TimeSpan.Zero);
+            Assert.AreEqual(TimeSpan.Zero, _limitSwitch.DebounceTime);
             
             // Verify initial pin value based on pin mode
             // InputPullUp should initialize to High
@@ -185,7 +185,7 @@ namespace HVO.Iot.Devices.Tests
 
             // Assert - verify the limit switch was created successfully
             Assert.IsNotNull(_limitSwitch);
-            Assert.AreEqual(_limitSwitch.GpioPinNumber, TestPin);
+            Assert.AreEqual(TestPin, _limitSwitch.GpioPinNumber);
         }
 
         [TestMethod]
@@ -324,10 +324,10 @@ namespace HVO.Iot.Devices.Tests
             var result = _limitSwitch.ToString();
 
             // Assert
-            Assert.IsTrue(result.Contains($"Pin={TestPin}"));
-            Assert.IsTrue(result.Contains("Mode=InputPullUp"));
-            Assert.IsTrue(result.Contains("Pull=True"));
-            Assert.IsTrue(result.Contains("ExtResistor=False"));
+            StringAssert.Contains(result, $"Pin={TestPin}");
+            StringAssert.Contains(result, "Mode=InputPullUp");
+            StringAssert.Contains(result, "Pull=True");
+            StringAssert.Contains(result, "ExtResistor=False");
         }
 
         #endregion
@@ -345,8 +345,7 @@ namespace HVO.Iot.Devices.Tests
             try
             {
                 SimulatePinStateChange(PinEventTypes.Falling);
-                // If we get here, the event was handled gracefully
-                Assert.IsTrue(true, "Event was handled without crashing");
+                // If we get here, the event was handled gracefully - no assertion needed
             }
             catch
             {
@@ -373,8 +372,8 @@ namespace HVO.Iot.Devices.Tests
             SimulatePinStateChange(PinEventTypes.Rising);
 
             // Assert
-            Assert.IsTrue(countAfterFirst >= 0); // Event may or may not fire depending on timing
-            Assert.AreEqual(eventCount, countAfterFirst); // Should not increase after unsubscription
+            Assert.IsGreaterThanOrEqualTo(countAfterFirst, 0); // Event may or may not fire depending on timing
+            Assert.AreEqual(countAfterFirst, eventCount); // Should not increase after unsubscription
         }
 
         [TestMethod]
@@ -390,9 +389,9 @@ namespace HVO.Iot.Devices.Tests
             Thread.Sleep(50);
             // Assert
             Assert.IsNotNull(capturedArgs);
-            Assert.AreEqual(capturedArgs.ChangeType, PinEventTypes.Falling);
-            Assert.AreEqual(capturedArgs.PinNumber, TestPin);
-            Assert.AreEqual(capturedArgs.PinMode, PinMode.InputPullUp);
+            Assert.AreEqual(PinEventTypes.Falling, capturedArgs.ChangeType);
+            Assert.AreEqual(TestPin, capturedArgs.PinNumber);
+            Assert.AreEqual(PinMode.InputPullUp, capturedArgs.PinMode);
             Assert.IsTrue(capturedArgs.EventDateTime <= DateTimeOffset.Now);
         }
 
@@ -468,7 +467,7 @@ namespace HVO.Iot.Devices.Tests
             SimulatePinStateChange(PinEventTypes.Rising);
 
             // Assert - Should only fire once due to debouncing
-            Assert.IsTrue(eventCount <= 3, $"Expected at most 3 events, but got {eventCount}");
+            Assert.IsLessThanOrEqualTo(eventCount, 3, $"Expected at most 3 events, but got {eventCount}");
         }
 
         [TestMethod]
@@ -486,7 +485,7 @@ namespace HVO.Iot.Devices.Tests
             SimulatePinStateChange(PinEventTypes.Rising);  // Low→High
             Thread.Sleep(25);
             // Assert
-            Assert.IsTrue(events.Count >= 1, "At least one event should have fired");
+            Assert.IsGreaterThanOrEqualTo(events.Count, 1, "At least one event should have fired");
             if (events.Count >= 1)
             {
                 Assert.AreEqual(PinEventTypes.Falling, events[0], "First event should be Falling");
@@ -580,10 +579,10 @@ namespace HVO.Iot.Devices.Tests
             _limitSwitch = CreateLimitSwitch(isPullup: false, hasExternalResistor: true, debounceTime: debounceTime);
 
             // Assert
-            Assert.AreEqual(_limitSwitch.GpioPinNumber, TestPin);
+            Assert.AreEqual(TestPin, _limitSwitch.GpioPinNumber);
             Assert.IsFalse(_limitSwitch.IsPullup);
             Assert.IsTrue(_limitSwitch.HasExternalResistor);
-            Assert.AreEqual(_limitSwitch.DebounceTime, debounceTime);
+            Assert.AreEqual(debounceTime, _limitSwitch.DebounceTime);
             Assert.IsNotNull(_limitSwitch.GpioController);
         }
 
@@ -597,8 +596,8 @@ namespace HVO.Iot.Devices.Tests
             var result = _limitSwitch.ToString();
 
             // Assert
-            Assert.IsTrue(result.Contains("Pull=False"));
-            Assert.IsTrue(result.Contains("ExtResistor=True"));
+            StringAssert.Contains(result, "Pull=False");
+            StringAssert.Contains(result, "ExtResistor=True");
         }
 
         #endregion
@@ -668,7 +667,7 @@ namespace HVO.Iot.Devices.Tests
             Task.WaitAll(tasks.ToArray());
 
             // Assert
-            Assert.AreEqual(0, exceptions.Count, $"Thread safety test failed with {exceptions.Count} exceptions");
+            CollectionAssert.AreEqual(Array.Empty<Exception>(), exceptions, $"Thread safety test failed with {exceptions.Count} exceptions");
         }
 
         #endregion

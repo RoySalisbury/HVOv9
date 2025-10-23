@@ -129,7 +129,7 @@ public class RoofControllerRelayBehaviorTests
 
         var stopWrites = hat.RelayWriteLog;
         stopWrites.Should().NotBeNull();
-        stopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        stopWrites.Count.Should().BeGreaterThanOrEqualTo(3);
         var stopSequence = stopWrites.Skip(Math.Max(0, stopWrites.Count - 3)).ToArray();
         stopSequence.Should().Equal(new[]
         {
@@ -185,7 +185,7 @@ public class RoofControllerRelayBehaviorTests
 
         var stopWrites = hat.RelayWriteLog;
         stopWrites.Should().NotBeNull();
-        stopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        stopWrites.Count.Should().BeGreaterThanOrEqualTo(3);
         var stopSequence = stopWrites.Skip(Math.Max(0, stopWrites.Count - 3)).ToArray();
         stopSequence.Should().Equal(new[]
         {
@@ -213,7 +213,7 @@ public class RoofControllerRelayBehaviorTests
 
         var openWrites = hat.RelayWriteLog;
         openWrites.Should().NotBeNull();
-        openWrites.Count.Should().BeGreaterOrEqualTo(3);
+        openWrites.Count.Should().BeGreaterThanOrEqualTo(3);
         var openSequence = openWrites.Skip(Math.Max(0, openWrites.Count - 3)).ToArray();
         openSequence.Should().Equal(new[]
         {
@@ -233,7 +233,7 @@ public class RoofControllerRelayBehaviorTests
 
         var stopWrites = hat.RelayWriteLog;
         stopWrites.Should().NotBeNull();
-        stopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        stopWrites.Count.Should().BeGreaterThanOrEqualTo(3);
         var stopSequence = stopWrites.Skip(Math.Max(0, stopWrites.Count - 3)).ToArray();
         stopSequence.Should().Equal(new[]
         {
@@ -281,7 +281,7 @@ public class RoofControllerRelayBehaviorTests
 
         var closeWrites = hat.RelayWriteLog;
         closeWrites.Should().NotBeNull();
-        closeWrites.Count.Should().BeGreaterOrEqualTo(3);
+        closeWrites.Count.Should().BeGreaterThanOrEqualTo(3);
         var closeSequence = closeWrites.Skip(Math.Max(0, closeWrites.Count - 3)).ToArray();
         closeSequence.Should().Equal(new[]
         {
@@ -300,7 +300,7 @@ public class RoofControllerRelayBehaviorTests
 
         var closeStopWrites = hat.RelayWriteLog;
         closeStopWrites.Should().NotBeNull();
-        closeStopWrites.Count.Should().BeGreaterOrEqualTo(3);
+        closeStopWrites.Count.Should().BeGreaterThanOrEqualTo(3);
         var closeStopSequence = closeStopWrites.Skip(Math.Max(0, closeStopWrites.Count - 3)).ToArray();
         closeStopSequence.Should().Equal(new[]
         {
