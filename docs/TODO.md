@@ -382,16 +382,11 @@ Several items await physical Raspberry Pi 5 hardware access:
 
 ---
 
-**Document Consolidation Note**: This master TODO consolidates items from:
-- `docs/TODO.md` (original)
-- `docs/phase3_3-status.md`
-- `docs/skymonitor-frame-context-plan.md`
-- `docs/skymonitorv5-data-store-project.md`
-- `docs/projects/skia-sharp-pipeline-plan.md`
-- `docs/projects/sky-monitor-v5/processed-frame-export-plan.md`
-- `docs/projects/sky-monitor-v5/camera-driver-refactor-plan.md`
-- `docs/projects/sky-monitor-v5/skymonitorv5-ux-plan.md`
-- `docs/projects/sky-monitor-v5/workstream7-image-history.md`
-- `docs/projects/dotnet10-readiness-plan.md`
+**Document Consolidation Note**: This master TODO consolidates and replaces previous project-specific planning documents, many of which have been completed and archived. 
 
-Archived project plan documents can be found in `docs/archive/completed-projects/` for historical reference.
+**Active Project Documentation**:
+- **SkyMonitor V5**: See `docs/projects/sky-monitor-v5/` for deployment guide, operations runbook, and migration guides
+- **RoofController V4**: See `docs/projects/roof-controller-v4-rpi/` for docker deployment guide
+- **.NET 10 Readiness**: See `docs/projects/dotnet10-readiness-plan.md` for upgrade planning
+
+**Completed Project Archives**: Historical project planning documents can be found in `docs/archive/completed-projects/` for reference.
