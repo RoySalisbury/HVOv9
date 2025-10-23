@@ -41,15 +41,26 @@
 
 ## Solution-Wide
 
-### Active Tasks
-- [ ] NuGet package updates and dependency management
-- [ ] Global code cleanup and refactoring initiatives
-- [ ] Cross-project standardization efforts
+### Ongoing Maintenance
+> These are continuous improvement areas without specific completion dates:
+- Periodic NuGet package updates and dependency management
+- Code quality improvements and refactoring as needed
+- Cross-project pattern standardization as new patterns emerge
 
-### Completed Tasks ✅
+### Recent Completions (October 2025) ✅
+- [x] Fix all 97 MSTest analyzer warnings across 21 test files
+- [x] Update .NET SDK from 9.0.302 to 9.0.304
+- [x] Update Microsoft.CodeAnalysis.Analyzers from 3.3.4 to 4.14.0
+- [x] Migrate NamedOneOfGenerator to IIncrementalGenerator API
+- [x] Fix bash unbound variable errors in devcontainer (POSH_SESSION_ID, STARSHIP_SESSION_KEY, Python guards)
+- [x] Localize strict mode in hvo-env.sh to prevent leaking into interactive shells
+
+### Completed Infrastructure ✅
 - [x] Standardize EF Core dependencies to 9.0.10 across solution
 - [x] Deploy `dotnet-ef` global tool for migration support
 - [x] Establish workspace-wide Result<T> pattern for error handling
+- [x] Establish MSTest standardization patterns across test suite
+- [x] Implement structured logging with ILogger<T> throughout workspace
 
 ---
 
