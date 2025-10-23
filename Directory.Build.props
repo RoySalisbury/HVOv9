@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- 
+    Directory.Build.props - Repository-wide MSBuild settings for HVOv9
+    
+    This file is automatically imported by all projects in the repository.
+    Project-specific overrides can be set in individual .csproj files after this import.
+    
+    See: https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory
+  -->
+
+  <PropertyGroup Label="Language and Framework Defaults">
+    <!-- Use latest C# language features (C# 12 for .NET 9) -->
+    <LangVersion>latest</LangVersion>
+    
+    <!-- Enable nullable reference types for better null safety -->
+    <Nullable>enable</Nullable>
+    
+    <!-- Enable implicit global usings for common namespaces -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Use latest code analysis rules for .NET 9 -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    
+    <!-- Treat warnings as errors in Release builds for quality -->
+    <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Suppressed Warnings">
+    <!-- CS1591: Missing XML comment for publicly visible type or member -->
+    <!-- Suppressed globally; enable per-project for public APIs that require documentation -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    
+    <!-- CS1030: #warning directive -->
+    <!-- Common in test projects for intentional warnings; suppress to reduce noise -->
+    <NoWarn>$(NoWarn);CS1030</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Build Output">
+    <!-- Suppress preview SDK messages (set in global.json but reinforced here) -->
+    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    
+    <!-- Generate full debug information for better debugging experience -->
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Code Quality">
+    <!-- Enable deterministic builds for reproducibility -->
+    <Deterministic>true</Deterministic>
+    
+    <!-- Enable source link for better debugging of NuGet packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    
+    <!-- Include symbols in NuGet packages -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Performance">
+    <!-- Enable ReadyToRun for faster startup in published apps -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
+    
+    <!-- Trim unused code in published apps for smaller deployment size -->
+    <PublishTrimmed Condition="'$(Configuration)' == 'Release' and '$(IsPublishable)' == 'true'">false</PublishTrimmed>
+  </PropertyGroup>
+
+</Project>
