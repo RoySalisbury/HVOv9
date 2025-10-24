@@ -184,8 +184,10 @@ namespace HVO.Astronomy.CFITSIO.Interop
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int fits_delete_file(SafeFitsFile fitsFile, ref int status);
 
-    /// <summary>Get the CFITSIO runtime version.</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_version")]
+  /// <summary>Get the CFITSIO runtime version.</summary>
+  // Some CFITSIO builds export the canonical symbol name 'ffvers' (the 'fits_' form is a macro alias in C).
+  // Use the native symbol directly to ensure compatibility across distributions.
+  [LibraryImport(NativeLibraryName, EntryPoint = "ffvers")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int fits_get_version(out double version);
 
