@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using HVO.Astronomy.CFITSIO.Interop;
 using static HVO.Astronomy.CFITSIO.Interop.CFitsIO;
+using HVO;
 
 #if HAS_SKIA
 using SkiaSharp;
@@ -89,13 +90,20 @@ namespace HVO.Astronomy.CFITSIO
     /// Create a new FITS file on disk.
     /// </summary>
     /// <param name="filePath">Destination path. Prefix with <c>!</c> to overwrite if it exists.</param>
-    public static FitsFile Create(string filePath)
+    public static Result<FitsFile> Create(string filePath)
     {
-      if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
-      int status = 0;
-      CFitsIO.fits_create_file(out var handle, filePath, ref status);
-      CFitsIO.ThrowIfError(status);
-      return new FitsFile(handle, Unbang(filePath));
+      if (string.IsNullOrWhiteSpace(filePath)) return Result<FitsFile>.Failure(new ArgumentNullException(nameof(filePath)));
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_create_file(out var handle, filePath, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<FitsFile>.Success(new FitsFile(handle, Unbang(filePath)));
+      }
+      catch (Exception ex)
+      {
+        return Result<FitsFile>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -103,59 +111,94 @@ namespace HVO.Astronomy.CFITSIO
     /// </summary>
     /// <param name="filePath">Path to an existing FITS file.</param>
     /// <param name="readWrite">If true, open read/write; otherwise read-only.</param>
-    public static FitsFile Open(string filePath, bool readWrite = false)
+    public static Result<FitsFile> Open(string filePath, bool readWrite = false)
     {
-      if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
-      int status = 0;
-      CFitsIO.fits_open_file(out var handle, filePath, readWrite ? CFitsIO.READWRITE : CFitsIO.READONLY, ref status);
-      CFitsIO.ThrowIfError(status);
-      return new FitsFile(handle, filePath);
+      if (string.IsNullOrWhiteSpace(filePath)) return Result<FitsFile>.Failure(new ArgumentNullException(nameof(filePath)));
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_open_file(out var handle, filePath, readWrite ? CFitsIO.READWRITE : CFitsIO.READONLY, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<FitsFile>.Success(new FitsFile(handle, filePath));
+      }
+      catch (Exception ex)
+      {
+        return Result<FitsFile>.Failure(ex);
+      }
     }
 
     /// <summary>
     /// Get the current HDU type and absolute number (1-based).
     /// </summary>
-    public (int HduType, int AbsoluteHduNumber) GetCurrentHduInfo()
+    public Result<(int HduType, int AbsoluteHduNumber)> GetCurrentHduInfo()
     {
-      int status = 0;
-      CFitsIO.fits_get_hdu_type(Handle, out int hduType, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_get_hdu_type(Handle, out int hduType, ref status);
+        CFitsIO.ThrowIfError(status);
 
-      CFitsIO.fits_get_hdu_num(Handle, out int absoluteHduNumber);
-      return (hduType, absoluteHduNumber);
+        CFitsIO.fits_get_hdu_num(Handle, out int absoluteHduNumber);
+        return Result<(int, int)>.Success((hduType, absoluteHduNumber));
+      }
+      catch (Exception ex)
+      {
+        return Result<(int, int)>.Failure(ex);
+      }
     }
 
     /// <summary>
     /// Move to the specified absolute HDU number (1-based). Returns the new HDU type.
     /// </summary>
-    public int MoveToHdu(int absoluteHduNumber)
+    public Result<int> MoveToHdu(int absoluteHduNumber)
     {
-      int status = 0;
-      CFitsIO.fits_movabs_hdu(Handle, absoluteHduNumber, out int hduType, ref status);
-      CFitsIO.ThrowIfError(status);
-      return hduType;
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_movabs_hdu(Handle, absoluteHduNumber, out int hduType, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<int>.Success(hduType);
+      }
+      catch (Exception ex)
+      {
+        return Result<int>.Failure(ex);
+      }
     }
 
     /// <summary>
     /// Move by a relative number of HDUs (positive moves forward). Returns the new HDU type.
     /// </summary>
-    public int MoveBy(int relativeHduOffset)
+    public Result<int> MoveBy(int relativeHduOffset)
     {
-      int status = 0;
-      CFitsIO.fits_movrel_hdu(Handle, relativeHduOffset, out int hduType, ref status);
-      CFitsIO.ThrowIfError(status);
-      return hduType;
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_movrel_hdu(Handle, relativeHduOffset, out int hduType, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<int>.Success(hduType);
+      }
+      catch (Exception ex)
+      {
+        return Result<int>.Failure(ex);
+      }
     }
 
     /// <summary>
     /// Get the total number of HDUs in this file.
     /// </summary>
-    public int GetNumberOfHdus()
+    public Result<int> GetNumberOfHdus()
     {
-      int status = 0;
-      CFitsIO.fits_get_num_hdus(Handle, out int count, ref status);
-      CFitsIO.ThrowIfError(status);
-      return count;
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_get_num_hdus(Handle, out int count, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<int>.Success(count);
+      }
+      catch (Exception ex)
+      {
+        return Result<int>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -163,14 +206,21 @@ namespace HVO.Astronomy.CFITSIO
     /// </summary>
     /// <param name="bitpix">CFITSIO BITPIX constant (e.g., <see cref="CFitsIO.USHORT_IMG"/>, <see cref="CFitsIO.FLOAT_IMG"/>).</param>
     /// <param name="axisLengths">Axis lengths; length equals the number of axes.</param>
-    public void CreateImageHdu(int bitpix, params long[] axisLengths)
+    public Result<bool> CreateImageHdu(int bitpix, params long[] axisLengths)
     {
       if (axisLengths is null || axisLengths.Length == 0)
-        throw new ArgumentException("At least one axis length is required.", nameof(axisLengths));
-
-      int status = 0;
-      CFitsIO.fits_create_imgll(Handle, bitpix, axisLengths.Length, axisLengths, ref status);
-      CFitsIO.ThrowIfError(status);
+        return Result<bool>.Failure(new ArgumentException("At least one axis length is required.", nameof(axisLengths)));
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_create_imgll(Handle, bitpix, axisLengths.Length, axisLengths, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -178,24 +228,39 @@ namespace HVO.Astronomy.CFITSIO
     /// </summary>
     /// <param name="maximumAxes">Maximum axes queried (allocates an array of this size).</param>
     /// <returns>(BITPIX, numberOfAxes, axisLengths)</returns>
-    public (int Bitpix, int NumberOfAxes, long[] AxisLengths) GetImageParameters(int maximumAxes = 9)
+    public Result<(int Bitpix, int NumberOfAxes, long[] AxisLengths)> GetImageParameters(int maximumAxes = 9)
     {
-      int status = 0;
-      var axis = new long[Math.Max(1, maximumAxes)];
-      CFitsIO.fits_get_img_paramll(Handle, axis.Length, out int bitpix, out int naxis, axis, ref status);
-      CFitsIO.ThrowIfError(status);
-      if (naxis < axis.Length) Array.Resize(ref axis, naxis);
-      return (bitpix, naxis, axis);
+      try
+      {
+        int status = 0;
+        var axis = new long[Math.Max(1, maximumAxes)];
+        CFitsIO.fits_get_img_paramll(Handle, axis.Length, out int bitpix, out int naxis, axis, ref status);
+        CFitsIO.ThrowIfError(status);
+        if (naxis < axis.Length) Array.Resize(ref axis, naxis);
+        return Result<(int, int, long[])>.Success((bitpix, naxis, axis));
+      }
+      catch (Exception ex)
+      {
+        return Result<(int, int, long[])>.Failure(ex);
+      }
     }
 
     /// <summary>
     /// Set BSCALE and BZERO for the current image HDU. For unsigned 16-bit storage, the convention is BSCALE=1, BZERO=32768.
     /// </summary>
-    public void SetScale(double bScale, double bZero)
+    public Result<bool> SetScale(double bScale, double bZero)
     {
-      int status = 0;
-      CFitsIO.fits_set_bscale(Handle, bScale, bZero, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_set_bscale(Handle, bScale, bZero, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -205,24 +270,32 @@ namespace HVO.Astronomy.CFITSIO
     /// <param name="cfitsioTypeCode">CFITSIO type code for <typeparamref name="T"/> (e.g., <see cref="CFitsIO.TUSHORT"/>).</param>
     /// <param name="firstElementIndex">1-based element index in FITS linearized array.</param>
     /// <param name="source">Source pixel span.</param>
-    public void WritePixels<T>(int cfitsioTypeCode, long firstElementIndex, ReadOnlySpan<T> source)
+    public Result<bool> WritePixels<T>(int cfitsioTypeCode, long firstElementIndex, ReadOnlySpan<T> source)
         where T : unmanaged
     {
-      int status = 0;
-      unsafe
+      try
       {
-        fixed (T* p = source)
+        int status = 0;
+        unsafe
         {
-          CFitsIO.fits_write_img(
-              Handle,
-              cfitsioTypeCode,
-              firstElementIndex,
-              source.Length,
-              (IntPtr)p,
-              ref status);
+          fixed (T* p = source)
+          {
+            CFitsIO.fits_write_img(
+                Handle,
+                cfitsioTypeCode,
+                firstElementIndex,
+                source.Length,
+                (IntPtr)p,
+                ref status);
+          }
         }
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
       }
-      CFitsIO.ThrowIfError(status);
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -232,164 +305,273 @@ namespace HVO.Astronomy.CFITSIO
     /// <param name="cfitsioTypeCode">CFITSIO type code for <typeparamref name="T"/>.</param>
     /// <param name="firstElementIndex">1-based element index in FITS linearized array.</param>
     /// <param name="destination">Destination pixel span.</param>
-    public void ReadPixels<T>(int cfitsioTypeCode, long firstElementIndex, Span<T> destination)
+    public Result<bool> ReadPixels<T>(int cfitsioTypeCode, long firstElementIndex, Span<T> destination)
         where T : unmanaged
     {
-      int status = 0;
-      int anyNull;
-      unsafe
+      try
       {
-        fixed (T* p = destination)
+        int status = 0;
+        int anyNull;
+        unsafe
         {
-          CFitsIO.fits_read_img(
-              Handle,
-              cfitsioTypeCode,
-              firstElementIndex,
-              destination.Length,
-              IntPtr.Zero,
-              (IntPtr)p,
-              out anyNull,
-              ref status);
+          fixed (T* p = destination)
+          {
+            CFitsIO.fits_read_img(
+                Handle,
+                cfitsioTypeCode,
+                firstElementIndex,
+                destination.Length,
+                IntPtr.Zero,
+                (IntPtr)p,
+                out anyNull,
+                ref status);
+          }
         }
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
       }
-      CFitsIO.ThrowIfError(status);
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Strongly-typed helper to write <c>ushort</c> pixels.</summary>
-    public void WritePixelsU16(long firstElementIndex, ReadOnlySpan<ushort> source)
-        => WritePixels<ushort>(CFitsIO.TUSHORT, firstElementIndex, source);
+  public Result<bool> WritePixelsU16(long firstElementIndex, ReadOnlySpan<ushort> source)
+    => WritePixels<ushort>(CFitsIO.TUSHORT, firstElementIndex, source);
 
     /// <summary>Strongly-typed helper to write <c>byte</c> pixels.</summary>
-    public void WritePixelsU8(long firstElementIndex, ReadOnlySpan<byte> source)
-        => WritePixels<byte>(CFitsIO.TBYTE, firstElementIndex, source);
+  public Result<bool> WritePixelsU8(long firstElementIndex, ReadOnlySpan<byte> source)
+    => WritePixels<byte>(CFitsIO.TBYTE, firstElementIndex, source);
 
     /// <summary>Strongly-typed helper to read <c>ushort</c> pixels.</summary>
-    public void ReadPixelsU16(long firstElementIndex, Span<ushort> destination)
-        => ReadPixels<ushort>(CFitsIO.TUSHORT, firstElementIndex, destination);
+  public Result<bool> ReadPixelsU16(long firstElementIndex, Span<ushort> destination)
+    => ReadPixels<ushort>(CFitsIO.TUSHORT, firstElementIndex, destination);
 
     /// <summary>Strongly-typed helper to read <c>byte</c> pixels.</summary>
-    public void ReadPixelsU8(long firstElementIndex, Span<byte> destination)
-        => ReadPixels<byte>(CFitsIO.TBYTE, firstElementIndex, destination);
+  public Result<bool> ReadPixelsU8(long firstElementIndex, Span<byte> destination)
+    => ReadPixels<byte>(CFitsIO.TBYTE, firstElementIndex, destination);
 
     /// <summary>
     /// Write a raw 80-character header card (advanced; consider using typed helpers).
     /// </summary>
-    public void WriteHeaderCard(string card)
+    public Result<bool> WriteHeaderCard(string card)
     {
-      int status = 0;
-      CFitsIO.fits_write_record(Handle, card, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_write_record(Handle, card, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Delete a header keyword from the current HDU.</summary>
-    public void DeleteHeaderKey(string keyword)
+    public Result<bool> DeleteHeaderKey(string keyword)
     {
-      int status = 0;
-      CFitsIO.fits_delete_key(Handle, keyword, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_delete_key(Handle, keyword, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Create or update a string keyword on the current HDU.</summary>
-    public void WriteKeyString(string keyword, string value, string comment = "")
+    public Result<bool> WriteKeyString(string keyword, string value, string comment = "")
     {
-      int status = 0;
-      CFitsIO.fits_update_key_str(Handle, keyword, value, comment, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_update_key_str(Handle, keyword, value, comment, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Create or update a 32-bit integer keyword on the current HDU.</summary>
-    public void WriteKeyInt32(string keyword, int value, string comment = "")
+    public Result<bool> WriteKeyInt32(string keyword, int value, string comment = "")
     {
-      int status = 0;
-      CFitsIO.fits_update_key_lng(Handle, keyword, value, comment, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_update_key_lng(Handle, keyword, value, comment, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Create or update a 64-bit integer keyword on the current HDU.</summary>
-    public void WriteKeyInt64(string keyword, long value, string comment = "")
+    public Result<bool> WriteKeyInt64(string keyword, long value, string comment = "")
     {
-      int status = 0;
-      CFitsIO.fits_update_key_lnglng(Handle, keyword, value, comment, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_update_key_lnglng(Handle, keyword, value, comment, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Create or update a double-precision keyword on the current HDU.</summary>
-    public void WriteKeyDouble(string keyword, double value, int decimals = -1, string comment = "")
+    public Result<bool> WriteKeyDouble(string keyword, double value, int decimals = -1, string comment = "")
     {
-      int status = 0;
-      CFitsIO.fits_update_key_dbl(Handle, keyword, value, decimals, comment, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_update_key_dbl(Handle, keyword, value, decimals, comment, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Create or update a logical (boolean) keyword on the current HDU.</summary>
-    public void WriteKeyBoolean(string keyword, bool value, string comment = "")
+    public Result<bool> WriteKeyBoolean(string keyword, bool value, string comment = "")
     {
-      int status = 0;
-      CFitsIO.fits_update_key_log(Handle, keyword, value ? 1 : 0, comment, ref status);
-      CFitsIO.ThrowIfError(status);
+      try
+      {
+        int status = 0;
+        CFitsIO.fits_update_key_log(Handle, keyword, value ? 1 : 0, comment, ref status);
+        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
+      }
     }
 
     /// <summary>Try to read a string keyword value; returns null if not present.</summary>
-    public string? TryGetKeyString(string keyword) => CFitsIO.TryReadKeyString(Handle, keyword);
+    public Result<string?> TryGetKeyString(string keyword)
+    {
+      try
+      {
+        return Result<string?>.Success(CFitsIO.TryReadKeyString(Handle, keyword));
+      }
+      catch (Exception ex)
+      {
+        return Result<string?>.Failure(ex);
+      }
+    }
 
     /// <summary>Try to read a 32-bit integer keyword value; returns null if not present.</summary>
-    public int? TryGetKeyInt32(string keyword)
+    public Result<int?> TryGetKeyInt32(string keyword)
     {
-      int status = 0;
-      int value = 0;
-      CFitsIO.fits_read_key_lng(Handle, keyword, ref value, IntPtr.Zero, ref status);
-      if (status != 0) return null;
-      return value;
+      try
+      {
+        int status = 0;
+        int value = 0;
+        CFitsIO.fits_read_key_lng(Handle, keyword, ref value, IntPtr.Zero, ref status);
+        if (status != 0) return Result<int?>.Success(null);
+        return Result<int?>.Success(value);
+      }
+      catch (Exception ex)
+      {
+        return Result<int?>.Failure(ex);
+      }
     }
 
     /// <summary>Try to read a 64-bit integer keyword value; returns null if not present.</summary>
-    public long? TryGetKeyInt64(string keyword)
+    public Result<long?> TryGetKeyInt64(string keyword)
     {
-      int status = 0;
-      long value = 0;
-      CFitsIO.fits_read_key_lnglng(Handle, keyword, ref value, IntPtr.Zero, ref status);
-      if (status != 0) return null;
-      return value;
+      try
+      {
+        int status = 0;
+        long value = 0;
+        CFitsIO.fits_read_key_lnglng(Handle, keyword, ref value, IntPtr.Zero, ref status);
+        if (status != 0) return Result<long?>.Success(null);
+        return Result<long?>.Success(value);
+      }
+      catch (Exception ex)
+      {
+        return Result<long?>.Failure(ex);
+      }
     }
 
     /// <summary>Try to read a double-precision keyword value; returns null if not present.</summary>
-    public double? TryGetKeyDouble(string keyword)
+    public Result<double?> TryGetKeyDouble(string keyword)
     {
-      int status = 0;
-      double value = 0;
-      CFitsIO.fits_read_key_dbl(Handle, keyword, ref value, IntPtr.Zero, ref status);
-      if (status != 0) return null;
-      return value;
+      try
+      {
+        int status = 0;
+        double value = 0;
+        CFitsIO.fits_read_key_dbl(Handle, keyword, ref value, IntPtr.Zero, ref status);
+        if (status != 0) return Result<double?>.Success(null);
+        return Result<double?>.Success(value);
+      }
+      catch (Exception ex)
+      {
+        return Result<double?>.Failure(ex);
+      }
     }
 
     /// <summary>Try to read a logical (boolean) keyword value; returns null if not present.</summary>
-    public bool? TryGetKeyBoolean(string keyword)
+    public Result<bool?> TryGetKeyBoolean(string keyword)
     {
-      int status = 0;
-      int logical = 0;
-      CFitsIO.fits_read_key_log(Handle, keyword, ref logical, IntPtr.Zero, ref status);
-      if (status != 0) return null;
-      return logical != 0;
+      try
+      {
+        int status = 0;
+        int logical = 0;
+        CFitsIO.fits_read_key_log(Handle, keyword, ref logical, IntPtr.Zero, ref status);
+        if (status != 0) return Result<bool?>.Success(null);
+        return Result<bool?>.Success(logical != 0);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool?>.Failure(ex);
+      }
     }
 
     /// <summary>
     /// Read all header cards from the current HDU as raw 80-character strings.
     /// </summary>
-    public IReadOnlyList<string> ReadAllHeaderCards()
+    public Result<IReadOnlyList<string>> ReadAllHeaderCards()
     {
-      int status = 0;
-      CFitsIO.fits_get_hdrspace(Handle, out int numberOfCards, out _, ref status);
-      CFitsIO.ThrowIfError(status);
-
-      var cards = new List<string>(numberOfCards);
-      for (int i = 1; i <= numberOfCards; i++)
+      try
       {
-        int s = 0;
-        string card = CFitsIO.ReadRecordToString(Handle, i, ref s);
-        CFitsIO.ThrowIfError(s);
-        cards.Add(card);
+        int status = 0;
+        CFitsIO.fits_get_hdrspace(Handle, out int numberOfCards, out _, ref status);
+        CFitsIO.ThrowIfError(status);
+
+        var cards = new List<string>(numberOfCards);
+        for (int i = 1; i <= numberOfCards; i++)
+        {
+          int s = 0;
+          string card = CFitsIO.ReadRecordToString(Handle, i, ref s);
+          CFitsIO.ThrowIfError(s);
+          cards.Add(card);
+        }
+        return Result<IReadOnlyList<string>>.Success(cards);
       }
-      return cards;
+      catch (Exception ex)
+      {
+        return Result<IReadOnlyList<string>>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -397,18 +579,22 @@ namespace HVO.Astronomy.CFITSIO
     /// Compresses all image HDUs into a new file. Non-image HDUs are copied unchanged.
     /// </summary>
     /// <param name="outputPath">Output path (prefix with <c>!</c> to overwrite).</param>
-    public void CompressTo(string outputPath)
+    public Result<bool> CompressTo(string outputPath)
     {
-      if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentNullException(nameof(outputPath));
+      if (string.IsNullOrWhiteSpace(outputPath)) return Result<bool>.Failure(new ArgumentNullException(nameof(outputPath)));
 
       int status = 0;
       CFitsIO.fits_create_file(out var outHandle, outputPath, ref status);
-      CFitsIO.ThrowIfError(status);
-
       try
       {
+        CFitsIO.ThrowIfError(status);
         CFitsIO.fits_img_compress(Handle, outHandle, ref status);
         CFitsIO.ThrowIfError(status);
+        return Result<bool>.Success(true);
+      }
+      catch (Exception ex)
+      {
+        return Result<bool>.Failure(ex);
       }
       finally
       {
@@ -420,33 +606,42 @@ namespace HVO.Astronomy.CFITSIO
     /// Apply compression settings (algorithm, tiles, parameters) to the <b>current HDU of this file</b>.
     /// Use when building compressed image HDUs manually (advanced scenarios).
     /// </summary>
-    public void ApplyCompressionPolicyToCurrentHdu(FitsCompressionPolicy policy)
+    public Result<bool> ApplyCompressionPolicyToCurrentHdu(FitsCompressionPolicy policy)
     {
-      if (policy is null) throw new ArgumentNullException(nameof(policy));
-      int status = 0;
-
-      if (policy.Compression != FitsCompression.None)
+      if (policy is null) return Result<bool>.Failure(new ArgumentNullException(nameof(policy)));
+      try
       {
-        CFitsIO.fits_set_compression_type(Handle, (int)policy.Compression, ref status);
-        CFitsIO.ThrowIfError(status);
+        int status = 0;
+
+        if (policy.Compression != FitsCompression.None)
+        {
+          CFitsIO.fits_set_compression_type(Handle, (int)policy.Compression, ref status);
+          CFitsIO.ThrowIfError(status);
+        }
+
+        if (policy.TileDimensions is { Length: > 0 })
+        {
+          CFitsIO.fits_set_tile_dimll(Handle, policy.TileDimensions.Length, policy.TileDimensions, ref status);
+          CFitsIO.ThrowIfError(status);
+        }
+
+        if (policy.Parameters is { Length: > 0 })
+        {
+          CFitsIO.fits_set_compression_param(Handle, policy.Parameters.Length, policy.Parameters, ref status);
+          CFitsIO.ThrowIfError(status);
+        }
+
+        if (policy.WriteChecksum)
+        {
+          CFitsIO.fits_write_chksum(Handle, ref status);
+          CFitsIO.ThrowIfError(status);
+        }
+
+        return Result<bool>.Success(true);
       }
-
-      if (policy.TileDimensions is { Length: > 0 })
+      catch (Exception ex)
       {
-        CFitsIO.fits_set_tile_dimll(Handle, policy.TileDimensions.Length, policy.TileDimensions, ref status);
-        CFitsIO.ThrowIfError(status);
-      }
-
-      if (policy.Parameters is { Length: > 0 })
-      {
-        CFitsIO.fits_set_compression_param(Handle, policy.Parameters.Length, policy.Parameters, ref status);
-        CFitsIO.ThrowIfError(status);
-      }
-
-      if (policy.WriteChecksum)
-      {
-        CFitsIO.fits_write_chksum(Handle, ref status);
-        CFitsIO.ThrowIfError(status);
+        return Result<bool>.Failure(ex);
       }
     }
 
@@ -470,70 +665,93 @@ namespace HVO.Astronomy.CFITSIO
     /// Create a new unsigned 16-bit grayscale (0..65535) image HDU and write all pixels (row-major).
     /// Sets BSCALE=1 and BZERO=32768.
     /// </summary>
-    public static void WriteU16(FitsFile fits, int width, int height, ReadOnlySpan<ushort> pixelsRowMajor)
+    public static Result<bool> WriteU16(FitsFile fits, int width, int height, ReadOnlySpan<ushort> pixelsRowMajor)
     {
-      if (fits is null) throw new ArgumentNullException(nameof(fits));
+      if (fits is null) return Result<bool>.Failure(new ArgumentNullException(nameof(fits)));
       if (pixelsRowMajor.Length != checked(width * height))
-        throw new ArgumentException("Pixel buffer length does not match width*height.", nameof(pixelsRowMajor));
+        return Result<bool>.Failure(new ArgumentException("Pixel buffer length does not match width*height.", nameof(pixelsRowMajor)));
 
-      fits.CreateImageHdu(CFitsIO.USHORT_IMG, width, height);
-      fits.SetScale(1.0, 32768.0);
-      fits.WritePixelsU16(1, pixelsRowMajor);
+      var r1 = fits.CreateImageHdu(CFitsIO.USHORT_IMG, width, height);
+      if (r1.IsFailure) return Result<bool>.Failure(r1.Error!);
 
-      fits.WriteKeyString("BUNIT", "ADU", "Pixel units");
-      fits.WriteKeyString("BITDEPTH", "16", "Unsigned 16-bit pixels");
+      var r2 = fits.SetScale(1.0, 32768.0);
+      if (r2.IsFailure) return Result<bool>.Failure(r2.Error!);
+
+      var r3 = fits.WritePixelsU16(1, pixelsRowMajor);
+      if (r3.IsFailure) return Result<bool>.Failure(r3.Error!);
+
+      // Non-critical header writes; propagate failure to be consistent with Result-based API
+      var r4 = fits.WriteKeyString("BUNIT", "ADU", "Pixel units");
+      if (r4.IsFailure) return Result<bool>.Failure(r4.Error!);
+      var r5 = fits.WriteKeyString("BITDEPTH", "16", "Unsigned 16-bit pixels");
+      if (r5.IsFailure) return Result<bool>.Failure(r5.Error!);
+
+      return Result<bool>.Success(true);
     }
 
     /// <summary>
     /// Create a new 8-bit grayscale image HDU and write all pixels (row-major).
     /// </summary>
-    public static void WriteU8(FitsFile fits, int width, int height, ReadOnlySpan<byte> pixelsRowMajor)
+    public static Result<bool> WriteU8(FitsFile fits, int width, int height, ReadOnlySpan<byte> pixelsRowMajor)
     {
-      if (fits is null) throw new ArgumentNullException(nameof(fits));
+      if (fits is null) return Result<bool>.Failure(new ArgumentNullException(nameof(fits)));
       if (pixelsRowMajor.Length != checked(width * height))
-        throw new ArgumentException("Pixel buffer length does not match width*height.", nameof(pixelsRowMajor));
+        return Result<bool>.Failure(new ArgumentException("Pixel buffer length does not match width*height.", nameof(pixelsRowMajor)));
 
-      fits.CreateImageHdu(CFitsIO.BYTE_IMG, width, height);
-      fits.WritePixelsU8(1, pixelsRowMajor);
+      var r1 = fits.CreateImageHdu(CFitsIO.BYTE_IMG, width, height);
+      if (r1.IsFailure) return Result<bool>.Failure(r1.Error!);
 
-      fits.WriteKeyString("BUNIT", "ADU", "Pixel units");
-      fits.WriteKeyString("BITDEPTH", "8", "Unsigned 8-bit pixels");
+      var r2 = fits.WritePixelsU8(1, pixelsRowMajor);
+      if (r2.IsFailure) return Result<bool>.Failure(r2.Error!);
+
+      var r3 = fits.WriteKeyString("BUNIT", "ADU", "Pixel units");
+      if (r3.IsFailure) return Result<bool>.Failure(r3.Error!);
+      var r4 = fits.WriteKeyString("BITDEPTH", "8", "Unsigned 8-bit pixels");
+      if (r4.IsFailure) return Result<bool>.Failure(r4.Error!);
+
+      return Result<bool>.Success(true);
     }
 
     /// <summary>
     /// Read the current image HDU as unsigned 16-bit grayscale (row-major).
     /// </summary>
-    public static ushort[] ReadU16(FitsFile fits, out int width, out int height)
+    public static Result<(ushort[] Pixels, int Width, int Height)> ReadU16(FitsFile fits)
     {
-      if (fits is null) throw new ArgumentNullException(nameof(fits));
+      if (fits is null) return Result<(ushort[] Pixels, int Width, int Height)>.Failure(new ArgumentNullException(nameof(fits)));
 
-      var (_, naxis, naxes) = fits.GetImageParameters();
-      if (naxis < 2) throw new InvalidOperationException("Current HDU is not a 2D image.");
+      var ip = fits.GetImageParameters();
+      if (ip.IsFailure) return Result<(ushort[] Pixels, int Width, int Height)>.Failure(ip.Error!);
+      var (_, naxis, naxes) = ip.Value;
+      if (naxis < 2) return Result<(ushort[] Pixels, int Width, int Height)>.Failure(new InvalidOperationException("Current HDU is not a 2D image."));
 
-      width = checked((int)naxes[0]);
-      height = checked((int)naxes[1]);
+      int width = checked((int)naxes[0]);
+      int height = checked((int)naxes[1]);
 
       var buffer = new ushort[checked(width * height)];
-      fits.ReadPixelsU16(1, buffer);
-      return buffer;
+      var rr = fits.ReadPixelsU16(1, buffer);
+      if (rr.IsFailure) return Result<(ushort[] Pixels, int Width, int Height)>.Failure(rr.Error!);
+      return Result<(ushort[] Pixels, int Width, int Height)>.Success((buffer, width, height));
     }
 
     /// <summary>
     /// Read the current image HDU as unsigned 8-bit grayscale (row-major).
     /// </summary>
-    public static byte[] ReadU8(FitsFile fits, out int width, out int height)
+    public static Result<(byte[] Pixels, int Width, int Height)> ReadU8(FitsFile fits)
     {
-      if (fits is null) throw new ArgumentNullException(nameof(fits));
+      if (fits is null) return Result<(byte[] Pixels, int Width, int Height)>.Failure(new ArgumentNullException(nameof(fits)));
 
-      var (_, naxis, naxes) = fits.GetImageParameters();
-      if (naxis < 2) throw new InvalidOperationException("Current HDU is not a 2D image.");
+      var ip = fits.GetImageParameters();
+      if (ip.IsFailure) return Result<(byte[] Pixels, int Width, int Height)>.Failure(ip.Error!);
+      var (_, naxis, naxes) = ip.Value;
+      if (naxis < 2) return Result<(byte[] Pixels, int Width, int Height)>.Failure(new InvalidOperationException("Current HDU is not a 2D image."));
 
-      width = checked((int)naxes[0]);
-      height = checked((int)naxes[1]);
+      int width = checked((int)naxes[0]);
+      int height = checked((int)naxes[1]);
 
       var buffer = new byte[checked(width * height)];
-      fits.ReadPixelsU8(1, buffer);
-      return buffer;
+      var rr = fits.ReadPixelsU8(1, buffer);
+      if (rr.IsFailure) return Result<(byte[] Pixels, int Width, int Height)>.Failure(rr.Error!);
+      return Result<(byte[] Pixels, int Width, int Height)>.Success((buffer, width, height));
     }
   }
 
@@ -592,7 +810,7 @@ namespace HVO.Astronomy.CFITSIO
     private readonly FitsFile _fits;
 
     /// <summary>Create a new header builder bound to <paramref name="fits"/>.</summary>
-    public FitsHeaderBuilder(FitsFile fits) => _fits = fits ?? throw new ArgumentNullException(nameof(fits));
+  public FitsHeaderBuilder(FitsFile fits) => _fits = fits ?? throw new ArgumentNullException(nameof(fits));
 
     /// <summary>Set an arbitrary string keyword.</summary>
     public FitsHeaderBuilder SetString(string keyword, string value, string comment = "")
@@ -751,21 +969,24 @@ namespace HVO.Astronomy.CFITSIO
     /// Save a grayscale <see cref="SKBitmap"/> as a 16-bit FITS image (0..65535).
     /// If not Gray8, pixels are converted to Gray8, then expanded to U16 (replicated byte).
     /// </summary>
-    public static void SaveAsFitsU16(this SKBitmap bitmap,
-                                     string fitsPath,
-                                     bool overwrite = true,
-                                     FitsCompressionPolicy? compressionPolicy = null,
-                                     Action<FitsFile>? stampHeader = null)
+    public static Result<bool> SaveAsFitsU16(this SKBitmap bitmap,
+                                             string fitsPath,
+                                             bool overwrite = true,
+                                             FitsCompressionPolicy? compressionPolicy = null,
+                                             Action<FitsFile>? stampHeader = null)
     {
-      if (bitmap is null) throw new ArgumentNullException(nameof(bitmap));
-      if (string.IsNullOrWhiteSpace(fitsPath)) throw new ArgumentNullException(nameof(fitsPath));
+      if (bitmap is null) return Result<bool>.Failure(new ArgumentNullException(nameof(bitmap)));
+      if (string.IsNullOrWhiteSpace(fitsPath)) return Result<bool>.Failure(new ArgumentNullException(nameof(fitsPath)));
 
       // Extract a U16 plane (row-major)
       var (width, height, plane) = ExtractGrayU16(bitmap);
 
       // Create FITS and write image
-      using var fits = overwrite ? FitsFile.Create("!" + fitsPath) : FitsFile.Create(fitsPath);
-      FitsImage.WriteU16(fits, width, height, plane);
+      var rCreate = overwrite ? FitsFile.Create("!" + fitsPath) : FitsFile.Create(fitsPath);
+      if (rCreate.IsFailure) return Result<bool>.Failure(rCreate.Error!);
+      using var fits = rCreate.Value;
+      var rWrite = FitsImage.WriteU16(fits, width, height, plane);
+      if (rWrite.IsFailure) return Result<bool>.Failure(rWrite.Error!);
 
       // Optional header stamping (e.g., WCS)
       stampHeader?.Invoke(fits);
@@ -776,22 +997,28 @@ namespace HVO.Astronomy.CFITSIO
       //
       // For fully custom tiling/parameters, build compressed HDUs manually and call:
       // fits.ApplyCompressionPolicyToCurrentHdu(compressionPolicy) before writing pixels.
-      _ = compressionPolicy; // intentionally unused here (see notes above)
+      if (compressionPolicy is not null)
+      {
+        var rPol = fits.ApplyCompressionPolicyToCurrentHdu(compressionPolicy);
+        if (rPol.IsFailure) return Result<bool>.Failure(rPol.Error!);
+      }
+
+      return Result<bool>.Success(true);
     }
 
     /// <summary>
     /// Save an <see cref="SKImage"/> as a 16-bit FITS image (0..65535).
     /// Internally snapshots to a temporary <see cref="SKBitmap"/>.
     /// </summary>
-    public static void SaveAsFitsU16(this SKImage image,
-                                     string fitsPath,
-                                     bool overwrite = true,
-                                     FitsCompressionPolicy? compressionPolicy = null,
-                                     Action<FitsFile>? stampHeader = null)
+    public static Result<bool> SaveAsFitsU16(this SKImage image,
+                                             string fitsPath,
+                                             bool overwrite = true,
+                                             FitsCompressionPolicy? compressionPolicy = null,
+                                             Action<FitsFile>? stampHeader = null)
     {
-      if (image is null) throw new ArgumentNullException(nameof(image));
+      if (image is null) return Result<bool>.Failure(new ArgumentNullException(nameof(image)));
       using var bmp = SKBitmap.FromImage(image);
-      SaveAsFitsU16(bmp, fitsPath, overwrite, compressionPolicy, stampHeader);
+      return SaveAsFitsU16(bmp, fitsPath, overwrite, compressionPolicy, stampHeader);
     }
 
     /// <summary>
@@ -801,11 +1028,15 @@ namespace HVO.Astronomy.CFITSIO
     /// </summary>
     /// <param name="fitsPath">Path to a FITS file.</param>
     /// <param name="preferU16">If true, downconvert U16 to Gray8; otherwise read as U8.</param>
-    public static SKBitmap LoadFitsToBitmap(string fitsPath, bool preferU16 = true)
+    public static Result<SKBitmap> LoadFitsToBitmap(string fitsPath, bool preferU16 = true)
     {
-      using var ff = FitsFile.Open(fitsPath, readWrite: false);
-      var (_, naxis, naxes) = ff.GetImageParameters();
-      if (naxis < 2) throw new InvalidOperationException("Not a 2D image.");
+      var ropen = FitsFile.Open(fitsPath, readWrite: false);
+      if (ropen.IsFailure) return Result<SKBitmap>.Failure(ropen.Error!);
+      using var ff = ropen.Value;
+      var ip = ff.GetImageParameters();
+      if (ip.IsFailure) return Result<SKBitmap>.Failure(ip.Error!);
+      var (_, naxis, naxes) = ip.Value;
+      if (naxis < 2) return Result<SKBitmap>.Failure(new InvalidOperationException("Not a 2D image."));
 
       int width = checked((int)naxes[0]);
       int height = checked((int)naxes[1]);
@@ -816,18 +1047,22 @@ namespace HVO.Astronomy.CFITSIO
       if (preferU16)
       {
         // Read as U16, then downconvert to Gray8 by dropping low 8 bits.
-        var data16 = FitsImage.ReadU16(ff, out _, out _);
-        for (int i = 0; i < data16.Length; i++)
-          dst[i] = (byte)(data16[i] >> 8);
+        var r16 = FitsImage.ReadU16(ff);
+        if (r16.IsFailure) return Result<SKBitmap>.Failure(r16.Error!);
+        var (pixels16, _, _) = r16.Value;
+        for (int i = 0; i < pixels16.Length; i++)
+          dst[i] = (byte)(pixels16[i] >> 8);
       }
       else
       {
         // Read as U8 directly.
-        var data8 = FitsImage.ReadU8(ff, out _, out _);
-        data8.CopyTo(dst);
+        var r8 = FitsImage.ReadU8(ff);
+        if (r8.IsFailure) return Result<SKBitmap>.Failure(r8.Error!);
+        var (pixels8, _, _) = r8.Value;
+        pixels8.CopyTo(dst);
       }
 
-      return bmp;
+      return Result<SKBitmap>.Success(bmp);
     }
 
     /// <summary>

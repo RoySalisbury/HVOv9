@@ -502,7 +502,7 @@ namespace HVO.Astronomy.CFITSIO.Interop
 
         if (_pointerArray != IntPtr.Zero)
           Marshal.FreeHGlobal(_pointerArray);
-        
+
         GC.SuppressFinalize(this);
       }
 

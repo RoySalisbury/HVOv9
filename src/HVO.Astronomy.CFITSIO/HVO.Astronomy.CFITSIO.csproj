@@ -37,6 +37,10 @@
     <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../HVO/HVO.csproj" />
+  </ItemGroup>
+
   <!-- Pack everything under runtimes/ into the nupkg -->
   <ItemGroup>
     <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" />
