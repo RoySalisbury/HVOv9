@@ -1,0 +1,57 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>    
+
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <RootNamespace>HVO.Astronomy.CFITSIO</RootNamespace>
+    <AssemblyName>HVO.Astronomy.CFITSIO</AssemblyName>
+    <PackageId>HVO.Astronomy.CFITSIO</PackageId>
+    <Version>1.0.0.0</Version>
+    <Authors>HVO</Authors>
+    <Description>CFITSIO native binaries for P/Invoke (macOS/Linux/Windows, multi-RID).</Description>
+    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>Astronomy,FITS</PackageTags>
+    <RepositoryUrl>https://github.com/RoySalisbury/HVOv9</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/RoySalisbury/HVOv9/HVO.Astronomy.CFITSIO</PackageProjectUrl>    
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DefineConstants>HAS_SKIA</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+  <!-- Pack everything under runtimes/ into the nupkg -->
+  <ItemGroup>
+    <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+    <None Include="BUILD-FEATURES.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+
+  <Target Name="CopyPackageToLocalFeed" AfterTargets="Pack">
+      <PropertyGroup>
+          <!-- The correct path for the nupkg file after 'dotnet pack' -->
+          <NupkgFileName>$(PackageId).$(PackageVersion).nupkg</NupkgFileName>
+          <FullPackagePath>$(OutputPath)../$(NupkgFileName)</FullPackagePath>
+      </PropertyGroup>
+      <Copy SourceFiles="$(FullPackagePath)" DestinationFolder="$(SolutionDir)../.LocalPackages" Condition="Exists('$(FullPackagePath)')" />
+      <Message Text="Copied package from $(FullPackagePath) to $(SolutionDir)../.LocalPackages" Importance="High" />
+    </Target>
+</Project>
