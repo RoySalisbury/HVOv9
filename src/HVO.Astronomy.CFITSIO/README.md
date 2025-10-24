@@ -34,8 +34,15 @@ License: BSD-3-Clause
 ## What is included
 
 - `Interop/CFitsIO.cs`: Source-generated [LibraryImport] interop for CFITSIO
-- `FitsManaged.cs`: Managed API (FitsFile, FitsImage, header builders, compression helpers)
-- `Wcs/FitsWcs.cs`: Small WCS helpers (TAN model convenience)
+- Managed API (one class per file following project standards):
+    - `FitsFile.cs`: Main FITS file wrapper with HDU navigation and I/O
+    - `FitsImage.cs`: Static helpers for U16/U8 image operations
+    - `FitsCommonKeywords.cs`: Standard FITS keyword constants and utilities
+    - `FitsHeaderBuilder.cs`: Fluent builder for common header keywords
+    - `WcsHeaderBuilder.cs`: Fluent builder for WCS header keywords
+    - `FitsCompression.cs`: Compression algorithm enumeration
+    - `FitsCompressionPolicy.cs`: Compression configuration class
+    - `SkiaFitsExtensions.cs`: Optional SkiaSharp integration (conditional compilation)
 
 The project enables overflow checking in Debug and Release, uses SafeHandle for native lifetime, and standardizes UTF‑8 string marshalling.
 
@@ -52,12 +59,15 @@ No runtime setup is required—the package includes native CFITSIO binaries for 
 ## Design and structure
 
 - Namespace: `HVO.Astronomy.CFITSIO`
-- Core types:
+- Core types (one class per file):
     - `FitsFile`: Safe wrapper over a native `fitsfile*` using SafeHandle
-    - `FitsImage`: High-level helpers for grayscale images (U16, U8)
-    - `FitsHeaderBuilder`, `WcsHeaderBuilder`: Fluent utilities to stamp common keywords and WCS
-    - `FitsCompressionPolicy` and `FitsCompression`: Compression configuration
-    - Optional Skia helpers under `HAS_SKIA`: `SkiaFitsExtensions`
+    - `FitsImage`: Static helpers for grayscale images (U16, U8)
+    - `FitsCommonKeywords`: Standard FITS keyword constants and ISO timestamp helpers
+    - `FitsHeaderBuilder`: Fluent utility to stamp common keywords
+    - `WcsHeaderBuilder`: Fluent utility to stamp WCS keywords
+    - `FitsCompression`: Enum of compression algorithms (None, Rice, Gzip, etc.)
+    - `FitsCompressionPolicy`: Configuration class for compression parameters
+    - `SkiaFitsExtensions` (optional, under `HAS_SKIA`): FITS ↔ SkiaSharp bitmap conversions
 - Error model: `HVO.Result<T>` and `HVO.Result<T,TEnum>` provide non-throwing operation results
 
 ## Error handling: Result<T>
@@ -235,7 +245,6 @@ When compiled with `HAS_SKIA` and a reference to SkiaSharp, use the helpers:
 
 ```csharp
 using HVO.Astronomy.CFITSIO;
-using HVO.Astronomy.CFITSIO.Wcs;
 using SkiaSharp;
 
 // Save a grayscale SKBitmap to FITS (U16)
