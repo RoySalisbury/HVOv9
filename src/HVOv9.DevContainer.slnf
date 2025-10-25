@@ -2,6 +2,8 @@
   "solution": {
     "path": "HVOv9.DevContainer.slnx",
     "projects": [
+      "HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj",
+      "HVO.Astronomy.CFITSIO.Tests/HVO.Astronomy.CFITSIO.Tests.csproj",
       "HVO.DataModels/HVO.DataModels.csproj",
       "HVO.GpioTestApp/HVO.GpioTestApp.csproj",
       "HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj",

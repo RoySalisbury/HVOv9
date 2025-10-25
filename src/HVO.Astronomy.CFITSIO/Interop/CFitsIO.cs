@@ -128,7 +128,7 @@ namespace HVO.Astronomy.CFITSIO.Interop
     // Some builds still export ffvers (no fits_* alias).
     [LibraryImport(NativeLibraryName, EntryPoint = "ffvers")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_version(out double version);
+    public static partial void fits_get_version(out double version);
 
     // ───────────── HDU nav / info ─────────────
     [LibraryImport(NativeLibraryName, EntryPoint = "ffmahd")]
@@ -340,7 +340,7 @@ namespace HVO.Astronomy.CFITSIO.Interop
     // ───────────── Error text (short symbols) ─────────────
     [LibraryImport(NativeLibraryName, EntryPoint = "ffgerr")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe partial int ffgerr(int status, byte* errText);
+    private static unsafe partial void ffgerr(int status, byte* errText);
 
     [LibraryImport(NativeLibraryName, EntryPoint = "ffgmsg")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
@@ -348,7 +348,7 @@ namespace HVO.Astronomy.CFITSIO.Interop
 
     [LibraryImport(NativeLibraryName, EntryPoint = "ffrprt")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial void fits_report_error(IntPtr file, int status);
+    public static partial void fits_report_error(IntPtr file, ref int status);
 
     // ───────────── Utilities ─────────────
     public static unsafe string ReadRecordToString(SafeFitsFile fptr, int keyNumber, ref int status)
