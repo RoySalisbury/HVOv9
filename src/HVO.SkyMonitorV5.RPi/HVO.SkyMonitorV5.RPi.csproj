@@ -13,7 +13,6 @@
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
     <PackageReference Include="GeoTimeZone" />
-    <PackageReference Include="HVO.Astronomy.CFITSIO" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   <PackageReference Include="Microsoft.AspNetCore.DataProtection.Extensions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
@@ -39,6 +38,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../HVO/HVO.csproj" />
+  <ProjectReference Include="../HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj" />
     <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
     <ProjectReference Include="../HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
     <ProjectReference Include="../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
