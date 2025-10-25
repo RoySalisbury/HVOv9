@@ -44,6 +44,16 @@
     <ProjectReference Include="../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
   </ItemGroup>
 
+  <!-- Copy native CFITSIO libraries from the referenced project when using a ProjectReference -->
+  <Target Name="CopyNativeCFitsIoAssets" AfterTargets="Build">
+    <ItemGroup>
+      <CFitsioNativeLibs Include="../HVO.Astronomy.CFITSIO/runtimes/**/*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CFitsioNativeLibs)"
+          DestinationFiles="@(CFitsioNativeLibs->'$(OutDir)runtimes/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
   <ItemGroup>
     <Content Include="Data/catalogs/**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

@@ -1,6 +1,9 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Pipeline;
+using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
@@ -12,10 +15,20 @@ namespace HVO.SkyMonitorV5.RPi.Services;
 public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
 {
     private readonly ILogger<ProcessedFrameEncoder> _logger;
+    private readonly IFitsFrameEncoder _fitsEncoder;
+    private readonly IRigAcquisitionAdapter _rigAdapter;
+    private readonly IOptionsMonitor<FitsExportOptions> _fitsOptions;
 
-    public ProcessedFrameEncoder(ILogger<ProcessedFrameEncoder> logger)
+    public ProcessedFrameEncoder(
+        ILogger<ProcessedFrameEncoder> logger,
+        IFitsFrameEncoder fitsEncoder,
+        IRigAcquisitionAdapter rigAdapter,
+        IOptionsMonitor<FitsExportOptions> fitsOptions)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _fitsEncoder = fitsEncoder ?? throw new ArgumentNullException(nameof(fitsEncoder));
+        _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
+        _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
     }
 
     public ProcessedFrameDelivery Encode(ProcessedFrame frame)
@@ -30,7 +43,24 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
             throw new InvalidOperationException("Processed frame does not contain an immutable SKImage for encoding.");
         }
 
-        var encoding = ImageEncodingUtilities.Normalize(frame.Encoding);
+        var fits = _fitsOptions.CurrentValue;
+        if (fits.EnableForProcessed)
+        {
+            try
+            {
+                var rig = _rigAdapter.ActiveRig;
+                var delivery = _fitsEncoder.EncodeProcessed(frame, rig, fits);
+                // Force content type and extension for FITS
+                return new ProcessedFrameDelivery(delivery.Payload, "application/fits", delivery.FileExtension ?? "fits");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "FITS encoding for processed frame {FrameId} failed; falling back to configured image encoding.", frame.FrameId);
+                // Fall through to legacy encoding
+            }
+        }
+
+    var encoding = ImageEncodingUtilities.Normalize(frame.Encoding);
         var format = ImageEncodingUtilities.ToSkiaFormat(encoding.Format);
 
         using var data = frame.ImmutableImage.Encode(format, encoding.Quality);
