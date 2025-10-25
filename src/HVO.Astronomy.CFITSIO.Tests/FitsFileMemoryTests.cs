@@ -6,6 +6,19 @@ using HVO.Astronomy.CFITSIO.Tests.Helpers;
 
 namespace HVO.Astronomy.CFITSIO.Tests;
 
+/// <summary>
+/// Tests for CFITSIO in-memory file (memfile) API.
+/// 
+/// KNOWN ISSUE: These tests crash when run together as a suite due to a test runner + native library
+/// interaction issue. All tests pass when run individually. To run individually:
+/// <code>
+/// export HVO_ENABLE_MEMFILE_TESTS=1
+/// dotnet test --filter "FullyQualifiedName~CreateInMemory_WriteImage_ToArray_NotEmpty"
+/// dotnet test --filter "FullyQualifiedName~CompressToArray_FromInMemory_CanBeOpenedAndRead"
+/// dotnet test --filter "FullyQualifiedName~OpenFromMemory_WithEmptyBuffer_Throws"
+/// dotnet test --filter "FullyQualifiedName~CreateInMemory_JustCreateAndDispose_DoesNotCrash"
+/// </code>
+/// </summary>
 [TestClass]
 [DoNotParallelize] // Memfile tests must run sequentially due to CFITSIO native library state
 public class FitsFileMemoryTests
