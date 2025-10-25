@@ -14,13 +14,14 @@ namespace HVO.Astronomy.CFITSIO
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private unsafe delegate void* ReallocCallback(void* ptr, nuint newSize);
 
+    // Shared static delegate and function pointer - never GC'd, safe for all CFITSIO memfile calls
+    private static readonly unsafe ReallocCallback s_reallocDelegate = DefaultRealloc;
+    private static readonly IntPtr s_reallocFunctionPtr = Marshal.GetFunctionPointerForDelegate(s_reallocDelegate);
+
     private IntPtr _memBufPtrLoc;
     private IntPtr _memSizeLoc;
     private MemoryBackingMode _memMode;
     private IntPtr _originalExternalBuffer;
-#pragma warning disable CS0414 // Field assigned but never used - stored to prevent GC collection
-    private ReallocCallback? _reallocCallback;  // Keep delegate alive to prevent GC
-#pragma warning restore CS0414
 
     // Static realloc implementation that CFITSIO can call
     private static unsafe void* DefaultRealloc(void* ptr, nuint newSize)
@@ -57,19 +58,15 @@ namespace HVO.Astronomy.CFITSIO
       void* bufLoc = (void*)Marshal.AllocHGlobal(IntPtr.Size);
       void* sizeLoc = (void*)Marshal.AllocHGlobal(sizeof(nuint));
 
-      // Create realloc callback delegate and keep it alive
-      var reallocCallback = new ReallocCallback(DefaultRealloc);
-      var reallocPtr = Marshal.GetFunctionPointerForDelegate(reallocCallback);
-
       try
       {
         // Initialize the control blocks
         *(void**)bufLoc = null;
         *(nuint*)sizeLoc = initialCapacityBytes;
 
-        // Call CFITSIO - it will store these addresses and update the values over time
+        // Call CFITSIO with shared static realloc callback
         CFitsIO.fits_create_memfile(out var handle, (void**)bufLoc, (nuint*)sizeLoc,
-                                    growDeltaBytes, reallocPtr, ref status);
+                                    growDeltaBytes, s_reallocFunctionPtr, ref status);
         CFitsIO.ThrowIfError(status);
 
         return new FitsFile(handle, null)
@@ -77,8 +74,7 @@ namespace HVO.Astronomy.CFITSIO
           _memBufPtrLoc = (IntPtr)bufLoc,
           _memSizeLoc = (IntPtr)sizeLoc,
           _memMode = MemoryBackingMode.InMemoryOwnedByCFitsio,
-          _originalExternalBuffer = IntPtr.Zero,
-          _reallocCallback = reallocCallback // Keep delegate alive to prevent GC
+          _originalExternalBuffer = IntPtr.Zero
         };
       }
       catch
@@ -97,10 +93,6 @@ namespace HVO.Astronomy.CFITSIO
       IntPtr bufLoc = IntPtr.Zero;
       IntPtr sizeLoc = IntPtr.Zero;
 
-      // Create realloc callback delegate for read/write mode
-      ReallocCallback? reallocCallback = readWrite ? new ReallocCallback(DefaultRealloc) : null;
-      IntPtr reallocPtr = reallocCallback != null ? Marshal.GetFunctionPointerForDelegate(reallocCallback) : IntPtr.Zero;
-
       try
       {
         fixed (byte* p = source)
@@ -114,11 +106,12 @@ namespace HVO.Astronomy.CFITSIO
         *(nuint*)((void*)sizeLoc) = (nuint)source.Length;
 
         int status = 0;
+        // Use shared static realloc for read/write, or IntPtr.Zero for read-only
         CFitsIO.fits_open_memfile(out var handle, "inmem.fits",
                                   readWrite ? CFitsIO.READWRITE : CFitsIO.READONLY,
                                   (void**)((void*)bufLoc), (nuint*)((void*)sizeLoc),
                                   readWrite ? growDeltaBytes : 0,
-                                  reallocPtr, ref status);
+                                  readWrite ? s_reallocFunctionPtr : IntPtr.Zero, ref status);
         CFitsIO.ThrowIfError(status);
 
         var f = new FitsFile(handle, null)
@@ -127,8 +120,7 @@ namespace HVO.Astronomy.CFITSIO
           _memSizeLoc = sizeLoc,
           _memMode = readWrite ? MemoryBackingMode.InMemoryOwnedByCFitsio
                                : MemoryBackingMode.InMemoryExternalBuffer,
-          _originalExternalBuffer = readWrite ? IntPtr.Zero : original,
-          _reallocCallback = reallocCallback // Keep delegate alive (null is OK for read-only)
+          _originalExternalBuffer = readWrite ? IntPtr.Zero : original
         };
 
         if (readWrite) original = IntPtr.Zero;
@@ -184,8 +176,13 @@ namespace HVO.Astronomy.CFITSIO
       output.Write(bytes, 0, bytes.Length);
     }
 
-    private void DisposeMemoryResources()
+    private unsafe void DisposeMemoryResources()
     {
+      // IMPORTANT: Do NOT free the buffer here - CFITSIO manages it internally.
+      // When we close the FITS file (Handle.Dispose()), CFITSIO calls our realloc
+      // callback with size=0 to free the buffer automatically.
+      
+      // Free the control blocks
       if (_memBufPtrLoc != IntPtr.Zero)
       {
         Marshal.FreeHGlobal(_memBufPtrLoc);
@@ -198,6 +195,7 @@ namespace HVO.Astronomy.CFITSIO
         _memSizeLoc = IntPtr.Zero;
       }
 
+      // Free external buffer for read-only mode
       if (_memMode == MemoryBackingMode.InMemoryExternalBuffer && _originalExternalBuffer != IntPtr.Zero)
       {
         Marshal.FreeHGlobal(_originalExternalBuffer);
@@ -205,6 +203,7 @@ namespace HVO.Astronomy.CFITSIO
       }
 
       _memMode = MemoryBackingMode.None;
+      // NOTE: Don't null out _reallocCallback - let GC collect it naturally
     }
 
     /// <summary>

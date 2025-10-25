@@ -7,6 +7,7 @@ using HVO.Astronomy.CFITSIO.Tests.Helpers;
 namespace HVO.Astronomy.CFITSIO.Tests;
 
 [TestClass]
+[DoNotParallelize] // Memfile tests must run sequentially due to CFITSIO native library state
 public class FitsFileMemoryTests
 {
   [TestMethod]
