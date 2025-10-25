@@ -77,7 +77,7 @@ public class FitsFileMemoryConcurrentTests
 
     // Run multiple memfile operations in parallel tasks
     var tasks = new Task<byte[]>[5];
-    
+
     for (int i = 0; i < tasks.Length; i++)
     {
       int taskId = i;
@@ -85,11 +85,11 @@ public class FitsFileMemoryConcurrentTests
       {
         using var mem = FitsFile.CreateInMemory();
         mem.CreateImageHdu(CFitsIO.BYTE_IMG, 8, 8).IsSuccessful.Should().BeTrue();
-        
+
         var pixels = new byte[64];
         for (int j = 0; j < pixels.Length; j++)
           pixels[j] = (byte)((taskId * 10 + j) % 256);
-        
+
         mem.WritePixelsU8(1, pixels).IsSuccessful.Should().BeTrue();
         return mem.ToArray();
       });

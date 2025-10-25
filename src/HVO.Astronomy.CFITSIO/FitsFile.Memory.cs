@@ -181,7 +181,7 @@ namespace HVO.Astronomy.CFITSIO
       // IMPORTANT: Do NOT free the buffer here - CFITSIO manages it internally.
       // When we close the FITS file (Handle.Dispose()), CFITSIO calls our realloc
       // callback with size=0 to free the buffer automatically.
-      
+
       // Free the control blocks
       if (_memBufPtrLoc != IntPtr.Zero)
       {

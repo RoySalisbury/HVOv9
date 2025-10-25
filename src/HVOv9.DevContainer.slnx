@@ -27,6 +27,7 @@
   <Folder Name="/Themes/">
     <Project Path="HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
   </Folder>
+  <Project Path="HVO.Astronomy.CFITSIO.Tests/HVO.Astronomy.CFITSIO.Tests.csproj" />
   <Project Path="HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj" />
   <Project Path="HVO.DataModels/HVO.DataModels.csproj" />
   <Project Path="HVO.NinaClient/HVO.NinaClient.csproj" Id="939204bd-3174-4a74-852f-82c2880b49d6" />

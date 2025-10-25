@@ -43,7 +43,7 @@ public class CompressionTests
     using var compressed = opened.Value;
     var hdus = compressed.GetNumberOfHdus();
     hdus.IsSuccessful.Should().BeTrue();
-    Assert.IsTrue(hdus.Value >= 1);
+    Assert.IsGreaterThanOrEqualTo(1, hdus.Value);
 
     compressed.Dispose();
     TestPaths.DeleteIfExists(srcPath);

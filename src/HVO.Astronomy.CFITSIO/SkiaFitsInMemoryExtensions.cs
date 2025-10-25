@@ -1,6 +1,7 @@
 #if HAS_SKIA
 using System;
 using System.IO;
+using HVO; // Result<T>
 using HVO.Astronomy.CFITSIO;
 using HVO.Astronomy.CFITSIO.Interop;
 using SkiaSharp;
@@ -26,20 +27,49 @@ namespace HVO.Astronomy.CFITSIO
                                         FitsCompressionPolicy? compressionPolicy = null,
                                         Action<FitsFile>? stampHeader = null)
     {
-      if (bitmap == null) throw new ArgumentNullException(nameof(bitmap));
+      var r = ToFitsU16BytesResult(bitmap, compressionPolicy, stampHeader);
+      if (r.IsFailure) throw r.Error!;
+      return r.Value;
+    }
+
+    /// <summary>
+    /// Result-based variant of <see cref="ToFitsU16Bytes(SKBitmap, FitsCompressionPolicy?, Action{FitsFile}?)"/>.
+    /// </summary>
+    public static Result<byte[]> ToFitsU16BytesResult(this SKBitmap bitmap,
+                                                      FitsCompressionPolicy? compressionPolicy = null,
+                                                      Action<FitsFile>? stampHeader = null)
+    {
+      if (bitmap is null) return Result<byte[]>.Failure(new ArgumentNullException(nameof(bitmap)));
 
       // Extract Gray8 → expand to U16 plane
       var (w, h, planeU16) = ExtractGrayU16(bitmap);
 
-      // Create an in-memory FITS, write the image, stamp headers, (optionally) apply compression policy
-      using var mf = FitsFile.CreateInMemory();
-      FitsImage.WriteU16(mf, w, h, planeU16);
+      try
+      {
+        using var mf = FitsFile.CreateInMemory();
 
-      stampHeader?.Invoke(mf);
-      if (compressionPolicy != null)
-        mf.ApplyCompressionPolicyToCurrentHdu(compressionPolicy);
+        // Create U16 image in the primary HDU and write pixels using unsigned scaling
+        var rCreate = mf.CreateImageHdu(CFitsIO.USHORT_IMG, w, h);
+        if (rCreate.IsFailure) return Result<byte[]>.Failure(rCreate.Error!);
+        var rScale = mf.SetScale(1.0, 32768.0);
+        if (rScale.IsFailure) return Result<byte[]>.Failure(rScale.Error!);
+        var rWrite = mf.WritePixelsU16(1, planeU16);
+        if (rWrite.IsFailure) return Result<byte[]>.Failure(rWrite.Error!);
 
-      return mf.ToArray();
+        // Optional header stamping and compression policy application
+        stampHeader?.Invoke(mf);
+        if (compressionPolicy is not null)
+        {
+          var rPol = mf.ApplyCompressionPolicyToCurrentHdu(compressionPolicy);
+          if (rPol.IsFailure) return Result<byte[]>.Failure(rPol.Error!);
+        }
+
+        return Result<byte[]>.Success(mf.ToArray());
+      }
+      catch (Exception ex)
+      {
+        return Result<byte[]>.Failure(ex);
+      }
     }
 
     /// <summary>
@@ -63,8 +93,26 @@ namespace HVO.Astronomy.CFITSIO
                                      Action<FitsFile>? stampHeader = null)
     {
       if (output == null) throw new ArgumentNullException(nameof(output));
-      var bytes = bitmap.ToFitsU16Bytes(compressionPolicy, stampHeader);
+      var r = bitmap.ToFitsU16BytesResult(compressionPolicy, stampHeader);
+      if (r.IsFailure) throw r.Error!;
+      var bytes = r.Value;
       output.Write(bytes, 0, bytes.Length);
+    }
+
+    /// <summary>
+    /// Result-based variant that writes directly to a stream.
+    /// </summary>
+    public static Result<bool> SaveAsFitsU16Result(this SKBitmap bitmap,
+                                                   Stream output,
+                                                   FitsCompressionPolicy? compressionPolicy = null,
+                                                   Action<FitsFile>? stampHeader = null)
+    {
+      if (output == null) return Result<bool>.Failure(new ArgumentNullException(nameof(output)));
+      var r = bitmap.ToFitsU16BytesResult(compressionPolicy, stampHeader);
+      if (r.IsFailure) return Result<bool>.Failure(r.Error!);
+      var bytes = r.Value;
+      output.Write(bytes, 0, bytes.Length);
+      return Result<bool>.Success(true);
     }
 
     /// <summary>
@@ -75,17 +123,35 @@ namespace HVO.Astronomy.CFITSIO
     /// If true, reads as U16 then down-converts to Gray8 (keep dynamic range); else read as U8 if present.
     /// </param>
 
-    // TODO: Re-implement after memfile testing
-    // /// <summary>
-    // /// Recompress FITS in memory using CFITSIO's image-compress (all image HDUs).
-    // /// </summary>
-    // public static byte[] RecompressFitsBytes(this byte[] fitsBytes)
-    // {
-    //   if (fitsBytes == null || fitsBytes.Length == 0) throw new ArgumentException("Empty FITS buffer.", nameof(fitsBytes));
-    //
-    //   using var src = FitsFile.OpenFromMemory(fitsBytes, readWrite: false);
-    //   return src.ToArray(); // Placeholder - need to implement compress-to-memory flow
-    // }
+    /// <summary>
+    /// Recompress a FITS file in-memory using CFITSIO's image-compress (all image HDUs).
+    /// Uses defaults similar to fpack unless a custom policy is applied beforehand.
+    /// </summary>
+    public static byte[] RecompressFitsBytes(this byte[] fitsBytes)
+    {
+      var r = RecompressFitsBytesResult(fitsBytes);
+      if (r.IsFailure) throw r.Error!;
+      return r.Value;
+    }
+
+    /// <summary>
+    /// Result-based variant for in-memory recompression.
+    /// </summary>
+    public static Result<byte[]> RecompressFitsBytesResult(this byte[] fitsBytes)
+    {
+      if (fitsBytes == null || fitsBytes.Length == 0)
+        return Result<byte[]>.Failure(new ArgumentException("Empty FITS buffer.", nameof(fitsBytes)));
+
+      try
+      {
+        using var src = FitsFile.OpenFromMemory(fitsBytes, readWrite: false);
+        return Result<byte[]>.Success(src.CompressToArray());
+      }
+      catch (Exception ex)
+      {
+        return Result<byte[]>.Failure(ex);
+      }
+    }
 
     // ────────────────────────── helpers ──────────────────────────
 
