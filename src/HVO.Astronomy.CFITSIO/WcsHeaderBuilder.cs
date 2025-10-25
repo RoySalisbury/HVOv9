@@ -55,14 +55,14 @@ public sealed class WcsHeaderBuilder
   {
     _fits.WriteKeyString(FitsCommonKeywords.CTYPE1, "RA---TAN", "WCS projection");
     _fits.WriteKeyString(FitsCommonKeywords.CTYPE2, "DEC--TAN", "WCS projection");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CRVAL1, referenceWorldLongitudeDegrees, -1, "Reference world longitude (deg)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CRVAL2, referenceWorldLatitudeDegrees, -1, "Reference world latitude (deg)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CRPIX1, referencePixelX, -1, "Reference pixel X (1-based)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CRPIX2, referencePixelY, -1, "Reference pixel Y (1-based)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CD1_1, cd11, -1, "CD matrix 1,1 (deg/pix)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CD1_2, cd12, -1, "CD matrix 1,2 (deg/pix)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CD2_1, cd21, -1, "CD matrix 2,1 (deg/pix)");
-    _fits.WriteKeyDouble(FitsCommonKeywords.CD2_2, cd22, -1, "CD matrix 2,2 (deg/pix)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CRVAL1, referenceWorldLongitudeDegrees, 15, "Reference world longitude (deg)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CRVAL2, referenceWorldLatitudeDegrees, 15, "Reference world latitude (deg)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CRPIX1, referencePixelX, 15, "Reference pixel X (1-based)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CRPIX2, referencePixelY, 15, "Reference pixel Y (1-based)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CD1_1, cd11, 15, "CD matrix 1,1 (deg/pix)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CD1_2, cd12, 15, "CD matrix 1,2 (deg/pix)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CD2_1, cd21, 15, "CD matrix 2,1 (deg/pix)");
+    _fits.WriteKeyDouble(FitsCommonKeywords.CD2_2, cd22, 15, "CD matrix 2,2 (deg/pix)");
     _fits.WriteKeyString(FitsCommonKeywords.CUNIT1, unitsAxis1, "Axis 1 units");
     _fits.WriteKeyString(FitsCommonKeywords.CUNIT2, unitsAxis2, "Axis 2 units");
     return this;

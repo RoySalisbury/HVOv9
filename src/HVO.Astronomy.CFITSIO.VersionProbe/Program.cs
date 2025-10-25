@@ -37,6 +37,9 @@ static class VersionProbe
       Console.WriteLine("\nNo runtimes directory present in output.");
     }
 
+    // Validate that all managed entry points resolve to exports in the native library
+    ValidateEntryPoints();
+
     // Try to get CFITSIO version via managed wrapper
     try
     {
@@ -113,6 +116,76 @@ static class VersionProbe
     catch (Exception e)
     {
       Console.WriteLine($"Manual symbol probe failed: {e}");
+    }
+  }
+
+  // Validate all LibraryImport entry points exposed by the managed wrapper against the native library
+  static void ValidateEntryPoints()
+  {
+    try
+    {
+      var rid = RuntimeInformation.RuntimeIdentifier;
+      var baseDir = AppContext.BaseDirectory;
+      var probeDirs = new[]
+      {
+        Path.Combine(baseDir, "runtimes", rid, "native"),
+        Path.Combine(baseDir, "runtimes", "linux-arm64", "native"),
+        Path.Combine(baseDir, "runtimes", "linux-x64", "native"),
+        Path.Combine(baseDir, "runtimes", "osx-arm64", "native"),
+        Path.Combine(baseDir, "runtimes", "osx-x64", "native")
+      };
+      var libName = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "libcfitsio.dylib" : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cfitsio.dll" : "libcfitsio.so";
+      var libPath = probeDirs.FirstOrDefault(d => Directory.Exists(d) && File.Exists(Path.Combine(d, libName)));
+      if (libPath is null)
+      {
+        Console.WriteLine("\nEntry point validation skipped: native library not found in runtimes/*/native.");
+        return;
+      }
+      var fullLibPath = Path.Combine(libPath, libName);
+      Console.WriteLine($"\nValidating entry points against: {fullLibPath}");
+
+      if (!NativeLibrary.TryLoad(fullLibPath, out var handle))
+      {
+        Console.WriteLine("Failed to load native library for validation.");
+        return;
+      }
+
+      try
+      {
+        var t = typeof(CFitsIO);
+        var methods = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+        var entries = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var m in methods)
+        {
+          foreach (var cad in m.GetCustomAttributesData())
+          {
+            if (cad.AttributeType.FullName == typeof(LibraryImportAttribute).FullName)
+            {
+              // Find EntryPoint named argument
+              var entry = cad.NamedArguments.FirstOrDefault(na => na.MemberName == "EntryPoint").TypedValue.Value as string;
+              if (!string.IsNullOrEmpty(entry)) entries.Add(entry!);
+            }
+          }
+        }
+
+        int missing = 0;
+        foreach (var ep in entries)
+        {
+          bool ok = NativeLibrary.TryGetExport(handle, ep, out var _);
+          Console.WriteLine($"  {(ok ? "[OK]" : "[!!]")} {ep}");
+          if (!ok) missing++;
+        }
+
+        Console.WriteLine(missing == 0 ? "All entry points resolved." : $"Missing {missing} entry point(s). See [!!] above.");
+      }
+      finally
+      {
+        NativeLibrary.Free(handle);
+      }
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine($"Entry point validation failed: {ex}");
     }
   }
 }

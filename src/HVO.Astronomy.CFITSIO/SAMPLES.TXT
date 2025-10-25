@@ -1,0 +1,66 @@
+How you use these
+
+Create in memory (new file):
+
+IntPtr buf = IntPtr.Zero;
+nuint size = 0;
+int status = 0;
+
+CFitsIO.fits_create_memfile(out var fptr, ref buf, ref size,
+                            deltaSize: 64 * 1024, // e.g., 64 KB growth chunks
+                            memoryReallocCallback: IntPtr.Zero,
+                            memoryFreeCallback: IntPtr.Zero,
+                            ref status);
+CFitsIO.ThrowIfError(status);
+// ... write HDUs, keywords, pixels with your existing methods ...
+// flush if you need up-to-date length
+CFitsIO.fits_flush_file(fptr, ref status);
+CFitsIO.ThrowIfError(status);
+
+// Now copy the bytes out (remember: CFITSIO owns buf; copy before closing)
+var managed = new byte[(long)size];
+Marshal.Copy(buf, managed, 0, (int)size);
+fptr.Dispose(); // closes; CFITSIO frees its buffer
+
+--------------
+
+
+
+Open an existing byte[] in memory:
+
+// pin/copy your byte[] to unmanaged first (or use fixed && fits_open_memfile with a non-growing delta)
+IntPtr buf = Marshal.AllocHGlobal(bytes.Length);
+Marshal.Copy(bytes, 0, buf, bytes.Length);
+nuint size = (nuint)bytes.Length;
+int status = 0;
+
+CFitsIO.fits_open_memfile(out var fptr, "inmem.fits",
+                          CFitsIO.READONLY,
+                          ref buf, ref size,
+                          deltaSize: 0, // 0 = no growth needed for read-only
+                          memoryReallocCallback: IntPtr.Zero,
+                          memoryFreeCallback: IntPtr.Zero,
+                          ref status);
+CFitsIO.ThrowIfError(status);
+// ... read like normal ...
+fptr.Dispose();
+Marshal.FreeHGlobal(buf); // you own this buffer
+
+----------------
+
+// 1) New FITS in memory → write image → get bytes
+using var mf = FitsFile.CreateInMemory();
+FitsImage.WriteU16(mf, width, height, pixelsU16);
+byte[] payload = mf.ToArray();
+
+// 2) Open existing bytes read-only in memory → read header
+using var ro = FitsFile.OpenFromMemory(existingBytes, readWrite: false);
+// ... call ro.GetImageParameters(), ro.ReadAllHeaderCards(), etc. ...
+
+// 3) Open bytes read/write in memory (CFITSIO grows buffer) → modify → get bytes
+using var rw = FitsFile.OpenFromMemory(existingBytes, readWrite: true);
+var hb = new FitsHeaderBuilder(rw).SetString("OBSERVER", "Me");
+byte[] modified = rw.ToArray();
+
+// 4) Compress in RAM
+byte[] compressed = mf.CompressToArray();

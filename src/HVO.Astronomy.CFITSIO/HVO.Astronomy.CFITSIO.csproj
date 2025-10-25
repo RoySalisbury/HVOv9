@@ -11,7 +11,7 @@
     <RootNamespace>HVO.Astronomy.CFITSIO</RootNamespace>
     <AssemblyName>HVO.Astronomy.CFITSIO</AssemblyName>
     <PackageId>HVO.Astronomy.CFITSIO</PackageId>
-  <Version>1.0.1</Version>
+  <Version>1.0.3</Version>
     <Authors>HVO</Authors>
     <Description>CFITSIO native binaries for P/Invoke (macOS/Linux/Windows, multi-RID).</Description>
     <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
@@ -35,6 +35,16 @@
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
+    <!-- Bring in platform native assets for Skia so libSkiaSharp is copied to runtimes/*/native -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>    
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,6 @@
 #nullable enable
 using System;
-using System.Runtime.CompilerServices;   // CallConvCdecl
+using System.Runtime.CompilerServices; // CallConvCdecl
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -9,566 +9,380 @@ namespace HVO.Astronomy.CFITSIO.Interop
 {
   /// <summary>
   /// Source-generated P/Invoke surface for the native <c>CFITSIO</c> library (cdecl, UTF-8).
-  /// <list type="bullet">
-  ///   <item><description>Uses <see cref="LibraryImportAttribute"/> with UTF-8 marshalling.</description></item>
-  ///   <item><description>All <c>fitsfile*</c> handles are represented by <see cref="SafeFitsFile"/>.</description></item>
-  ///   <item><description>No <see cref="StringBuilder"/> parameters in P/Invokes; helper methods provide string-returning wrappers.</description></item>
-  /// </list>
-  /// <para><b>Indexing:</b> CFITSIO uses 1-based indices for HDUs, pixels, and table rows.</para>
+  /// Exports are bound to the canonical short symbol names (e.g., <c>ffopen</c>) that most
+  /// CFITSIO builds expose. See the CFITSIO User’s Guide and <c>longnam.h</c> for mappings.
   /// </summary>
   public static partial class CFitsIO
   {
     private const string NativeLibraryName = "cfitsio";
 
-    // CFITSIO recommended buffer sizes (safe upper bounds)
-    private const int FLEN_STATUS = 81;   // status description (fits_get_errstatus)
-    private const int FLEN_ERRMSG = 81;   // one error stack line (fits_read_errmsg)
-    private const int FLEN_CARD = 81;  // header card (80 chars + NUL)
-    private const int FLEN_KEYWORD = 72;  // keyword name (enough for read_keyn)
-    private const int FLEN_VALUE = 1024; // generous value buffer for read_key_str
-    private const int FLEN_COMMENT = 1024; // generous comment buffer for read_key_str
+    // Official FLEN_* from fitsio.h (Aug 2024 guide; older headers similar)
+    private const int FLEN_FILENAME = 1025;
+    private const int FLEN_KEYWORD = 72;
+    private const int FLEN_CARD = 81;
+    private const int FLEN_VALUE = 71;
+    private const int FLEN_COMMENT = 73;
+    private const int FLEN_ERRMSG = 81;
+    private const int FLEN_STATUS = 31;
 
-    // ───────────────────────────── SafeHandle ─────────────────────────────
-
-    /// <summary>
-    /// Safe handle for a native <c>fitsfile*</c>. Disposing this handle closes the file via <c>fits_close_file</c>.
-    /// </summary>
+    // ───────────── SafeHandle for fitsfile* ─────────────
+    /// <summary>Safe wrapper for <c>fitsfile*</c>. Disposing closes via <c>ffclos</c>.</summary>
     public sealed class SafeFitsFile : SafeHandleZeroOrMinusOneIsInvalid
     {
       public SafeFitsFile() : base(ownsHandle: true) { }
       protected override bool ReleaseHandle()
       {
         int status = 0;
-        fits_close_file(handle, ref status);
+        ffclos(handle, ref status);
         handle = IntPtr.Zero;
         return true;
       }
     }
 
-    // ───────────────────────────── Exceptions ─────────────────────────────
-
-    /// <summary>Exception thrown when a CFITSIO function returns a non-zero status code.</summary>
+    // ───────────── Exception helpers ─────────────
     public sealed class FitsInteropException : InvalidOperationException
     {
       public int Status { get; }
       public FitsInteropException(int status, string message)
-          : base($"CFITSIO error {status}: {message}") => Status = status;
+        : base($"CFITSIO error {status}: {message}") => Status = status;
     }
 
-    /// <summary>
-    /// Throws a <see cref="FitsInteropException"/> if <paramref name="status"/> is non-zero.
-    /// Includes a one-line errstatus plus any queued error stack lines.
-    /// </summary>
     public static void ThrowIfError(int status)
     {
       if (status == 0) return;
-
       string summary = GetErrorStatusText(status);
       string stack = DrainErrorStack();
-      string message = string.IsNullOrEmpty(stack) ? summary : $"{summary} | CFITSIO stack:{Environment.NewLine}{stack}";
-      throw new FitsInteropException(status, message);
+      string msg = string.IsNullOrWhiteSpace(stack) ? summary : $"{summary}{Environment.NewLine}{stack}";
+      throw new FitsInteropException(status, msg);
     }
 
-    /// <summary>Get the one-line description for a CFITSIO status code.</summary>
     public static unsafe string GetErrorStatusText(int status)
     {
       byte* buf = stackalloc byte[FLEN_STATUS];
-      fits_get_errstatus(status, buf);
+      ffgerr(status, buf);
       return Utf8ZToString(buf);
     }
 
-    /// <summary>Drain the CFITSIO error stack and return all lines as a single string separated by newlines.</summary>
     public static unsafe string DrainErrorStack()
     {
       var sb = new StringBuilder();
       byte* line = stackalloc byte[FLEN_ERRMSG];
-      while (fits_read_errmsg(line) != 0)
-      {
-        sb.AppendLine(Utf8ZToString(line));
-      }
+      while (ffgmsg(line) != 0) sb.AppendLine(Utf8ZToString(line));
       return sb.ToString();
     }
 
-    // ───────────────────────────── Constants ──────────────────────────────
-
-    /// <summary>File I/O mode: read-only access.</summary>
+    // ───────────── Common constants ─────────────
     public const int READONLY = 0;
-    /// <summary>File I/O mode: read/write access.</summary>
     public const int READWRITE = 1;
 
-    /// <summary>HDU type constant: image extension.</summary>
     public const int IMAGE_HDU = 0;
-    /// <summary>HDU type constant: ASCII table extension.</summary>
     public const int ASCII_TBL = 1;
-    /// <summary>HDU type constant: binary table extension.</summary>
     public const int BINARY_TBL = 2;
-    /// <summary>HDU type constant: match any HDU type.</summary>
     public const int ANY_HDU = -1;
 
-    /// <summary>BITPIX: 8-bit unsigned byte image.</summary>
     public const int BYTE_IMG = 8;
-    /// <summary>BITPIX: 16-bit signed short image.</summary>
-    public const int SHORT_IMG = 16;
-    /// <summary>Pseudo-BITPIX for unsigned 16-bit (BITPIX=16 with BZERO=32768, BSCALE=1).</summary>
-    public const int USHORT_IMG = 20;
-    /// <summary>BITPIX: 32-bit signed long image.</summary>
+    public const int SHORT_IMG = 16; // signed; use BSCALE/BZERO for U16
+    public const int USHORT_IMG = 20; // pseudo-BITPIX (convention)
     public const int LONG_IMG = 32;
-    /// <summary>BITPIX: 64-bit signed long long image.</summary>
     public const int LONGLONG_IMG = 64;
-    /// <summary>BITPIX: 32-bit IEEE float image.</summary>
     public const int FLOAT_IMG = -32;
-    /// <summary>BITPIX: 64-bit IEEE double image.</summary>
     public const int DOUBLE_IMG = -64;
 
-    // Data type codes for (read|write)_img/col
-    /// <summary>CFITSIO data type: single bit.</summary>
     public const int TBIT = 1;
-    /// <summary>CFITSIO data type: unsigned 8-bit byte.</summary>
     public const int TBYTE = 11;
-    /// <summary>CFITSIO data type: signed 8-bit byte.</summary>
-    public const int TSBYTE = 12;
-    /// <summary>CFITSIO data type: unsigned 16-bit short.</summary>
-    public const int TUSHORT = 20;
-    /// <summary>CFITSIO data type: signed 16-bit short.</summary>
-    public const int TSHORT = 21;
-    /// <summary>CFITSIO data type: unsigned 32-bit int.</summary>
-    public const int TUINT = 30;
-    /// <summary>CFITSIO data type: signed 32-bit int.</summary>
-    public const int TINT = 31;
-    /// <summary>CFITSIO data type: unsigned 32-bit long.</summary>
-    public const int TULONG = 40;
-    /// <summary>CFITSIO data type: signed 32-bit long.</summary>
-    public const int TLONG = 41;
-    /// <summary>CFITSIO data type: signed 64-bit long long.</summary>
-    public const int TLONGLONG = 81;
-    /// <summary>CFITSIO data type: 32-bit IEEE float.</summary>
-    public const int TFLOAT = 42;
-    /// <summary>CFITSIO data type: 64-bit IEEE double.</summary>
-    public const int TDOUBLE = 82;
-    /// <summary>CFITSIO data type: logical/boolean.</summary>
     public const int TLOGICAL = 14;
-    /// <summary>CFITSIO data type: ASCII string.</summary>
     public const int TSTRING = 16;
+    public const int TUSHORT = 20;
+    public const int TSHORT = 21;
+    public const int TUINT = 30;
+    public const int TINT = 31;
+    public const int TULONG = 40;
+    public const int TLONG = 41;
+    public const int TFLOAT = 42;
+    public const int TDOUBLE = 82;
+    public const int TLONGLONG = 81;
 
-    // Compression algorithm codes
-    /// <summary>Compression: Rice algorithm (lossless integer).</summary>
     public const int RICE_1 = 11;
-    /// <summary>Compression: GZIP variant 1 (row-by-row).</summary>
     public const int GZIP_1 = 21;
-    /// <summary>Compression: GZIP variant 2 (tiled).</summary>
     public const int GZIP_2 = 22;
-    /// <summary>Compression: PLIO (integer-only).</summary>
     public const int PLIO_1 = 31;
-    /// <summary>Compression: HCOMPRESS (wavelet-based).</summary>
     public const int HCOMPRESS_1 = 41;
 
-    // ───────────────────────────── Files ──────────────────────────────────
-
-    /// <summary>Open an existing FITS file.</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_open_file", StringMarshalling = StringMarshalling.Utf8)]
+    // ───────────── Files (ff*) ─────────────
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffopen", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_open_file(out SafeFitsFile fitsFile, string fileName, int ioMode, ref int status);
+    public static partial int fits_open_file(out SafeFitsFile fptr, string fileName, int ioMode, ref int status);
 
-    /// <summary>Create a new FITS file. Prefix <paramref name="fileName"/> with '!' to overwrite.</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_create_file", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffinit", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_create_file(out SafeFitsFile fitsFile, string fileName, ref int status);
+    public static partial int fits_create_file(out SafeFitsFile fptr, string fileName, ref int status);
 
-    /// <summary>Close a FITS file. Usually invoked by <see cref="SafeFitsFile.ReleaseHandle"/>.</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_close_file")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffclos")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_close_file(IntPtr fitsFile, ref int status);
+    private static partial int ffclos(IntPtr fptr, ref int status);
 
-    /// <summary>Delete a FITS file on disk.</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_delete_file")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffdelt")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_delete_file(SafeFitsFile fitsFile, ref int status);
+    public static partial int fits_delete_file(SafeFitsFile fptr, ref int status);
 
-  /// <summary>Get the CFITSIO runtime version.</summary>
-  // Some CFITSIO builds export the canonical symbol name 'ffvers' (the 'fits_' form is a macro alias in C).
-  // Use the native symbol directly to ensure compatibility across distributions.
-  [LibraryImport(NativeLibraryName, EntryPoint = "ffvers")]
+    // Some builds still export ffvers (no fits_* alias).
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffvers")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int fits_get_version(out double version);
 
-    // ─────────────── HDU navigation / introspection ────────────────
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_movabs_hdu")]
+    // ───────────── HDU nav / info ─────────────
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffmahd")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_movabs_hdu(SafeFitsFile fitsFile, int absoluteHduNumber, out int hduType, ref int status);
+    public static partial int fits_movabs_hdu(SafeFitsFile fptr, int absoluteHduNumber, out int hduType, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_movrel_hdu")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffmrhd")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_movrel_hdu(SafeFitsFile fitsFile, int relativeHduOffset, out int hduType, ref int status);
+    public static partial int fits_movrel_hdu(SafeFitsFile fptr, int relativeHduOffset, out int hduType, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_hdu_num")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffghdn")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_hdu_num(SafeFitsFile fitsFile, out int absoluteHduNumber);
+    public static partial int fits_get_hdu_num(SafeFitsFile fptr, out int absoluteHduNumber);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_num_hdus")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffthdu")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_num_hdus(SafeFitsFile fitsFile, out int numberOfHdus, ref int status);
+    public static partial int fits_get_num_hdus(SafeFitsFile fptr, out int numberOfHdus, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_hdu_type")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffghdt")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_hdu_type(SafeFitsFile fitsFile, out int hduType, ref int status);
+    public static partial int fits_get_hdu_type(SafeFitsFile fptr, out int hduType, ref int status);
 
-    // ───────────────────── Image create / query ─────────────────────
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_create_imgll")]
+    // ───────────── Image create / query ─────────────
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffcrimll")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_create_imgll(SafeFitsFile fitsFile, int bitpix, int numberOfAxes, long[] axisLengths, ref int status);
+    public static partial int fits_create_imgll(SafeFitsFile fptr, int bitpix, int numberOfAxes, long[] axisLengths, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_insert_imgll")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffiimgll")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_insert_imgll(SafeFitsFile fitsFile, int bitpix, int numberOfAxes, long[] axisLengths, ref int status);
+    public static partial int fits_insert_imgll(SafeFitsFile fptr, int bitpix, int numberOfAxes, long[] axisLengths, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_img_paramll")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgiprll")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_img_paramll(SafeFitsFile fitsFile, int maximumAxes, out int bitpix, out int numberOfAxes, long[] axisLengths, ref int status);
+    public static partial int fits_get_img_paramll(SafeFitsFile fptr, int maxdim, out int bitpix, out int naxis, long[] naxes, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_set_bscale")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpscl")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_set_bscale(SafeFitsFile fitsFile, double bScale, double bZero, ref int status);
+    public static partial int fits_set_bscale(SafeFitsFile fptr, double bScale, double bZero, ref int status);
 
-    // ───────────────────────── Image I/O ───────────────────────────
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_img")]
+    // ───────────── Image I/O ─────────────
+    // fits_write_img / ffppr
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffppr")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_img(SafeFitsFile fitsFile, int dataType, long firstElementIndex, long numberOfElements, IntPtr sourceArray, ref int status);
+    public static partial int fits_write_img(SafeFitsFile fptr, int dataType, long firstElem, long nElem, IntPtr src, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_img")]
+    // fits_read_img / ffgpv
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgpv")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_img(SafeFitsFile fitsFile, int dataType, long firstElementIndex, long numberOfElements, IntPtr nullValue, IntPtr destinationArray, out int anyNull, ref int status);
+    public static partial int fits_read_img(SafeFitsFile fptr, int dataType, long firstElem, long nElem, IntPtr nullVal, IntPtr dest, out int anyNull, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_subset")]
+    // fits_write_subset / ffpss
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpss")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_subset(SafeFitsFile fitsFile, int dataType, long[] firstPixel, long[] lastPixel, IntPtr sourceArray, ref int status);
+    public static partial int fits_write_subset(SafeFitsFile fptr, int dataType, long[] firstPixel, long[] lastPixel, IntPtr src, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_subset")]
+    // fits_read_subset / ffgsv
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgsv")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_subset(SafeFitsFile fitsFile, int dataType, long[] firstPixel, long[] lastPixel, long[]? pixelStep, IntPtr nullValue, IntPtr destinationArray, out int anyNull, ref int status);
+    public static partial int fits_read_subset(SafeFitsFile fptr, int dataType, long[] firstPixel, long[] lastPixel, long[]? inc, IntPtr nullVal, IntPtr dest, out int anyNull, ref int status);
 
-    // ───────────────────── Headers / Keywords ──────────────────────
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_hdrspace")]
+    // ───────────── Headers / Keywords ─────────────
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffghsp")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_hdrspace(SafeFitsFile fitsFile, out int numberOfCards, out int positionOfNextKey, ref int status);
+    public static partial int fits_get_hdrspace(SafeFitsFile fptr, out int nkeys, out int keypos, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_hdrpos")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffghps")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_get_hdrpos(SafeFitsFile fitsFile, out int currentKeyNumber, out int currentKeyPosition, ref int status);
+    public static partial int fits_get_hdrpos(SafeFitsFile fptr, out int keynum, out int keypos, ref int status);
 
-    // read/write raw cards
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_record")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgrec")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe partial int fits_read_record(SafeFitsFile fitsFile, int keyNumber, byte* card, ref int status);
+    private static unsafe partial int ffgrec(SafeFitsFile fptr, int keyNumber, byte* card, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_record", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffprec", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_record(SafeFitsFile fitsFile, string card, ref int status);
+    public static partial int fits_write_record(SafeFitsFile fptr, string card, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_delete_key", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffdkey", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_delete_key(SafeFitsFile fitsFile, string keyword, ref int status);
+    public static partial int fits_delete_key(SafeFitsFile fptr, string keyword, ref int status);
 
-    // typed key write/update
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_key_str", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpkys", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_key_str(SafeFitsFile fitsFile, string keyword, string value, string comment, ref int status);
+    public static partial int fits_write_key_str(SafeFitsFile fptr, string keyword, string value, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_update_key_str", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffukys", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_update_key_str(SafeFitsFile fitsFile, string keyword, string value, string comment, ref int status);
+    public static partial int fits_update_key_str(SafeFitsFile fptr, string keyword, string value, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_key_lng", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpkyj", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_key_lng(SafeFitsFile fitsFile, string keyword, int value, string comment, ref int status);
+    public static partial int fits_write_key_lng(SafeFitsFile fptr, string keyword, int value, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_update_key_lng", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffukyj", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_update_key_lng(SafeFitsFile fitsFile, string keyword, int value, string comment, ref int status);
+    public static partial int fits_update_key_lng(SafeFitsFile fptr, string keyword, int value, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_key_lnglng", StringMarshalling = StringMarshalling.Utf8)]
+    // NOTE: CFITSIO does not have native 64-bit integer keyword functions (ffpkyjj/ffukyjj do not exist)
+    // Use string-based keyword storage for 64-bit values or accept 32-bit truncation with ffpkyj
+    // [LibraryImport(NativeLibraryName, EntryPoint = "ffpkyj", StringMarshalling = StringMarshalling.Utf8)]
+    // [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    // public static partial int fits_write_key_lnglng(SafeFitsFile fptr, string keyword, long value, string comment, ref int status);
+
+    // [LibraryImport(NativeLibraryName, EntryPoint = "ffukyj", StringMarshalling = StringMarshalling.Utf8)]
+    // [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    // public static partial int fits_update_key_lnglng(SafeFitsFile fptr, string keyword, long value, string comment, ref int status);
+
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpkyd", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_key_lnglng(SafeFitsFile fitsFile, string keyword, long value, string comment, ref int status);
+    public static partial int fits_write_key_dbl(SafeFitsFile fptr, string keyword, double value, int decimals, string comment, ref int status);
 
-    // 64-bit (long long) KEYWORD update
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_update_key_lnglng", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffukyd", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_update_key_lnglng(
-        SafeFitsFile fitsFile,
-        string keyword,
-        long value,
-        string comment,
-        ref int status);
+    public static partial int fits_update_key_dbl(SafeFitsFile fptr, string keyword, double value, int decimals, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_key_dbl", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpkyl", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_key_dbl(SafeFitsFile fitsFile, string keyword, double value, int decimals, string comment, ref int status);
+    public static partial int fits_write_key_log(SafeFitsFile fptr, string keyword, int logicalValue, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_update_key_dbl", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffukyl", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_update_key_dbl(SafeFitsFile fitsFile, string keyword, double value, int decimals, string comment, ref int status);
+    public static partial int fits_update_key_log(SafeFitsFile fptr, string keyword, int logicalValue, string comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_key_log", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpdat")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_key_log(SafeFitsFile fitsFile, string keyword, int logicalValue, string comment, ref int status);
+    public static partial int fits_write_date(SafeFitsFile fptr, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_update_key_log", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgkyj", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_update_key_log(SafeFitsFile fitsFile, string keyword, int logicalValue, string comment, ref int status);
+    public static partial int fits_read_key_lng(SafeFitsFile fptr, string keyword, ref int value, IntPtr comment, ref int status);
 
-    /// <summary>Write the current UTC date to the <c>DATE</c> keyword of the current HDU.</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_date")]
+    // NOTE: CFITSIO has ffgkyjj for reading 64-bit, but for consistency with string-based storage
+    // for write operations, we use string-based read as well
+    // [LibraryImport(NativeLibraryName, EntryPoint = "ffgkyjj", StringMarshalling = StringMarshalling.Utf8)]
+    // [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    // public static partial int fits_read_key_lnglng(SafeFitsFile fptr, string keyword, ref long value, IntPtr comment, ref int status);
+
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgkyd", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_date(SafeFitsFile fitsFile, ref int status);
+    public static partial int fits_read_key_dbl(SafeFitsFile fptr, string keyword, ref double value, IntPtr comment, ref int status);
 
-    // typed key reads (note comment is OUT; we pass null/zero)
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_key_lng", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgkyl", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_key_lng(SafeFitsFile fitsFile, string keyword, ref int value, IntPtr comment, ref int status);
+    public static partial int fits_read_key_log(SafeFitsFile fptr, string keyword, ref int logicalValue, IntPtr comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_key_lnglng", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgkys", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_key_lnglng(SafeFitsFile fitsFile, string keyword, ref long value, IntPtr comment, ref int status);
+    private static unsafe partial int ffgkys(SafeFitsFile fptr, string keyword, byte* value, byte* comment, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_key_dbl", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgkyn")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_key_dbl(SafeFitsFile fitsFile, string keyword, ref double value, IntPtr comment, ref int status);
+    private static unsafe partial int ffgkyn(SafeFitsFile fptr, int keyNumber, byte* keyword, byte* card, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_key_log", StringMarshalling = StringMarshalling.Utf8)]
+    // ───────────── Tables (subset) ─────────────
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffcrtb", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_key_log(SafeFitsFile fitsFile, string keyword, ref int logicalValue, IntPtr comment, ref int status);
+    public static partial int fits_create_tbl(SafeFitsFile fptr, int tableType, long nRows, int nFields, IntPtr ttype, IntPtr tform, IntPtr tunit, string? extname, ref int status);
 
-    // string key read / key+card read (use byte* buffers)
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_key_str", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "fficol", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe partial int fits_read_key_str(SafeFitsFile fitsFile, string keyword, byte* value, byte* comment, ref int status);
+    public static partial int fits_insert_col(SafeFitsFile fptr, int columnNumber, string columnName, string columnFormat, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_keyn")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpcl")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe partial int fits_read_keyn(SafeFitsFile fitsFile, int keyNumber, byte* keyword, byte* card, ref int status);
+    public static partial int fits_write_col(SafeFitsFile fptr, int dataType, int columnNumber, long firstRow, long firstElem, long nElem, IntPtr values, ref int status);
 
-    // ─────────────────────────── Tables ────────────────────────────
-
-    /// <summary>Create a table extension (use <see cref="Utf8StringArray"/> to pass string arrays).</summary>
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_create_tbl", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgcv")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_create_tbl(
-        SafeFitsFile fitsFile,
-        int tableType,
-        long numberOfRows,
-        int numberOfFields,
-        IntPtr columnNamesUtf8Array,   // char** ttype
-        IntPtr columnFormatsUtf8Array, // char** tform
-        IntPtr columnUnitsUtf8Array,   // char** tunit
-        string? extensionName,
-        ref int status);
+    public static partial int fits_read_col(SafeFitsFile fptr, int dataType, int columnNumber, long firstRow, long firstElem, long nElem, IntPtr nullVal, IntPtr values, out int anyNull, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_insert_col", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffdhdu")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_insert_col(SafeFitsFile fitsFile, int columnNumber, string columnName, string columnFormat, ref int status);
+    public static partial int fits_delete_hdu(SafeFitsFile fptr, ref int hduType, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_col")]
+    // ───────────── Compression (naming varies) ─────────────
+    // Most builds export these long names (no ff*). Keep as-is:
+    [LibraryImport(NativeLibraryName, EntryPoint = "fits_img_compress")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_col(SafeFitsFile fitsFile, int dataType, int columnNumber, long firstRow, long firstElement, long numberOfElements, IntPtr values, ref int status);
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_col")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_read_col(SafeFitsFile fitsFile, int dataType, int columnNumber, long firstRow, long firstElement, long numberOfElements, IntPtr nullValue, IntPtr values, out int anyNull, ref int status);
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_delete_hdu")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_delete_hdu(SafeFitsFile fitsFile, ref int hduType, ref int status);
-
-    // ─────────────────────── Compression ───────────────────────────
+    public static partial int fits_img_compress(SafeFitsFile inFptr, SafeFitsFile outFptr, ref int status);
 
     [LibraryImport(NativeLibraryName, EntryPoint = "fits_set_compression_type")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_set_compression_type(SafeFitsFile fitsFile, int compressionType, ref int status);
+    public static partial int fits_set_compression_type(SafeFitsFile fptr, int ctype, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_set_tile_dimll")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_set_tile_dimll(SafeFitsFile fitsFile, int numberOfAxes, long[] tileDimensions, ref int status);
+    // NOTE: fits_set_tile_dimll and fits_set_compression_param are not exported in many CFITSIO builds.
+    // Users should configure compression via fits_set_compression_type and other available APIs.
+    // Uncomment and map to correct symbols if your build provides them.
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_set_compression_param")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_set_compression_param(SafeFitsFile fitsFile, int numberOfParameters, float[] parameters, ref int status);
+    // [LibraryImport(NativeLibraryName, EntryPoint = "fits_set_tile_dimll")]
+    // [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    // public static partial int fits_set_tile_dimll(SafeFitsFile fptr, int naxis, long[] tileDim, ref int status);
+
+    // [LibraryImport(NativeLibraryName, EntryPoint = "fits_set_compression_param")]
+    // [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    // public static partial int fits_set_compression_param(SafeFitsFile fptr, int nParams, float[] parameters, ref int status);
 
     [LibraryImport(NativeLibraryName, EntryPoint = "fits_is_compressed_image")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_is_compressed_image(SafeFitsFile fitsFile, out int isCompressed, ref int status);
+    public static partial int fits_is_compressed_image(SafeFitsFile fptr, out int isCompressed, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_img_compress")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffpcks")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_img_compress(SafeFitsFile inputFitsFile, SafeFitsFile outputFitsFile, ref int status);
+    public static partial int fits_write_chksum(SafeFitsFile fptr, ref int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_copy_hdu")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffvcks")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_copy_hdu(SafeFitsFile inputFitsFile, SafeFitsFile outputFitsFile, int moreKeys, ref int status);
+    public static partial int fits_verify_chksum(SafeFitsFile fptr, out int dataOk, out int hduOk, ref int status);
 
-    // ───────────────────── Checksums / Errors ──────────────────────
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_write_chksum")]
+    // ───────────── Error text (short symbols) ─────────────
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgerr")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_write_chksum(SafeFitsFile fitsFile, ref int status);
+    private static unsafe partial int ffgerr(int status, byte* errText);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_verify_chksum")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffgmsg")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial int fits_verify_chksum(SafeFitsFile fitsFile, out int dataIsOk, out int hduIsOk, ref int status);
+    private static unsafe partial int ffgmsg(byte* errMsg);
 
-    // NOTE: Use unsafe byte* buffers (no StringBuilder in source-generated interop)
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_get_errstatus")]
+    [LibraryImport(NativeLibraryName, EntryPoint = "ffrprt")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe partial int fits_get_errstatus(int status, byte* errorText);
+    public static partial void fits_report_error(IntPtr file, int status);
 
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_read_errmsg")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe partial int fits_read_errmsg(byte* errorMessage);
-
-    [LibraryImport(NativeLibraryName, EntryPoint = "fits_report_error")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    public static partial void fits_report_error(IntPtr filePointer, int status);
-
-    // ───────────────────── Pin helpers (spans) ─────────────────────
-
-    /// <summary>Pin a span and pass an unmanaged pointer to a callback (for array arguments to native calls).</summary>
-    public static unsafe void WithPinned<T>(Span<T> span, Action<IntPtr> action) where T : unmanaged
-    {
-      if (action is null) throw new ArgumentNullException(nameof(action));
-      fixed (T* p = span) action((IntPtr)p);
-    }
-
-    /// <summary>Pin a read-only span and pass an unmanaged pointer to a callback (for array arguments to native calls).</summary>
-    public static unsafe void WithPinned<T>(ReadOnlySpan<T> span, Action<IntPtr> action) where T : unmanaged
-    {
-      if (action is null) throw new ArgumentNullException(nameof(action));
-      fixed (T* p = span) action((IntPtr)p);
-    }
-
-    // ───────────── UTF-8 string[] → char** marshalling helper ────────────
-
-    /// <summary>
-    /// Utility for marshalling managed <see cref="string"/> arrays as unmanaged UTF-8 <c>char**</c>.
-    /// Use in a <c>using</c> block and pass <see cref="Pointer"/> to functions like <c>fits_create_tbl</c>.
-    /// </summary>
-    public sealed class Utf8StringArray : IDisposable
-    {
-      private readonly IntPtr _pointerArray;
-      private readonly IntPtr[] _itemPointers;
-      private bool _disposed;
-
-      /// <summary>Pointer to the unmanaged <c>char**</c> array (or <see cref="IntPtr.Zero"/> if empty/null).</summary>
-      public IntPtr Pointer => _pointerArray;
-
-      private Utf8StringArray(IntPtr pointerArray, IntPtr[] itemPointers)
-      {
-        _pointerArray = pointerArray;
-        _itemPointers = itemPointers;
-      }
-
-      /// <summary>Create an unmanaged UTF-8 <c>char**</c> from a managed <see cref="string"/> array (null → <see cref="IntPtr.Zero"/>).</summary>
-      public static Utf8StringArray From(string[]? values)
-      {
-        if (values is null || values.Length == 0)
-          return new Utf8StringArray(IntPtr.Zero, Array.Empty<IntPtr>());
-
-        var items = new IntPtr[values.Length];
-
-        for (int i = 0; i < values.Length; i++)
-        {
-          if (values[i] is null) { items[i] = IntPtr.Zero; continue; }
-          var bytes = Encoding.UTF8.GetBytes(values[i]);
-          var p = Marshal.AllocHGlobal(bytes.Length + 1);
-          Marshal.Copy(bytes, 0, p, bytes.Length);
-          Marshal.WriteByte(p + bytes.Length, 0);
-          items[i] = p;
-        }
-
-        int size = IntPtr.Size * items.Length;
-        var arr = Marshal.AllocHGlobal(size);
-        for (int i = 0; i < items.Length; i++)
-          Marshal.WriteIntPtr(arr, i * IntPtr.Size, items[i]);
-
-        return new Utf8StringArray(arr, items);
-      }
-
-      public void Dispose()
-      {
-        if (_disposed) return;
-        _disposed = true;
-
-        foreach (var p in _itemPointers)
-          if (p != IntPtr.Zero) Marshal.FreeHGlobal(p);
-
-        if (_pointerArray != IntPtr.Zero)
-          Marshal.FreeHGlobal(_pointerArray);
-
-        GC.SuppressFinalize(this);
-      }
-
-      ~Utf8StringArray()
-      {
-        Dispose();
-      }
-    }
-
-    // ─────────────── String-returning helper wrappers ───────────────
-
-    /// <summary>Read an 80-character header card by index and return it as a managed string.</summary>
-    /// <param name="fitsFile">FITS file handle.</param>
-    /// <param name="keyNumber">1-based keyword index.</param>
-    /// <param name="status">CFITSIO status code.</param>
-    /// <returns>Header card as string (trailing whitespace trimmed).</returns>
-    public static unsafe string ReadRecordToString(SafeFitsFile fitsFile, int keyNumber, ref int status)
+    // ───────────── Utilities ─────────────
+    public static unsafe string ReadRecordToString(SafeFitsFile fptr, int keyNumber, ref int status)
     {
       byte* buf = stackalloc byte[FLEN_CARD];
-      int rc = fits_read_record(fitsFile, keyNumber, buf, ref status);
+      _ = ffgrec(fptr, keyNumber, buf, ref status);
       ThrowIfError(status);
       return Utf8ZToString(buf);
     }
 
-    /// <summary>Read keyword name and full card by index. Returns (keyword, card) tuple.</summary>
-    /// <param name="fitsFile">FITS file handle.</param>
-    /// <param name="keyNumber">1-based keyword index.</param>
-    /// <param name="status">CFITSIO status code.</param>
-    /// <returns>Tuple of (keyword name, full 80-char card).</returns>
-    public static unsafe (string Keyword, string Card) ReadKeynToStrings(SafeFitsFile fitsFile, int keyNumber, ref int status)
+    public static unsafe (string Keyword, string Card) ReadKeynToStrings(SafeFitsFile fptr, int keyNumber, ref int status)
     {
-      byte* kbuf = stackalloc byte[FLEN_KEYWORD];
-      byte* cbuf = stackalloc byte[FLEN_CARD];
-      int rc = fits_read_keyn(fitsFile, keyNumber, kbuf, cbuf, ref status);
+      byte* k = stackalloc byte[FLEN_KEYWORD];
+      byte* c = stackalloc byte[FLEN_CARD];
+      _ = ffgkyn(fptr, keyNumber, k, c, ref status);
       ThrowIfError(status);
-      return (Utf8ZToString(kbuf), Utf8ZToString(cbuf));
+      return (Utf8ZToString(k), Utf8ZToString(c));
     }
 
-    /// <summary>Read a string keyword value (ignoring comment). Returns null if keyword not found.</summary>
-    /// <param name="fitsFile">FITS file handle.</param>
-    /// <param name="keyword">Keyword name to read.</param>
-    /// <returns>String value, or null if keyword doesn't exist or an error occurred.</returns>
-    public static unsafe string? TryReadKeyString(SafeFitsFile fitsFile, string keyword)
+    public static unsafe string? TryReadKeyString(SafeFitsFile fptr, string keyword)
     {
       int status = 0;
-      byte* vbuf = stackalloc byte[FLEN_VALUE];
-      byte* cbuf = stackalloc byte[FLEN_COMMENT];
-      int rc = fits_read_key_str(fitsFile, keyword, vbuf, cbuf, ref status);
+      byte* v = stackalloc byte[FLEN_VALUE];
+      byte* cm = stackalloc byte[FLEN_COMMENT];
+      _ = ffgkys(fptr, keyword, v, cm, ref status);
       if (status != 0) return null;
-      return Utf8ZToString(vbuf);
+      return Utf8ZToString(v);
     }
 
-    // ─────────────────────────── Utilities ──────────────────────────
-
-    /// <summary>
-    /// Convert a null-terminated UTF-8 byte sequence to a managed string, trimming trailing spaces (common in FITS).
-    /// </summary>
-    /// <param name="p">Pointer to null-terminated UTF-8 bytes.</param>
-    /// <returns>Managed string with trailing whitespace removed.</returns>
     private static unsafe string Utf8ZToString(byte* p)
     {
       if (p == null) return string.Empty;
       int len = 0; while (p[len] != 0) len++;
-      return Encoding.UTF8.GetString(p, len).TrimEnd(); // trim trailing spaces common in FITS cards
+      return Encoding.UTF8.GetString(p, len).TrimEnd();
     }
   }
 }

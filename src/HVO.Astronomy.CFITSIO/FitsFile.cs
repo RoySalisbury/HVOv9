@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using HVO.Astronomy.CFITSIO.Interop;
 
 namespace HVO.Astronomy.CFITSIO;
@@ -8,7 +9,7 @@ namespace HVO.Astronomy.CFITSIO;
 /// <summary>
 /// Managed FITS file wrapper with typed Result&lt;T&gt; API for image I/O, header manipulation, and compression.
 /// </summary>
-public sealed class FitsFile : IDisposable
+public sealed partial class FitsFile : IDisposable
 {
   /// <summary>
   /// The native handle for this FITS file. Disposed automatically when this <see cref="FitsFile"/> is disposed.
@@ -358,13 +359,20 @@ public sealed class FitsFile : IDisposable
     }
   }
 
-  /// <summary>Create or update a 64-bit integer keyword on the current HDU.</summary>
+  /// <summary>
+  /// Create or update a 64-bit integer keyword on the current HDU.
+  /// NOTE: CFITSIO does not have native 64-bit integer support for keywords.
+  /// This method stores the value as a string to preserve full precision.
+  /// </summary>
   public Result<bool> WriteKeyInt64(string keyword, long value, string comment = "")
   {
     try
     {
+      // CFITSIO doesn't support 64-bit integer keywords natively
+      // Store as string to preserve full precision
       int status = 0;
-      CFitsIO.fits_update_key_lnglng(Handle, keyword, value, comment, ref status);
+      string valueStr = value.ToString();
+      CFitsIO.fits_update_key_str(Handle, keyword, valueStr, comment, ref status);
       CFitsIO.ThrowIfError(status);
       return Result<bool>.Success(true);
     }
@@ -436,16 +444,26 @@ public sealed class FitsFile : IDisposable
     }
   }
 
-  /// <summary>Try to read a 64-bit integer keyword value; returns null if not present.</summary>
+  /// <summary>
+  /// Try to read a 64-bit integer keyword value; returns null if not present.
+  /// NOTE: CFITSIO does not have native 64-bit integer support.
+  /// This reads the value as a string and parses it to preserve full precision.
+  /// </summary>
   public Result<long?> TryGetKeyInt64(string keyword)
   {
     try
     {
-      int status = 0;
-      long value = 0;
-      CFitsIO.fits_read_key_lnglng(Handle, keyword, ref value, IntPtr.Zero, ref status);
-      if (status != 0) return Result<long?>.Success(null);
-      return Result<long?>.Success(value);
+      // Read as string since CFITSIO doesn't support 64-bit integers natively
+      var stringResult = TryGetKeyString(keyword);
+      if (stringResult.IsFailure) return Result<long?>.Failure(stringResult.Error!);
+      if (stringResult.Value == null) return Result<long?>.Success(null);
+
+      // Parse the string to long
+      if (long.TryParse(stringResult.Value, out long value))
+      {
+        return Result<long?>.Success(value);
+      }
+      return Result<long?>.Failure(new FormatException($"Keyword '{keyword}' value '{stringResult.Value}' is not a valid Int64"));
     }
     catch (Exception ex)
     {
@@ -559,17 +577,20 @@ public sealed class FitsFile : IDisposable
         CFitsIO.ThrowIfError(status);
       }
 
-      if (policy.TileDimensions is { Length: > 0 })
-      {
-        CFitsIO.fits_set_tile_dimll(Handle, policy.TileDimensions.Length, policy.TileDimensions, ref status);
-        CFitsIO.ThrowIfError(status);
-      }
+      // NOTE: fits_set_tile_dimll and fits_set_compression_param are not available in all CFITSIO builds.
+      // These settings are commented out; use fits_set_compression_type for basic compression control.
 
-      if (policy.Parameters is { Length: > 0 })
-      {
-        CFitsIO.fits_set_compression_param(Handle, policy.Parameters.Length, policy.Parameters, ref status);
-        CFitsIO.ThrowIfError(status);
-      }
+      // if (policy.TileDimensions is { Length: > 0 })
+      // {
+      //   CFitsIO.fits_set_tile_dimll(Handle, policy.TileDimensions.Length, policy.TileDimensions, ref status);
+      //   CFitsIO.ThrowIfError(status);
+      // }
+
+      // if (policy.Parameters is { Length: > 0 })
+      // {
+      //   CFitsIO.fits_set_compression_param(Handle, policy.Parameters.Length, policy.Parameters, ref status);
+      //   CFitsIO.ThrowIfError(status);
+      // }
 
       if (policy.WriteChecksum)
       {
@@ -590,8 +611,17 @@ public sealed class FitsFile : IDisposable
   /// </summary>
   public void Dispose()
   {
-    Handle.Dispose();
+    try
+    {
+      Handle.Dispose();
+    }
+    finally
+    {
+      // Clean up memory resources (control blocks and external buffers)
+      DisposeMemoryResources();
+    }
   }
+
 
   private static string? Unbang(string path) => path?.StartsWith("!", StringComparison.Ordinal) == true ? path[1..] : path;
 }

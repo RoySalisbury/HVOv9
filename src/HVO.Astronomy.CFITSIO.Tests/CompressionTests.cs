@@ -28,8 +28,8 @@ public class CompressionTests
 
       var buf = new ushort[100];
       for (int i = 0; i < buf.Length; i++) buf[i] = (ushort)i;
-  var w = fits.WritePixelsU16(1, buf);
-  w.IsSuccessful.Should().BeTrue(w.Error?.ToString());
+      var w = fits.WritePixelsU16(1, buf);
+      w.IsSuccessful.Should().BeTrue(w.Error?.ToString());
 
       var comp = fits.CompressTo("!" + dstPath);
       comp.IsSuccessful.Should().BeTrue(comp.Error?.ToString());
@@ -38,12 +38,12 @@ public class CompressionTests
     File.Exists(dstPath).Should().BeTrue();
 
     // Open compressed file and check HDU count
-  var opened = FitsFile.Open(dstPath, readWrite: false);
-  opened.IsSuccessful.Should().BeTrue(opened.Error?.ToString());
+    var opened = FitsFile.Open(dstPath, readWrite: false);
+    opened.IsSuccessful.Should().BeTrue(opened.Error?.ToString());
     using var compressed = opened.Value;
     var hdus = compressed.GetNumberOfHdus();
-  hdus.IsSuccessful.Should().BeTrue();
-  Assert.IsTrue(hdus.Value >= 1);
+    hdus.IsSuccessful.Should().BeTrue();
+    Assert.IsTrue(hdus.Value >= 1);
 
     compressed.Dispose();
     TestPaths.DeleteIfExists(srcPath);

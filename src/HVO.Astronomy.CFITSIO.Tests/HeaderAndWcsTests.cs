@@ -16,12 +16,12 @@ public class HeaderAndWcsTests
     string path = TestPaths.GetTempFile($"headers_{Guid.NewGuid():N}.fits");
     TestPaths.DeleteIfExists(path);
 
-  var created = FitsFile.Create("!" + path);
-  created.IsSuccessful.Should().BeTrue(created.Error?.ToString());
+    var created = FitsFile.Create("!" + path);
+    created.IsSuccessful.Should().BeTrue(created.Error?.ToString());
     using var fits = created.Value;
 
     var rimg = fits.CreateImageHdu(CFitsIO.USHORT_IMG, 3, 3);
-  rimg.IsSuccessful.Should().BeTrue(rimg.Error?.ToString());
+    rimg.IsSuccessful.Should().BeTrue(rimg.Error?.ToString());
 
     var hb = new FitsHeaderBuilder(fits)
       .SetString("OBSERVER", "test-user", "Observer name")
@@ -54,12 +54,12 @@ public class HeaderAndWcsTests
     string path = TestPaths.GetTempFile($"wcs_{Guid.NewGuid():N}.fits");
     TestPaths.DeleteIfExists(path);
 
-  var created = FitsFile.Create("!" + path);
-  created.IsSuccessful.Should().BeTrue(created.Error?.ToString());
+    var created = FitsFile.Create("!" + path);
+    created.IsSuccessful.Should().BeTrue(created.Error?.ToString());
     using var fits = created.Value;
 
     var rimg = fits.CreateImageHdu(CFitsIO.USHORT_IMG, 200, 100);
-  rimg.IsSuccessful.Should().BeTrue(rimg.Error?.ToString());
+    rimg.IsSuccessful.Should().BeTrue(rimg.Error?.ToString());
 
     var wcs = new WcsHeaderBuilder(fits)
       .SetTanWithCdMatrix(
@@ -86,4 +86,48 @@ public class HeaderAndWcsTests
     fits.Dispose();
     TestPaths.DeleteIfExists(path);
   }
+
+  [TestMethod]
+  public void WcsBuilder_SetSimpleTan_Writes_CDELT_Keywords()
+  {
+    if (!NativeAvailability.HasCFitsIO) Assert.Inconclusive("CFITSIO native library not available on this platform.");
+    string path = TestPaths.GetTempFile($"wcs_simple_{Guid.NewGuid():N}.fits");
+    TestPaths.DeleteIfExists(path);
+
+    var created = FitsFile.Create("!" + path);
+    created.IsSuccessful.Should().BeTrue(created.Error?.ToString());
+    using var fits = created.Value;
+
+    var rimg = fits.CreateImageHdu(CFitsIO.USHORT_IMG, 100, 100);
+    rimg.IsSuccessful.Should().BeTrue(rimg.Error?.ToString());
+
+    // Use SetSimpleTan which writes CDELT1/CDELT2 instead of CD matrix
+    var wcs = new WcsHeaderBuilder(fits)
+      .SetSimpleTan(
+        referenceWorldLongitudeDegrees: 90.0,
+        referenceWorldLatitudeDegrees: 30.0,
+        referencePixelX: 50.0,
+        referencePixelY: 50.0,
+        degreesPerPixelX: -0.0005,
+        degreesPerPixelY: 0.0005)
+      .SetCelestialSystem("FK5", 2000.0);
+
+    // Validate CDELT-based WCS
+    fits.TryGetKeyString(FitsCommonKeywords.CTYPE1).Value.Should().Be("RA---TAN");
+    fits.TryGetKeyString(FitsCommonKeywords.CTYPE2).Value.Should().Be("DEC--TAN");
+    fits.TryGetKeyDouble(FitsCommonKeywords.CRVAL1).Value.Should().Be(90.0);
+    fits.TryGetKeyDouble(FitsCommonKeywords.CRVAL2).Value.Should().Be(30.0);
+    fits.TryGetKeyDouble(FitsCommonKeywords.CRPIX1).Value.Should().Be(50.0);
+    fits.TryGetKeyDouble(FitsCommonKeywords.CRPIX2).Value.Should().Be(50.0);
+    fits.TryGetKeyDouble(FitsCommonKeywords.CDELT1).Value.Should().BeApproximately(-0.0005, 1e-12);
+    fits.TryGetKeyDouble(FitsCommonKeywords.CDELT2).Value.Should().BeApproximately(0.0005, 1e-12);
+    fits.TryGetKeyString(FitsCommonKeywords.CUNIT1).Value.Should().Be("deg");
+    fits.TryGetKeyString(FitsCommonKeywords.CUNIT2).Value.Should().Be("deg");
+    fits.TryGetKeyString(FitsCommonKeywords.RADESYS).Value.Should().Be("FK5");
+    fits.TryGetKeyDouble(FitsCommonKeywords.EQUINOX).Value.Should().Be(2000.0);
+
+    fits.Dispose();
+    TestPaths.DeleteIfExists(path);
+  }
 }
+
