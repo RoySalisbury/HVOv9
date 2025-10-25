@@ -62,6 +62,10 @@ public class FitsFileMemoryTests
 
     // Open compressed bytes as read-only in-memory and read back
     using var ro = FitsFile.OpenFromMemory(compressed, readWrite: false);
+    
+    // Compressed image is in HDU #2 (primary is empty)
+    ro.MoveToHdu(2).IsSuccessful.Should().BeTrue();
+    
     var read = FitsImage.ReadU16(ro);
     read.IsSuccessful.Should().BeTrue(read.Error?.ToString());
     var (got, rw, rh) = read.Value;

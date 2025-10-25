@@ -10,10 +10,37 @@ namespace HVO.Astronomy.CFITSIO
   {
     private enum MemoryBackingMode { None, InMemoryOwnedByCFitsio, InMemoryExternalBuffer }
 
+    // Delegate for CFITSIO memory realloc callback: void* (*mem_realloc)(void *p, size_t newsize)
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private unsafe delegate void* ReallocCallback(void* ptr, nuint newSize);
+
     private IntPtr _memBufPtrLoc;
     private IntPtr _memSizeLoc;
     private MemoryBackingMode _memMode;
     private IntPtr _originalExternalBuffer;
+#pragma warning disable CS0414 // Field assigned but never used - stored to prevent GC collection
+    private ReallocCallback? _reallocCallback;  // Keep delegate alive to prevent GC
+#pragma warning restore CS0414
+
+    // Static realloc implementation that CFITSIO can call
+    private static unsafe void* DefaultRealloc(void* ptr, nuint newSize)
+    {
+      if (newSize == 0)
+      {
+        // Free the memory
+        if (ptr != null) Marshal.FreeHGlobal((IntPtr)ptr);
+        return null;
+      }
+
+      if (ptr == null)
+      {
+        // Initial allocation
+        return (void*)Marshal.AllocHGlobal((IntPtr)newSize);
+      }
+
+      // Reallocation
+      return (void*)Marshal.ReAllocHGlobal((IntPtr)ptr, (IntPtr)newSize);
+    }
 
     public bool IsInMemory => _memMode != MemoryBackingMode.None;
 
@@ -30,6 +57,10 @@ namespace HVO.Astronomy.CFITSIO
       void* bufLoc = (void*)Marshal.AllocHGlobal(IntPtr.Size);
       void* sizeLoc = (void*)Marshal.AllocHGlobal(sizeof(nuint));
 
+      // Create realloc callback delegate and keep it alive
+      var reallocCallback = new ReallocCallback(DefaultRealloc);
+      var reallocPtr = Marshal.GetFunctionPointerForDelegate(reallocCallback);
+
       try
       {
         // Initialize the control blocks
@@ -38,7 +69,7 @@ namespace HVO.Astronomy.CFITSIO
 
         // Call CFITSIO - it will store these addresses and update the values over time
         CFitsIO.fits_create_memfile(out var handle, (void**)bufLoc, (nuint*)sizeLoc,
-                                    growDeltaBytes, IntPtr.Zero, ref status);
+                                    growDeltaBytes, reallocPtr, ref status);
         CFitsIO.ThrowIfError(status);
 
         return new FitsFile(handle, null)
@@ -46,7 +77,8 @@ namespace HVO.Astronomy.CFITSIO
           _memBufPtrLoc = (IntPtr)bufLoc,
           _memSizeLoc = (IntPtr)sizeLoc,
           _memMode = MemoryBackingMode.InMemoryOwnedByCFitsio,
-          _originalExternalBuffer = IntPtr.Zero
+          _originalExternalBuffer = IntPtr.Zero,
+          _reallocCallback = reallocCallback // Keep delegate alive to prevent GC
         };
       }
       catch
@@ -65,6 +97,10 @@ namespace HVO.Astronomy.CFITSIO
       IntPtr bufLoc = IntPtr.Zero;
       IntPtr sizeLoc = IntPtr.Zero;
 
+      // Create realloc callback delegate for read/write mode
+      ReallocCallback? reallocCallback = readWrite ? new ReallocCallback(DefaultRealloc) : null;
+      IntPtr reallocPtr = reallocCallback != null ? Marshal.GetFunctionPointerForDelegate(reallocCallback) : IntPtr.Zero;
+
       try
       {
         fixed (byte* p = source)
@@ -82,7 +118,7 @@ namespace HVO.Astronomy.CFITSIO
                                   readWrite ? CFitsIO.READWRITE : CFitsIO.READONLY,
                                   (void**)((void*)bufLoc), (nuint*)((void*)sizeLoc),
                                   readWrite ? growDeltaBytes : 0,
-                                  IntPtr.Zero, ref status);
+                                  reallocPtr, ref status);
         CFitsIO.ThrowIfError(status);
 
         var f = new FitsFile(handle, null)
@@ -91,7 +127,8 @@ namespace HVO.Astronomy.CFITSIO
           _memSizeLoc = sizeLoc,
           _memMode = readWrite ? MemoryBackingMode.InMemoryOwnedByCFitsio
                                : MemoryBackingMode.InMemoryExternalBuffer,
-          _originalExternalBuffer = readWrite ? IntPtr.Zero : original
+          _originalExternalBuffer = readWrite ? IntPtr.Zero : original,
+          _reallocCallback = reallocCallback // Keep delegate alive (null is OK for read-only)
         };
 
         if (readWrite) original = IntPtr.Zero;
@@ -110,9 +147,27 @@ namespace HVO.Astronomy.CFITSIO
     {
       if (!IsInMemory) throw new InvalidOperationException("Not an in-memory FITS.");
 
+      // Check if file has any HDUs - freshly created files have none
+      var currentSize = CurrentBufferSize;
+      if (currentSize == 0)
+      {
+        // No data written yet - return empty array
+        return Array.Empty<byte>();
+      }
+
+      // Flush to ensure all writes are complete
       int status = 0;
       CFitsIO.fits_flush_file(Handle, ref status);
-      CFitsIO.ThrowIfError(status);
+
+      // If flush fails on an effectively empty file, return empty
+      if (status != 0)
+      {
+        if (currentSize == 0 || CurrentBufferPtr == null)
+          return Array.Empty<byte>();
+
+        // Otherwise it's a real error
+        CFitsIO.ThrowIfError(status);
+      }
 
       var size = CurrentBufferSize;
       if (size == 0) return Array.Empty<byte>();
