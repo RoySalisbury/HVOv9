@@ -88,6 +88,33 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
 
 ---
 
+### Phase 8 — Native Assets Packaging for CFITSIO
+
+Problem: When consuming `HVO.Astronomy.CFITSIO` via ProjectReference (instead of NuGet), native CFITSIO binaries under `runtimes/**` aren’t brought into app outputs automatically. We added a local copy target in SkyMonitor to bridge this, but the clean solution is to publish native assets in a dedicated package and reference it transitively.
+
+- [ ] Create `HVO.Astronomy.CFITSIO.NativeAssets` NuGet project (no managed code)
+  - Sdk: `Microsoft.NET.Sdk`
+  - `TargetFramework: net9.0`
+  - `IncludeBuildOutput: false` (so no empty DLL is produced)
+  - `GeneratePackageOnBuild: true`
+  - Pack all native files: `runtimes/**` → `PackagePath="runtimes"`
+  - Metadata: `PackageId=HVO.Astronomy.CFITSIO.NativeAssets`, license/readme tags
+- [ ] Update `HVO.Astronomy.CFITSIO` (managed) to reference the NativeAssets package
+  - Add `PackageReference Include="HVO.Astronomy.CFITSIO.NativeAssets"` (not PrivateAssets), so native libs flow transitively to consumers using the managed package
+- [ ] For devs using ProjectReference to `HVO.Astronomy.CFITSIO`
+  - Add `PackageReference Include="HVO.Astronomy.CFITSIO.NativeAssets"` to app/test projects
+  - Remove the temporary MSBuild copy target in SkyMonitor once the package is in place
+- [ ] Validate both consumption paths
+  - NuGet-only: App references `HVO.Astronomy.CFITSIO` (managed) and gets native assets transitively
+  - Source-based: App references `HVO.Astronomy.CFITSIO` (ProjectReference) and also `HVO.Astronomy.CFITSIO.NativeAssets` (PackageReference)
+- [ ] CI: Build and pack both packages; optionally push to local feed `.LocalPackages/`
+
+Acceptance:
+- Native CFITSIO libraries are present in app/bin for both NuGet and ProjectReference consumers, with no custom copy targets.
+- Packaging is self-contained and documented in the repo for future consumers.
+
+---
+
 ## FITS Keywords (v1)
 
 Write when available:
