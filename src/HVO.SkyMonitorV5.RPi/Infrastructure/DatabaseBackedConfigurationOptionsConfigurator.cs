@@ -34,6 +34,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     IConfigureOptions<StarCatalogOptions>,
     IConfigureOptions<LocalApiClientOptions>,
     IConfigureOptions<SkyMonitorTelemetryRetentionOptions>,
+    IConfigureOptions<FitsExportOptions>,
     IConfigurationSnapshotInvalidator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.General);
@@ -147,21 +148,53 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         }
     }
 
+    public void Configure(FitsExportOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var snapshot = GetSnapshot();
+        if (!snapshot.SystemSettings.TryGetValue(SystemSettingKeys.FitsExport, out var payload)
+            || string.IsNullOrWhiteSpace(payload))
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = JsonSerializer.Deserialize<FitsExportOptions>(payload, JsonOptions);
+            if (stored is null)
+            {
+                return;
+            }
+
+            options.EnableForRaw = stored.EnableForRaw;
+            options.EnableForProcessed = stored.EnableForProcessed;
+            options.BitDepth = stored.BitDepth;
+            options.UnsignedU16 = stored.UnsignedU16;
+            options.Compression = stored.Compression;
+            options.WriteChecksum = stored.WriteChecksum;
+        }
+        catch (JsonException ex)
+        {
+            _logger?.LogWarning(ex, "Unable to deserialize FITS export configuration from system settings.");
+        }
+    }
+
     public void Configure(AllSkyCatalogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         var snapshot = GetSnapshot();
 
         var cameraLookup = snapshot.Cameras.ToDictionary(c => c.Id);
-    var lensLookup = snapshot.Optics.ToDictionary(l => l.Id);
+        var lensLookup = snapshot.Optics.ToDictionary(l => l.Id);
 
         options.Cameras = snapshot.Cameras
             .Select(CreateCameraOption)
             .ToList();
 
-    options.Lenses = snapshot.Optics
-            .Select(CreateLensOption)
-            .ToList();
+        options.Lenses = snapshot.Optics
+                .Select(CreateLensOption)
+                .ToList();
 
         var rigEntries = new List<RigCatalogEntryOptions>();
         string activeRig = string.Empty;
@@ -888,9 +921,9 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
 
         public ObservatorySiteEntity Observatory { get; }
 
-    public IReadOnlyList<CameraCatalogEntity> Cameras { get; }
+        public IReadOnlyList<CameraCatalogEntity> Cameras { get; }
 
-    public IReadOnlyList<OpticsCatalogEntity> Optics { get; }
+        public IReadOnlyList<OpticsCatalogEntity> Optics { get; }
 
         public IReadOnlyList<RigCatalogEntryEntity> Rigs { get; }
 

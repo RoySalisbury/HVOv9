@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Models;
@@ -9,9 +10,12 @@ using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Pipeline.Composition;
 using HVO.SkyMonitorV5.RPi.Pipeline.Filters;
 using HVO.SkyMonitorV5.RPi.Services;
+using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Tests.Pipeline;
@@ -279,7 +283,17 @@ public sealed class FrameFilterPipelineTests
         };
 
         var pipeline = new FrameFilterPipeline(filters, composer, NullLogger<FrameFilterPipeline>.Instance);
-        var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
+        // Updated encoder constructor requires IFitsFrameEncoder, IRigAcquisitionAdapter, and IOptionsMonitor<FitsExportOptions>
+        var fitsEncoderMock = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
+        var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Loose);
+        rigAdapter.SetupGet(a => a.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
+        var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = false });
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            fitsEncoderMock.Object,
+            rigAdapter.Object,
+            fitsOptionsMonitor.Object);
 
         byte[]? referencePayload = null;
         var expectedFilters = new[]

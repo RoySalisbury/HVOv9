@@ -67,7 +67,26 @@ public sealed class AllSkyControllerTests
         Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
     }
 
-    private static AllSkyController CreateController(RawFrameSnapshot frame)
+    [TestMethod]
+    public void GetLatestFrame_WithFitsFormat_ReturnsFitsWhenEnabled()
+    {
+        using var context = new RawFrameTestContext();
+
+        var fitsBytes = new byte[] { 0x01, 0x02, 0x03 };
+        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
+        fitsEncoder
+            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()))
+            .Returns(new ProcessedFrameDelivery(fitsBytes, "application/fits", "fits"));
+
+        var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
+        var result = controller.GetLatestFrame(raw: true, rawFormat: "fits") as FileContentResult;
+
+        Assert.IsNotNull(result, "Controller should return a file for FITS request.");
+        Assert.AreEqual("application/fits", result.ContentType, "FITS content type should be returned when requested and enabled.");
+        Assert.HasCount(fitsBytes.Length, result.FileContents, "FITS payload should match encoder output.");
+    }
+
+    private static AllSkyController CreateController(RawFrameSnapshot frame, bool enableFits = false, IFitsFrameEncoder? fitsEncoder = null)
     {
         var frameStateStore = new Mock<IFrameStateStore>();
         frameStateStore.SetupGet(store => store.LatestRawFrame).Returns(frame);
@@ -78,7 +97,19 @@ public sealed class AllSkyControllerTests
 
         var encoder = new Mock<IProcessedFrameEncoder>();
 
-        var controller = new AllSkyController(frameStateStore.Object, optionsMonitor.Object, encoder.Object, NullLogger<AllSkyController>.Instance)
+        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = enableFits, EnableForProcessed = false });
+        var rigAdapter = new Mock<HVO.SkyMonitorV5.RPi.Cameras.Acquisition.IRigAcquisitionAdapter>();
+        rigAdapter.SetupGet(r => r.ActiveRig).Returns(HVO.SkyMonitorV5.RPi.Cameras.Projection.RigPresets.MockAsi174_Fujinon);
+
+        var controller = new AllSkyController(
+            frameStateStore.Object,
+            optionsMonitor.Object,
+            encoder.Object,
+            fitsEncoder ?? Mock.Of<IFitsFrameEncoder>(),
+            rigAdapter.Object,
+            fitsOptions.Object,
+            NullLogger<AllSkyController>.Instance)
         {
             ControllerContext = new ControllerContext
             {

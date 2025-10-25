@@ -26,9 +26,11 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
     private readonly IOptionsMonitor<ObservatoryLocationOptions> _observatoryMonitor;
     private readonly IOptionsMonitor<LocalApiClientOptions> _localApiMonitor;
     private readonly IOptionsMonitor<SkyMonitorTelemetryRetentionOptions> _telemetryMonitor;
+    private readonly IOptionsMonitor<FitsExportOptions> _fitsMonitor;
     private readonly IOptionsMonitorCache<ObservatoryLocationOptions> _observatoryCache;
     private readonly IOptionsMonitorCache<LocalApiClientOptions> _localApiCache;
     private readonly IOptionsMonitorCache<SkyMonitorTelemetryRetentionOptions> _telemetryCache;
+    private readonly IOptionsMonitorCache<FitsExportOptions> _fitsCache;
     private readonly TimeProvider _timeProvider;
     private readonly IRigRuntimeUpdater _runtimeUpdater;
     private readonly IRigAcquisitionAdapter _rigAdapter;
@@ -40,22 +42,26 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         IOptionsMonitor<ObservatoryLocationOptions> observatoryMonitor,
         IOptionsMonitor<LocalApiClientOptions> localApiMonitor,
         IOptionsMonitor<SkyMonitorTelemetryRetentionOptions> telemetryMonitor,
+    IOptionsMonitor<FitsExportOptions> fitsMonitor,
         IOptionsMonitorCache<ObservatoryLocationOptions> observatoryCache,
         IOptionsMonitorCache<LocalApiClientOptions> localApiCache,
         IOptionsMonitorCache<SkyMonitorTelemetryRetentionOptions> telemetryCache,
+    IOptionsMonitorCache<FitsExportOptions> fitsCache,
         TimeProvider timeProvider,
         IRigRuntimeUpdater runtimeUpdater,
         IRigAcquisitionAdapter rigAdapter,
         ILogger<SystemConfigurationService>? logger = null)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
-    _snapshotInvalidator = snapshotInvalidator ?? throw new ArgumentNullException(nameof(snapshotInvalidator));
+        _snapshotInvalidator = snapshotInvalidator ?? throw new ArgumentNullException(nameof(snapshotInvalidator));
         _observatoryMonitor = observatoryMonitor ?? throw new ArgumentNullException(nameof(observatoryMonitor));
         _localApiMonitor = localApiMonitor ?? throw new ArgumentNullException(nameof(localApiMonitor));
         _telemetryMonitor = telemetryMonitor ?? throw new ArgumentNullException(nameof(telemetryMonitor));
+        _fitsMonitor = fitsMonitor ?? throw new ArgumentNullException(nameof(fitsMonitor));
         _observatoryCache = observatoryCache ?? throw new ArgumentNullException(nameof(observatoryCache));
         _localApiCache = localApiCache ?? throw new ArgumentNullException(nameof(localApiCache));
         _telemetryCache = telemetryCache ?? throw new ArgumentNullException(nameof(telemetryCache));
+        _fitsCache = fitsCache ?? throw new ArgumentNullException(nameof(fitsCache));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _runtimeUpdater = runtimeUpdater ?? throw new ArgumentNullException(nameof(runtimeUpdater));
         _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
@@ -111,9 +117,9 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
                     $"Observatory configuration revision mismatch. Expected {entity.Revision}, received {request.Revision}."));
             }
 
-        if (await context.ObservatorySites
-            .AnyAsync(site => site.Id != entity.Id && site.Slug == normalizedSlug, cancellationToken)
-                    .ConfigureAwait(false))
+            if (await context.ObservatorySites
+                .AnyAsync(site => site.Id != entity.Id && site.Slug == normalizedSlug, cancellationToken)
+                        .ConfigureAwait(false))
             {
                 return Result<SystemObservatoryConfigurationResponse>.Failure(new InvalidOperationException($"An observatory with slug '{normalizedSlug}' already exists."));
             }
@@ -276,6 +282,54 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         }
     }
 
+    public async Task<Result<SystemFitsExportConfigurationResponse>> GetFitsExportAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fallback = _fitsMonitor.CurrentValue ?? new FitsExportOptions();
+
+            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var entity = await context.SystemSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Key == SystemSettingKeys.FitsExport, cancellationToken)
+                .ConfigureAwait(false);
+
+            var options = TryDeserialize(entity?.PayloadJson, fallback);
+            var revision = entity?.Revision ?? 0;
+            return Result<SystemFitsExportConfigurationResponse>.Success(MapFitsExport(options, revision));
+        }
+        catch (Exception ex)
+        {
+            return Result<SystemFitsExportConfigurationResponse>.Failure(ex);
+        }
+    }
+
+    public async Task<Result<SystemFitsExportConfigurationResponse>> UpdateFitsExportAsync(UpdateSystemFitsExportRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var configured = new FitsExportOptions
+            {
+                EnableForRaw = request.EnableForRaw,
+                EnableForProcessed = request.EnableForProcessed,
+                BitDepth = request.BitDepth,
+                UnsignedU16 = request.UnsignedU16,
+                Compression = request.Compression,
+                WriteChecksum = request.WriteChecksum
+            };
+
+            var revision = await UpsertSystemSettingAsync(SystemSettingKeys.FitsExport, configured, request.Revision, cancellationToken).ConfigureAwait(false);
+
+            InvalidateCaches(fits: true);
+
+            return Result<SystemFitsExportConfigurationResponse>.Success(MapFitsExport(configured, revision));
+        }
+        catch (Exception ex)
+        {
+            return Result<SystemFitsExportConfigurationResponse>.Failure(ex);
+        }
+    }
+
     public Task<Result<RigRuntimeStatusResponse>> GetRigRuntimeStatusAsync(CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
@@ -317,84 +371,84 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             switch (request.Action)
             {
                 case RigRuntimeActionKind.Start:
-                {
-                    var result = await _rigAdapter.StartAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter start failed."));
-                    }
+                        var result = await _rigAdapter.StartAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter start failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter started for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter already running for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter started for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter already running for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Pause:
-                {
-                    var result = await _rigAdapter.PauseAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter pause failed."));
-                    }
+                        var result = await _rigAdapter.PauseAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter pause failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter paused for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter was not running for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter paused for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter was not running for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Resume:
-                {
-                    var result = await _rigAdapter.ResumeAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter resume failed."));
-                    }
+                        var result = await _rigAdapter.ResumeAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter resume failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter resumed for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter was not paused for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter resumed for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter was not paused for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Stop:
-                {
-                    var result = await _rigAdapter.StopAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter stop failed."));
-                    }
+                        var result = await _rigAdapter.StopAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter stop failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter stopped for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter already stopped for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter stopped for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter already stopped for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Reload:
-                {
-                    await _runtimeUpdater.ReloadActiveRigAsync(request.ForceRestart, cancellationToken).ConfigureAwait(false);
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    succeeded = true;
-                    stateChanged = true;
-                    message = request.ForceRestart
-                        ? FormattableString.Invariant($"Reloaded rig '{rigName}' with force restart.")
-                        : FormattableString.Invariant($"Reloaded rig '{rigName}'.");
-                    break;
-                }
+                    {
+                        await _runtimeUpdater.ReloadActiveRigAsync(request.ForceRestart, cancellationToken).ConfigureAwait(false);
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        succeeded = true;
+                        stateChanged = true;
+                        message = request.ForceRestart
+                            ? FormattableString.Invariant($"Reloaded rig '{rigName}' with force restart.")
+                            : FormattableString.Invariant($"Reloaded rig '{rigName}'.");
+                        break;
+                    }
                 default:
-                {
-                    throw new ArgumentOutOfRangeException(nameof(request.Action), request.Action, "Unsupported adapter action.");
-                }
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(request.Action), request.Action, "Unsupported adapter action.");
+                    }
             }
 
             var status = BuildRuntimeStatus(message);
@@ -472,7 +526,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         return entity.Revision;
     }
 
-    private void InvalidateCaches(bool localApi = false, bool telemetry = false)
+    private void InvalidateCaches(bool localApi = false, bool telemetry = false, bool fits = false)
     {
         _snapshotInvalidator.InvalidateSnapshot();
         _observatoryCache.TryRemove(OptionsDefaults.DefaultName);
@@ -485,6 +539,11 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         if (telemetry)
         {
             _telemetryCache.TryRemove(OptionsDefaults.DefaultName);
+        }
+
+        if (fits)
+        {
+            _fitsCache.TryRemove(OptionsDefaults.DefaultName);
         }
     }
 
@@ -647,4 +706,33 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             return fallback;
         }
     }
+
+    private static FitsExportOptions TryDeserialize(string? payload, FitsExportOptions fallback)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return fallback;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<FitsExportOptions>(payload, JsonOptions) ?? fallback;
+        }
+        catch (JsonException)
+        {
+            return fallback;
+        }
+    }
+
+    private static SystemFitsExportConfigurationResponse MapFitsExport(FitsExportOptions options, long revision)
+        => new()
+        {
+            EnableForRaw = options.EnableForRaw,
+            EnableForProcessed = options.EnableForProcessed,
+            BitDepth = options.BitDepth,
+            UnsignedU16 = options.UnsignedU16,
+            Compression = options.Compression,
+            WriteChecksum = options.WriteChecksum,
+            Revision = revision
+        };
 }

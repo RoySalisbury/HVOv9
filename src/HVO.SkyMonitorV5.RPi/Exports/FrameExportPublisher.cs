@@ -23,28 +23,34 @@ public sealed class FrameExportPublisher
 
     private readonly IFrameExportDispatcher _dispatcher;
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
+    private readonly IFitsFrameEncoder _fitsFrameEncoder;
     private readonly ILogger<FrameExportPublisher> _logger;
     private readonly IOptionsMonitor<SkiaPipelineFeatureOptions> _featureOptions;
     private readonly ISkiaPipelineFeatureToggleMonitor _featureMonitor;
     private readonly IImageFrameArchiveIngestionQueue _archiveQueue;
     private readonly IOptionsMonitor<ImageHistoryOptions> _imageHistoryOptions;
+    private readonly IOptionsMonitor<FitsExportOptions> _fitsOptions;
 
     public FrameExportPublisher(
         IFrameExportDispatcher dispatcher,
         IProcessedFrameEncoder processedFrameEncoder,
+        IFitsFrameEncoder fitsFrameEncoder,
         ILogger<FrameExportPublisher> logger,
         IOptionsMonitor<SkiaPipelineFeatureOptions> featureOptions,
         ISkiaPipelineFeatureToggleMonitor featureMonitor,
         IImageFrameArchiveIngestionQueue archiveQueue,
-        IOptionsMonitor<ImageHistoryOptions> imageHistoryOptions)
+        IOptionsMonitor<ImageHistoryOptions> imageHistoryOptions,
+        IOptionsMonitor<FitsExportOptions> fitsOptions)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
+        _fitsFrameEncoder = fitsFrameEncoder ?? throw new ArgumentNullException(nameof(fitsFrameEncoder));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _featureOptions = featureOptions ?? throw new ArgumentNullException(nameof(featureOptions));
         _featureMonitor = featureMonitor ?? throw new ArgumentNullException(nameof(featureMonitor));
         _archiveQueue = archiveQueue ?? throw new ArgumentNullException(nameof(archiveQueue));
         _imageHistoryOptions = imageHistoryOptions ?? throw new ArgumentNullException(nameof(imageHistoryOptions));
+        _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
     }
 
     public void PublishRawFrame(
@@ -68,6 +74,54 @@ public sealed class FrameExportPublisher
                     frameNumber,
                     capture.FrameId);
                 return;
+            }
+
+            // Preferred path: FITS encoder for raw frames when enabled
+            var fits = _fitsOptions.CurrentValue;
+            if (fits.EnableForRaw)
+            {
+                try
+                {
+                    var snapshot = new Models.RawFrameSnapshot(capture.FrameId, capture.Image, capture.Timestamp, capture.Exposure)
+                    {
+                        ImmutableImage = imageForExport
+                    };
+
+                    var delivery = _fitsFrameEncoder.EncodeRaw(imageForExport, snapshot, rig, fits);
+
+                    var metadata = FrameExportMetadataBuilder.FromRaw(
+                        capture,
+                        rig,
+                        stageTimestampUtc,
+                        queueLatencyMilliseconds: captureMilliseconds,
+                        processingMilliseconds: null,
+                        rawImageDescriptor: null,
+                        payloadContentType: delivery.ContentType,
+                        payloadExtension: delivery.FileExtension ?? "fits");
+
+                    var payloadBuffer = delivery.Payload.ToArray();
+                    var envelope = new FrameExportEnvelope(
+                        capture.FrameId,
+                        FrameExportStage.Raw,
+                        metadata,
+                        payloadBuffer,
+                        delivery.ContentType,
+                        delivery.FileExtension ?? "fits");
+
+                    if (!_dispatcher.TryEnqueue(envelope))
+                    {
+                        _logger.LogDebug(
+                            "Frame export dispatcher rejected raw FITS payload for frame #{FrameNumber} ({FrameId}).",
+                            frameNumber,
+                            capture.FrameId);
+                    }
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "FITS encoding for raw frame #{FrameNumber} ({FrameId}) failed; falling back to legacy/raw paths.", frameNumber, capture.FrameId);
+                }
             }
 
             var features = _featureOptions.CurrentValue;

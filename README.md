@@ -271,6 +271,60 @@ See `.github/copilot-instructions.md` for workspace-wide standards:
 3. Use Result<T> for error-prone operations.
 4. Keep components clean (markup in .razor, logic in .razor.cs).
 
+## Future enhancements
+
+### SkyMonitor V5 FITS Export - Optional enhancements
+
+The core FITS export implementation is complete (Phases 1-8). The following optional items are available for future development:
+
+#### Admin UI for FITS Configuration
+- **Route**: `/admin/settings/fits-export`
+- **Purpose**: Form-based interface for managing FITS export settings
+- **Features**:
+  - Form fields for all 6 options (EnableForRaw, EnableForProcessed, BitDepth, UnsignedU16, Compression, WriteChecksum)
+  - Validation consistent with data annotations
+  - Save via `SystemConfigurationService` PUT endpoint
+- **Status**: Deferred - API endpoints are fully functional; UI is optional convenience
+
+#### Database Seeding for FITS Defaults
+- **Purpose**: Pre-populate SystemSettings table with initial FITS configuration values during bootstrap
+- **Status**: Not required - service returns sensible defaults when no DB row exists (revision=0)
+
+#### Color-preserving FITS
+- **Feature**: Write NAXIS=3 color cube (R,G,B planes) instead of grayscale for color sensors
+- **Use case**: Preserve full color information for RGB camera sensors
+- **Status**: Enable after core FITS delivery is stable
+
+#### Tiled Compression Tuning
+- **Feature**: Expose tile dimension options; call `fits_set_tile_dimll` if available in build
+- **Use case**: Fine-tune compression performance and quality
+- **Status**: Advanced feature for performance optimization
+
+#### Advanced WCS / Plate Solve Integration
+- **Feature**: Write full TAN/SIP WCS including distortion terms (PV/SIP coefficients)
+- **Use case**: Advanced astrometric solutions with distortion correction
+- **Status**: Requires plate solving integration
+
+#### Multi-extension Archival FITS
+- **Feature**: Package RAW and PROCESSED as separate HDUs (MEF) for archival backends
+- **Use case**: Single-file archival format containing multiple image versions
+- **Status**: Advanced archival feature
+
+#### Format Negotiation & Policy
+- **Feature**: Per-sink overrides (e.g., S3 compressed, filesystem uncompressed), API Accept negotiation
+- **Use case**: Different export formats for different storage backends
+- **Status**: Advanced configuration feature
+
+#### Archive Backfill Tools
+- **Feature**: Batch migrate legacy PNG/JPEG/skimg to FITS with metadata stamping
+- **Use case**: Convert existing image archives to FITS format
+- **Status**: Operational tooling for migration scenarios
+
+#### Performance & Throughput
+- **Feature**: Benchmarks for compression choices; consider streaming writer for very large frames
+- **Use case**: Optimize FITS export performance for high-throughput scenarios
+- **Status**: Performance optimization after baseline is stable
+
 ## License
 
 Part of the Hualapai Valley Observatory automation system.

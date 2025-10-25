@@ -7,4 +7,5 @@ public static class SystemSettingKeys
 {
     public const string LocalApi = "local-api";
     public const string TelemetryRetention = "telemetry-retention";
+    public const string FitsExport = "fits-export";
 }

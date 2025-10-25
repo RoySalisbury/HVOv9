@@ -75,6 +75,24 @@ public sealed class SystemConfigurationController : ControllerBase
         return await ExecuteAsync(() => _configurationService.UpdateTelemetryRetentionAsync(request, cancellationToken)).ConfigureAwait(false);
     }
 
+    [HttpGet("fits-export")]
+    [ProducesResponseType(typeof(SystemFitsExportConfigurationResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<SystemFitsExportConfigurationResponse>> GetFitsExportAsync(CancellationToken cancellationToken)
+        => await ExecuteAsync(() => _configurationService.GetFitsExportAsync(cancellationToken)).ConfigureAwait(false);
+
+    [HttpPut("fits-export")]
+    [ProducesResponseType(typeof(SystemFitsExportConfigurationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SystemFitsExportConfigurationResponse>> UpdateFitsExportAsync([FromBody] UpdateSystemFitsExportRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return await ExecuteAsync(() => _configurationService.UpdateFitsExportAsync(request, cancellationToken)).ConfigureAwait(false);
+    }
+
     [HttpGet("runtime")]
     [ProducesResponseType(typeof(RigRuntimeStatusResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<RigRuntimeStatusResponse>> GetRigRuntimeStatusAsync(CancellationToken cancellationToken)
