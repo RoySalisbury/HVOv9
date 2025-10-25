@@ -22,6 +22,11 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
+  <!-- Exclude corrupted test file; replaced by new clean test -->
+  <ItemGroup>
+    <Compile Remove="Exports/FrameExportPublisherTests.cs" />
+  </ItemGroup>
+
     <ItemGroup>
       <ProjectReference Include="..\HVO.SkyMonitorV5.RPi\HVO.SkyMonitorV5.RPi.csproj" />
     </ItemGroup>
