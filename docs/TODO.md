@@ -112,7 +112,7 @@
 - [ ] Support processed/raw download format selection via `type` query parameter
 - [ ] Surface quick-download shortcuts on Monitor cards using cached media URIs
 - [ ] Tag release milestone for frame export project with ops/support review notes
-- [DEFERRED] FITS/TIFF encoder support for remote dispatch (pending data store completion)
+ - [~] FITS encoder support for remote dispatch (in progress) — see plan: `docs/projects/skymonitor-v5-fits-export-plan.md`
 
 #### Completed Tasks ✅
 - [x] Implement `FrameExportPublisher` with bounded channel dispatcher
