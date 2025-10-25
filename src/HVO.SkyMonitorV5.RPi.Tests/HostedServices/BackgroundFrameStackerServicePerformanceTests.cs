@@ -67,8 +67,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
 
     var dispatcher = new Mock<IFrameExportDispatcher>();
     dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
-    var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder);
+    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
 
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
@@ -183,8 +183,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
 
     var dispatcher = new Mock<IFrameExportDispatcher>();
     dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
-    var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder);
+    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
 
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
@@ -272,8 +272,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
 
     var dispatcher = new Mock<IFrameExportDispatcher>();
     dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
-    var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder);
+    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
 
         var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
@@ -370,14 +370,18 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
         var imageHistoryOptions = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
         imageHistoryOptions.SetupGet(o => o.CurrentValue).Returns(new ImageHistoryOptions());
+        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = false, EnableForProcessed = false });
 
         return new FrameExportPublisher(
             dispatcher,
             encoder,
+            Mock.Of<IFitsFrameEncoder>(),
             NullLogger<FrameExportPublisher>.Instance,
             optionsMonitor.Object,
             featureMonitor.Object,
             archiveQueue.Object,
-            imageHistoryOptions.Object);
+            imageHistoryOptions.Object,
+            fitsOptions.Object);
     }
 }

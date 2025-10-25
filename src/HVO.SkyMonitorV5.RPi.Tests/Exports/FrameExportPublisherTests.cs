@@ -29,11 +29,11 @@ public sealed class FrameExportPublisherTests
             .Callback<FrameExportEnvelope>(envelope => capturedEnvelope = envelope)
             .Returns(true);
 
-        var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
+    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
         var monitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
         var publisher = CreatePublisher(
             dispatcher.Object,
-            encoder,
+            encoder.Object,
             new SkiaPipelineFeatureOptions(),
             monitor.Object);
 
@@ -269,8 +269,8 @@ public sealed class FrameExportPublisherTests
         var monitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
         monitor.Setup(m => m.RecordFallback(SkiaPipelineFeatureNames.RawLinearPayloads));
 
-        var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-    var publisher = CreatePublisher(dispatcher.Object, encoder, featureOptions, monitor.Object);
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var publisher = CreatePublisher(dispatcher.Object, encoder.Object, featureOptions, monitor.Object);
 
         var exposure = new ExposureSettings(ExposureMilliseconds: 500, Gain: 120, AutoExposure: false, AutoGain: false);
         var info = new SKImageInfo(8, 8, SKColorType.RgbaF16, SKAlphaType.Premul, SKColorSpace.CreateSrgbLinear());
@@ -406,13 +406,22 @@ public sealed class FrameExportPublisherTests
 
         var queue = archiveQueue ?? Mock.Of<IImageFrameArchiveIngestionQueue>(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>()) == true);
 
+        var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(new FitsExportOptions
+        {
+            EnableForRaw = false,
+            EnableForProcessed = false
+        });
+
         return new FrameExportPublisher(
             dispatcher,
             encoder,
+            Mock.Of<IFitsFrameEncoder>(),
             NullLogger<FrameExportPublisher>.Instance,
             optionsMonitor.Object,
             monitor,
             queue,
-            imageHistoryMonitor.Object);
+            imageHistoryMonitor.Object,
+            fitsOptionsMonitor.Object);
     }
 }

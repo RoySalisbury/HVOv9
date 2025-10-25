@@ -99,8 +99,9 @@ public sealed class FrameExportGoldenFixturesTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
-        var delivery = encoder.Encode(processedFrame);
+    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+    Assert.IsNotNull(data, "Expected PNG encoding to succeed for processed frame.");
+    var delivery = new ProcessedFrameDelivery(data!.ToArray(), "image/png", "png");
 
         var processedHash = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
         const string expectedProcessedHash = "C22A5C3A47ACA7F5A8E2A146E34ED5DDF5D3F68AAB129054A6758C36C225D196";
@@ -239,7 +240,6 @@ public sealed class FrameExportGoldenFixturesTests
             Assert.IsTrue(rawSuccess, "Expected raw payload extraction to succeed for golden fixture.");
             var expectedRawPayload = rawPayloadMemory.ToArray();
 
-            var encoder = new ProcessedFrameEncoder(NullLogger<ProcessedFrameEncoder>.Instance);
             var processedEncoding = new ImageEncodingSettings(ImageEncodingFormat.Png, 100);
 
             var processedFrame = new ProcessedFrame(
@@ -255,7 +255,9 @@ public sealed class FrameExportGoldenFixturesTests
                 ProcessingMilliseconds: 0,
                 ImmutableImage: immutableImage);
 
-            var expectedDelivery = encoder.Encode(processedFrame);
+            using var processedData = immutableImage.Encode(SKEncodedImageFormat.Png, 100);
+            Assert.IsNotNull(processedData, "Expected PNG encoding to succeed for processed frame.");
+            var expectedDelivery = new ProcessedFrameDelivery(processedData!.ToArray(), "image/png", "png");
             var expectedDeliveryPayload = expectedDelivery.Payload.ToArray();
 
             var stackResult = new FrameStackResult(
@@ -279,15 +281,22 @@ public sealed class FrameExportGoldenFixturesTests
             archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
             var imageHistoryOptions = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
             imageHistoryOptions.SetupGet(o => o.CurrentValue).Returns(new ImageHistoryOptions());
+            var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
+            fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = false, EnableForProcessed = false });
+
+            var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+            encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>())).Returns(expectedDelivery);
 
             var publisher = new FrameExportPublisher(
                 dispatcher,
-                encoder,
+                encoder.Object,
+                Mock.Of<IFitsFrameEncoder>(),
                 NullLogger<FrameExportPublisher>.Instance,
                 featureOptions.Object,
                 featureMonitor.Object,
                 archiveQueue.Object,
-                imageHistoryOptions.Object);
+                imageHistoryOptions.Object,
+                fitsOptions.Object);
 
             publisher.PublishRawFrame(
                 frameNumber: 1,
