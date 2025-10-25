@@ -44,7 +44,14 @@
     </PackageReference>
     <PackageReference Include="SkiaSharp.NativeAssets.Win32">
       <PrivateAssets>all</PrivateAssets>
-    </PackageReference>    
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the NativeAssets package to ensure native CFITSIO binaries flow transitively to consumers -->
+    <ProjectReference Include="../HVO.Astronomy.CFITSIO.NativeAssets/HVO.Astronomy.CFITSIO.NativeAssets.csproj">
+      <!-- Don't mark as PrivateAssets - we want this to flow to consumers -->
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -52,9 +59,9 @@
     <ProjectReference Include="../HVO/HVO.csproj" PrivateAssets="All" />
   </ItemGroup>
 
-  <!-- Pack everything under runtimes/ into the nupkg -->
+  <!-- Pack documentation files into the nupkg -->
+  <!-- NOTE: Native assets are now provided by HVO.Astronomy.CFITSIO.NativeAssets package -->
   <ItemGroup>
-    <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" />
     <None Include="README.md" Pack="true" PackagePath="" />
     <None Include="BUILD-FEATURES.md" Pack="true" PackagePath="" />
   </ItemGroup>

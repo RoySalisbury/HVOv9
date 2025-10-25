@@ -186,15 +186,15 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         var snapshot = GetSnapshot();
 
         var cameraLookup = snapshot.Cameras.ToDictionary(c => c.Id);
-    var lensLookup = snapshot.Optics.ToDictionary(l => l.Id);
+        var lensLookup = snapshot.Optics.ToDictionary(l => l.Id);
 
         options.Cameras = snapshot.Cameras
             .Select(CreateCameraOption)
             .ToList();
 
-    options.Lenses = snapshot.Optics
-            .Select(CreateLensOption)
-            .ToList();
+        options.Lenses = snapshot.Optics
+                .Select(CreateLensOption)
+                .ToList();
 
         var rigEntries = new List<RigCatalogEntryOptions>();
         string activeRig = string.Empty;
@@ -921,9 +921,9 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
 
         public ObservatorySiteEntity Observatory { get; }
 
-    public IReadOnlyList<CameraCatalogEntity> Cameras { get; }
+        public IReadOnlyList<CameraCatalogEntity> Cameras { get; }
 
-    public IReadOnlyList<OpticsCatalogEntity> Optics { get; }
+        public IReadOnlyList<OpticsCatalogEntity> Optics { get; }
 
         public IReadOnlyList<RigCatalogEntryEntity> Rigs { get; }
 

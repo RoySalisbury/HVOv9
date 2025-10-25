@@ -53,15 +53,15 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         ILogger<SystemConfigurationService>? logger = null)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
-    _snapshotInvalidator = snapshotInvalidator ?? throw new ArgumentNullException(nameof(snapshotInvalidator));
+        _snapshotInvalidator = snapshotInvalidator ?? throw new ArgumentNullException(nameof(snapshotInvalidator));
         _observatoryMonitor = observatoryMonitor ?? throw new ArgumentNullException(nameof(observatoryMonitor));
         _localApiMonitor = localApiMonitor ?? throw new ArgumentNullException(nameof(localApiMonitor));
-    _telemetryMonitor = telemetryMonitor ?? throw new ArgumentNullException(nameof(telemetryMonitor));
-    _fitsMonitor = fitsMonitor ?? throw new ArgumentNullException(nameof(fitsMonitor));
+        _telemetryMonitor = telemetryMonitor ?? throw new ArgumentNullException(nameof(telemetryMonitor));
+        _fitsMonitor = fitsMonitor ?? throw new ArgumentNullException(nameof(fitsMonitor));
         _observatoryCache = observatoryCache ?? throw new ArgumentNullException(nameof(observatoryCache));
         _localApiCache = localApiCache ?? throw new ArgumentNullException(nameof(localApiCache));
-    _telemetryCache = telemetryCache ?? throw new ArgumentNullException(nameof(telemetryCache));
-    _fitsCache = fitsCache ?? throw new ArgumentNullException(nameof(fitsCache));
+        _telemetryCache = telemetryCache ?? throw new ArgumentNullException(nameof(telemetryCache));
+        _fitsCache = fitsCache ?? throw new ArgumentNullException(nameof(fitsCache));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _runtimeUpdater = runtimeUpdater ?? throw new ArgumentNullException(nameof(runtimeUpdater));
         _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
@@ -117,9 +117,9 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
                     $"Observatory configuration revision mismatch. Expected {entity.Revision}, received {request.Revision}."));
             }
 
-        if (await context.ObservatorySites
-            .AnyAsync(site => site.Id != entity.Id && site.Slug == normalizedSlug, cancellationToken)
-                    .ConfigureAwait(false))
+            if (await context.ObservatorySites
+                .AnyAsync(site => site.Id != entity.Id && site.Slug == normalizedSlug, cancellationToken)
+                        .ConfigureAwait(false))
             {
                 return Result<SystemObservatoryConfigurationResponse>.Failure(new InvalidOperationException($"An observatory with slug '{normalizedSlug}' already exists."));
             }
@@ -371,84 +371,84 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             switch (request.Action)
             {
                 case RigRuntimeActionKind.Start:
-                {
-                    var result = await _rigAdapter.StartAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter start failed."));
-                    }
+                        var result = await _rigAdapter.StartAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter start failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter started for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter already running for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter started for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter already running for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Pause:
-                {
-                    var result = await _rigAdapter.PauseAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter pause failed."));
-                    }
+                        var result = await _rigAdapter.PauseAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter pause failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter paused for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter was not running for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter paused for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter was not running for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Resume:
-                {
-                    var result = await _rigAdapter.ResumeAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter resume failed."));
-                    }
+                        var result = await _rigAdapter.ResumeAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter resume failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter resumed for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter was not paused for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter resumed for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter was not paused for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Stop:
-                {
-                    var result = await _rigAdapter.StopAsync(cancellationToken).ConfigureAwait(false);
-                    if (result.IsFailure)
                     {
-                        return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter stop failed."));
-                    }
+                        var result = await _rigAdapter.StopAsync(cancellationToken).ConfigureAwait(false);
+                        if (result.IsFailure)
+                        {
+                            return Result<RigRuntimeActionResponse>.Failure(result.Error ?? new InvalidOperationException("Adapter stop failed."));
+                        }
 
-                    succeeded = true;
-                    stateChanged = result.Value;
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    message = result.Value
-                        ? FormattableString.Invariant($"Adapter stopped for rig '{rigName}'.")
-                        : FormattableString.Invariant($"Adapter already stopped for rig '{rigName}'.");
-                    break;
-                }
+                        succeeded = true;
+                        stateChanged = result.Value;
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        message = result.Value
+                            ? FormattableString.Invariant($"Adapter stopped for rig '{rigName}'.")
+                            : FormattableString.Invariant($"Adapter already stopped for rig '{rigName}'.");
+                        break;
+                    }
                 case RigRuntimeActionKind.Reload:
-                {
-                    await _runtimeUpdater.ReloadActiveRigAsync(request.ForceRestart, cancellationToken).ConfigureAwait(false);
-                    var rigName = _rigAdapter.ActiveRig.Name;
-                    succeeded = true;
-                    stateChanged = true;
-                    message = request.ForceRestart
-                        ? FormattableString.Invariant($"Reloaded rig '{rigName}' with force restart.")
-                        : FormattableString.Invariant($"Reloaded rig '{rigName}'.");
-                    break;
-                }
+                    {
+                        await _runtimeUpdater.ReloadActiveRigAsync(request.ForceRestart, cancellationToken).ConfigureAwait(false);
+                        var rigName = _rigAdapter.ActiveRig.Name;
+                        succeeded = true;
+                        stateChanged = true;
+                        message = request.ForceRestart
+                            ? FormattableString.Invariant($"Reloaded rig '{rigName}' with force restart.")
+                            : FormattableString.Invariant($"Reloaded rig '{rigName}'.");
+                        break;
+                    }
                 default:
-                {
-                    throw new ArgumentOutOfRangeException(nameof(request.Action), request.Action, "Unsupported adapter action.");
-                }
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(request.Action), request.Action, "Unsupported adapter action.");
+                    }
             }
 
             var status = BuildRuntimeStatus(message);

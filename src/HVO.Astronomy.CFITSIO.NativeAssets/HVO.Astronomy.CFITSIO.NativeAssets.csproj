@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+
+    <!-- No managed code - this is just a native assets package -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <NoWarn>$(NoWarn);NU5128</NoWarn><!-- Suppress warning about no lib/ref assemblies for native-only package -->
+    <IncludeSymbols>false</IncludeSymbols><!-- No symbols package for native-only package -->
+
+    <!-- Package metadata -->
+    <PackageId>HVO.Astronomy.CFITSIO.NativeAssets</PackageId>
+    <Version>1.0.3</Version>
+    <Authors>HVO</Authors>
+    <Description>Native CFITSIO binaries for multiple platforms (macOS/Linux/Windows, multi-RID). This package contains only native assets and is referenced by HVO.Astronomy.CFITSIO.</Description>
+    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>Astronomy,FITS,Native</PackageTags>
+    <RepositoryUrl>https://github.com/RoySalisbury/HVOv9</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/RoySalisbury/HVOv9/HVO.Astronomy.CFITSIO.NativeAssets</PackageProjectUrl>
+  </PropertyGroup>
+
+  <!-- Pack all native files from runtimes/** into the nupkg -->
+  <ItemGroup>
+    <Content Include="../HVO.Astronomy.CFITSIO/runtimes/**/*">
+      <Pack>true</Pack>
+      <PackagePath>runtimes/%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <!-- Copy package to local feed after build -->
+  <Target Name="CopyPackageToLocalFeed" AfterTargets="Pack">
+    <PropertyGroup>
+      <NupkgFileName>$(PackageId).$(PackageVersion).nupkg</NupkgFileName>
+      <FullPackagePath>$(OutputPath)../$(NupkgFileName)</FullPackagePath>
+      <LocalPackagesDir>$(MSBuildThisFileDirectory)../../.LocalPackages</LocalPackagesDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(LocalPackagesDir)" Condition="!Exists('$(LocalPackagesDir)')" />
+    <Copy SourceFiles="$(FullPackagePath)" DestinationFolder="$(LocalPackagesDir)" Condition="Exists('$(FullPackagePath)')" />
+    <Message Text="Copied package from $(FullPackagePath) to $(LocalPackagesDir)" Importance="High" />
+  </Target>
+</Project>

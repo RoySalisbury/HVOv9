@@ -22,8 +22,8 @@ public interface ISystemConfigurationService
     Task<Result<SystemFitsExportConfigurationResponse>> GetFitsExportAsync(CancellationToken cancellationToken);
 
     Task<Result<SystemFitsExportConfigurationResponse>> UpdateFitsExportAsync(UpdateSystemFitsExportRequest request, CancellationToken cancellationToken);
-    
+
     Task<Result<RigRuntimeStatusResponse>> GetRigRuntimeStatusAsync(CancellationToken cancellationToken);
-    
+
     Task<Result<RigRuntimeActionResponse>> ExecuteRigRuntimeActionAsync(RigRuntimeActionRequest request, CancellationToken cancellationToken);
 }

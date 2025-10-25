@@ -319,7 +319,7 @@ public static class Program
         services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<LocalApiClientOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<FitsExportOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<FitsExportOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
         services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
         services.AddSingleton<IRigRuntimeUpdater, RigRuntimeUpdater>();

@@ -73,6 +73,7 @@
     <!-- Additional packages -->
     <PackageVersion Include="HVO.ZWOOptical.ASISDK" Version="0.0.3" />
     <PackageVersion Include="HVO.Astronomy.CFITSIO" Version="1.0.3" />
+    <PackageVersion Include="HVO.Astronomy.CFITSIO.NativeAssets" Version="1.0.3" />
     <PackageVersion Include="System.Drawing.Common" Version="8.0.7" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageVersion Include="CommunityToolkit.Maui" Version="11.0.0" />
