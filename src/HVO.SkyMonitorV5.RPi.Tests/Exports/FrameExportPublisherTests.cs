@@ -29,7 +29,7 @@ public sealed class FrameExportPublisherTests
             .Callback<FrameExportEnvelope>(envelope => capturedEnvelope = envelope)
             .Returns(true);
 
-    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
         var monitor = new Mock<ISkiaPipelineFeatureToggleMonitor>(MockBehavior.Strict);
         var publisher = CreatePublisher(
             dispatcher.Object,
@@ -73,8 +73,8 @@ public sealed class FrameExportPublisherTests
         Assert.AreEqual("application/vnd.hvo.skia.raw", envelope.ContentType, "Raw exports should use the high-bit content type.");
         Assert.AreEqual("skimg", envelope.FileExtension, "Raw exports should use the skimg extension.");
         Assert.IsNotNull(envelope.Metadata.RawImageDescriptor, "Raw exports should include an image descriptor.");
-    Assert.AreEqual(SkiaRawFrameHelper.RawContentType, envelope.Metadata.PayloadContentType, "Metadata should advertise raw payload content type.");
-    Assert.AreEqual(SkiaRawFrameHelper.RawFileExtension, envelope.Metadata.PayloadExtension, "Metadata should advertise raw payload extension.");
+        Assert.AreEqual(SkiaRawFrameHelper.RawContentType, envelope.Metadata.PayloadContentType, "Metadata should advertise raw payload content type.");
+        Assert.AreEqual(SkiaRawFrameHelper.RawFileExtension, envelope.Metadata.PayloadExtension, "Metadata should advertise raw payload extension.");
 
         var descriptor = envelope.Metadata.RawImageDescriptor!;
         Assert.AreEqual(16, descriptor.Width, "Descriptor width should match the captured image.");
@@ -93,7 +93,7 @@ public sealed class FrameExportPublisherTests
             .Callback<FrameExportEnvelope>(envelope => capturedEnvelope = envelope)
             .Returns(true);
 
-    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
 
         using var surface = SKSurface.Create(new SKImageInfo(8, 8, SKColorType.Rgba8888, SKAlphaType.Premul));
         surface.Canvas.Clear(SKColors.MidnightBlue);
@@ -162,14 +162,14 @@ public sealed class FrameExportPublisherTests
         dispatcher.Verify(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>()), Times.Once);
         encoder.Verify(e => e.Encode(It.Is<ProcessedFrame>(frame => frame.FrameId == processedFrame.FrameId)), Times.Once);
 
-    Assert.IsNotNull(capturedEnvelope, "Processed frame publish should enqueue an export envelope.");
-    var envelope = capturedEnvelope!;
+        Assert.IsNotNull(capturedEnvelope, "Processed frame publish should enqueue an export envelope.");
+        var envelope = capturedEnvelope!;
 
         CollectionAssert.AreEqual(payload, envelope.Payload.ToArray(), "Envelope payload should originate from the encoder delivery.");
         Assert.AreEqual("image/png", envelope.ContentType, "Envelope should advertise encoder content type.");
         Assert.AreEqual("png", envelope.FileExtension, "Envelope should use encoder file extension.");
-    Assert.AreEqual("image/png", envelope.Metadata.PayloadContentType, "Metadata should track processed payload content type.");
-    Assert.AreEqual("png", envelope.Metadata.PayloadExtension, "Metadata should track processed payload extension.");
+        Assert.AreEqual("image/png", envelope.Metadata.PayloadContentType, "Metadata should track processed payload content type.");
+        Assert.AreEqual("png", envelope.Metadata.PayloadExtension, "Metadata should track processed payload extension.");
 
         Assert.AreEqual(processedFrame.FrameId, envelope.FrameId, "Envelope should preserve processed frame identifier.");
         Assert.AreEqual(FrameExportStage.Processed, envelope.Stage, "Processed frame should target the processed stage.");

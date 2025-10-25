@@ -11,9 +11,9 @@ namespace HVO.SkyMonitorV5.RPi.Services;
 /// </summary>
 public interface IFitsFrameEncoder
 {
-    /// <summary>Encode a raw frame (from SKImage) to FITS bytes.</summary>
-    ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options);
+  /// <summary>Encode a raw frame (from SKImage) to FITS bytes.</summary>
+  ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options);
 
-    /// <summary>Encode a processed frame to FITS bytes.</summary>
-    ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options);
+  /// <summary>Encode a processed frame to FITS bytes.</summary>
+  ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options);
 }

@@ -60,7 +60,7 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
             }
         }
 
-    var encoding = ImageEncodingUtilities.Normalize(frame.Encoding);
+        var encoding = ImageEncodingUtilities.Normalize(frame.Encoding);
         var format = ImageEncodingUtilities.ToSkiaFormat(encoding.Format);
 
         using var data = frame.ImmutableImage.Encode(format, encoding.Quality);

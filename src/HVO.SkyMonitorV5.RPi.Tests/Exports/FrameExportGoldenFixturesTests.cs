@@ -99,9 +99,9 @@ public sealed class FrameExportGoldenFixturesTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-    Assert.IsNotNull(data, "Expected PNG encoding to succeed for processed frame.");
-    var delivery = new ProcessedFrameDelivery(data!.ToArray(), "image/png", "png");
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        Assert.IsNotNull(data, "Expected PNG encoding to succeed for processed frame.");
+        var delivery = new ProcessedFrameDelivery(data!.ToArray(), "image/png", "png");
 
         var processedHash = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
         const string expectedProcessedHash = "C22A5C3A47ACA7F5A8E2A146E34ED5DDF5D3F68AAB129054A6758C36C225D196";

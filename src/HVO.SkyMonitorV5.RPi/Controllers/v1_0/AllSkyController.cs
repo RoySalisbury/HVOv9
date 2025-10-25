@@ -11,6 +11,7 @@ using HVO.SkyMonitorV5.RPi.Skia;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
+using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
 
 namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 
@@ -20,21 +21,31 @@ namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 public sealed class AllSkyController : ControllerBase
 {
     private const string RawPngContentType = "image/png";
+    private const string FitsContentType = "application/fits";
 
     private readonly IFrameStateStore _frameStateStore;
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
     private readonly ILogger<AllSkyController> _logger;
+    private readonly IFitsFrameEncoder _fitsEncoder;
+    private readonly IRigAcquisitionAdapter _rigAdapter;
+    private readonly IOptionsMonitor<FitsExportOptions> _fitsOptions;
 
     public AllSkyController(
         IFrameStateStore frameStateStore,
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
         IProcessedFrameEncoder processedFrameEncoder,
+        IFitsFrameEncoder fitsEncoder,
+        IRigAcquisitionAdapter rigAdapter,
+        IOptionsMonitor<FitsExportOptions> fitsOptions,
         ILogger<AllSkyController> logger)
     {
         _frameStateStore = frameStateStore;
         _optionsMonitor = optionsMonitor;
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
+        _fitsEncoder = fitsEncoder ?? throw new ArgumentNullException(nameof(fitsEncoder));
+        _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
+        _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
         _logger = logger;
     }
 
@@ -70,6 +81,24 @@ public sealed class AllSkyController : ControllerBase
                 }
 
                 var formatPreference = ResolveRawFrameFormat(rawFormat);
+
+                // FITS path when requested and enabled
+                if (formatPreference == RawFrameFormatPreference.Fits && _fitsOptions.CurrentValue.EnableForRaw)
+                {
+                    try
+                    {
+                        var snapshot = new RawFrameSnapshot(frame.FrameId, frame.Image, frame.Timestamp, frame.Exposure)
+                        {
+                            ImmutableImage = sourceImage
+                        };
+                        var delivery = _fitsEncoder.EncodeRaw(sourceImage, snapshot, _rigAdapter.ActiveRig, _fitsOptions.CurrentValue);
+                        return File(delivery.Payload.ToArray(), FitsContentType);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "FITS encode failed for raw frame {FrameId}; falling back to legacy format.", frame.FrameId);
+                    }
+                }
 
                 var descriptorForHeaders = frame.ImageDescriptor;
                 byte[]? rawPayload = null;
@@ -246,6 +275,12 @@ public sealed class AllSkyController : ControllerBase
             return RawFrameFormatPreference.Raw;
         }
 
+        if (rawFormat.Equals("fits", StringComparison.OrdinalIgnoreCase)
+            || rawFormat.Equals(FitsContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            return RawFrameFormatPreference.Fits;
+        }
+
         return RawFrameFormatPreference.Auto;
     }
 
@@ -253,6 +288,7 @@ public sealed class AllSkyController : ControllerBase
     {
         Auto,
         Raw,
-        Png
+        Png,
+        Fits
     }
 }

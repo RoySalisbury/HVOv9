@@ -54,8 +54,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         frameStateStore.SetupGet(store => store.ConfigurationVersion).Returns(1);
         frameStateStore.SetupGet(store => store.Configuration).Returns(configuration);
         frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
-    frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
-    frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
+        frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
+        frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
 
         var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);
@@ -65,10 +65,10 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
         clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
 
-    var dispatcher = new Mock<IFrameExportDispatcher>();
-    dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
-    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
-    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
+        var dispatcher = new Mock<IFrameExportDispatcher>();
+        dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
 
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
@@ -86,8 +86,8 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
             .Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()))
             .Callback<BackgroundStackerStatus>(status => capturedStatuses.Add(status));
 
-    var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
-    var capture = new CapturedImage(Guid.NewGuid(), null!, DateTimeOffset.UtcNow, exposure, null);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 1_000, Gain: 200, AutoExposure: false, AutoGain: false);
+        var capture = new CapturedImage(Guid.NewGuid(), null!, DateTimeOffset.UtcNow, exposure, null);
         const long captureSizeBytes = 0;
 
         var workItem1 = new StackingWorkItem(
@@ -118,18 +118,18 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         var latest = capturedStatuses[^1];
         Assert.AreEqual(2, latest.ProcessedFrameCount, "Processed frame count should accumulate.");
         Assert.AreEqual(42, latest.LastFrameNumber, "Last frame number should reflect most recent work item.");
-    Assert.IsTrue(latest.LastQueueLatencyMilliseconds.HasValue, "Latest queue latency should be recorded.");
-    Assert.AreEqual(18.0, latest.LastQueueLatencyMilliseconds.Value, 1e-3, "Last queue latency should match latest telemetry.");
-    Assert.IsTrue(latest.LastStackMilliseconds.HasValue, "Latest stack duration should be recorded.");
-    Assert.AreEqual(35.0, latest.LastStackMilliseconds.Value, 1e-3, "Last stack duration should match latest telemetry.");
-    Assert.IsTrue(latest.LastFilterMilliseconds.HasValue, "Latest filter duration should be recorded.");
-    Assert.AreEqual(55.0, latest.LastFilterMilliseconds.Value, 1e-3, "Last filter duration should match latest telemetry.");
-    Assert.IsTrue(latest.AverageQueueLatencyMilliseconds.HasValue, "Average queue latency should be tracked.");
-    Assert.AreEqual(14.0, latest.AverageQueueLatencyMilliseconds.Value, 1e-3, "Average queue latency should reflect all samples.");
-    Assert.IsTrue(latest.AverageStackMilliseconds.HasValue, "Average stack duration should be tracked.");
-    Assert.AreEqual(30.0, latest.AverageStackMilliseconds.Value, 1e-3, "Average stack duration should reflect all samples.");
-    Assert.IsTrue(latest.AverageFilterMilliseconds.HasValue, "Average filter duration should be tracked.");
-    Assert.AreEqual(47.5, latest.AverageFilterMilliseconds.Value, 1e-3, "Average filter duration should reflect all samples.");
+        Assert.IsTrue(latest.LastQueueLatencyMilliseconds.HasValue, "Latest queue latency should be recorded.");
+        Assert.AreEqual(18.0, latest.LastQueueLatencyMilliseconds.Value, 1e-3, "Last queue latency should match latest telemetry.");
+        Assert.IsTrue(latest.LastStackMilliseconds.HasValue, "Latest stack duration should be recorded.");
+        Assert.AreEqual(35.0, latest.LastStackMilliseconds.Value, 1e-3, "Last stack duration should match latest telemetry.");
+        Assert.IsTrue(latest.LastFilterMilliseconds.HasValue, "Latest filter duration should be recorded.");
+        Assert.AreEqual(55.0, latest.LastFilterMilliseconds.Value, 1e-3, "Last filter duration should match latest telemetry.");
+        Assert.IsTrue(latest.AverageQueueLatencyMilliseconds.HasValue, "Average queue latency should be tracked.");
+        Assert.AreEqual(14.0, latest.AverageQueueLatencyMilliseconds.Value, 1e-3, "Average queue latency should reflect all samples.");
+        Assert.IsTrue(latest.AverageStackMilliseconds.HasValue, "Average stack duration should be tracked.");
+        Assert.AreEqual(30.0, latest.AverageStackMilliseconds.Value, 1e-3, "Average stack duration should reflect all samples.");
+        Assert.IsTrue(latest.AverageFilterMilliseconds.HasValue, "Average filter duration should be tracked.");
+        Assert.AreEqual(47.5, latest.AverageFilterMilliseconds.Value, 1e-3, "Average filter duration should reflect all samples.");
     }
 
     [TestMethod]
@@ -181,10 +181,10 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         clock.Setup(c => c.GetZoneLabel(It.IsAny<DateTimeOffset>())).Returns("UTC");
         clock.Setup(c => c.ToLocal(It.IsAny<DateTimeOffset>())).Returns<DateTimeOffset>(timestamp => timestamp);
 
-    var dispatcher = new Mock<IFrameExportDispatcher>();
-    dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
-    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
-    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
+        var dispatcher = new Mock<IFrameExportDispatcher>();
+        dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
 
         using var service = new BackgroundFrameStackerService(
             optionsMonitor.Object,
@@ -270,10 +270,10 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         frameStateStore.Setup(store => store.UpdateBackgroundStackerStatus(It.IsAny<BackgroundStackerStatus>()));
         frameStateStore.Setup(store => store.UpdateProcessingQueueStatus(It.IsAny<ProcessingQueueStatus>()));
 
-    var dispatcher = new Mock<IFrameExportDispatcher>();
-    dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
-    var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
-    var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
+        var dispatcher = new Mock<IFrameExportDispatcher>();
+        dispatcher.Setup(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>())).Returns(true);
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        var exportPublisher = CreateExportPublisher(dispatcher.Object, encoder.Object);
 
         var clock = new Mock<IObservatoryClock>(MockBehavior.Strict);
         clock.SetupGet(c => c.UtcNow).Returns(() => DateTimeOffset.UtcNow);

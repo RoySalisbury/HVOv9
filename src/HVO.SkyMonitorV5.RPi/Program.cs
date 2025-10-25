@@ -79,9 +79,9 @@ public static class Program
         ConfigureServices(builder.Services, builder.Configuration);
         ConfigureLogging(builder.Logging);
 
-    var app = builder.Build();
-    ConfigureUnhandledExceptionLogging(app);
-    Configure(app);
+        var app = builder.Build();
+        ConfigureUnhandledExceptionLogging(app);
+        Configure(app);
 
         app.Run();
     }
@@ -103,13 +103,13 @@ public static class Program
             relativePath: "configuration/sm-config.db",
             configureOptions: builder => builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
-    services.AddSingleton<IDataStoreBootstrapStatus, DataStoreBootstrapStatus>();
+        services.AddSingleton<IDataStoreBootstrapStatus, DataStoreBootstrapStatus>();
 
-    services.AddHostedService<ConfigurationStoreBootstrapper>();
+        services.AddHostedService<ConfigurationStoreBootstrapper>();
 
-    services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
-    services.AddSkyMonitorImageFrameArchive(relativePath: "telemetry/image_frame_archive.sqlite");
-    services.AddHostedService<ImageFrameArchiveBootstrapper>();
+        services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
+        services.AddSkyMonitorImageFrameArchive(relativePath: "telemetry/image_frame_archive.sqlite");
+        services.AddHostedService<ImageFrameArchiveBootstrapper>();
         services.AddHostedService<TelemetryStoreBootstrapper>();
 
         services.AddOptions<SkyMonitorTelemetryRetentionOptions>()
@@ -307,8 +307,8 @@ public static class Program
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-    services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
-    services.AddSingleton<IConfigurationSnapshotInvalidator>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<DatabaseBackedConfigurationOptionsConfigurator>();
+        services.AddSingleton<IConfigurationSnapshotInvalidator>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<ObservatoryLocationOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<AllSkyCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<CameraPipelineOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
@@ -317,12 +317,12 @@ public static class Program
         services.AddSingleton<IConfigureOptions<CelestialAnnotationsOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<ConstellationFigureOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<LocalApiClientOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-    services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<LocalApiClientOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
-    services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
-    services.AddSingleton<IRigRuntimeUpdater, RigRuntimeUpdater>();
-    services.AddSingleton<IEquipmentConfigurationService, EquipmentConfigurationService>();
+        services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
+        services.AddSingleton<IRigRuntimeUpdater, RigRuntimeUpdater>();
+        services.AddSingleton<IEquipmentConfigurationService, EquipmentConfigurationService>();
 
         services.AddSingleton<ISkyMonitorTelemetryIngestionQueue, SkyMonitorTelemetryIngestionQueue>();
         services.AddSingleton<SkyMonitorTelemetryMetrics>();
@@ -333,19 +333,19 @@ public static class Program
         services.AddSingleton<SkyMonitorTelemetryRetentionProcessor>();
         services.AddHostedService<SkyMonitorTelemetryRetentionService>();
 
-    services.AddSingleton<IFrameStateStore, FrameStateStore>();
-    services.AddScoped<IFrameMediaProvider, FrameMediaProvider>();
-    services.AddScoped<IImageHistoryService, ImageHistoryService>();
+        services.AddSingleton<IFrameStateStore, FrameStateStore>();
+        services.AddScoped<IFrameMediaProvider, FrameMediaProvider>();
+        services.AddScoped<IImageHistoryService, ImageHistoryService>();
 
-    services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
-    services.AddSingleton<IExposureController, AdaptiveExposureController>();
-    services.AddSingleton<SkiaSurfacePool>();
-    services.AddSingleton<INativeBufferLeaseFactory>(HGlobalNativeBufferLeaseFactory.Shared);
-    services.AddSingleton<IFrameCalibrationPipelineFactory>(NullFrameCalibrationPipelineFactory.Instance);
-    services.AddSingleton<IFramePreprocessingOrchestrator, FramePreprocessingOrchestrator>();
+        services.AddSingleton<IExposureAnalyzer, SimpleExposureAnalyzer>();
+        services.AddSingleton<IExposureController, AdaptiveExposureController>();
+        services.AddSingleton<SkiaSurfacePool>();
+        services.AddSingleton<INativeBufferLeaseFactory>(HGlobalNativeBufferLeaseFactory.Shared);
+        services.AddSingleton<IFrameCalibrationPipelineFactory>(NullFrameCalibrationPipelineFactory.Instance);
+        services.AddSingleton<IFramePreprocessingOrchestrator, FramePreprocessingOrchestrator>();
         services.AddSingleton<OverlayAssetCache>();
         services.AddSingleton<FrameComposer>();
-    services.AddSingleton<IFrameStacker, RollingFrameStacker>();
+        services.AddSingleton<IFrameStacker, RollingFrameStacker>();
         services.AddSingleton<IMinioClientProvider, MinioClientProvider>();
         services.AddSingleton<IRemoteFrameEncoder, SkiaRemoteFrameEncoder>();
         services.AddSingleton<IRemoteFramePublisher, RemoteFramePublisher>();
@@ -421,14 +421,14 @@ public static class Program
             });
 
         services.AddSingleton<FrameExportMetrics>();
-    services.AddSingleton<FrameExportRetryService>();
-    services.AddSingleton<IFrameExportRetryQueue>(sp => sp.GetRequiredService<FrameExportRetryService>());
-    services.AddHostedService(sp => sp.GetRequiredService<FrameExportRetryService>());
+        services.AddSingleton<FrameExportRetryService>();
+        services.AddSingleton<IFrameExportRetryQueue>(sp => sp.GetRequiredService<FrameExportRetryService>());
+        services.AddHostedService(sp => sp.GetRequiredService<FrameExportRetryService>());
         services.AddSingleton<FrameExportDispatcher>();
-    services.AddSingleton<IFrameExportDispatcher>(sp => sp.GetRequiredService<FrameExportDispatcher>());
-    services.AddHostedService(sp => sp.GetRequiredService<FrameExportDispatcher>());
+        services.AddSingleton<IFrameExportDispatcher>(sp => sp.GetRequiredService<FrameExportDispatcher>());
+        services.AddHostedService(sp => sp.GetRequiredService<FrameExportDispatcher>());
         services.AddSingleton<IProcessedFrameEncoder, ProcessedFrameEncoder>();
-    services.AddSingleton<ISkiaPipelineFeatureToggleMonitor, SkiaPipelineFeatureToggleMonitor>();
+        services.AddSingleton<ISkiaPipelineFeatureToggleMonitor, SkiaPipelineFeatureToggleMonitor>();
 
         services.AddSingleton<ImageFrameArchiveIngestionService>();
         services.AddSingleton<IImageFrameArchiveIngestionQueue>(sp => sp.GetRequiredService<ImageFrameArchiveIngestionService>());
@@ -460,8 +460,8 @@ public static class Program
         services.AddSingleton<IRigCatalog>(sp => sp.GetRequiredService<AllSkyCatalogRegistry>());
         services.AddHostedService<CatalogConfigurationReporter>();
 
-    services.AddSingleton<ICameraDriverRegistry, CameraDriverRegistry>();
-    services.AddSingleton<ICameraDriverFactory, CameraDriverFactory>();
+        services.AddSingleton<ICameraDriverRegistry, CameraDriverRegistry>();
+        services.AddSingleton<ICameraDriverFactory, CameraDriverFactory>();
         services.AddSingleton<IRigAcquisitionAdapter, RigAcquisitionAdapter>();
 
         services.AddSingleton<FrameFilterPipeline>(sp =>
@@ -478,7 +478,7 @@ public static class Program
         RegisterCameraAdapters(services);
 
         services.AddHostedService<AllSkyCaptureService>();
-        
+
         services.AddOpenTelemetry()
             .WithMetrics(builder =>
             {
@@ -501,7 +501,7 @@ public static class Program
         var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
         var logger = loggerFactory.CreateLogger("HVO.SkyMonitorV5.UnhandledExceptions");
         var configuration = app.Configuration;
-    var logFirstChance = configuration.GetValue<bool?>("SkyMonitor:Diagnostics:LogFirstChanceExceptions") ?? false;
+        var logFirstChance = configuration.GetValue<bool?>("SkyMonitor:Diagnostics:LogFirstChanceExceptions") ?? false;
 
         AppDomain.CurrentDomain.UnhandledException += (_, eventArgs) =>
         {
@@ -521,7 +521,7 @@ public static class Program
             eventArgs.SetObserved();
         };
 
-    if (logFirstChance)
+        if (logFirstChance)
         {
             AppDomain.CurrentDomain.FirstChanceException += (_, eventArgs) =>
             {
@@ -552,7 +552,7 @@ public static class Program
 
     private static string? TryGetFirstChanceCallSiteSignature()
     {
-    var stackTrace = new StackTrace(skipFrames: 2, fNeedFileInfo: false);
+        var stackTrace = new StackTrace(skipFrames: 2, fNeedFileInfo: false);
         var frames = stackTrace.GetFrames();
 
         if (frames is null || frames.Length == 0)

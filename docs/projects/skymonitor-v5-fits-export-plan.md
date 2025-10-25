@@ -20,23 +20,23 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
 ## Phases & Tasks
 
 ### Phase 1 — Options and DI
-- [ ] Create `FitsExportOptions`
+- [x] Create `FitsExportOptions`
   - EnableForRaw (bool)
   - EnableForProcessed (bool)
   - BitDepth: `U16 | U8` (default U16)
   - UnsignedU16 (bool, default true → BSCALE=1, BZERO=32768)
   - Compression: `None | Rice | Gzip1 | Gzip2 | HCompress`
   - WriteChecksum (bool, default true)
-- [ ] Bind options in `Program.cs`: `services.Configure<FitsExportOptions>(...)`
-- [ ] Register services:
+- [x] Bind options in `Program.cs`: `services.Configure<FitsExportOptions>(...)`
+- [x] Register services:
   - `services.AddSingleton<IFitsFrameEncoder, FitsFrameEncoder>()`
   - Keep `IProcessedFrameEncoder` bound, but its implementation will delegate to FITS when enabled
 
 ### Phase 2 — FITS encoder service
-- [ ] Define `IFitsFrameEncoder`
+- [x] Define `IFitsFrameEncoder`
   - `Result<ProcessedFrameDelivery> EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions opts)`
   - `Result<ProcessedFrameDelivery> EncodeProcessed(ProcessedFrame frame, FrameStackContext ctx, RigSpec rig, FitsExportOptions opts)`
-- [ ] Implement `FitsFrameEncoder` using `HVO.Astronomy.CFITSIO`:
+- [x] Implement `FitsFrameEncoder` using `HVO.Astronomy.CFITSIO`:
   - Prefer U16 with unsigned scaling; fallback to U8 when configured
   - Convert color frames to grayscale for v1 (see Optional Phase for color cube)
   - Apply compression with `fits_img_compress` when enabled (return compressed image bytes; main image usually in HDU 2)
@@ -44,26 +44,26 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
   - Stamp FITS headers (see Keywords section)
 
 ### Phase 3 — Processed export switch (Option A)
-- [ ] Replace `ProcessedFrameEncoder.Encode` to output FITS when `EnableForProcessed==true`
+- [x] Replace `ProcessedFrameEncoder.Encode` to output FITS when `EnableForProcessed==true`
   - Delegate to `IFitsFrameEncoder.EncodeProcessed`
   - Preserve PNG/JPEG only when disabled or on error fallback (log + metrics)
-- [ ] Ensure `FrameExportPublisher` continues to work with generic `ProcessedFrameDelivery` (no changes expected)
+- [x] Ensure `FrameExportPublisher` continues to work with generic `ProcessedFrameDelivery` (no changes expected)
 
 ### Phase 4 — Raw export switch
-- [ ] Update `FrameExportPublisher.PublishRawFrame` to produce FITS when `EnableForRaw==true`
+- [x] Update `FrameExportPublisher.PublishRawFrame` to produce FITS when `EnableForRaw==true`
   - Use `IFitsFrameEncoder.EncodeRaw`
   - Set envelope to `application/fits` + `.fits`
   - Retain PNG fallback on error; record fallback via feature monitor
 
 ### Phase 5 — API download support
-- [ ] Add `rawFormat=fits` to `AllSkyController.GetLatestFrame` query
+- [x] Add `rawFormat=fits` to `AllSkyController.GetLatestFrame` query
   - When requested, return FITS bytes from `IFitsFrameEncoder.EncodeRaw`
   - Content-Type: `application/fits`
   - Keep RAW/PNG paths as fallback
 
 ### Phase 6 — Tests
 - [ ] `ProcessedFrameEncoderTests`: FITS enabled → `application/fits`, `.fits`, non-empty payload; assert basic FITS headers (BITPIX, NAXIS1/2, DATE-OBS)
-- [ ] `AllSkyControllerTests`: `rawFormat=fits` returns `application/fits` with payload
+- [x] `AllSkyControllerTests`: `rawFormat=fits` returns `application/fits` with payload
 - [ ] Export pipeline tests: ensure envelopes carry correct content type/extension under FITS
 - [ ] Maintain CFITSIO memfile tests (already in `HVO.Astronomy.CFITSIO`)
 
