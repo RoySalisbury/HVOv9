@@ -1,6 +1,6 @@
 # SkyMonitor V5 – FITS Export Plan
 
-Status: Draft (in progress)
+Status: Phase 6 complete; Phase 7 started
 Owner: SkyMonitor V5
 Last Updated: 2025-10-25
 
@@ -61,30 +61,33 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
   - Content-Type: `application/fits`
   - Keep RAW/PNG paths as fallback
 
-### Phase 6 — Tests
-- [ ] `ProcessedFrameEncoderTests`: FITS enabled → `application/fits`, `.fits`, non-empty payload; assert basic FITS headers (BITPIX, NAXIS1/2, DATE-OBS)
+### Phase 6 — Tests (Completed on 2025-10-25)
+- [x] `ProcessedFrameEncoderTests`: FITS enabled → `application/fits`, `.fits`, non-empty payload; assert basic FITS headers
+  - File: `src/HVO.SkyMonitorV5.RPi.Tests/Services/ProcessedFrameEncoderTests.cs`
 - [x] `AllSkyControllerTests`: `rawFormat=fits` returns `application/fits` with payload
-- [ ] Export pipeline tests: ensure envelopes carry correct content type/extension under FITS
-- [ ] Maintain CFITSIO memfile tests (already in `HVO.Astronomy.CFITSIO`)
+- [x] Export pipeline tests: ensure processed envelopes carry correct FITS content type/extension when enabled
+  - File: `src/HVO.SkyMonitorV5.RPi.Tests/Exports/FrameExportPublisher_FitsTests.cs`
+- [x] Maintain CFITSIO memfile tests (in `HVO.Astronomy.CFITSIO`) – existing suite remains green
 
-### Phase 7 — Database and UI Configuration
-- [ ] Add `FitsExportOptions` to `DatabaseBackedConfigurationOptionsConfigurator`
-  - Implement `IConfigureOptions<FitsExportOptions>` interface
-  - Create new system setting key: `SystemSettingKeys.FitsExport`
-  - Add `Configure(FitsExportOptions)` method to load from DB
-  - Register configurator in `Program.cs` DI alongside other options
-- [ ] Create EF entity for FITS export settings
-  - Add migration for new system setting storage
-  - Provide default seed values matching `FitsExportOptions` defaults
-- [ ] Create UI configuration page for FITS export settings
-  - Add route `/admin/settings/fits-export` or similar
-  - Form inputs for all `FitsExportOptions` properties
-  - Save endpoint using `SystemConfigurationService` pattern
-  - Match UI pattern from other settings pages
-- [ ] Update `SystemConfigurationService`
-  - Add `GetFitsExportSettingsAsync` method
-  - Add `UpdateFitsExportSettingsAsync` method
-  - Follow pattern from `LocalApiClientOptions` and `TelemetryRetentionOptions`
+### Phase 7 — Database and UI Configuration (Started 2025-10-25)
+- [ ] Add `FitsExportOptions` to database-backed configuration
+  - Implement `IConfigureOptions<FitsExportOptions>` to load from system settings
+  - Introduce `SystemSettingKeys.FitsExport` and bind all properties
+  - Register configurator in DI (`Program.cs`)
+- [ ] Persisted settings model and migration
+  - Add EF entity and migration for FITS export settings
+  - Seed defaults matching `FitsExportOptions`
+- [ ] Admin UI page for FITS export
+  - Route `/admin/settings/fits-export`
+  - Form fields for all options; validation consistent with data annotations
+  - Save via `SystemConfigurationService`
+- [ ] Extend `SystemConfigurationService`
+  - `GetFitsExportSettingsAsync` and `UpdateFitsExportSettingsAsync`
+  - Follow patterns used by other options (e.g., LocalApiClientOptions)
+
+Next up:
+- Wire up `IConfigureOptions<FitsExportOptions>` in data/config project
+- Add minimal integration test proving DB-backed value toggles FITS on/off for processed exports
 
 ---
 
