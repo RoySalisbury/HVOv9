@@ -67,6 +67,25 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
 - [ ] Export pipeline tests: ensure envelopes carry correct content type/extension under FITS
 - [ ] Maintain CFITSIO memfile tests (already in `HVO.Astronomy.CFITSIO`)
 
+### Phase 7 — Database and UI Configuration
+- [ ] Add `FitsExportOptions` to `DatabaseBackedConfigurationOptionsConfigurator`
+  - Implement `IConfigureOptions<FitsExportOptions>` interface
+  - Create new system setting key: `SystemSettingKeys.FitsExport`
+  - Add `Configure(FitsExportOptions)` method to load from DB
+  - Register configurator in `Program.cs` DI alongside other options
+- [ ] Create EF entity for FITS export settings
+  - Add migration for new system setting storage
+  - Provide default seed values matching `FitsExportOptions` defaults
+- [ ] Create UI configuration page for FITS export settings
+  - Add route `/admin/settings/fits-export` or similar
+  - Form inputs for all `FitsExportOptions` properties
+  - Save endpoint using `SystemConfigurationService` pattern
+  - Match UI pattern from other settings pages
+- [ ] Update `SystemConfigurationService`
+  - Add `GetFitsExportSettingsAsync` method
+  - Add `UpdateFitsExportSettingsAsync` method
+  - Follow pattern from `LocalApiClientOptions` and `TelemetryRetentionOptions`
+
 ---
 
 ## FITS Keywords (v1)

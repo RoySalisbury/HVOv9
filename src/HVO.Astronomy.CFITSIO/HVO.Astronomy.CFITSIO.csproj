@@ -59,7 +59,6 @@
     <None Include="BUILD-FEATURES.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
-
   <Target Name="CopyPackageToLocalFeed" AfterTargets="Pack">
       <PropertyGroup>
           <!-- The correct path for the nupkg file after 'dotnet pack' -->

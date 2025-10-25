@@ -366,6 +366,13 @@ public static class Program
             .ValidateDataAnnotations()
             .PostConfigure(options => options.Normalize());
 
+        // FITS export options and encoder
+        services.AddOptions<FitsExportOptions>()
+            .Bind(configuration.GetSection(FitsExportOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        services.AddSingleton<IFitsFrameEncoder, FitsFrameEncoder>();
+
         services.AddOptions<SkiaPipelineFeatureOptions>()
             .Bind(configuration.GetSection(SkiaPipelineFeatureOptions.SectionName))
             .ValidateDataAnnotations()
