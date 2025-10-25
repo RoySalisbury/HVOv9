@@ -14,7 +14,7 @@ CONFIGURATION="Debug"
 FRAMEWORK="net9.0-ios"
 RUNTIME_IDENTIFIER_DEVICE="ios-arm64"
 UDID="${HVO_IOS_SIM_UDID:-}"  # for --mode sim; override with --udid
-PROJECT_PATH="${REPO_ROOT}/src/HVO.Maui.RoofControllerV4.iPad/HVO.Maui.RoofControllerV4.iPad.csproj"
+PROJECT_PATH="${REPO_ROOT}/src/HVO.iOS/HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj"
 APP_ID="org.hvo.roofcontroller.v4.ipad"
 ATTACH_CONSOLE=false
 

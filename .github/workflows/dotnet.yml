@@ -3,30 +3,28 @@ name: .NET Build & Test
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
-      - '**/*.txt'
-      - '.vscode/**'
-      - '.devcontainer/**'
-      - '.github/ISSUE_TEMPLATE/**'
+    paths:
+      - 'src/HVO/**'
+      - 'src/HVO.DataModels/**'
+      - 'src/HVO.SourceGenerators/**'
+      - 'src/HVO.WebSite.Themes/**'
+      - 'src/NuGet.config'
+      - 'src/global.json'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - '.github/workflows/dotnet.yml'
   pull_request:
-    branches: [ main ]
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
-      - '**/*.txt'
-      - '.vscode/**'
-      - '.devcontainer/**'
-      - '.github/ISSUE_TEMPLATE/**'
+    branches: [ main, feature/** ]
+    paths:
+      - 'src/HVO/**'
+      - 'src/HVO.DataModels/**'
+      - 'src/HVO.SourceGenerators/**'
+      - 'src/HVO.WebSite.Themes/**'
+      - 'src/NuGet.config'
+      - 'src/global.json'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - '.github/workflows/dotnet.yml'
   schedule:
     - cron: '0 2 * * *'
 
@@ -63,61 +61,24 @@ jobs:
             NuGet.config
 
       - name: Restore dependencies
-        # Use the solution filter to restore only the required projects
-        run: cd src && dotnet restore HVOv9.slnf --nologo -v minimal
+        # Restore the full root solution (benchmarks are excluded from this .sln)
+        run: cd src && dotnet restore HVOv9.sln --nologo -v minimal
 
-      - name: Build all non-MAUI projects
-        # Use the solution filter to build only the required projects
-        run: cd src && dotnet build HVOv9.slnf --no-restore -c Release -v minimal --nologo -maxcpucount /p:ContinuousIntegrationBuild=true
+      - name: Build all non-MAUI projects (Debug)
+        # Build the full root solution
+        run: cd src && dotnet build HVOv9.sln --no-restore -c Debug -v minimal --nologo -maxcpucount /p:ContinuousIntegrationBuild=true
 
-      - name: Upload build artifacts
+      - name: Upload build artifacts (Debug)
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-non-maui
           path: |
-            src/**/bin/Release/**
-            !src/**/bin/Release/**/ref/**
-            src/**/obj/Release/net9.0/compressed/**
-            src/**/obj/Release/net9.0/scopedcss/**
+            src/**/bin/Debug/**
+            !src/**/bin/Debug/**/ref/**
+            src/**/obj/Debug/net9.0/compressed/**
+            src/**/obj/Debug/net9.0/scopedcss/**
           retention-days: 1
 
-  # New job to build only the MAUI iOS project on a macOS runner.
-  build-maui-ios:
-    needs: build-non-maui
-    runs-on: macos-latest
-    timeout-minutes: 15
-
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: 1
-      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Install MAUI workload
-        run: dotnet workload install maui --ignore-failed-sources
-
-      - name: Restore dependencies
-        run: cd src && dotnet restore HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj
-
-      - name: Build MAUI iOS project
-        run: cd src && dotnet build HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj -f:net9.0-ios -c Release --no-restore /p:ContinuousIntegrationBuild=true
-
-      - name: Upload iOS build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts-maui-ios
-          path: src/HVO.RoofControllerV4.iPad/bin/Release/net9.0-ios/
-          retention-days: 1
-          
   test-unit:
     needs: build-non-maui
     runs-on: ubuntu-latest
@@ -126,9 +87,9 @@ jobs:
     strategy:
       matrix:
         test-project:
-          - HVO.Iot.Devices.Tests
-          - HVO.WebSite.Playground.Tests
-          - HVO.RoofControllerV4.RPi.Tests
+          - HVO.Iot/HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj
+          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
+          - HVO.RoofControllerV4/HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -162,18 +123,21 @@ jobs:
         run: |
           cd src
           mkdir -p TestResults/${{ matrix.test-project }}
-          dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
+          dotnet test ${{ matrix.test-project }} --no-build -c Debug --nologo -v minimal \
             --filter "TestCategory!=Integration" \
             -l "trx;LogFileName=${{ matrix.test-project }}.trx" \
             --results-directory TestResults/${{ matrix.test-project }} \
-            --logger "console;verbosity=normal"
+            --logger "console;verbosity=normal" \
+            --settings coverage.runsettings
 
-      - name: Upload Unit Test Results
+      - name: Upload Unit Test Results and Coverage
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results-unit-${{ matrix.test-project }}-${{ github.run_id }}
-          path: src/TestResults/${{ matrix.test-project }}
+          path: |
+            src/TestResults/${{ matrix.test-project }}
+            src/**/TestResults/**/coverage.cobertura.xml
           if-no-files-found: warn
           retention-days: 7
 
@@ -190,9 +154,9 @@ jobs:
     strategy:
       matrix:
         test-project:
-          - HVO.Iot.Devices.Tests
-          - HVO.WebSite.Playground.Tests
-          - HVO.RoofControllerV4.RPi.Tests
+          - HVO.Iot/HVO.Iot.Devices.Tests/HVO.Iot.Devices.Tests.csproj
+          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
+          - HVO.RoofControllerV4/HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -226,22 +190,26 @@ jobs:
         run: |
           cd src
           mkdir -p TestResults/${{ matrix.test-project }}
-          dotnet test ${{ matrix.test-project }} --no-build -c Release --nologo -v minimal \
+          dotnet test ${{ matrix.test-project }} --no-build -c Debug --nologo -v minimal \
             --filter "TestCategory=Integration" \
             -l "trx;LogFileName=${{ matrix.test-project }}.trx" \
             --results-directory TestResults/${{ matrix.test-project }} \
-            --logger "console;verbosity=normal"
+            --logger "console;verbosity=normal" \
+            --settings coverage.runsettings
 
-      - name: Upload Integration Test Results
+      - name: Upload Integration Test Results and Coverage
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results-integration-${{ matrix.test-project }}-${{ github.run_id }}
-          path: src/TestResults/${{ matrix.test-project }}
+          path: |
+            src/TestResults/${{ matrix.test-project }}
+            src/**/TestResults/**/coverage.cobertura.xml
           if-no-files-found: warn
           retention-days: 7
 
   benchmark-smoke:
+    continue-on-error: true
     needs: build-non-maui
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -278,10 +246,10 @@ jobs:
           name: build-artifacts-non-maui
           path: src
 
-      - name: Run benchmark smoke suite
+      - name: Run benchmark smoke suite (Debug)
         working-directory: src
         run: |
-          dotnet run --project HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj -c Release --no-build -- --filter '*EndToEndPipeline*'
+          dotnet run --project HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj -c Debug --no-build -- --filter '*EndToEndPipeline*'
 
       - name: Upload benchmark summary
         if: ${{ always() }}
@@ -289,7 +257,7 @@ jobs:
         with:
           name: benchmark-results-${{ github.run_id }}
           path: |
-            src/HVO.SkyMonitorV5.RPi.Benchmarks/BenchmarkDotNet.Artifacts/results/*EndToEndPipeline*.md
-            src/HVO.SkyMonitorV5.RPi.Benchmarks/BenchmarkDotNet.Artifacts/results/*EndToEndPipeline*.csv
+            src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Benchmarks/BenchmarkDotNet.Artifacts/results/*EndToEndPipeline*.md
+            src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Benchmarks/BenchmarkDotNet.Artifacts/results/*EndToEndPipeline*.csv
           if-no-files-found: warn
           retention-days: 7

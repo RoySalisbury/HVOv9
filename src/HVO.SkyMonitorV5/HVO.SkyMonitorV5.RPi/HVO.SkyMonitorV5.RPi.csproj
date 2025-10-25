@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HVO.SkyMonitorV5.RPi</RootNamespace>
+    <AssemblyName>HVO.SkyMonitorV5.RPi</AssemblyName>
+    <RuntimeIdentifiers>linux-arm64;linux-x64;osx-arm64;osx-x64</RuntimeIdentifiers>
+    <UserSecretsId>hvo-skymonitor-v5-rpi-dev</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+    <PackageReference Include="GeoTimeZone" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  <PackageReference Include="Microsoft.AspNetCore.DataProtection.Extensions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  <PackageReference Include="Polly" />
+    <PackageReference Include="SkiaSharp">
+      <ExcludeAssets>native</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" />
+    <PackageReference Include="TimeZoneConverter" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+  <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+    <PackageReference Include="Minio" />
+  <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- Native CFITSIO assets for ProjectReference scenario -->
+    <PackageReference Include="HVO.Astronomy.CFITSIO.NativeAssets" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../HVO/HVO.csproj" />
+  <ProjectReference Include="../../HVO.Astronomy/HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj" />
+    <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
+    <ProjectReference Include="../../HVO.ZWOOptical/HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
+    <ProjectReference Include="../../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Data/catalogs/**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Data/configuration/**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="../../HVO.WebSite.Themes/wwwroot/fonts/OpenSans-Semibold.ttf" Link="Resources/Fonts/OpenSans-Semibold.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="../../HVO.WebSite.Themes/wwwroot/fonts/OpenSans-Regular.ttf" Link="Resources/Fonts/OpenSans-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

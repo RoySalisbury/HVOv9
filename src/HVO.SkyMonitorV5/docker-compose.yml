@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  skymonitor:
+    build:
+      context: ../..
+      dockerfile: src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/Dockerfile
+    image: hvo/skymonitorv5:rpi-dev
+    container_name: hvo-skymonitorv5
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Configure MinIO endpoint for dev if the app reads these
+      - HVO_MINIO_ENDPOINT=http://minio:9000
+      - HVO_MINIO_CONSOLE=http://localhost:9001
+      - HVO_MINIO_ACCESS_KEY=minioadmin
+      - HVO_MINIO_SECRET_KEY=minioadmin
+    ports:
+      - "5201:8080"
+    depends_on:
+      - minio
+    networks:
+      - hvo-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: hvo-minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - skymonitorv5-minio-data:/data
+    networks:
+      - hvo-network
+
+volumes:
+  skymonitorv5-minio-data: {}
+
+networks:
+  hvo-network:
+    name: hvo-network
+    driver: bridge
