@@ -118,7 +118,7 @@ public sealed class FrameExportPublisherFitsTests
     Assert.IsNotNull(capturedEnvelope);
     Assert.AreEqual("application/fits", capturedEnvelope!.ContentType);
     Assert.AreEqual("fits", capturedEnvelope.FileExtension);
-    Assert.IsTrue(capturedEnvelope.Payload.Length > 0);
+    Assert.IsGreaterThan(0, capturedEnvelope.Payload.Length);
     CollectionAssert.AreEqual(expectedFitsBytes, capturedEnvelope.Payload.ToArray());
   }
 }

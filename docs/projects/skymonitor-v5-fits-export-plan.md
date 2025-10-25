@@ -93,12 +93,10 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
   - `InvalidateCaches(fits: true)` clears `IOptionsMonitorCache<FitsExportOptions>`
   - DB updates immediately affect encoder behavior without restart
 
-**Optional items deferred for future work:**
-- Admin UI page for FITS export (Route `/admin/settings/fits-export`)
-  - Form fields for all options; validation consistent with data annotations
-  - Save via `SystemConfigurationService` PUT endpoint
-- DB seeding for FITS defaults during bootstrap
-  - Not required - service returns defaults when no row exists
+**Optional items moved to README:**
+- See repository README section "Future enhancements → SkyMonitor V5 FITS Export - Optional enhancements" for:
+  - Admin UI for FITS configuration (`/admin/settings/fits-export`)
+  - Database seeding of FITS defaults during bootstrap
 
 **Integration test note:**
 - Initial integration test removed due to EF migration conflicts with test infrastructure
@@ -166,24 +164,18 @@ Write when available:
 
 ---
 
-## Optional Final Phase (Edge Cases)
+## Optional Final Phase (Edge Cases) — moved to README
 
-Enable selectively after core FITS delivery is stable.
+These items have been consolidated into the repository README under
+"Future enhancements → SkyMonitor V5 FITS Export - Optional enhancements":
 
-- [ ] Color-preserving FITS:
-  - Write NAXIS=3 color cube (R,G,B planes) instead of grayscale for color sensors
-- [ ] Tiled compression tuning:
-  - Expose tile dimension options; call `fits_set_tile_dimll` if available in build
-- [ ] Advanced WCS / Plate solve integration:
-  - Write full TAN/SIP WCS including distortion terms (PV/SIP coefficients)
-- [ ] Multi-extension archival FITS:
-  - Package RAW and PROCESSED as separate HDUs (MEF) for archival backends
-- [ ] Format negotiation & policy:
-  - Per-sink overrides (e.g., S3 compressed, filesystem uncompressed), API Accept negotiation
-- [ ] Archive backfill tools:
-  - Batch migrate legacy PNG/JPEG/skimg to FITS with metadata stamping
-- [ ] Performance & throughput:
-  - Benchmarks for compression choices; consider streaming writer for very large frames
+- Color-preserving FITS (RGB cubes)
+- Tiled compression tuning
+- Advanced WCS / Plate solve integration
+- Multi-extension archival FITS (MEF)
+- Format negotiation & policy
+- Archive backfill tools
+- Performance & throughput benchmarks
 
 ---
 
