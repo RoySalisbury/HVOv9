@@ -105,7 +105,7 @@ ensure_image_ready() {
   RUN_TESTS=false \
   RUN_BENCHMARKS=false \
   START_CONTAINER=false \
-  bash "${REPO_ROOT}/scripts/deploy-skymonitor-rpi.sh"
+  bash "${REPO_ROOT}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/deploy-skymonitor-rpi.sh"
 }
 
 run_container_scenario() {

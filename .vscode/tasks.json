@@ -51,7 +51,7 @@
       "command": "dotnet",
       "args": [
         "build",
-  "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
+        "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
         "-c",
         "Debug"
       ],
@@ -70,7 +70,7 @@
       "command": "dotnet",
       "args": [
         "build",
-  "${workspaceFolder}/src/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
+        "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
         "-c",
         "Release"
       ],
@@ -86,7 +86,7 @@
     {
       "label": "run:roofv4ipad:debug",
       "type": "shell",
-      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-sim.sh",
+  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-sim.sh",
       "args": [
         "--configuration",
         "Debug",
@@ -104,7 +104,7 @@
     {
       "label": "run:roofv4ipad:release",
       "type": "shell",
-      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-sim.sh",
+  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-sim.sh",
       "args": [
         "--configuration",
         "Release",
@@ -122,7 +122,7 @@
     {
       "label": "run:roofv4:ipad:device:debug",
       "type": "shell",
-      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-device.sh",
+  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-device.sh",
       "args": [
         "--configuration",
         "Debug"
@@ -142,7 +142,7 @@
     {
       "label": "run:roofv4:ipad:device:release",
       "type": "shell",
-      "command": "${workspaceFolder}/scripts/run-roofcontroller-ipad-device.sh",
+  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-device.sh",
       "args": [
         "--configuration",
         "Release"
@@ -181,7 +181,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
+        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
         "-c",
         "Debug"
       ],
@@ -200,7 +200,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
+        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
         "-c",
         "Release"
       ],
@@ -253,7 +253,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
+        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
         "-c",
         "Debug"
       ],
@@ -272,7 +272,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
+        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
         "-c",
         "Release"
       ],
