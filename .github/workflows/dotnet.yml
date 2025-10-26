@@ -136,8 +136,8 @@ jobs:
         with:
           name: test-results-unit-${{ matrix.test-project }}-${{ github.run_id }}
           path: |
-            **/TestResults/**/coverage.cobertura.xml
-            **/TestResults/**/*.trx
+            src/**/TestResults/*/coverage.cobertura.xml
+            src/**/TestResults/*.trx
           if-no-files-found: warn
           retention-days: 7
 
@@ -203,8 +203,8 @@ jobs:
         with:
           name: test-results-integration-${{ matrix.test-project }}-${{ github.run_id }}
           path: |
-            **/TestResults/**/coverage.cobertura.xml
-            **/TestResults/**/*.trx
+            src/**/TestResults/*/coverage.cobertura.xml
+            src/**/TestResults/*.trx
           if-no-files-found: warn
           retention-days: 7
 
