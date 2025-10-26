@@ -150,8 +150,14 @@ internal sealed class ImageFrameArchiveIngestionService : BackgroundService, IIm
         }
 
         var timestampUtc = FrameExportPathUtilities.ResolveStageTimestamp(request.Metadata);
-        var thumbnailPath = await TryPersistThumbnailAsync(request, options, timestampUtc, cancellationToken).ConfigureAwait(false);
-        var (mediaFilePath, mediaObjectKey, mediaBucket) = ResolveMediaReferences(request, timestampUtc);
+        var isRaw = IsRawIngestion(request);
+
+        var thumbnailPath = isRaw
+            ? null
+            : await TryPersistThumbnailAsync(request, options, timestampUtc, cancellationToken).ConfigureAwait(false);
+
+        var processedRefs = ResolveMediaReferencesForStage(request, timestampUtc, FrameExportStage.Processed);
+        var rawRefs = ResolveMediaReferencesForStage(request, timestampUtc, FrameExportStage.Raw);
 
         var entity = new FrameArchiveEntity
         {
@@ -165,20 +171,29 @@ internal sealed class ImageFrameArchiveIngestionService : BackgroundService, IIm
             QueueLatencyMilliseconds = request.Metadata.QueueLatencyMilliseconds,
             ProcessingMilliseconds = request.Metadata.ProcessingMilliseconds,
             FullPipelineMilliseconds = request.Metadata.FullPipelineMilliseconds,
+            // For raw ingestions, avoid assigning null to non-nullable; keep a safe default.
             PayloadContentType = ResolveContentType(request),
-            PayloadExtension = FrameExportPathUtilities.ResolveExtension(request.FileExtension ?? request.Metadata.PayloadExtension),
+            PayloadExtension = isRaw ? "jpg" : FrameExportPathUtilities.ResolveExtension(request.FileExtension ?? request.Metadata.PayloadExtension),
             ThumbnailFilePath = thumbnailPath,
-            MediaFilePath = mediaFilePath,
-            MediaObjectKey = mediaObjectKey,
-            MediaBucket = mediaBucket,
-            RawMediaFilePath = null,
-            RawMediaObjectKey = null,
-            RawMediaBucket = null,
+            MediaFilePath = isRaw ? null : processedRefs.FilePath,
+            MediaObjectKey = isRaw ? null : processedRefs.ObjectKey,
+            MediaBucket = isRaw ? null : processedRefs.Bucket,
+            RawMediaFilePath = isRaw ? rawRefs.FilePath : null,
+            RawMediaObjectKey = isRaw ? rawRefs.ObjectKey : null,
+            RawMediaBucket = isRaw ? rawRefs.Bucket : null,
             ArchivedAtUtc = _clock.UtcNow
         };
 
         await using var context = await _archiveContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var existing = await context.FrameArchives.FindAsync(new object[] { entity.FrameId }, cancellationToken).ConfigureAwait(false);
+
+        // Explicitly enable tracking for this query since the factory uses NoTracking by default
+        // We need tracking so EF Core can detect changes when we update properties
+        var existing = await context.FrameArchives
+            .AsTracking()
+            .FirstOrDefaultAsync(e => e.FrameId == entity.FrameId, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Query is tracking-enabled above; avoid noisy state debug logs in production
 
         if (existing is null)
         {
@@ -186,7 +201,32 @@ internal sealed class ImageFrameArchiveIngestionService : BackgroundService, IIm
         }
         else
         {
-            context.Entry(existing).CurrentValues.SetValues(entity);
+            // Update only fields relevant to the ingestion stage to avoid clobbering the other stage's references
+            existing.CapturedAtUtc = entity.CapturedAtUtc;
+            existing.RigName = entity.RigName;
+            existing.CameraName = entity.CameraName;
+            existing.FramesStacked = entity.FramesStacked;
+            existing.IntegrationMilliseconds = entity.IntegrationMilliseconds;
+            existing.AppliedFilters = entity.AppliedFilters;
+            existing.QueueLatencyMilliseconds = entity.QueueLatencyMilliseconds;
+            existing.ProcessingMilliseconds = entity.ProcessingMilliseconds;
+            existing.FullPipelineMilliseconds = entity.FullPipelineMilliseconds;
+            existing.ThumbnailFilePath = entity.ThumbnailFilePath ?? existing.ThumbnailFilePath;
+
+            if (isRaw)
+            {
+                existing.RawMediaFilePath = entity.RawMediaFilePath ?? existing.RawMediaFilePath;
+                existing.RawMediaObjectKey = entity.RawMediaObjectKey ?? existing.RawMediaObjectKey;
+                existing.RawMediaBucket = entity.RawMediaBucket ?? existing.RawMediaBucket;
+            }
+            else
+            {
+                existing.PayloadContentType = entity.PayloadContentType ?? existing.PayloadContentType;
+                existing.PayloadExtension = entity.PayloadExtension ?? existing.PayloadExtension;
+                existing.MediaFilePath = entity.MediaFilePath ?? existing.MediaFilePath;
+                existing.MediaObjectKey = entity.MediaObjectKey ?? existing.MediaObjectKey;
+                existing.MediaBucket = entity.MediaBucket ?? existing.MediaBucket;
+            }
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -292,9 +332,9 @@ internal sealed class ImageFrameArchiveIngestionService : BackgroundService, IIm
         }
     }
 
-    private (string? FilePath, string? ObjectKey, string? Bucket) ResolveMediaReferences(ImageFrameArchiveIngestionRequest request, DateTimeOffset timestampUtc)
+    private (string? FilePath, string? ObjectKey, string? Bucket) ResolveMediaReferencesForStage(ImageFrameArchiveIngestionRequest request, DateTimeOffset timestampUtc, FrameExportStage stage)
     {
-        var stageOptions = _frameExportOptions.CurrentValue.GetStageOptions(FrameExportStage.Processed);
+        var stageOptions = _frameExportOptions.CurrentValue.GetStageOptions(stage);
         if (!stageOptions.Enabled)
         {
             return (null, null, null);
@@ -328,6 +368,23 @@ internal sealed class ImageFrameArchiveIngestionService : BackgroundService, IIm
         }
 
         return (filePath, objectKey, bucket);
+    }
+
+    private static bool IsRawIngestion(ImageFrameArchiveIngestionRequest request)
+    {
+        // Prefer explicit descriptor
+        if (request.Metadata.RawImageDescriptor is not null)
+        {
+            return true;
+        }
+
+        var ct = (request.ContentType ?? request.Metadata.PayloadContentType)?.ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(ct))
+        {
+            return false;
+        }
+
+        return ct.Contains("application/fits") || ct.Contains(Skia.SkiaRawFrameHelper.RawContentType);
     }
 
     private static class ImageHistoryDefaults

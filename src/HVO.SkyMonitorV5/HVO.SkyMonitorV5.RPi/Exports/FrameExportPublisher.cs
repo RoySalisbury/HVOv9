@@ -99,6 +99,9 @@ public sealed class FrameExportPublisher
                         payloadContentType: fitsBytes.ContentType,
                         payloadExtension: fitsBytes.FileExtension);
 
+                    // Queue raw archive ingestion for FITS
+                    QueueArchiveIngestion(metadata, fitsBytes.Payload.ToArray(), fitsBytes.ContentType, fitsBytes.FileExtension);
+
                     var envelope = new FrameExportEnvelope(
                         capture.FrameId,
                         FrameExportStage.Raw,
@@ -137,6 +140,9 @@ public sealed class FrameExportPublisher
                     rawImageDescriptor: descriptor,
                     payloadContentType: SkiaRawFrameHelper.RawContentType,
                     payloadExtension: SkiaRawFrameHelper.RawFileExtension);
+
+                // Queue raw archive ingestion for native payload
+                QueueArchiveIngestion(metadata, rawBytes, SkiaRawFrameHelper.RawContentType, SkiaRawFrameHelper.RawFileExtension);
 
                 var envelope = new FrameExportEnvelope(
                     capture.FrameId,
@@ -199,6 +205,9 @@ public sealed class FrameExportPublisher
                 payload,
                 LegacyRawContentType,
                 LegacyRawExtension);
+
+            // Queue raw archive ingestion for PNG fallback
+            QueueArchiveIngestion(fallbackMetadata, payload, LegacyRawContentType, LegacyRawExtension);
 
             if (!_dispatcher.TryEnqueue(fallbackEnvelope))
             {
@@ -385,6 +394,7 @@ public sealed class FrameExportPublisher
         var options = _imageHistoryOptions.CurrentValue;
         if (options is null || !options.EnableArchive)
         {
+            _logger.LogDebug("Archive ingestion skipped for frame {FrameId} - archive disabled.", metadata.FrameId);
             return;
         }
 
@@ -397,9 +407,16 @@ public sealed class FrameExportPublisher
             extension,
             FrameExportPayloadRole.Archive);
 
+        _logger.LogDebug(
+            "Queuing archive ingestion for frame {FrameId} - ContentType: {ContentType}, Extension: {Extension}, PayloadRole: {PayloadRole}",
+            metadata.FrameId,
+            contentType,
+            extension,
+            FrameExportPayloadRole.Archive);
+
         if (!_archiveQueue.TryEnqueue(request))
         {
-            _logger.LogDebug(
+            _logger.LogWarning(
                 "Image frame archive ingestion queue rejected processed frame {FrameId}.",
                 metadata.FrameId);
         }
