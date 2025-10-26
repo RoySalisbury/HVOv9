@@ -152,12 +152,104 @@ public sealed class ProcessedFrameEncoderTests
             rigAdapter.Object,
             fitsOptions.Object);
 
-        var delivery = encoder.Encode(frame);
+        var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.Export);
 
         Assert.AreEqual("application/fits", delivery.ContentType, "FITS-enabled encoding should advertise application/fits content type.");
         Assert.AreEqual("fits", delivery.FileExtension, "FITS-enabled delivery should use fits file extension.");
         Assert.IsGreaterThan(0, delivery.Payload.Length, "FITS-enabled encoder should emit non-empty payload.");
 
         fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Once);
+    }
+
+    [TestMethod]
+    public void Encode_FitsEnabledWithUIContext_UsesPngFormat()
+    {
+        using var bitmap = new SKBitmap(width: 96, height: 96);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 100, Gain: 0, AutoExposure: false, AutoGain: false);
+        var encoding = new ImageEncodingSettings(ImageEncodingFormat.Png, 100);
+
+        var frame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            encoding,
+            "image/png",
+            "png",
+            FramesStacked: 1,
+            IntegrationMilliseconds: exposure.ExposureMilliseconds,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 0,
+            ImmutableImage: image);
+
+        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = true, EnableForRaw = false });
+
+        var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Strict);
+        rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
+
+        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
+        // FITS encoder should not be called for UI context
+
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            fitsEncoder.Object,
+            rigAdapter.Object,
+            fitsOptions.Object);
+
+        var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.UserInterface);
+
+        Assert.AreEqual("image/png", delivery.ContentType, "UI context should return PNG even when FITS is enabled.");
+        Assert.AreEqual("png", delivery.FileExtension, "UI context should use png file extension.");
+        Assert.IsGreaterThan(0, delivery.Payload.Length, "UI encoder should emit non-empty payload.");
+
+        // FITS encoder should not have been called for UI context
+        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Never);
+    }
+
+    [TestMethod]
+    public void Encode_DefaultContext_UsesPngFormat()
+    {
+        using var bitmap = new SKBitmap(width: 96, height: 96);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 100, Gain: 0, AutoExposure: false, AutoGain: false);
+        var encoding = new ImageEncodingSettings(ImageEncodingFormat.Png, 100);
+
+        var frame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            encoding,
+            "image/png",
+            "png",
+            FramesStacked: 1,
+            IntegrationMilliseconds: exposure.ExposureMilliseconds,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 0,
+            ImmutableImage: image);
+
+        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = true, EnableForRaw = false });
+
+        var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Strict);
+        rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
+
+        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
+        // FITS encoder should not be called for default (UI) context
+
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            fitsEncoder.Object,
+            rigAdapter.Object,
+            fitsOptions.Object);
+
+        var delivery = encoder.Encode(frame); // Default context should be UserInterface
+
+        Assert.AreEqual("image/png", delivery.ContentType, "Default context should return PNG even when FITS is enabled.");
+        Assert.AreEqual("png", delivery.FileExtension, "Default context should use png file extension.");
+        Assert.IsGreaterThan(0, delivery.Payload.Length, "Default encoder should emit non-empty payload.");
+
+        // FITS encoder should not have been called for default (UI) context
+        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Never);
     }
 }

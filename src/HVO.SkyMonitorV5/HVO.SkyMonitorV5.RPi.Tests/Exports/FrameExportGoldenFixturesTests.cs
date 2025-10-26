@@ -285,7 +285,7 @@ public sealed class FrameExportGoldenFixturesTests
             fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = false, EnableForProcessed = false });
 
             var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
-            encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>())).Returns(expectedDelivery);
+            encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>(), It.IsAny<ProcessedFrameEncodingContext>())).Returns(expectedDelivery);
 
             var publisher = new FrameExportPublisher(
                 dispatcher,

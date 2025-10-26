@@ -238,7 +238,7 @@ public sealed class FrameExportPublisher
 
             if (features.EnableProcessedFrameEncoder)
             {
-                var delivery = _processedFrameEncoder.Encode(processedFrame);
+                var delivery = _processedFrameEncoder.Encode(processedFrame, Services.ProcessedFrameEncodingContext.Export);
                 var contentType = delivery.ContentType;
                 var fileExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(contentType);
 

@@ -602,7 +602,7 @@ public void PublishProcessedFrame_EncoderDisabledFallsBackToImmutableImage()
         stageTimestampUtc: DateTimeOffset.UtcNow);
 
     dispatcher.Verify(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>()), Times.Once);
-    encoder.Verify(e => e.Encode(It.IsAny<ProcessedFrame>()), Times.Never);
+    encoder.Verify(e => e.Encode(It.IsAny<ProcessedFrame>(), It.IsAny<ProcessedFrameEncodingContext>()), Times.Never);
     monitor.Verify(m => m.RecordFallback(SkiaPipelineFeatureNames.ProcessedFrameEncoder), Times.Once);
 
     Assert.IsNotNull(capturedEnvelope, "Fallback path should enqueue envelopes.");

@@ -31,7 +31,7 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
         _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
     }
 
-    public ProcessedFrameDelivery Encode(ProcessedFrame frame)
+    public ProcessedFrameDelivery Encode(ProcessedFrame frame, ProcessedFrameEncodingContext context = ProcessedFrameEncodingContext.UserInterface)
     {
         if (frame is null)
         {
@@ -44,7 +44,8 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
         }
 
         var fits = _fitsOptions.CurrentValue;
-        if (fits.EnableForProcessed)
+        // Only use FITS for Export context when enabled - UI should always use JPG/PNG
+        if (context == ProcessedFrameEncodingContext.Export && fits.EnableForProcessed)
         {
             try
             {
