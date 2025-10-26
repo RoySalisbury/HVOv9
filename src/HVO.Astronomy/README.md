@@ -294,4 +294,3 @@ public class FitsFile : IDisposable
 - [FITS Format Specification](https://fits.gsfc.nasa.gov/fits_standard.html)
 - [CFITSIO Documentation](https://heasarc.gsfc.nasa.gov/fitsio/)
 - [Astronomical Data Formats](https://www.astropy.org/astropy-data/)
-- [HVO Sky Monitor Architecture](../../docs/projects/sky-monitor-v5/)
