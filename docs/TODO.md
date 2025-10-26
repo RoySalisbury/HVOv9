@@ -1,7 +1,7 @@
 # HVOv9 Master TODO
 
 > **Document Status**: Master task tracker for the entire HVOv9 workspace  
-> **Last Updated**: 2025-10-22  
+> **Last Updated**: 2025-10-25  
 > **Task Status Legend**:
 > - `[ ]` - Pending/Not Started
 > - `[x]` - Completed
@@ -12,6 +12,8 @@
 ---
 
 ## Documentation index (quick links)
+
+- Documentation hub: `docs/README.md`
 
 - Guides (cross-cutting): `docs/guides/`
 	- Dev container env: `docs/guides/devcontainer-environment-setup.md`
@@ -48,6 +50,7 @@
 - Cross-project pattern standardization as new patterns emerge
 
 ### Recent Completions (October 2025) ✅
+- [x] Repository reorganization completed (Phase 7 Cleanup). Domain docs and root README updated; documentation index added at `docs/README.md`. Remaining follow-ups tracked in `docs/projects/post-restructure-plan.md`.
 - [x] Fix all 97 MSTest analyzer warnings across 21 test files
 - [x] Update .NET SDK from 9.0.302 to 9.0.304
 - [x] Update Microsoft.CodeAnalysis.Analyzers from 3.3.4 to 4.14.0

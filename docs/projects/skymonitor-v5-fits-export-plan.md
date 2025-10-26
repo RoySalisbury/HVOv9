@@ -109,7 +109,7 @@ Out-of-scope (optional final phase): color-cube FITS, tiled compression knobs, a
 
 Problem: When consuming `HVO.Astronomy.CFITSIO` via ProjectReference (instead of NuGet), native CFITSIO binaries under `runtimes/**` aren’t brought into app outputs automatically. We added a local copy target in SkyMonitor to bridge this, but the clean solution is to publish native assets in a dedicated package and reference it transitively.
 
-- [ ] Create `HVO.Astronomy.CFITSIO.NativeAssets` NuGet project (no managed code)
+- [x] Create `HVO.Astronomy.CFITSIO.NativeAssets` NuGet project (no managed code)
   - Sdk: `Microsoft.NET.Sdk`
   - `TargetFramework: net9.0`
   - `IncludeBuildOutput: false` (so no empty DLL is produced)
