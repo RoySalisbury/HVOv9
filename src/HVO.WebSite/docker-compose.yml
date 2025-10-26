@@ -14,7 +14,7 @@ services:
       - hvo-network
 
   website-playground:
-    profiles: ["playground"]
+    profiles: [ "playground" ]
     build:
       context: ../..
       dockerfile: src/HVO.WebSite/HVO.WebSite.Playground/Dockerfile

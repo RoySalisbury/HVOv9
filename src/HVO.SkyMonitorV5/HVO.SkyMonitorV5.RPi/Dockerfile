@@ -10,21 +10,21 @@ WORKDIR /src
 # Ensure native dependencies for SkiaSharp and telemetry are present during restore/test stages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        fontconfig \
-        fonts-dejavu-core \
-        fonts-liberation2 \
-        fonts-noto-core \
-        fonts-noto-mono \
-        fonts-noto-color-emoji \
-        fonts-roboto \
-        fonts-open-sans \
-        libuuid1 \
-        libfontconfig1 \
-        libfreetype6 \
-        libharfbuzz0b \
-        libpng16-16 \
-        libjpeg62-turbo \
-        libexpat1 && \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation2 \
+    fonts-noto-core \
+    fonts-noto-mono \
+    fonts-noto-color-emoji \
+    fonts-roboto \
+    fonts-open-sans \
+    libuuid1 \
+    libfontconfig1 \
+    libfreetype6 \
+    libharfbuzz0b \
+    libpng16-16 \
+    libjpeg62-turbo \
+    libexpat1 && \
     rm -rf /var/lib/apt/lists/* && \
     fc-cache -f
 
@@ -63,14 +63,14 @@ RUN dotnet test \
     --logger "trx;LogFileName=SkyMonitorV5.Tests.trx"
 
 RUN if [ "$RUN_BENCHMARKS" = "true" ]; then \
-        dotnet run \
-            --project HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj \
-            --configuration Release \
-            -- \
-            --job short \
-            --filter "Category=Smoke"; \
+    dotnet run \
+    --project HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj \
+    --configuration Release \
+    -- \
+    --job short \
+    --filter "Category=Smoke"; \
     else \
-        echo "Skipping benchmark smoke run"; \
+    echo "Skipping benchmark smoke run"; \
     fi
 
 # ---------------------------------
@@ -96,26 +96,26 @@ WORKDIR /app
 # Install native dependencies required by camera adapters, telemetry, SkiaSharp, and CFITSIO
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        libcurl3-gnutls \
-        fontconfig \
-        fonts-dejavu-core \
-        fonts-liberation2 \
-        fonts-noto-core \
-        fonts-noto-mono \
-        fonts-noto-color-emoji \
-        fonts-roboto \
-        fonts-open-sans \
-        libuuid1 \
-        libgpiod2 \
-        i2c-tools \
-        libfontconfig1 \
-        libfreetype6 \
-        libharfbuzz0b \
-        libpng16-16 \
-        libjpeg62-turbo \
-        libexpat1 && \
+    ca-certificates \
+    curl \
+    libcurl3-gnutls \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation2 \
+    fonts-noto-core \
+    fonts-noto-mono \
+    fonts-noto-color-emoji \
+    fonts-roboto \
+    fonts-open-sans \
+    libuuid1 \
+    libgpiod2 \
+    i2c-tools \
+    libfontconfig1 \
+    libfreetype6 \
+    libharfbuzz0b \
+    libpng16-16 \
+    libjpeg62-turbo \
+    libexpat1 && \
     rm -rf /var/lib/apt/lists/* && \
     fc-cache -f
 
