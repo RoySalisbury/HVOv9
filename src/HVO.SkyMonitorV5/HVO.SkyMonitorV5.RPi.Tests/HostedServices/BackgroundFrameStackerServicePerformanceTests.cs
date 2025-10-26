@@ -376,7 +376,6 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         return new FrameExportPublisher(
             dispatcher,
             encoder,
-            Mock.Of<IFitsFrameEncoder>(),
             NullLogger<FrameExportPublisher>.Instance,
             optionsMonitor.Object,
             featureMonitor.Object,

@@ -80,8 +80,6 @@ public sealed class AllSkyControllerTests
         Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
     }
 
-    // Removed: FITS encoder is no longer used for raw path; controller returns raw or PNG fallback
-
 
 
     [TestMethod]
@@ -111,7 +109,7 @@ public sealed class AllSkyControllerTests
         encoder.VerifyAll();
     }
 
-    private static AllSkyController CreateController(RawFrameSnapshot frame, bool enableFits = false, IFitsFrameEncoder? fitsEncoder = null)
+    private static AllSkyController CreateController(RawFrameSnapshot frame, bool enableFits = false)
     {
         var frameStateStore = new Mock<IFrameStateStore>();
         frameStateStore.SetupGet(store => store.LatestRawFrame).Returns(frame);
@@ -129,7 +127,6 @@ public sealed class AllSkyControllerTests
             frameStateStore.Object,
             optionsMonitor.Object,
             encoder.Object,
-            fitsEncoder ?? Mock.Of<IFitsFrameEncoder>(),
             rigAdapter.Object,
             NullLogger<AllSkyController>.Instance)
         {
@@ -194,7 +191,6 @@ public sealed class AllSkyControllerTests
             frameStateStore.Object,
             optionsMonitor.Object,
             processedEncoder,
-            Mock.Of<IFitsFrameEncoder>(),
             rigAdapter.Object,
             NullLogger<AllSkyController>.Instance)
         {

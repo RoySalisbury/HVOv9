@@ -27,21 +27,18 @@ public sealed class AllSkyController : ControllerBase
     private readonly IOptionsMonitor<CameraPipelineOptions> _optionsMonitor;
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
     private readonly ILogger<AllSkyController> _logger;
-    private readonly IFitsFrameEncoder _fitsEncoder;
     private readonly IRigAcquisitionAdapter _rigAdapter;
 
     public AllSkyController(
         IFrameStateStore frameStateStore,
         IOptionsMonitor<CameraPipelineOptions> optionsMonitor,
         IProcessedFrameEncoder processedFrameEncoder,
-        IFitsFrameEncoder fitsEncoder,
         IRigAcquisitionAdapter rigAdapter,
         ILogger<AllSkyController> logger)
     {
         _frameStateStore = frameStateStore;
         _optionsMonitor = optionsMonitor;
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
-        _fitsEncoder = fitsEncoder ?? throw new ArgumentNullException(nameof(fitsEncoder));
         _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
         _logger = logger;
     }

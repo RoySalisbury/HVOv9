@@ -160,12 +160,9 @@ public class EndToEndPipelineBenchmarks
         }
     }
 
-    // No-op FITS encoder placeholder; not used when FITS export disabled
+    // No-op FITS encoder placeholder
     private sealed class NoopFitsFrameEncoder : IFitsFrameEncoder
     {
-        public ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsEncodingOptions? options)
-            => new(Array.Empty<byte>(), "application/fits", "fits");
-
         public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
             => new(Array.Empty<byte>(), "application/fits", "fits");
     }

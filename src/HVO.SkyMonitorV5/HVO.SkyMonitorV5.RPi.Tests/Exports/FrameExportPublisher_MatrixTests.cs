@@ -72,12 +72,9 @@ public sealed class FrameExportPublisher_MatrixTests
     var exportOptionsMonitor = new Mock<IOptionsMonitor<FrameExportOptions>>();
     exportOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(exportOptions);
 
-    var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict); // not used in these tests
-
     return new FrameExportPublisher(
         dispatcher,
         processedEncoder,
-        fitsEncoder.Object,
         NullLogger<FrameExportPublisher>.Instance,
         featureOptionsMonitor.Object,
         featureToggle.Object,

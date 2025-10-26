@@ -23,7 +23,6 @@ public sealed class FrameExportPublisher
 
     private readonly IFrameExportDispatcher _dispatcher;
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
-    private readonly IFitsFrameEncoder _fitsFrameEncoder;
     private readonly ILogger<FrameExportPublisher> _logger;
     private readonly IOptionsMonitor<SkiaPipelineFeatureOptions> _featureOptions;
     private readonly ISkiaPipelineFeatureToggleMonitor _featureMonitor;
@@ -34,7 +33,6 @@ public sealed class FrameExportPublisher
     public FrameExportPublisher(
         IFrameExportDispatcher dispatcher,
         IProcessedFrameEncoder processedFrameEncoder,
-        IFitsFrameEncoder fitsFrameEncoder,
         ILogger<FrameExportPublisher> logger,
         IOptionsMonitor<SkiaPipelineFeatureOptions> featureOptions,
         ISkiaPipelineFeatureToggleMonitor featureMonitor,
@@ -44,7 +42,6 @@ public sealed class FrameExportPublisher
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
-        _fitsFrameEncoder = fitsFrameEncoder ?? throw new ArgumentNullException(nameof(fitsFrameEncoder));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _featureOptions = featureOptions ?? throw new ArgumentNullException(nameof(featureOptions));
         _featureMonitor = featureMonitor ?? throw new ArgumentNullException(nameof(featureMonitor));

@@ -290,7 +290,6 @@ public sealed class FrameExportGoldenFixturesTests
             var publisher = new FrameExportPublisher(
                 dispatcher,
                 encoder.Object,
-                Mock.Of<IFitsFrameEncoder>(),
                 NullLogger<FrameExportPublisher>.Instance,
                 featureOptions.Object,
                 featureMonitor.Object,
