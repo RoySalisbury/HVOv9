@@ -29,7 +29,6 @@ public sealed class AllSkyController : ControllerBase
     private readonly ILogger<AllSkyController> _logger;
     private readonly IFitsFrameEncoder _fitsEncoder;
     private readonly IRigAcquisitionAdapter _rigAdapter;
-    private readonly IOptionsMonitor<FitsExportOptions> _fitsOptions;
 
     public AllSkyController(
         IFrameStateStore frameStateStore,
@@ -37,7 +36,6 @@ public sealed class AllSkyController : ControllerBase
         IProcessedFrameEncoder processedFrameEncoder,
         IFitsFrameEncoder fitsEncoder,
         IRigAcquisitionAdapter rigAdapter,
-        IOptionsMonitor<FitsExportOptions> fitsOptions,
         ILogger<AllSkyController> logger)
     {
         _frameStateStore = frameStateStore;
@@ -45,7 +43,6 @@ public sealed class AllSkyController : ControllerBase
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
         _fitsEncoder = fitsEncoder ?? throw new ArgumentNullException(nameof(fitsEncoder));
         _rigAdapter = rigAdapter ?? throw new ArgumentNullException(nameof(rigAdapter));
-        _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
         _logger = logger;
     }
 
@@ -81,27 +78,6 @@ public sealed class AllSkyController : ControllerBase
                 }
 
                 var formatPreference = ResolveRawFrameFormat(rawFormat);
-
-                // FITS path when enabled (default) or explicitly requested
-                var shouldUseFits = _fitsOptions.CurrentValue.EnableForRaw &&
-                    (formatPreference == RawFrameFormatPreference.Auto || formatPreference == RawFrameFormatPreference.Fits);
-
-                if (shouldUseFits)
-                {
-                    try
-                    {
-                        var snapshot = new RawFrameSnapshot(frame.FrameId, frame.Image, frame.Timestamp, frame.Exposure)
-                        {
-                            ImmutableImage = sourceImage
-                        };
-                        var delivery = _fitsEncoder.EncodeRaw(sourceImage, snapshot, _rigAdapter.ActiveRig, _fitsOptions.CurrentValue);
-                        return File(delivery.Payload.ToArray(), FitsContentType);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "FITS encode failed for raw frame {FrameId}; falling back to legacy format.", frame.FrameId);
-                    }
-                }
 
                 var descriptorForHeaders = frame.ImageDescriptor;
                 byte[]? rawPayload = null;

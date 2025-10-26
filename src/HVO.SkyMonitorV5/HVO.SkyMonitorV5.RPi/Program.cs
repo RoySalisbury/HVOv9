@@ -319,7 +319,6 @@ public static class Program
         services.AddSingleton<IConfigureOptions<StarCatalogOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<LocalApiClientOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
-        services.AddSingleton<IConfigureOptions<FitsExportOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<FrameExportOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
         services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
@@ -358,7 +357,6 @@ public static class Program
             .PostConfigure(options => options.Normalize())
             .ValidateOnStart();
 
-        services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, LegacyFitsExportMigrationConfigurator>();
         services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, ImageHistoryFrameExportOptionsConfigurator>();
 
         services.AddOptions<FrameExportResilienceOptions>()
@@ -370,11 +368,6 @@ public static class Program
             .Bind(configuration.GetSection(FrameExportRetryOptions.SectionName))
             .ValidateDataAnnotations()
             .PostConfigure(options => options.Normalize());
-
-        // FITS export options and encoder
-        services.AddOptions<FitsExportOptions>()
-            .Bind(configuration.GetSection(FitsExportOptions.SectionName))
-            .ValidateDataAnnotations();
 
         services.AddSingleton<IFitsFrameEncoder, FitsFrameEncoder>();
 

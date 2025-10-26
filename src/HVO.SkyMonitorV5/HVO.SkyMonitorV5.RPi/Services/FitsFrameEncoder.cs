@@ -2,6 +2,7 @@ using System;
 using HVO.Astronomy.CFITSIO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
