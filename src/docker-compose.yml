@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Root orchestration that composes domain-level stacks.
 # Requires Docker Compose with 'include' support. Alternatively, use multiple -f files.
 
