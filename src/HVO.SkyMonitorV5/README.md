@@ -476,7 +476,7 @@ dotnet run -c Release -- --duration 24h
 ### Test Coverage
 ```bash
 # Run tests with coverage collection (same as CI)
-dotnet test --settings ../../coverage.runsettings
+dotnet test --settings ../coverage.runsettings
 
 # Coverage reports are generated in TestResults/*/coverage.cobertura.xml
 # See main README for coverage badge setup
