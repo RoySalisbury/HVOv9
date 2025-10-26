@@ -342,5 +342,7 @@ private async Task<Result<T>> RetryAsync<T>(Func<Task<Result<T>>> operation, int
 
 - [NINA Official Site](https://nighttime-imaging.eu/)
 - [NINA API Documentation](https://github.com/christian-photo/ninaAPI)
-- [HVO NINA Client Project Guide](../../docs/projects/nina-client/)
-- [Observatory Automation Architecture](../../docs/observatory-automation.md)
+<!-- Documentation links below are currently unavailable. -->
+<!-- - [HVO NINA Client Project Guide](../../docs/projects/nina-client/) -->
+<!-- - [Observatory Automation Architecture](../../docs/observatory-automation.md) -->
+*Documentation for NINA Client and Observatory Automation Architecture is coming soon.*
