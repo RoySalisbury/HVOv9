@@ -12,6 +12,8 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
+#pragma warning disable CS0618 // Suppress obsolete warnings for FitsExportOptions usage in legacy-path tests
+
 namespace HVO.SkyMonitorV5.RPi.Tests.Services;
 
 [TestClass]
@@ -296,4 +298,139 @@ public sealed class ProcessedFrameEncoderTests
         Assert.AreEqual("jpg", delivery.FileExtension, "Custom encoding should override frame encoding for file extension.");
         Assert.IsGreaterThan(0, delivery.Payload.Length, "Encoder should emit non-empty payload with custom encoding.");
     }
+
+    [TestMethod]
+    public void Encode_CustomFits_UsesUnifiedFitsEncoder()
+    {
+        using var bitmap = new SKBitmap(width: 8, height: 8);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 500, Gain: 100, AutoExposure: false, AutoGain: false);
+        var frameEncoding = new ImageEncodingSettings(ImageEncodingFormat.Png, 100);
+
+        var frame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            frameEncoding,
+            ImageEncodingUtilities.ToContentType(frameEncoding.Format),
+            ImageEncodingUtilities.ToFileExtension(frameEncoding.Format),
+            FramesStacked: 1,
+            IntegrationMilliseconds: exposure.ExposureMilliseconds,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 0,
+            ImmutableImage: image);
+
+        var fitsOptionsMonitor = Mock.Of<IOptionsMonitor<FitsExportOptions>>(m => m.CurrentValue == new FitsExportOptions());
+        var rigAdapter = Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon);
+
+        var expected = new byte[] { 0x01, 0x02, 0x03 };
+        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
+        fitsEncoder
+            .Setup(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
+            .Returns(new ProcessedFrameDelivery(expected, "application/fits", "fits"));
+
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            fitsEncoder.Object,
+            rigAdapter,
+            fitsOptionsMonitor);
+
+        var custom = new ImageEncodingSettings(ImageEncodingFormat.Fits, 100)
+        {
+            FitsOptions = new FitsEncodingOptions
+            {
+                BitDepth = HVO.SkyMonitorV5.RPi.Pipeline.FitsBitDepth.U16,
+                ImageFormat = HVO.SkyMonitorV5.RPi.Pipeline.FitsImageFormat.Mono,
+                Compression = HVO.SkyMonitorV5.RPi.Pipeline.FitsCompression.None,
+                UnsignedU16 = true,
+                WriteChecksum = true
+            }
+        };
+
+        var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.UserInterface, custom);
+
+        Assert.AreEqual("application/fits", delivery.ContentType);
+        Assert.AreEqual("fits", delivery.FileExtension);
+        CollectionAssert.AreEqual(expected, delivery.Payload.ToArray());
+
+        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Once);
+    }
+
+    [TestMethod]
+    public void Encode_TiffFormat_ThrowsNotSupported()
+    {
+        using var bitmap = new SKBitmap(width: 4, height: 4);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 100, Gain: 0, AutoExposure: false, AutoGain: false);
+        var frameEncoding = new ImageEncodingSettings(ImageEncodingFormat.Tiff, 90);
+
+        var frame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            frameEncoding,
+            ImageEncodingUtilities.ToContentType(frameEncoding.Format),
+            ImageEncodingUtilities.ToFileExtension(frameEncoding.Format),
+            FramesStacked: 1,
+            IntegrationMilliseconds: exposure.ExposureMilliseconds,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 0,
+            ImmutableImage: image);
+
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            Mock.Of<IFitsFrameEncoder>(),
+            Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon),
+            Mock.Of<IOptionsMonitor<FitsExportOptions>>(m => m.CurrentValue == new FitsExportOptions()));
+
+        try
+        {
+            encoder.Encode(frame);
+            Assert.Fail("Expected NotSupportedException for TIFF format.");
+        }
+        catch (NotSupportedException)
+        {
+            // expected
+        }
+    }
+
+    [TestMethod]
+    public void Encode_XisfFormat_ThrowsNotSupported()
+    {
+        using var bitmap = new SKBitmap(width: 4, height: 4);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 100, Gain: 0, AutoExposure: false, AutoGain: false);
+        var frameEncoding = new ImageEncodingSettings(ImageEncodingFormat.Xisf, 90);
+
+        var frame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            frameEncoding,
+            ImageEncodingUtilities.ToContentType(frameEncoding.Format),
+            ImageEncodingUtilities.ToFileExtension(frameEncoding.Format),
+            FramesStacked: 1,
+            IntegrationMilliseconds: exposure.ExposureMilliseconds,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 0,
+            ImmutableImage: image);
+
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            Mock.Of<IFitsFrameEncoder>(),
+            Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon),
+            Mock.Of<IOptionsMonitor<FitsExportOptions>>(m => m.CurrentValue == new FitsExportOptions()));
+
+        try
+        {
+            encoder.Encode(frame);
+            Assert.Fail("Expected NotSupportedException for XISF format.");
+        }
+        catch (NotSupportedException)
+        {
+            // expected
+        }
+    }
 }
+
+#pragma warning restore CS0618

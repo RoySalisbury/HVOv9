@@ -3,9 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using HVO.SkyMonitorV5.RPi.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 
@@ -15,10 +19,14 @@ namespace HVO.SkyMonitorV5.RPi.Controllers.v1_0;
 public sealed class DiagnosticsController : ControllerBase
 {
     private readonly IDiagnosticsService _diagnosticsService;
+    private readonly IOptionsMonitor<FrameExportOptions> _frameExportOptions;
+    private readonly ILogger<DiagnosticsController>? _logger;
 
-    public DiagnosticsController(IDiagnosticsService diagnosticsService)
+    public DiagnosticsController(IDiagnosticsService diagnosticsService, IOptionsMonitor<FrameExportOptions> frameExportOptions, ILogger<DiagnosticsController>? logger = null)
     {
         _diagnosticsService = diagnosticsService ?? throw new ArgumentNullException(nameof(diagnosticsService));
+        _frameExportOptions = frameExportOptions ?? throw new ArgumentNullException(nameof(frameExportOptions));
+        _logger = logger;
     }
 
     [HttpGet("background-stacker")]
@@ -296,5 +304,23 @@ public sealed class DiagnosticsController : ControllerBase
             title: "Unable to retrieve telemetry events.",
             detail: error?.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [HttpGet("frame-export")]
+    [ProducesResponseType(typeof(DiagnosticsFrameExportResponse), StatusCodes.Status200OK)]
+    public ActionResult<DiagnosticsFrameExportResponse> GetFrameExportConfiguration()
+    {
+        var options = _frameExportOptions.CurrentValue;
+
+        var raw = options.GetStageOptions(Exports.FrameExportStage.Raw);
+        var processed = options.GetStageOptions(Exports.FrameExportStage.Processed);
+
+        var response = new DiagnosticsFrameExportResponse
+        {
+            Raw = DiagnosticsFrameExportResponse.StageInfo.FromStageOptions(raw, Exports.FrameExportStage.Raw),
+            Processed = DiagnosticsFrameExportResponse.StageInfo.FromStageOptions(processed, Exports.FrameExportStage.Processed)
+        };
+
+        return Ok(response);
     }
 }

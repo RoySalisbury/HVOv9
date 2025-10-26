@@ -90,6 +90,48 @@ Unify the frame export configuration model to support any format (JPEG, PNG, FIT
 
 ---
 
+## Implementation status (Oct 26, 2025)
+
+- Phase 1 — Completed
+    - Core types extended: ImageEncodingFormat, FitsEncodingOptions, ImageEncodingSettings, utilities
+- Phase 2 — Completed
+    - FrameExportOptions updated (ArchiveEncoding/DeliveryEncoding, Normalize, legacy migration helpers)
+    - FitsExportOptions marked [Obsolete]
+- Phase 3 — Completed
+    - Encoders updated to consume ImageEncodingSettings; FITS via FitsEncodingOptions
+- Phase 4 — Completed
+    - Publisher routes Delivery vs Archive; UI coerces delivery to raster when needed
+- Phase 5 — Completed
+    - Implemented via IPostConfigureOptions migration (no hosted service)
+- Phase 6 — Completed (initial guide)
+    - New guide: docs/guides/unified-frame-export-configuration.md
+- Phase 8 — In progress
+    - DB-backed override added: unified FrameExportOptions can now be provided via system setting key "frame-export" (JSON payload)
+    - DatabaseBackedConfigurationOptionsConfigurator deserializes and applies stage options; Normalize post-configure finalizes defaults
+    - DI wiring added so DB provider participates in FrameExportOptions configuration
+
+Build/Tests
+- Build: PASS (legacy [Obsolete] warnings expected during transition)
+- Tests: PASS — 214 passed, 0 failed (HVO.SkyMonitorV5.RPi.Tests)
+
+Recent additions (Oct 26, 2025)
+- Diagnostics endpoint coverage extended to TIFF/XISF (MIME, extension, raster flags)
+- Role enumeration tests for `FrameExportStageOptions.EnumerateRoles()` across all scopes
+- Unified FITS encoder path test validates `ProcessedFrameEncoder` uses `IFitsFrameEncoder` when custom `ImageEncodingSettings.Format=Fits`
+- Encoder guards: `Tiff` and `Xisf` throw `NotSupportedException` in raster path
+- AllSkyController raw FITS behaviors:
+    - FITS requested but encoder fails → falls back to raw skimg payload with correct headers
+    - Auto (no rawFormat) selects FITS when enabled; failure falls back to raw skimg
+    - Processed path returns `IProcessedFrameEncoder` payload
+- Diagnostics integration test: DB-backed `frame-export` override reflected by `/api/v1.0/diagnostics/frame-export` (skips inconclusively if SQLite is unavailable in CI)
+- Diagnostics unit test: both Raw and Processed configured to FITS surface FITS details (bit-depth, format, compression) in response
+
+Next steps
+- Admin UI for editing the `frame-export` JSON (with schema hints) and migrating from legacy FITS setting in-app
+- Broaden negative tests: ensure UI endpoints never return FITS unless explicitly requested
+- Optional: end-to-end test that sets `frame-export` via system configuration API then verifies diagnostics reflect it
+- Consider JSON schema for `ImageEncodingSettings` to validate DB payloads pre-commit
+
 ## Phase 1: Extend Core Types for Format Support
 
 ### Tasks
@@ -793,6 +835,36 @@ private ImageEncodingSettings CreateEncodingFromQuery(string format, int quality
 
 ## Phase 5: Configuration Migration and Backward Compatibility
 
+Status: Completed — Implemented using post-configuration migration
+
+What shipped
+- A post-configure options component migrates legacy `FitsExportOptions` into unified `FrameExportOptions` at startup.
+- This runs after configuration binding (including DB-backed legacy values) and before other post-configures.
+
+Key files
+- `src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/Infrastructure/LegacyFitsExportMigrationConfigurator.cs`
+- DI wiring in `src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/Program.cs`:
+
+```csharp
+services.AddOptions<FrameExportOptions>()
+    .Bind(configuration.GetSection(FrameExportOptions.SectionName))
+    .ValidateDataAnnotations()
+    .PostConfigure(options => options.Normalize())
+    .ValidateOnStart();
+
+services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, LegacyFitsExportMigrationConfigurator>();
+services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, ImageHistoryFrameExportOptionsConfigurator>();
+
+// Legacy options remain bound for transitional read-only use
+services.AddOptions<FitsExportOptions>()
+    .Bind(configuration.GetSection(FitsExportOptions.SectionName))
+    .ValidateDataAnnotations();
+```
+
+Tests
+- `HVO.SkyMonitorV5.RPi.Tests/Infrastructure/LegacyFitsExportMigrationConfiguratorTests.cs`
+- Scenarios: no-migration, raw-only, processed-only, both stages, null-safety
+
 ### Tasks
 
 #### 5.1: Create Configuration Migration Service
@@ -906,6 +978,15 @@ Provide example of new unified configuration:
 ---
 
 ## Phase 6: Documentation and Examples
+
+Status: Completed — Initial guide added
+
+What shipped
+- `docs/guides/unified-frame-export-configuration.md` provides:
+    - Sample appsettings for all four export points
+    - Defaults and delivery vs archive behavior
+    - FITS options reference
+    - Migration notes and validation behavior
 
 ### Tasks
 

@@ -1,7 +1,7 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
-using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
@@ -11,9 +11,20 @@ namespace HVO.SkyMonitorV5.RPi.Services;
 /// </summary>
 public interface IFitsFrameEncoder
 {
-  /// <summary>Encode a raw frame (from SKImage) to FITS bytes.</summary>
-  ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options);
+  /// <summary>
+  /// Encode a raw frame (from SKImage) to FITS bytes using unified encoding options.
+  /// </summary>
+  /// <param name="image">The image to encode.</param>
+  /// <param name="frame">The raw frame snapshot for metadata.</param>
+  /// <param name="rig">Rig specification for headers.</param>
+  /// <param name="options">Unified FITS encoding options (nullable for defaults).</param>
+  ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsEncodingOptions? options);
 
-  /// <summary>Encode a processed frame to FITS bytes.</summary>
-  ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options);
+  /// <summary>
+  /// Encode a processed frame to FITS bytes using unified encoding options.
+  /// </summary>
+  /// <param name="frame">The processed frame to encode.</param>
+  /// <param name="rig">Rig specification for headers.</param>
+  /// <param name="options">Unified FITS encoding options (nullable for defaults).</param>
+  ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options);
 }

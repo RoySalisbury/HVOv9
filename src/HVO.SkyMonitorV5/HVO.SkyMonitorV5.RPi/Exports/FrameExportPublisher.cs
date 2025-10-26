@@ -241,41 +241,73 @@ public sealed class FrameExportPublisher
 
             if (features.EnableProcessedFrameEncoder)
             {
-                // Processed frames are NOT RAW; always deliver JPG/PNG per encoding settings.
-                // Use UserInterface context so we never force FITS for processed outputs.
-                // Apply ArchiveEncoding from export options for consistent quality/format across all exports.
+                // Route using unified export options: Delivery vs Archive can differ.
                 var exportOptions = _exportOptions.CurrentValue;
-                var processedOptions = exportOptions.Processed;
-                var archiveEncoding = processedOptions.ArchiveEncoding;
+                var processedOptions = exportOptions.Processed ?? new FrameExportStageOptions();
 
+                var archiveEncoding = processedOptions.ArchiveEncoding;
+                var deliveryEncoding = processedOptions.DeliveryEncoding ?? archiveEncoding;
+
+                // Ensure delivery uses a raster-friendly format for UI/delivery
+                if (!ImageEncodingUtilities.IsRasterFormat(deliveryEncoding.Format))
+                {
+                    deliveryEncoding = new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 85);
+                }
+
+                // Encode delivery payload (UI-friendly raster)
                 var delivery = _processedFrameEncoder.Encode(
                     processedFrame,
                     Services.ProcessedFrameEncodingContext.UserInterface,
-                    archiveEncoding);
-                var contentType = delivery.ContentType;
-                var fileExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(contentType);
+                    deliveryEncoding);
+                var deliveryContentType = delivery.ContentType;
+                var deliveryExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(deliveryContentType);
 
-                var metadata = FrameExportMetadataBuilder.FromProcessed(
+                var deliveryMetadata = FrameExportMetadataBuilder.FromProcessed(
                     processedFrame,
                     stackResult.Context,
                     rig,
                     stageTimestampUtc,
                     queueLatencyMilliseconds,
                     processingMilliseconds,
-                    payloadContentType: contentType,
-                    payloadExtension: fileExtension);
+                    payloadContentType: deliveryContentType,
+                    payloadExtension: deliveryExtension);
 
-                var payloadBuffer = delivery.Payload.ToArray();
-                QueueArchiveIngestion(metadata, payloadBuffer, contentType, fileExtension);
+                var deliveryPayloadBuffer = delivery.Payload.ToArray();
 
-                var payload = new ReadOnlyMemory<byte>(payloadBuffer);
+                // Encode archive payload only when archive is enabled
+                var imageHistory = _imageHistoryOptions.CurrentValue;
+                if (imageHistory is not null && imageHistory.EnableArchive)
+                {
+                    var archive = _processedFrameEncoder.Encode(
+                        processedFrame,
+                        Services.ProcessedFrameEncodingContext.Export,
+                        archiveEncoding);
+                    var archiveContentType = archive.ContentType;
+                    var archiveExtension = archive.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(archiveContentType);
+
+                    var archiveMetadata = FrameExportMetadataBuilder.FromProcessed(
+                        processedFrame,
+                        stackResult.Context,
+                        rig,
+                        stageTimestampUtc,
+                        queueLatencyMilliseconds,
+                        processingMilliseconds,
+                        payloadContentType: archiveContentType,
+                        payloadExtension: archiveExtension);
+
+                    var archivePayloadBuffer = archive.Payload.ToArray();
+                    QueueArchiveIngestion(archiveMetadata, archivePayloadBuffer, archiveContentType, archiveExtension);
+                }
+
+                // Enqueue delivery envelope
+                var payload = new ReadOnlyMemory<byte>(deliveryPayloadBuffer);
                 var envelope = new FrameExportEnvelope(
                     processedFrame.FrameId,
                     FrameExportStage.Processed,
-                    metadata,
+                    deliveryMetadata,
                     payload,
-                    contentType,
-                    fileExtension);
+                    deliveryContentType,
+                    deliveryExtension);
 
                 if (!_dispatcher.TryEnqueue(envelope))
                 {

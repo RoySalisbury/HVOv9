@@ -35,6 +35,7 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     IConfigureOptions<LocalApiClientOptions>,
     IConfigureOptions<SkyMonitorTelemetryRetentionOptions>,
     IConfigureOptions<FitsExportOptions>,
+    IConfigureOptions<FrameExportOptions>,
     IConfigurationSnapshotInvalidator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.General);
@@ -177,6 +178,42 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         catch (JsonException ex)
         {
             _logger?.LogWarning(ex, "Unable to deserialize FITS export configuration from system settings.");
+        }
+    }
+
+    public void Configure(FrameExportOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var snapshot = GetSnapshot();
+        if (!snapshot.SystemSettings.TryGetValue(SystemSettingKeys.FrameExport, out var payload)
+            || string.IsNullOrWhiteSpace(payload))
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = JsonSerializer.Deserialize<FrameExportOptions>(payload, JsonOptions);
+            if (stored is null)
+            {
+                return;
+            }
+
+            // Replace stage configurations when provided in DB payload; post-configure normalizers will ensure defaults
+            if (stored.Raw is not null)
+            {
+                options.Raw = stored.Raw;
+            }
+
+            if (stored.Processed is not null)
+            {
+                options.Processed = stored.Processed;
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger?.LogWarning(ex, "Unable to deserialize FrameExport configuration from system settings.");
         }
     }
 

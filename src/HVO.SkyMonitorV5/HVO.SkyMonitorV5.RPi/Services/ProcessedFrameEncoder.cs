@@ -46,28 +46,45 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
             throw new InvalidOperationException("Processed frame does not contain an immutable SKImage for encoding.");
         }
 
+        // Use custom encoding if provided, otherwise fall back to frame's encoding settings
+        var encoding = customEncoding is not null
+            ? ImageEncodingUtilities.Normalize(customEncoding)
+            : ImageEncodingUtilities.Normalize(frame.Encoding);
+
+        // If explicitly asked to encode FITS, use unified encoder path
+        if (encoding.Format == ImageEncodingFormat.Fits)
+        {
+            try
+            {
+                var rig = _rigAdapter.ActiveRig;
+                var delivery = _fitsEncoder.EncodeProcessed(frame, rig, encoding.FitsOptions);
+                return new ProcessedFrameDelivery(delivery.Payload, "application/fits", delivery.FileExtension ?? "fits");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "FITS encoding (unified) for processed frame {FrameId} failed; falling back to raster encoding.", frame.FrameId);
+                // Fall through to raster
+            }
+        }
+
+        // Legacy behavior: when no explicit encoding provided and export context requests FITS via legacy options
         var fits = _fitsOptions.CurrentValue;
-        // Only use FITS for Export context when enabled - UI should always use JPG/PNG
-        if (context == ProcessedFrameEncodingContext.Export && fits.EnableForProcessed)
+        if (customEncoding is null && context == ProcessedFrameEncodingContext.Export && fits.EnableForProcessed)
         {
             try
             {
                 var rig = _rigAdapter.ActiveRig;
                 var delivery = _fitsEncoder.EncodeProcessed(frame, rig, fits);
-                // Force content type and extension for FITS
                 return new ProcessedFrameDelivery(delivery.Payload, "application/fits", delivery.FileExtension ?? "fits");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "FITS encoding for processed frame {FrameId} failed; falling back to configured image encoding.", frame.FrameId);
-                // Fall through to legacy encoding
+                _logger.LogWarning(ex, "FITS encoding (legacy) for processed frame {FrameId} failed; falling back to raster encoding.", frame.FrameId);
+                // Fall through to raster
             }
         }
 
-        // Use custom encoding if provided, otherwise fall back to frame's encoding settings
-        var encoding = customEncoding is not null
-            ? ImageEncodingUtilities.Normalize(customEncoding)
-            : ImageEncodingUtilities.Normalize(frame.Encoding);
+        // Raster path: encode via Skia using requested format/quality
         var format = ImageEncodingUtilities.ToSkiaFormat(encoding.Format);
 
         using var data = frame.ImmutableImage.Encode(format, encoding.Quality);

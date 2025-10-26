@@ -2,7 +2,7 @@ using System;
 using HVO.Astronomy.CFITSIO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
-using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
@@ -25,12 +25,11 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     _siteOptions = siteOptions?.Value ?? throw new ArgumentNullException(nameof(siteOptions));
   }
 
-  public ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options)
+  public ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsEncodingOptions? options)
   {
     ArgumentNullException.ThrowIfNull(image);
     ArgumentNullException.ThrowIfNull(frame);
     ArgumentNullException.ThrowIfNull(rig);
-    ArgumentNullException.ThrowIfNull(options);
 
     try
     {
@@ -61,11 +60,10 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     }
   }
 
-  public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options)
+  public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
   {
     ArgumentNullException.ThrowIfNull(frame);
     ArgumentNullException.ThrowIfNull(rig);
-    ArgumentNullException.ThrowIfNull(options);
 
     try
     {
@@ -97,20 +95,21 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     }
   }
 
-  private FitsCompressionPolicy? CreateCompressionPolicy(FitsExportOptions options)
+  private FitsCompressionPolicy? CreateCompressionPolicy(FitsEncodingOptions? options)
   {
-    if (options.Compression == FitsCompressionKind.None)
+    if (options is null || options.Compression == Pipeline.FitsCompression.None)
     {
       return null;
     }
 
     var compression = options.Compression switch
     {
-      FitsCompressionKind.Rice => FitsCompression.Rice,
-      FitsCompressionKind.Gzip1 => FitsCompression.GZip1,
-      FitsCompressionKind.Gzip2 => FitsCompression.GZip2,
-      FitsCompressionKind.HCompress => FitsCompression.HCompress,
-      _ => FitsCompression.None
+      Pipeline.FitsCompression.Rice => HVO.Astronomy.CFITSIO.FitsCompression.Rice,
+      Pipeline.FitsCompression.Gzip1 => HVO.Astronomy.CFITSIO.FitsCompression.GZip1,
+      Pipeline.FitsCompression.Gzip2 => HVO.Astronomy.CFITSIO.FitsCompression.GZip2,
+      Pipeline.FitsCompression.HCompress => HVO.Astronomy.CFITSIO.FitsCompression.HCompress,
+      Pipeline.FitsCompression.PLio => HVO.Astronomy.CFITSIO.FitsCompression.None,
+      _ => HVO.Astronomy.CFITSIO.FitsCompression.None
     };
 
     return new FitsCompressionPolicy
@@ -120,7 +119,7 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     };
   }
 
-  private void StampRawFrameHeaders(FitsFile fits, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options)
+  private void StampRawFrameHeaders(FitsFile fits, RawFrameSnapshot frame, RigSpec rig, FitsEncodingOptions? options)
   {
     var builder = new FitsHeaderBuilder(fits);
 
@@ -142,7 +141,7 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
            .SetString("ORIGIN", "Hualapai Valley Observatory", "Organization responsible for the data");
   }
 
-  private void StampProcessedFrameHeaders(FitsFile fits, ProcessedFrame frame, RigSpec rig, FitsExportOptions options)
+  private void StampProcessedFrameHeaders(FitsFile fits, ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
   {
     var builder = new FitsHeaderBuilder(fits);
 
@@ -172,9 +171,9 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     }
   }
 
-  private void StampImageMetadata(FitsHeaderBuilder builder, int width, int height, FitsExportOptions options)
+  private void StampImageMetadata(FitsHeaderBuilder builder, int width, int height, FitsEncodingOptions? options)
   {
-    if (options.UnsignedU16 && options.BitDepth == FitsBitDepth.U16)
+    if (options is not null && options.UnsignedU16 && options.BitDepth == Pipeline.FitsBitDepth.U16)
     {
       // BSCALE=1, BZERO=32768 for unsigned 16-bit
       builder.SetScale(1.0, 32768.0);

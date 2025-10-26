@@ -50,25 +50,23 @@ public sealed class FrameExportStageOptions
     public FrameExportPayloadScope PayloadScope { get; set; } = FrameExportPayloadScope.Unspecified;
 
     /// <summary>
-    /// Encoding settings for archive role exports. Defaults to JPG @ 95% quality.
-    /// For processed frames, this encoding is used for all exports (both archive and delivery roles).
+    /// Encoding settings for archive role exports. Can be any supported format (JPEG, PNG, FITS, TIFF, XISF).
     /// </summary>
     /// <remarks>
-    /// Currently, the export pipeline creates a single payload per frame using ArchiveEncoding.
-    /// This payload is written to all configured export targets (archive and/or delivery).
-    /// Future enhancement: Support per-role encoding by creating separate payloads when
-    /// ArchiveEncoding and DeliveryEncoding differ.
+    /// Default: JPEG @ 95% for processed frames, FITS U16 for raw frames.
+    /// Supports format-specific options via FitsOptions, TiffOptions, etc.
+    /// When PayloadScope includes Archive, this encoding is used for archive exports.
     /// </remarks>
     public ImageEncodingSettings ArchiveEncoding { get; set; } = new(ImageEncodingFormat.Jpeg, 95);
 
     /// <summary>
-    /// Encoding settings for delivery role exports. Defaults to null (uses ArchiveEncoding).
+    /// Encoding settings for delivery role exports. Can be any supported format (JPEG, PNG, FITS, TIFF, XISF).
     /// </summary>
     /// <remarks>
-    /// Reserved for future enhancement. Currently, all exports use ArchiveEncoding.
-    /// When set, this value is available in configuration but not yet applied to delivery exports.
-    /// Planned: When ArchiveAndDelivery scope is used with different encodings, create separate
-    /// payloads per role with their respective encoding settings.
+    /// When null, uses ArchiveEncoding for all exports (single-payload mode).
+    /// When set, creates separate payloads for archive and delivery roles.
+    /// Typically set to a more web-friendly format (e.g., JPEG @ 80%) when archive uses
+    /// higher-fidelity formats (FITS, PNG lossless, TIFF).
     /// </remarks>
     public ImageEncodingSettings? DeliveryEncoding { get; set; }
 
@@ -91,8 +89,16 @@ public sealed class FrameExportStageOptions
                 : FrameExportPayloadScope.ArchiveOnly; // Changed default to ArchiveOnly for processed
         }
 
-        // Ensure archive encoding has defaults
-        ArchiveEncoding ??= new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 95);
+        // Ensure archive encoding has stage-appropriate defaults
+        if (ArchiveEncoding == null)
+        {
+            ArchiveEncoding = stage == FrameExportStage.Raw
+                ? new ImageEncodingSettings(ImageEncodingFormat.Fits, 100)
+                {
+                    FitsOptions = new FitsEncodingOptions() // Uses FITS defaults: U16, Mono, None compression
+                }
+                : new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 95);
+        }
     }
 
     internal bool HasActiveFilesystemSink() => Enabled && Filesystem.Any(static option => option is { Enabled: true, RootPathLength: > 0 });

@@ -320,6 +320,7 @@ public static class Program
         services.AddSingleton<IConfigureOptions<LocalApiClientOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<SkyMonitorTelemetryRetentionOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
         services.AddSingleton<IConfigureOptions<FitsExportOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
+        services.AddSingleton<IConfigureOptions<FrameExportOptions>>(sp => sp.GetRequiredService<DatabaseBackedConfigurationOptionsConfigurator>());
 
         services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
         services.AddSingleton<IRigRuntimeUpdater, RigRuntimeUpdater>();
@@ -353,8 +354,11 @@ public static class Program
 
         services.AddOptions<FrameExportOptions>()
             .Bind(configuration.GetSection(FrameExportOptions.SectionName))
-            .PostConfigure(options => options.Normalize());
+            .ValidateDataAnnotations()
+            .PostConfigure(options => options.Normalize())
+            .ValidateOnStart();
 
+        services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, LegacyFitsExportMigrationConfigurator>();
         services.AddSingleton<IPostConfigureOptions<FrameExportOptions>, ImageHistoryFrameExportOptionsConfigurator>();
 
         services.AddOptions<FrameExportResilienceOptions>()
