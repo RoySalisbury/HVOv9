@@ -471,7 +471,6 @@ When playground code proves valuable:
 
 - [System.CommandLine Documentation](https://learn.microsoft.com/en-us/dotnet/standard/commandline/)
 - [BenchmarkDotNet Documentation](https://benchmarkdotnet.org/)
-- [GPIO Testing Guide](../../docs/guides/hardware-simulation-improvements.md)
 - [FITS File Format](https://fits.gsfc.nasa.gov/)
 
 ## 💡 Contributing
