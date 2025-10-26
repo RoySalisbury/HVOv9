@@ -212,4 +212,4 @@ public bool IsClosed
 - [System.Device.Gpio Documentation](https://learn.microsoft.com/en-us/dotnet/iot/intro)
 - [Raspberry Pi GPIO Pinout](https://pinout.xyz/)
 - [HVO Hardware Simulation Guide](../../docs/guides/hardware-simulation-improvements.md)
-- [IoT Device Development Guide](../../docs/projects/iot-devices/)
+- [IoT Device Development Guide](../../docs/projects/iot-devices/README.md)
