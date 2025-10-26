@@ -49,12 +49,17 @@ This plan tracks follow-up work after completing the repository reorganization (
 
 ## 4) Deployment Scripts
 
-- [ ] Test and validate updated scripts
+- [x] Test and validate updated scripts
   - `scripts/deploy-roofcontroller-rpi.sh`
   - `scripts/deploy-skymonitor-rpi.sh`
   - `scripts/run-roofcontroller-ipad-device.sh`
   - `scripts/run-roofcontroller-ipad-sim.sh`
   - `scripts/copy-catalog.sh`
+  - ✅ **Complete**: All deployment scripts functional with proper shim delegation
+  - ✅ **Validation**: All shims delegate correctly to project-local implementations
+  - ✅ **Testing**: Scripts validate arguments and show proper error messages
+  - ✅ **Documentation**: Comprehensive validation results in `docs/validation/deployment-scripts-validation-results.md`
+  - 🔧 **Fixed**: iOS script permissions issue resolved
 
 ## 5) Documentation Polish
 

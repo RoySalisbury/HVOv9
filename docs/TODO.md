@@ -51,6 +51,7 @@
 
 ### Recent Completions (October 2025) ✅
 - [x] Repository reorganization completed (Phase 7 Cleanup). Domain docs and root README updated; documentation index added at `docs/README.md`. Remaining follow-ups tracked in `docs/projects/post-restructure-plan.md`.
+- [x] Post-restructure validation (Docker and deployment scripts): Complete validation of Docker infrastructure and deployment scripts on feature branch; all containers and deployment workflows functional.
 - [x] Fix all 97 MSTest analyzer warnings across 21 test files
 - [x] Update .NET SDK from 9.0.302 to 9.0.304
 - [x] Update Microsoft.CodeAnalysis.Analyzers from 3.3.4 to 4.14.0
