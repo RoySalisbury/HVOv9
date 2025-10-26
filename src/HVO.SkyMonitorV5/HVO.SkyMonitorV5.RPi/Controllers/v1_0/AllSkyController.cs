@@ -83,7 +83,7 @@ public sealed class AllSkyController : ControllerBase
                 var formatPreference = ResolveRawFrameFormat(rawFormat);
 
                 // FITS path when enabled (default) or explicitly requested
-                var shouldUseFits = _fitsOptions.CurrentValue.EnableForRaw && 
+                var shouldUseFits = _fitsOptions.CurrentValue.EnableForRaw &&
                     (formatPreference == RawFrameFormatPreference.Auto || formatPreference == RawFrameFormatPreference.Fits);
 
                 if (shouldUseFits)

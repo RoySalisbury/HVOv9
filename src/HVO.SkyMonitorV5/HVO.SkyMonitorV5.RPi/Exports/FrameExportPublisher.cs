@@ -238,7 +238,9 @@ public sealed class FrameExportPublisher
 
             if (features.EnableProcessedFrameEncoder)
             {
-                var delivery = _processedFrameEncoder.Encode(processedFrame, Services.ProcessedFrameEncodingContext.Export);
+                // Processed frames are NOT RAW; always deliver JPG/PNG per encoding settings.
+                // Use UserInterface context so we never force FITS for processed outputs.
+                var delivery = _processedFrameEncoder.Encode(processedFrame, Services.ProcessedFrameEncodingContext.UserInterface);
                 var contentType = delivery.ContentType;
                 var fileExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(contentType);
 

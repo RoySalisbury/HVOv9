@@ -20,7 +20,7 @@ namespace HVO.SkyMonitorV5.RPi.Tests.Exports;
 public sealed class FrameExportPublisherFitsTests
 {
     [TestMethod]
-    public void PublishProcessedFrame_FitsEnabled_EnqueuesFITSExportEnvelope()
+    public void PublishProcessedFrame_FitsEnabled_UsesPngExportEnvelope()
     {
         // Arrange
         var dispatcher = new Mock<IFrameExportDispatcher>(MockBehavior.Strict);
@@ -116,9 +116,9 @@ public sealed class FrameExportPublisherFitsTests
         // Assert
         dispatcher.Verify(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>()), Times.Once);
         Assert.IsNotNull(capturedEnvelope);
-        Assert.AreEqual("application/fits", capturedEnvelope!.ContentType);
-        Assert.AreEqual("fits", capturedEnvelope.FileExtension);
+        Assert.AreEqual("image/png", capturedEnvelope!.ContentType, "Processed exports should use PNG/JPG, not FITS");
+        Assert.AreEqual("png", capturedEnvelope.FileExtension);
         Assert.IsGreaterThan(0, capturedEnvelope.Payload.Length);
-        CollectionAssert.AreEqual(expectedFitsBytes, capturedEnvelope.Payload.ToArray());
+        // FITS encoder should not have been used for processed exports
     }
 }
