@@ -8,9 +8,10 @@ This plan tracks follow-up work after completing the repository reorganization (
 
 ## 1) CI/CD and Workflows
 
-- [ ] Update root workflow triggers for core libraries and shared files
+- [x] Update root workflow triggers for core libraries and shared files
   - Paths: `src/HVO/**`, `src/HVO.DataModels/**`, `src/HVO.SourceGenerators/**`, `src/HVO.WebSite.Themes/**`
   - Shared files: `Directory.Build.props`, `Directory.Packages.props`, `src/global.json`, `src/NuGet.config`
+  - ✅ Added missing CFITSIO and SkyMonitorV5 test projects to dotnet.yml workflow matrix
 - [ ] Validate all domain workflows on branch (push and verify)
   - Check artifacts (TRX results, coverage) publish correctly
   - Confirm path filters trigger appropriately
@@ -24,10 +25,10 @@ This plan tracks follow-up work after completing the repository reorganization (
 
 ## 3) Dev Container Validation
 
-- [ ] Rebuild the dev container with new paths
-- [ ] Verify `post-create.sh` completes successfully
-- [ ] Verify solutions open correctly in VS Code
-- [ ] Verify tasks and launch configurations work
+- [x] Rebuild the dev container with new paths
+- [x] Verify `post-create.sh` completes successfully
+- [x] Verify solutions open correctly in VS Code
+- [x] Verify tasks and launch configurations work
 
 ## 4) Deployment Scripts
 
