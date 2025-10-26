@@ -10,7 +10,8 @@ set -euo pipefail
 #   Prefixes: processed, raw
 #
 # Credentials are read from environment variables:
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (required)
+#   HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY (required)
+#   HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY (required)
 # Optional env overrides:
 #   S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_PREFIXES (comma-separated)
 #
@@ -48,7 +49,8 @@ Options:
   -h, --help                Show this help
 
 Environment:
-  AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (required)
+  HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY (required)
+  HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY (required)
   S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_PREFIXES (optional overrides)
 EOF
 }
@@ -65,8 +67,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${AWS_ACCESS_KEY_ID:-}" || -z "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
-  echo "ERROR: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set in the environment." >&2
+# Map HVO secret env vars to AWS CLI expected names
+export AWS_ACCESS_KEY_ID="${HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY:-}"
+export AWS_SECRET_ACCESS_KEY="${HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY:-}"
+
+if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" ]]; then
+  echo "ERROR: HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_ACCESSKEY and HVO_SECRET__SKYMONITORV5__FRAMEEXPORT_RAW_S3_SECRETKEY must be set in the environment." >&2
   exit 1
 fi
 
