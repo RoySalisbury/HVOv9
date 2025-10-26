@@ -19,10 +19,16 @@ This plan tracks follow-up work after completing the repository reorganization (
 
 ## 2) Docker Validation
 
-- [ ] Build all Docker images (RoofController V4, SkyMonitor V5, WebSite)
-- [ ] Validate individual containers run correctly
-- [ ] Validate full stack via `src/docker-compose.yml`
-- [ ] Document any service wiring adjustments if needed
+- [x] Build all Docker images (RoofController V4, SkyMonitor V5, WebSite)
+- [x] Validate individual containers run correctly
+- [x] Validate full stack via `src/docker-compose.yml`
+- [x] Document any service wiring adjustments if needed
+  - ✅ **Complete**: All Docker images build successfully from repository root
+  - ✅ **Individual Containers**: RoofController, SkyMonitor, and Website all start correctly with health checks
+  - ✅ **Full Stack**: docker-compose orchestration working with proper service dependencies
+  - ✅ **Documentation**: Comprehensive validation results in `docs/validation/docker-validation-results.md`
+  - 🔧 **Fixed**: WebSite Playground Dockerfile missing HVO.NinaClient dependency
+  - ⚠️ **Known Issue**: CFITSIO native libraries cause graceful fallback in SkyMonitor (container remains healthy)
 
 ## ✅ Progress Status
 

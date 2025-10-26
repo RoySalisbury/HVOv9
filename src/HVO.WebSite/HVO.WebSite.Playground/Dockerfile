@@ -16,6 +16,7 @@ COPY [".LocalPackages/", "/.LocalPackages/"]
 COPY ["src/HVO/HVO.csproj", "HVO/"]
 COPY ["src/HVO.DataModels/HVO.DataModels.csproj", "HVO.DataModels/"]
 COPY ["src/HVO.WebSite.Themes/HVO.WebSite.Themes.csproj", "HVO.WebSite.Themes/"]
+COPY ["src/HVO.NINA/HVO.NinaClient/HVO.NinaClient.csproj", "HVO.NINA/HVO.NinaClient/"]
 COPY ["src/HVO.WebSite/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj", "HVO.WebSite/HVO.WebSite.Playground/"]
 
 # Restore dependencies
@@ -44,12 +45,12 @@ WORKDIR /app
 # Install minimal native dependencies for fonts and health checks
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        fontconfig \
-        fonts-dejavu-core \
-        fonts-liberation2 \
-        fonts-noto-core && \
+    ca-certificates \
+    curl \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation2 \
+    fonts-noto-core && \
     rm -rf /var/lib/apt/lists/* && \
     fc-cache -f
 
