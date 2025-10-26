@@ -21,7 +21,7 @@ set -euo pipefail
 # - Ability to target one or both prefixes
 #
 # Dependencies:
-# - aws CLI. If not installed, this script will try a dockerized aws-cli.
+# - MinIO CLI (mc) preferred, or AWS CLI (aws). If neither is installed, falls back to dockerized aws-cli.
 #
 # Usage examples:
 #   bash scripts/clear-skymonitor-s3.sh                       # dry run, both prefixes
@@ -79,17 +79,58 @@ fi
 # Resolve prefixes array
 IFS=',' read -r -a PREFIXES <<< "$PREFIXES_CSV"
 
+# Detect which CLI tool to use
+have_mc() { command -v mc >/dev/null 2>&1; }
 have_aws() { command -v aws >/dev/null 2>&1; }
+have_docker() { command -v docker >/dev/null 2>&1; }
+
+USE_MC=false
+USE_AWS=false
+MC_ALIAS="hvominio"
+
+if have_mc; then
+  USE_MC=true
+  # Configure MinIO alias if not already present
+  if ! mc alias list "$MC_ALIAS" >/dev/null 2>&1; then
+    echo "Configuring MinIO alias '$MC_ALIAS' -> $ENDPOINT"
+    mc alias set "$MC_ALIAS" "$ENDPOINT" "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" --api S3v4 >/dev/null
+  fi
+elif have_aws; then
+  USE_AWS=true
+elif have_docker; then
+  USE_AWS=true
+  echo "Using dockerized AWS CLI"
+else
+  echo "ERROR: No suitable CLI found. Install 'mc' (MinIO client), 'aws' (AWS CLI), or 'docker'." >&2
+  exit 1
+fi
+
+run_s3_list() {
+  local prefix="$1"
+  if [[ "$USE_MC" == true ]]; then
+    mc ls --recursive "$MC_ALIAS/$BUCKET/$prefix" 2>/dev/null | head -n 10 || true
+  else
+    run_aws --endpoint-url "$ENDPOINT" --no-verify-ssl s3 ls "s3://$BUCKET/$prefix" --recursive 2>/dev/null | head -n 10 || true
+  fi
+}
+
+run_s3_remove() {
+  local prefix="$1"
+  shift
+  local extra_args=("$@")
+  
+  if [[ "$USE_MC" == true ]]; then
+    mc rm --recursive --force "${extra_args[@]}" "$MC_ALIAS/$BUCKET/$prefix"
+  else
+    run_aws --endpoint-url "$ENDPOINT" --no-verify-ssl s3 rm "s3://$BUCKET/$prefix" --recursive "${extra_args[@]}"
+  fi
+}
 
 run_aws() {
   if have_aws; then
     AWS_DEFAULT_REGION="$REGION" aws "$@"
   else
-    # Try dockerized aws-cli
-    if ! command -v docker >/dev/null 2>&1; then
-      echo "ERROR: aws CLI not found and docker is unavailable to run aws-cli." >&2
-      exit 1
-    fi
+    # Dockerized aws-cli
     docker run --rm \
       -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION="$REGION" \
       amazon/aws-cli:2 \
@@ -99,25 +140,28 @@ run_aws() {
 
 DRYRUN_ARGS=()
 if [[ "$CONFIRM" != true ]]; then
-  DRYRUN_ARGS+=(--dryrun)
+  if [[ "$USE_MC" == true ]]; then
+    DRYRUN_ARGS+=(--dry-run)
+  else
+    DRYRUN_ARGS+=(--dryrun)
+  fi
   echo "[DRY RUN] No objects will be deleted. Use --confirm to actually delete." >&2
 fi
 
 echo "Endpoint : $ENDPOINT"
 echo "Bucket   : $BUCKET"
 echo "Region   : $REGION"
+echo "CLI Tool : $(if [[ "$USE_MC" == true ]]; then echo "MinIO mc"; else echo "AWS CLI"; fi)"
 printf "Prefixes : %s\n" "${PREFIXES[*]}"
 
 # Iterate prefixes; show counts then delete
 for prefix in "${PREFIXES[@]}"; do
   echo "---"
-  echo "Listing objects under s3://$BUCKET/$prefix"
-  # Using s3api with pagination could be added if needed; for now rely on s3 rm --recursive to handle all.
-  # Show a quick head listing (first 10 objects)
-  run_aws --endpoint-url "$ENDPOINT" --no-verify-ssl s3 ls "s3://$BUCKET/$prefix" --recursive | head -n 10 || true
+  echo "Listing objects under s3://$BUCKET/$prefix (first 10)"
+  run_s3_list "$prefix"
 
   echo "Deleting objects under s3://$BUCKET/$prefix ${CONFIRM:+(CONFIRMED)}" 
-  run_aws --endpoint-url "$ENDPOINT" --no-verify-ssl s3 rm "s3://$BUCKET/$prefix" --recursive "${DRYRUN_ARGS[@]}"
+  run_s3_remove "$prefix" "${DRYRUN_ARGS[@]}"
 
 done
 
