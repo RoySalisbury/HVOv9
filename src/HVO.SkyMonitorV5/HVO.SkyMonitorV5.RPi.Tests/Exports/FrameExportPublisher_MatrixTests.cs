@@ -72,9 +72,34 @@ public sealed class FrameExportPublisher_MatrixTests
     var exportOptionsMonitor = new Mock<IOptionsMonitor<FrameExportOptions>>();
     exportOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(exportOptions);
 
+    var noopFitsEncoder = new Mock<IFitsFrameEncoder>();
+
+
+    noopFitsEncoder.Setup(e => e.EncodeRaw(It.IsAny<SKBitmap>(), It.IsAny<CapturedImage>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions>()))
+
+
+        .Returns(new ProcessedFrameDelivery(Array.Empty<byte>(), "application/fits", "fits"));
+
+
+    noopFitsEncoder.Setup(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions>()))
+
+
+        .Returns(new ProcessedFrameDelivery(Array.Empty<byte>(), "application/fits", "fits"));
+
+
+
     return new FrameExportPublisher(
+
+
         dispatcher,
+
+
         processedEncoder,
+
+
+        noopFitsEncoder.Object,
+
+
         NullLogger<FrameExportPublisher>.Instance,
         featureOptionsMonitor.Object,
         featureToggle.Object,
