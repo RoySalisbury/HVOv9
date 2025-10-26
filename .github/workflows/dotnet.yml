@@ -220,6 +220,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     timeout-minutes: 10
+    
+    # Explicit permissions for security best practices
+    permissions:
+      contents: read  # Read repository contents (not needed but minimal)
+      actions: read   # Download artifacts from previous jobs
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
