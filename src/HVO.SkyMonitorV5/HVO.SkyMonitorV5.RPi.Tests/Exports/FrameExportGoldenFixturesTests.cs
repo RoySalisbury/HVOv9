@@ -287,9 +287,16 @@ public sealed class FrameExportGoldenFixturesTests
             var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
             encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>(), It.IsAny<ProcessedFrameEncodingContext>(), It.IsAny<ImageEncodingSettings>())).Returns(expectedDelivery);
 
+            var noopFitsEncoder = new Mock<IFitsFrameEncoder>();
+            noopFitsEncoder.Setup(e => e.EncodeRaw(It.IsAny<SKBitmap>(), It.IsAny<CapturedImage>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions>()))
+                .Returns(new ProcessedFrameDelivery(Array.Empty<byte>(), "application/fits", "fits"));
+            noopFitsEncoder.Setup(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions>()))
+                .Returns(new ProcessedFrameDelivery(Array.Empty<byte>(), "application/fits", "fits"));
+
             var publisher = new FrameExportPublisher(
                 dispatcher,
                 encoder.Object,
+                noopFitsEncoder.Object,
                 NullLogger<FrameExportPublisher>.Instance,
                 featureOptions.Object,
                 featureMonitor.Object,

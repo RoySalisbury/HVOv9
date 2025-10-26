@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Pipeline;
@@ -373,9 +374,16 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         var exportOptions = new Mock<IOptionsMonitor<FrameExportOptions>>();
         exportOptions.SetupGet(o => o.CurrentValue).Returns(new FrameExportOptions());
 
+        var noopFitsEncoder = new Mock<IFitsFrameEncoder>();
+        noopFitsEncoder.Setup(e => e.EncodeRaw(It.IsAny<SKBitmap>(), It.IsAny<CapturedImage>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions>()))
+            .Returns(new ProcessedFrameDelivery(Array.Empty<byte>(), "application/fits", "fits"));
+        noopFitsEncoder.Setup(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions>()))
+            .Returns(new ProcessedFrameDelivery(Array.Empty<byte>(), "application/fits", "fits"));
+
         return new FrameExportPublisher(
             dispatcher,
             encoder,
+            noopFitsEncoder.Object,
             NullLogger<FrameExportPublisher>.Instance,
             optionsMonitor.Object,
             featureMonitor.Object,

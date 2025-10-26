@@ -11,11 +11,13 @@ using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using HVO.SkyMonitorV5.RPi.Tests.TestHelpers;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Minio;
 using Minio.DataModel.Args;
 using Minio.Exceptions;
+using Moq;
 
 namespace HVO.SkyMonitorV5.RPi.Tests.Exports;
 
@@ -57,14 +59,20 @@ public sealed class S3FrameExportSinkIntegrationTests
         });
         options.Normalize();
 
-    using var provider = new MinioClientProvider(NullLogger<MinioClientProvider>.Instance);
+        using var provider = new MinioClientProvider(NullLogger<MinioClientProvider>.Instance);
         using var optionsMonitor = new TestOptionsMonitor<FrameExportOptions>(options);
         var resilienceProvider = new TestResiliencePolicyProvider();
+        
+        var mockHealthCheck = new Mock<HealthCheckService>();
+        mockHealthCheck.Setup(h => h.CheckHealthAsync(It.IsAny<Func<HealthCheckRegistration, bool>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HealthReport(new Dictionary<string, HealthReportEntry>(), HealthStatus.Healthy, TimeSpan.Zero));
+        
         var sink = new S3FrameExportSink(
             FrameExportStage.Raw,
             optionsMonitor,
             provider,
             resilienceProvider,
+            mockHealthCheck.Object,
             NullLogger<S3FrameExportSink>.Instance);
 
         var frameId = Guid.CreateVersion7();
@@ -212,11 +220,17 @@ public sealed class S3FrameExportSinkIntegrationTests
         using var provider = new MinioClientProvider(NullLogger<MinioClientProvider>.Instance);
         using var optionsMonitor = new TestOptionsMonitor<FrameExportOptions>(options);
         var resilienceProvider = new TestResiliencePolicyProvider();
+        
+        var mockHealthCheck = new Mock<HealthCheckService>();
+        mockHealthCheck.Setup(h => h.CheckHealthAsync(It.IsAny<Func<HealthCheckRegistration, bool>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HealthReport(new Dictionary<string, HealthReportEntry>(), HealthStatus.Healthy, TimeSpan.Zero));
+        
         var sink = new S3FrameExportSink(
             FrameExportStage.Raw,
             optionsMonitor,
             provider,
             resilienceProvider,
+            mockHealthCheck.Object,
             NullLogger<S3FrameExportSink>.Instance);
 
         var frameId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeffffffff");

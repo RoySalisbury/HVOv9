@@ -147,6 +147,9 @@ public class FrameFilterPipelineBenchmarks
     // No-op FITS encoder placeholder
     private sealed class NoopFitsFrameEncoder : IFitsFrameEncoder
     {
+        public ProcessedFrameDelivery EncodeRaw(SKBitmap bitmap, CapturedImage capture, RigSpec rig, FitsEncodingOptions? options)
+            => new(Array.Empty<byte>(), "application/fits", "fits");
+
         public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
             => new(Array.Empty<byte>(), "application/fits", "fits");
     }
