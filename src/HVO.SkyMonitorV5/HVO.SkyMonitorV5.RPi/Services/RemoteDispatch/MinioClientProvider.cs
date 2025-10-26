@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Globalization;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Minio;
@@ -51,18 +52,57 @@ public sealed class MinioClientProvider : IMinioClientProvider, IDisposable
 
     private IMinioClient BuildClient(string endpoint, string accessKey, string secretKey, bool useSsl)
     {
-        _logger.LogDebug("Creating MinIO client for endpoint {Endpoint} (SSL={UseSsl}).", endpoint, useSsl);
+        var (normalizedEndpoint, normalizedSsl) = NormalizeEndpoint(endpoint, useSsl);
+
+        _logger.LogDebug("Creating MinIO client for endpoint {Endpoint} (normalized: {Normalized}, SSL={UseSsl}).", endpoint, normalizedEndpoint, normalizedSsl);
 
         var builder = new MinioClient()
-            .WithEndpoint(endpoint)
+            .WithEndpoint(normalizedEndpoint)
             .WithCredentials(accessKey, secretKey);
 
-        if (useSsl)
+        if (normalizedSsl)
         {
             builder = builder.WithSSL();
         }
 
         return builder.Build();
+    }
+
+    private static (string endpoint, bool useSsl) NormalizeEndpoint(string endpoint, bool useSsl)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return (endpoint, useSsl);
+        }
+
+        var trimmed = endpoint.Trim();
+
+        // If endpoint includes scheme, parse and convert to host[:port], updating SSL accordingly
+        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+            {
+                var host = uri.Host;
+                var portPart = uri.IsDefaultPort ? string.Empty : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
+                var hostPort = string.Concat(host, portPart);
+                var ssl = useSsl || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+                return (hostPort, ssl);
+            }
+
+            // Fallback: strip known scheme prefixes if Uri parsing failed
+            if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring("http://".Length);
+            }
+            else if (trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring("https://".Length);
+                useSsl = true;
+            }
+        }
+
+        return (trimmed, useSsl);
     }
 
     public void Dispose()

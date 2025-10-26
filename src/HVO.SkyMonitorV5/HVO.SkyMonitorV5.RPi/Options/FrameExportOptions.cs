@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
 using HVO.SkyMonitorV5.RPi.Exports;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 
 namespace HVO.SkyMonitorV5.RPi.Options;
 
@@ -48,6 +49,27 @@ public sealed class FrameExportStageOptions
 
     public FrameExportPayloadScope PayloadScope { get; set; } = FrameExportPayloadScope.Unspecified;
 
+    /// <summary>
+    /// Encoding settings for archive role exports. Can be any supported format (JPEG, PNG, FITS, TIFF, XISF).
+    /// </summary>
+    /// <remarks>
+    /// Default: JPEG @ 95% for processed frames, FITS U16 for raw frames.
+    /// Supports format-specific options via FitsOptions, TiffOptions, etc.
+    /// When PayloadScope includes Archive, this encoding is used for archive exports.
+    /// </remarks>
+    public ImageEncodingSettings ArchiveEncoding { get; set; } = new(ImageEncodingFormat.Jpeg, 95);
+
+    /// <summary>
+    /// Encoding settings for delivery role exports. Can be any supported format (JPEG, PNG, FITS, TIFF, XISF).
+    /// </summary>
+    /// <remarks>
+    /// When null, uses ArchiveEncoding for all exports (single-payload mode).
+    /// When set, creates separate payloads for archive and delivery roles.
+    /// Typically set to a more web-friendly format (e.g., JPEG @ 80%) when archive uses
+    /// higher-fidelity formats (FITS, PNG lossless, TIFF).
+    /// </remarks>
+    public ImageEncodingSettings? DeliveryEncoding { get; set; }
+
     internal void Normalize(FrameExportStage stage)
     {
         foreach (var filesystem in Filesystem)
@@ -64,7 +86,18 @@ public sealed class FrameExportStageOptions
         {
             PayloadScope = stage == FrameExportStage.Raw
                 ? FrameExportPayloadScope.ArchiveOnly
-                : FrameExportPayloadScope.DeliveryOnly;
+                : FrameExportPayloadScope.ArchiveOnly; // Changed default to ArchiveOnly for processed
+        }
+
+        // Ensure archive encoding has stage-appropriate defaults
+        if (ArchiveEncoding == null)
+        {
+            ArchiveEncoding = stage == FrameExportStage.Raw
+                ? new ImageEncodingSettings(ImageEncodingFormat.Fits, 100)
+                {
+                    FitsOptions = new FitsEncodingOptions() // Uses FITS defaults: U16, Mono, None compression
+                }
+                : new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 95);
         }
     }
 
@@ -111,7 +144,7 @@ public sealed class FilesystemFrameExportSinkOptions
     public string? Prefix
     {
         get => _prefix;
-    set => _prefix = string.IsNullOrWhiteSpace(value) ? null : value.Trim().Trim('/', '\\');
+        set => _prefix = string.IsNullOrWhiteSpace(value) ? null : value.Trim().Trim('/', '\\');
     }
 
     public bool IncludeMetadataManifest { get; set; } = true;
@@ -129,7 +162,7 @@ public sealed class FilesystemFrameExportSinkOptions
             yield break;
         }
 
-    var segments = _prefix.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var segments = _prefix.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var segment in segments)
         {
             yield return segment;

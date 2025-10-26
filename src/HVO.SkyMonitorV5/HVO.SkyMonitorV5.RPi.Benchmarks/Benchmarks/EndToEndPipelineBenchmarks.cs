@@ -52,19 +52,13 @@ public class EndToEndPipelineBenchmarks
         _pipeline = new FrameFilterPipeline(filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
 
         // Set up minimal dependencies for the updated encoder signature
-        var fitsOptions = new StaticOptionsMonitor<FitsExportOptions>(new FitsExportOptions
-        {
-            EnableForProcessed = false,
-            EnableForRaw = false
-        });
         var rigAdapter = new DummyRigAdapter(RigPresets.MockAsi174_Fujinon);
         var fitsEncoder = new NoopFitsFrameEncoder();
 
         _encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder,
-            rigAdapter,
-            fitsOptions);
+            rigAdapter);
 
         var bufferMinimum = Math.Max(24, StackingFrameCount);
 
@@ -166,13 +160,10 @@ public class EndToEndPipelineBenchmarks
         }
     }
 
-    // No-op FITS encoder placeholder; not used when FITS export disabled
+    // No-op FITS encoder placeholder
     private sealed class NoopFitsFrameEncoder : IFitsFrameEncoder
     {
-        public ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options)
-            => new(Array.Empty<byte>(), "application/fits", "fits");
-
-        public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options)
+        public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
             => new(Array.Empty<byte>(), "application/fits", "fits");
     }
 

@@ -7,6 +7,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Skia;
 using HVO.SkyMonitorV5.RPi.Services;
 using HVO.SkyMonitorV5.RPi.Storage;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -39,7 +40,7 @@ public sealed class AllSkyControllerTests
     }
 
     [TestMethod]
-    public void GetLatestFrame_DefaultRawFormat_ReturnsRawPayload()
+    public void GetLatestFrame_DefaultRawFormat_ReturnsRawPayload_Auto()
     {
         using var context = new RawFrameTestContext();
         var controller = CreateController(context.Frame);
@@ -68,25 +69,47 @@ public sealed class AllSkyControllerTests
     }
 
     [TestMethod]
-    public void GetLatestFrame_WithFitsFormat_ReturnsFitsWhenEnabled()
+    public void GetLatestFrame_WithFitsFormat_ReturnsRawPayload()
     {
         using var context = new RawFrameTestContext();
-
-        var fitsBytes = new byte[] { 0x01, 0x02, 0x03 };
-        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
-        fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()))
-            .Returns(new ProcessedFrameDelivery(fitsBytes, "application/fits", "fits"));
-
-        var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
+        var controller = CreateController(context.Frame);
         var result = controller.GetLatestFrame(raw: true, rawFormat: "fits") as FileContentResult;
 
-        Assert.IsNotNull(result, "Controller should return a file for FITS request.");
-        Assert.AreEqual("application/fits", result.ContentType, "FITS content type should be returned when requested and enabled.");
-        Assert.HasCount(fitsBytes.Length, result.FileContents, "FITS payload should match encoder output.");
+        Assert.IsNotNull(result, "Controller should return a file for raw request.");
+        Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Raw content type should be returned for raw FITS preference.");
+        Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
     }
 
-    private static AllSkyController CreateController(RawFrameSnapshot frame, bool enableFits = false, IFitsFrameEncoder? fitsEncoder = null)
+
+
+    [TestMethod]
+    public void GetLatestFrame_Processed_ReturnsEncoderPayload()
+    {
+        // Arrange processed frame and encoder output
+        using var bitmap = new SKBitmap(8, 8);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(1000, 200, false, false);
+        var encoding = new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 85);
+        var processed = new ProcessedFrame(Guid.NewGuid(), DateTimeOffset.UtcNow, exposure, encoding, "image/jpeg", "jpg", 1, exposure.ExposureMilliseconds, Array.Empty<string>(), 0, image);
+
+        var deliveryBytes = new byte[] { 0xAA, 0xBB, 0xCC };
+        var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
+        encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>(), ProcessedFrameEncodingContext.UserInterface, null))
+               .Returns(new ProcessedFrameDelivery(deliveryBytes, "image/jpeg", "jpg"));
+
+        var controller = CreateControllerWithProcessed(processed, encoder.Object);
+
+        // Act
+        var result = controller.GetLatestFrame(raw: false) as FileContentResult;
+
+        // Assert
+        Assert.IsNotNull(result);
+        Assert.AreEqual("image/jpeg", result.ContentType);
+        Assert.HasCount(deliveryBytes.Length, result.FileContents);
+        encoder.VerifyAll();
+    }
+
+    private static AllSkyController CreateController(RawFrameSnapshot frame, bool enableFits = false)
     {
         var frameStateStore = new Mock<IFrameStateStore>();
         frameStateStore.SetupGet(store => store.LatestRawFrame).Returns(frame);
@@ -97,8 +120,6 @@ public sealed class AllSkyControllerTests
 
         var encoder = new Mock<IProcessedFrameEncoder>();
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = enableFits, EnableForProcessed = false });
         var rigAdapter = new Mock<HVO.SkyMonitorV5.RPi.Cameras.Acquisition.IRigAcquisitionAdapter>();
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(HVO.SkyMonitorV5.RPi.Cameras.Projection.RigPresets.MockAsi174_Fujinon);
 
@@ -106,9 +127,7 @@ public sealed class AllSkyControllerTests
             frameStateStore.Object,
             optionsMonitor.Object,
             encoder.Object,
-            fitsEncoder ?? Mock.Of<IFitsFrameEncoder>(),
             rigAdapter.Object,
-            fitsOptions.Object,
             NullLogger<AllSkyController>.Instance)
         {
             ControllerContext = new ControllerContext
@@ -155,4 +174,34 @@ public sealed class AllSkyControllerTests
             _surface.Dispose();
         }
     }
+
+    private static AllSkyController CreateControllerWithProcessed(ProcessedFrame processed, IProcessedFrameEncoder processedEncoder)
+    {
+        var frameStateStore = new Mock<IFrameStateStore>();
+        frameStateStore.SetupGet(store => store.LatestProcessedFrame).Returns(processed);
+        frameStateStore.SetupGet(store => store.Configuration).Returns(CameraConfiguration.FromOptions(new CameraPipelineOptions()));
+
+        var optionsMonitor = new Mock<IOptionsMonitor<CameraPipelineOptions>>();
+        optionsMonitor.SetupGet(options => options.CurrentValue).Returns(new CameraPipelineOptions());
+
+        var rigAdapter = new Mock<HVO.SkyMonitorV5.RPi.Cameras.Acquisition.IRigAcquisitionAdapter>();
+        rigAdapter.SetupGet(r => r.ActiveRig).Returns(HVO.SkyMonitorV5.RPi.Cameras.Projection.RigPresets.MockAsi174_Fujinon);
+
+        var controller = new AllSkyController(
+            frameStateStore.Object,
+            optionsMonitor.Object,
+            processedEncoder,
+            rigAdapter.Object,
+            NullLogger<AllSkyController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+
+        return controller;
+    }
 }
+
+#pragma warning restore CS0618

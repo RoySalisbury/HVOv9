@@ -3,6 +3,7 @@ using HVO.Astronomy.CFITSIO;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 using HVO.SkyMonitorV5.RPi.Models;
 using HVO.SkyMonitorV5.RPi.Options;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
@@ -25,29 +26,28 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     _siteOptions = siteOptions?.Value ?? throw new ArgumentNullException(nameof(siteOptions));
   }
 
-  public ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options)
+  public ProcessedFrameDelivery EncodeRaw(SKBitmap bitmap, CapturedImage capture, RigSpec rig, FitsEncodingOptions? options)
   {
-    ArgumentNullException.ThrowIfNull(image);
-    ArgumentNullException.ThrowIfNull(frame);
+    ArgumentNullException.ThrowIfNull(bitmap);
+    ArgumentNullException.ThrowIfNull(capture);
     ArgumentNullException.ThrowIfNull(rig);
-    ArgumentNullException.ThrowIfNull(options);
 
     try
     {
-      using var bitmap = SKBitmap.FromImage(image);
       var compressionPolicy = CreateCompressionPolicy(options);
 
       var fitsBytes = bitmap.ToFitsU16BytesResult(
           compressionPolicy: compressionPolicy,
-          stampHeader: fits => StampRawFrameHeaders(fits, frame, rig, options));
+          stampHeader: fits => StampRawFrameHeaders(fits, capture, rig, options));
 
       if (fitsBytes.IsFailure)
       {
-        _logger.LogError(fitsBytes.Error, "Failed to encode raw frame {FrameId} to FITS", frame.FrameId);
+        _logger.LogError(fitsBytes.Error, "Failed to encode raw frame {FrameId} to FITS", capture.FrameId);
         throw fitsBytes.Error!;
       }
 
-      _logger.LogDebug("Encoded raw frame {FrameId} to FITS ({Size} bytes)", frame.FrameId, fitsBytes.Value.Length);
+      _logger.LogDebug("Encoded raw frame {FrameId} to FITS ({Size} bytes)",
+          capture.FrameId, fitsBytes.Value.Length);
 
       return new ProcessedFrameDelivery(
           Payload: fitsBytes.Value,
@@ -56,16 +56,15 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     }
     catch (Exception ex) when (ex is not ArgumentNullException)
     {
-      _logger.LogError(ex, "Error encoding raw frame {FrameId} to FITS", frame.FrameId);
+      _logger.LogError(ex, "Error encoding raw frame {FrameId} to FITS", capture.FrameId);
       throw;
     }
   }
 
-  public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options)
+  public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
   {
     ArgumentNullException.ThrowIfNull(frame);
     ArgumentNullException.ThrowIfNull(rig);
-    ArgumentNullException.ThrowIfNull(options);
 
     try
     {
@@ -97,20 +96,21 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     }
   }
 
-  private FitsCompressionPolicy? CreateCompressionPolicy(FitsExportOptions options)
+  private FitsCompressionPolicy? CreateCompressionPolicy(FitsEncodingOptions? options)
   {
-    if (options.Compression == FitsCompressionKind.None)
+    if (options is null || options.Compression == Pipeline.FitsCompression.None)
     {
       return null;
     }
 
     var compression = options.Compression switch
     {
-      FitsCompressionKind.Rice => FitsCompression.Rice,
-      FitsCompressionKind.Gzip1 => FitsCompression.GZip1,
-      FitsCompressionKind.Gzip2 => FitsCompression.GZip2,
-      FitsCompressionKind.HCompress => FitsCompression.HCompress,
-      _ => FitsCompression.None
+      Pipeline.FitsCompression.Rice => HVO.Astronomy.CFITSIO.FitsCompression.Rice,
+      Pipeline.FitsCompression.Gzip1 => HVO.Astronomy.CFITSIO.FitsCompression.GZip1,
+      Pipeline.FitsCompression.Gzip2 => HVO.Astronomy.CFITSIO.FitsCompression.GZip2,
+      Pipeline.FitsCompression.HCompress => HVO.Astronomy.CFITSIO.FitsCompression.HCompress,
+      Pipeline.FitsCompression.PLio => HVO.Astronomy.CFITSIO.FitsCompression.None,
+      _ => HVO.Astronomy.CFITSIO.FitsCompression.None
     };
 
     return new FitsCompressionPolicy
@@ -120,29 +120,9 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     };
   }
 
-  private void StampRawFrameHeaders(FitsFile fits, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options)
-  {
-    var builder = new FitsHeaderBuilder(fits);
 
-    // Core image metadata
-    StampImageMetadata(builder, frame.Image.Width, frame.Image.Height, options);
 
-    // Timing
-    StampTimingMetadata(builder, frame.Timestamp);
-
-    // Camera/Instrument
-    StampInstrumentMetadata(builder, rig, frame.Exposure);
-
-    // Observatory site
-    StampSiteMetadata(builder);
-
-    // Processing notes
-    builder.SetString("IMAGETYP", "Light Frame", "Type of image")
-           .SetString("SWCREATE", "HVO SkyMonitor V5", "Software that created this file")
-           .SetString("ORIGIN", "Hualapai Valley Observatory", "Organization responsible for the data");
-  }
-
-  private void StampProcessedFrameHeaders(FitsFile fits, ProcessedFrame frame, RigSpec rig, FitsExportOptions options)
+  private void StampProcessedFrameHeaders(FitsFile fits, ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
   {
     var builder = new FitsHeaderBuilder(fits);
 
@@ -172,9 +152,31 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     }
   }
 
-  private void StampImageMetadata(FitsHeaderBuilder builder, int width, int height, FitsExportOptions options)
+  private void StampRawFrameHeaders(FitsFile fits, CapturedImage capture, RigSpec rig, FitsEncodingOptions? options)
   {
-    if (options.UnsignedU16 && options.BitDepth == FitsBitDepth.U16)
+    var builder = new FitsHeaderBuilder(fits);
+
+    // Core image metadata
+    StampImageMetadata(builder, capture.Image.Width, capture.Image.Height, options);
+
+    // Timing
+    StampTimingMetadata(builder, capture.Timestamp);
+
+    // Camera/Instrument
+    StampInstrumentMetadata(builder, rig, capture.Exposure);
+
+    // Observatory site
+    StampSiteMetadata(builder);
+
+    // Raw frame metadata
+    builder.SetString("IMAGETYP", "Light", "Type of image")
+           .SetString("SWCREATE", "HVO SkyMonitor V5", "Software that created this file")
+           .SetString("ORIGIN", "Hualapai Valley Observatory", "Organization responsible for the data");
+  }
+
+  private void StampImageMetadata(FitsHeaderBuilder builder, int width, int height, FitsEncodingOptions? options)
+  {
+    if (options is not null && options.UnsignedU16 && options.BitDepth == Pipeline.FitsBitDepth.U16)
     {
       // BSCALE=1, BZERO=32768 for unsigned 16-bit
       builder.SetScale(1.0, 32768.0);

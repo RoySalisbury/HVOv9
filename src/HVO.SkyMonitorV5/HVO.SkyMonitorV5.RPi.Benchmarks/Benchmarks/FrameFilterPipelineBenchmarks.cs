@@ -45,19 +45,13 @@ public class FrameFilterPipelineBenchmarks
         _frameComposer = new FrameComposer(_surfacePool, NullLogger<FrameComposer>.Instance);
         _pipeline = new FrameFilterPipeline(_filters, _frameComposer, NullLogger<FrameFilterPipeline>.Instance);
 
-        var fitsOptions = new StaticOptionsMonitor<FitsExportOptions>(new FitsExportOptions
-        {
-            EnableForProcessed = false,
-            EnableForRaw = false
-        });
         var rigAdapter = new DummyRigAdapter(RigPresets.MockAsi174_Fujinon);
         var fitsEncoder = new NoopFitsFrameEncoder();
 
         _encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder,
-            rigAdapter,
-            fitsOptions);
+            rigAdapter);
 
         _configuration = new CameraConfiguration(
             EnableStacking: true,
@@ -150,13 +144,10 @@ public class FrameFilterPipelineBenchmarks
         }
     }
 
-    // No-op FITS encoder placeholder; not used when FITS export disabled
+    // No-op FITS encoder placeholder
     private sealed class NoopFitsFrameEncoder : IFitsFrameEncoder
     {
-        public ProcessedFrameDelivery EncodeRaw(SKImage image, RawFrameSnapshot frame, RigSpec rig, FitsExportOptions options)
-            => new(Array.Empty<byte>(), "application/fits", "fits");
-
-        public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsExportOptions options)
+        public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
             => new(Array.Empty<byte>(), "application/fits", "fits");
     }
 

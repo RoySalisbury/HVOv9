@@ -1,7 +1,7 @@
 # HVOv9 Master TODO
 
 > **Document Status**: Master task tracker for the entire HVOv9 workspace  
-> **Last Updated**: 2025-10-25  
+> **Last Updated**: 2025-10-26  
 > **Task Status Legend**:
 > - `[ ]` - Pending/Not Started
 > - `[x]` - Completed
@@ -107,8 +107,35 @@
 - [x] Establish deterministic composition on linear surfaces
 - [x] Implement background stacker with adaptive queue capacity
 
+### Architecture & Infrastructure
+#### Active Tasks
+- [ ] **Database Architecture Decision**: Evaluate SQLite vs PostgreSQL for multi-component deployment architecture
+  - **Context**: Planning to break system into separate Docker components (S3, DB, UI, ImageCapture, etc.) that can run on same system or distributed across multiple hosts
+  - **SQLite Considerations**:
+    - ✅ Pros: Zero configuration, file-based, excellent for single-node deployments, proven stability
+    - ❌ Cons: File-locking challenges with networked storage (NFS/SMB), limited multi-writer scenarios, no native network protocol
+    - Current state: Recently implemented WAL mode + busy timeout for concurrent access (see `docs/projects/sky-monitor-v5/sqlite-concurrency-configuration.md`)
+  - **PostgreSQL Considerations**:
+    - ✅ Pros: Native network protocol, true multi-writer concurrency, robust replication, connection pooling, better distributed architecture fit
+    - ❌ Cons: Additional infrastructure complexity, separate container/service to manage, connection overhead for local deployments
+  - **Decision Points**:
+    1. Primary deployment model: Single-host vs multi-host vs hybrid
+    2. Data locality requirements: co-located with capture process or centralized
+    3. Concurrent access patterns: multiple writers (ImageCapture instances?) or single writer + multiple readers
+    4. Operational complexity tolerance: file-based simplicity vs managed database service
+    5. Migration path: can SQLite serve as initial implementation with PostgreSQL as future option?
+  - **Recommendation**: Document deployment scenarios (single RPi, multi-host observatory, cloud hybrid) and map database requirements to each. Consider hybrid approach: SQLite for edge nodes (frame archive, local config) + PostgreSQL for centralized telemetry/aggregation if needed.
+  - **Related**: Configuration management strategy (appsettings vs database precedence) should align with chosen database architecture
+
 ### Frame Export & Remote Dispatch
 #### Active Tasks
+- [ ] **Configuration precedence decision**: Determine whether database configuration (`system_setting` table) or `appsettings.json` should take precedence for `FrameExport` options. Current behavior: database overrides appsettings via `DatabaseBackedConfigurationOptionsConfigurator`. Consider: appsettings as source of truth with database as optional override layer, or vice versa. Document chosen pattern and ensure consistency across all config-backed options. **Impacts**: deployment workflows, runtime reconfiguration, default value management, ops troubleshooting. **Note**: This decision should align with overall database architecture choice above.
+- [ ] Health checks UI: Add admin panel to surface `/health` and `/health/ready` with per-sink S3 status (stage, endpoint, bucket, readiness). Include refresh + quick links.
+- [ ] Partial S3 export on Degraded readiness: extend `S3FrameExportHealthCheck` to expose per-sink readiness; update `S3FrameExportSink` to filter targets to only healthy sinks instead of skipping all on Degraded.
+- [ ] Configurable readiness probe throttle: introduce `ExportHealthOptions` (or extend `FrameExportResilienceOptions`) with `ReadinessProbeIntervalSeconds` (default 5s) used by `S3FrameExportSink` to throttle health checks.
+- [ ] Startup readiness summary: log S3 sink readiness and bucket existence at startup (one-time probe) with clear guidance if Unhealthy; optionally fail-fast behind a config flag in non-dev.
+- [ ] Exporter metrics: add counters for "exports skipped due to readiness" and per-sink success/failure to aid ops visibility.
+- [ ] Remove placeholder controller file: delete `Controllers/v1_0/HealthController.cs` (custom endpoint removed) and confirm no references/tests depend on it.
 - [ ] Expose `FrameExportOptions` in admin configuration UI
 - [ ] Provide CLI/support tooling (`scripts/export-frame-diagnostics.sh`) for export diagnostics
 - [ ] Document frame export operational runbook (S3 prefixes, retention, troubleshooting)

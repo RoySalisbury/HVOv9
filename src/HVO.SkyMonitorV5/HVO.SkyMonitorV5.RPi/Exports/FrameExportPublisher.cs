@@ -23,34 +23,34 @@ public sealed class FrameExportPublisher
 
     private readonly IFrameExportDispatcher _dispatcher;
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
-    private readonly IFitsFrameEncoder _fitsFrameEncoder;
+    private readonly IFitsFrameEncoder _fitsEncoder;
     private readonly ILogger<FrameExportPublisher> _logger;
     private readonly IOptionsMonitor<SkiaPipelineFeatureOptions> _featureOptions;
     private readonly ISkiaPipelineFeatureToggleMonitor _featureMonitor;
     private readonly IImageFrameArchiveIngestionQueue _archiveQueue;
     private readonly IOptionsMonitor<ImageHistoryOptions> _imageHistoryOptions;
-    private readonly IOptionsMonitor<FitsExportOptions> _fitsOptions;
+    private readonly IOptionsMonitor<FrameExportOptions> _exportOptions;
 
     public FrameExportPublisher(
         IFrameExportDispatcher dispatcher,
         IProcessedFrameEncoder processedFrameEncoder,
-        IFitsFrameEncoder fitsFrameEncoder,
+        IFitsFrameEncoder fitsEncoder,
         ILogger<FrameExportPublisher> logger,
         IOptionsMonitor<SkiaPipelineFeatureOptions> featureOptions,
         ISkiaPipelineFeatureToggleMonitor featureMonitor,
         IImageFrameArchiveIngestionQueue archiveQueue,
         IOptionsMonitor<ImageHistoryOptions> imageHistoryOptions,
-        IOptionsMonitor<FitsExportOptions> fitsOptions)
+        IOptionsMonitor<FrameExportOptions> exportOptions)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
-        _fitsFrameEncoder = fitsFrameEncoder ?? throw new ArgumentNullException(nameof(fitsFrameEncoder));
+        _fitsEncoder = fitsEncoder ?? throw new ArgumentNullException(nameof(fitsEncoder));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _featureOptions = featureOptions ?? throw new ArgumentNullException(nameof(featureOptions));
         _featureMonitor = featureMonitor ?? throw new ArgumentNullException(nameof(featureMonitor));
         _archiveQueue = archiveQueue ?? throw new ArgumentNullException(nameof(archiveQueue));
         _imageHistoryOptions = imageHistoryOptions ?? throw new ArgumentNullException(nameof(imageHistoryOptions));
-        _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
+        _exportOptions = exportOptions ?? throw new ArgumentNullException(nameof(exportOptions));
     }
 
     public void PublishRawFrame(
@@ -76,18 +76,18 @@ public sealed class FrameExportPublisher
                 return;
             }
 
-            // Preferred path: FITS encoder for raw frames when enabled
-            var fits = _fitsOptions.CurrentValue;
-            if (fits.EnableForRaw)
+            // Check configured encoding format for raw frames
+            var exportOptions = _exportOptions.CurrentValue;
+            var rawOptions = exportOptions.Raw ?? new FrameExportStageOptions();
+            var archiveEncoding = rawOptions.ArchiveEncoding;
+
+            // If FITS is configured, use FITS encoder
+            if (archiveEncoding.Format == ImageEncodingFormat.Fits)
             {
                 try
                 {
-                    var snapshot = new Models.RawFrameSnapshot(capture.FrameId, capture.Image, capture.Timestamp, capture.Exposure)
-                    {
-                        ImmutableImage = imageForExport
-                    };
-
-                    var delivery = _fitsFrameEncoder.EncodeRaw(imageForExport, snapshot, rig, fits);
+                    using var bitmap = SKBitmap.FromImage(imageForExport);
+                    var fitsBytes = _fitsEncoder.EncodeRaw(bitmap, capture, rig, archiveEncoding.FitsOptions);
 
                     var metadata = FrameExportMetadataBuilder.FromRaw(
                         capture,
@@ -96,17 +96,16 @@ public sealed class FrameExportPublisher
                         queueLatencyMilliseconds: captureMilliseconds,
                         processingMilliseconds: null,
                         rawImageDescriptor: null,
-                        payloadContentType: delivery.ContentType,
-                        payloadExtension: delivery.FileExtension ?? "fits");
+                        payloadContentType: fitsBytes.ContentType,
+                        payloadExtension: fitsBytes.FileExtension);
 
-                    var payloadBuffer = delivery.Payload.ToArray();
                     var envelope = new FrameExportEnvelope(
                         capture.FrameId,
                         FrameExportStage.Raw,
                         metadata,
-                        payloadBuffer,
-                        delivery.ContentType,
-                        delivery.FileExtension ?? "fits");
+                        fitsBytes.Payload,
+                        fitsBytes.ContentType,
+                        fitsBytes.FileExtension);
 
                     if (!_dispatcher.TryEnqueue(envelope))
                     {
@@ -115,12 +114,12 @@ public sealed class FrameExportPublisher
                             frameNumber,
                             capture.FrameId);
                     }
-
                     return;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "FITS encoding for raw frame #{FrameNumber} ({FrameId}) failed; falling back to legacy/raw paths.", frameNumber, capture.FrameId);
+                    _logger.LogWarning(ex, "FITS encoding for raw frame #{FrameNumber} ({FrameId}) failed; falling back to Skia raw or PNG.", frameNumber, capture.FrameId);
+                    // Fall through to legacy encoding
                 }
             }
 
@@ -238,31 +237,73 @@ public sealed class FrameExportPublisher
 
             if (features.EnableProcessedFrameEncoder)
             {
-                var delivery = _processedFrameEncoder.Encode(processedFrame);
-                var contentType = delivery.ContentType;
-                var fileExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(contentType);
+                // Route using unified export options: Delivery vs Archive can differ.
+                var exportOptions = _exportOptions.CurrentValue;
+                var processedOptions = exportOptions.Processed ?? new FrameExportStageOptions();
 
-                var metadata = FrameExportMetadataBuilder.FromProcessed(
+                var archiveEncoding = processedOptions.ArchiveEncoding;
+                var deliveryEncoding = processedOptions.DeliveryEncoding ?? archiveEncoding;
+
+                // Ensure delivery uses a raster-friendly format for UI/delivery
+                if (!ImageEncodingUtilities.IsRasterFormat(deliveryEncoding.Format))
+                {
+                    deliveryEncoding = new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 85);
+                }
+
+                // Encode delivery payload (UI-friendly raster)
+                var delivery = _processedFrameEncoder.Encode(
+                    processedFrame,
+                    Services.ProcessedFrameEncodingContext.UserInterface,
+                    deliveryEncoding);
+                var deliveryContentType = delivery.ContentType;
+                var deliveryExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(deliveryContentType);
+
+                var deliveryMetadata = FrameExportMetadataBuilder.FromProcessed(
                     processedFrame,
                     stackResult.Context,
                     rig,
                     stageTimestampUtc,
                     queueLatencyMilliseconds,
                     processingMilliseconds,
-                    payloadContentType: contentType,
-                    payloadExtension: fileExtension);
+                    payloadContentType: deliveryContentType,
+                    payloadExtension: deliveryExtension);
 
-                var payloadBuffer = delivery.Payload.ToArray();
-                QueueArchiveIngestion(metadata, payloadBuffer, contentType, fileExtension);
+                var deliveryPayloadBuffer = delivery.Payload.ToArray();
 
-                var payload = new ReadOnlyMemory<byte>(payloadBuffer);
+                // Encode archive payload only when archive is enabled
+                var imageHistory = _imageHistoryOptions.CurrentValue;
+                if (imageHistory is not null && imageHistory.EnableArchive)
+                {
+                    var archive = _processedFrameEncoder.Encode(
+                        processedFrame,
+                        Services.ProcessedFrameEncodingContext.Export,
+                        archiveEncoding);
+                    var archiveContentType = archive.ContentType;
+                    var archiveExtension = archive.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(archiveContentType);
+
+                    var archiveMetadata = FrameExportMetadataBuilder.FromProcessed(
+                        processedFrame,
+                        stackResult.Context,
+                        rig,
+                        stageTimestampUtc,
+                        queueLatencyMilliseconds,
+                        processingMilliseconds,
+                        payloadContentType: archiveContentType,
+                        payloadExtension: archiveExtension);
+
+                    var archivePayloadBuffer = archive.Payload.ToArray();
+                    QueueArchiveIngestion(archiveMetadata, archivePayloadBuffer, archiveContentType, archiveExtension);
+                }
+
+                // Enqueue delivery envelope
+                var payload = new ReadOnlyMemory<byte>(deliveryPayloadBuffer);
                 var envelope = new FrameExportEnvelope(
                     processedFrame.FrameId,
                     FrameExportStage.Processed,
-                    metadata,
+                    deliveryMetadata,
                     payload,
-                    contentType,
-                    fileExtension);
+                    deliveryContentType,
+                    deliveryExtension);
 
                 if (!_dispatcher.TryEnqueue(envelope))
                 {

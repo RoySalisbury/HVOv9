@@ -89,21 +89,28 @@ public sealed partial class RawFrameDetail : ComponentBase, IDisposable
             return;
         }
 
+        // Try to determine the timestamp - prefer FrameStateStore if available, otherwise use query param or current time
+        DateTimeOffset timestamp;
         var snapshot = FrameStateStore.LatestRawFrame;
-        if (snapshot is null || snapshot.FrameId != frameId)
+        if (snapshot is not null && snapshot.FrameId == frameId)
         {
-            _errorMessage = "The requested raw frame is no longer available.";
-            _isLoading = false;
-            await RequestUiRefreshAsync();
-            return;
+            timestamp = snapshot.Timestamp;
+        }
+        else if (!string.IsNullOrWhiteSpace(Timestamp) && DateTimeOffset.TryParse(Timestamp, out var parsedTimestamp))
+        {
+            timestamp = parsedTimestamp;
+        }
+        else
+        {
+            timestamp = ObservatoryClock.UtcNow;
         }
 
-        var pngMedia = await FetchRawMediaAsync(frameId, snapshot.Timestamp, RawFrameMediaFormat.Png, cancellationToken);
+        var pngMedia = await FetchRawMediaAsync(frameId, timestamp, RawFrameMediaFormat.Png, cancellationToken);
         if (pngMedia is null || string.IsNullOrWhiteSpace(pngMedia.DataUri))
         {
             if (!cancellationToken.IsCancellationRequested)
             {
-                _errorMessage = "Unable to generate a display payload for this frame.";
+                _errorMessage = "The requested raw frame is no longer available.";
                 _isLoading = false;
                 await RequestUiRefreshAsync();
             }
@@ -111,32 +118,40 @@ public sealed partial class RawFrameDetail : ComponentBase, IDisposable
             return;
         }
 
-        var rawMedia = await FetchRawMediaAsync(frameId, snapshot.Timestamp, RawFrameMediaFormat.Native, cancellationToken);
+        var rawMedia = await FetchRawMediaAsync(frameId, timestamp, RawFrameMediaFormat.Native, cancellationToken);
 
         if (cancellationToken.IsCancellationRequested)
         {
             return;
         }
 
-        var localTimestamp = ObservatoryClock.ToLocal(snapshot.Timestamp);
+        var localTimestamp = ObservatoryClock.ToLocal(pngMedia.Timestamp);
         var timestampStamp = localTimestamp.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
 
         try
         {
-            var descriptorEntries = BuildDescriptorEntries(snapshot, rawMedia?.Descriptor);
+            // Use snapshot if available for additional metadata, otherwise use media results
+            var descriptorEntries = snapshot is not null
+                ? BuildDescriptorEntries(snapshot, rawMedia?.Descriptor)
+                : BuildDescriptorEntriesFromMedia(pngMedia, rawMedia);
+
+            var exposureMs = snapshot?.Exposure.ExposureMilliseconds ?? 0;
+            var gain = snapshot?.Exposure.Gain ?? 0;
+            var autoExposure = snapshot?.Exposure.AutoExposure ?? false;
+            var autoGain = snapshot?.Exposure.AutoGain ?? false;
 
             _viewModel = new RawFrameViewModel(
-                snapshot.FrameId,
+                frameId,
                 localTimestamp,
                 pngMedia.DataUri,
                 pngMedia.DataUri,
                 rawMedia?.DataUri,
                 FormattableString.Invariant($"raw-frame-{timestampStamp}.png"),
                 FormattableString.Invariant($"raw-frame-{timestampStamp}.{SkiaRawFrameHelper.RawFileExtension}"),
-                snapshot.Exposure.ExposureMilliseconds,
-                snapshot.Exposure.Gain,
-                snapshot.Exposure.AutoExposure,
-                snapshot.Exposure.AutoGain,
+                exposureMs,
+                gain,
+                autoExposure,
+                autoGain,
                 descriptorEntries);
         }
         catch (Exception ex)
@@ -220,6 +235,46 @@ public sealed partial class RawFrameDetail : ComponentBase, IDisposable
         else
         {
             entries.Add(new DescriptorEntry("Pixel format", rawFrame.Image.ColorType.ToString()));
+        }
+
+        return entries;
+    }
+
+    private static IReadOnlyList<DescriptorEntry> BuildDescriptorEntriesFromMedia(
+        FrameMedia pngMedia,
+        FrameMedia? rawMedia)
+    {
+        var descriptor = rawMedia?.Descriptor ?? pngMedia.Descriptor;
+        var entries = new List<DescriptorEntry>(4);
+
+        if (descriptor is not null)
+        {
+            if (descriptor.Width > 0 && descriptor.Height > 0)
+            {
+                entries.Add(new DescriptorEntry(
+                    "Resolution",
+                    FormattableString.Invariant($"{descriptor.Width} × {descriptor.Height} px")));
+            }
+
+            if (!string.IsNullOrWhiteSpace(descriptor.PixelFormatHint))
+            {
+                entries.Add(new DescriptorEntry("Pixel format", descriptor.PixelFormatHint));
+            }
+
+            if (descriptor.RowBytes > 0)
+            {
+                entries.Add(new DescriptorEntry("Row bytes", FormattableString.Invariant($"{descriptor.RowBytes:N0}")));
+            }
+
+            if (descriptor.BytesPerPixel > 0)
+            {
+                entries.Add(new DescriptorEntry("Bytes / pixel", FormattableString.Invariant($"{descriptor.BytesPerPixel}")));
+            }
+        }
+
+        if (entries.Count == 0)
+        {
+            entries.Add(new DescriptorEntry("Status", "Metadata unavailable"));
         }
 
         return entries;

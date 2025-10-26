@@ -6,5 +6,8 @@ namespace HVO.SkyMonitorV5.RPi.Pipeline;
 public enum ImageEncodingFormat
 {
     Png = 0,
-    Jpeg = 1
+    Jpeg = 1,
+    Fits = 2,
+    Tiff = 3,
+    Xisf = 4
 }

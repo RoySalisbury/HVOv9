@@ -34,10 +34,18 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     IConfigureOptions<StarCatalogOptions>,
     IConfigureOptions<LocalApiClientOptions>,
     IConfigureOptions<SkyMonitorTelemetryRetentionOptions>,
-    IConfigureOptions<FitsExportOptions>,
+    IConfigureOptions<FrameExportOptions>,
     IConfigurationSnapshotInvalidator
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.General);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.General);
+        // Allow enum values to be represented as strings (e.g., "ArchiveOnly", "Fits", etc.)
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        return options;
+    }
 
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _contextFactory;
     private readonly IConfiguration _configuration;
@@ -148,12 +156,12 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
         }
     }
 
-    public void Configure(FitsExportOptions options)
+    public void Configure(FrameExportOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
         var snapshot = GetSnapshot();
-        if (!snapshot.SystemSettings.TryGetValue(SystemSettingKeys.FitsExport, out var payload)
+        if (!snapshot.SystemSettings.TryGetValue(SystemSettingKeys.FrameExport, out var payload)
             || string.IsNullOrWhiteSpace(payload))
         {
             return;
@@ -161,22 +169,26 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
 
         try
         {
-            var stored = JsonSerializer.Deserialize<FitsExportOptions>(payload, JsonOptions);
+            var stored = JsonSerializer.Deserialize<FrameExportOptions>(payload, JsonOptions);
             if (stored is null)
             {
                 return;
             }
 
-            options.EnableForRaw = stored.EnableForRaw;
-            options.EnableForProcessed = stored.EnableForProcessed;
-            options.BitDepth = stored.BitDepth;
-            options.UnsignedU16 = stored.UnsignedU16;
-            options.Compression = stored.Compression;
-            options.WriteChecksum = stored.WriteChecksum;
+            // Replace stage configurations when provided in DB payload; post-configure normalizers will ensure defaults
+            if (stored.Raw is not null)
+            {
+                options.Raw = stored.Raw;
+            }
+
+            if (stored.Processed is not null)
+            {
+                options.Processed = stored.Processed;
+            }
         }
         catch (JsonException ex)
         {
-            _logger?.LogWarning(ex, "Unable to deserialize FITS export configuration from system settings.");
+            _logger?.LogWarning(ex, "Unable to deserialize FrameExport configuration from system settings.");
         }
     }
 
