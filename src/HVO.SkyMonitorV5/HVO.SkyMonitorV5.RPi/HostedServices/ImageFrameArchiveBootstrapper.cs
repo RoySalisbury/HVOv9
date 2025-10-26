@@ -48,9 +48,14 @@ public sealed class ImageFrameArchiveBootstrapper : IHostedService
         try
         {
             await context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+
+            // Enable WAL mode and set busy timeout for better concurrent access
+            await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken).ConfigureAwait(false);
+            await context.Database.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;", cancellationToken).ConfigureAwait(false);
+
             var completedAtUtc = _clock.UtcNow;
             _status.ReportImageArchiveSuccess(databasePath, startedAtUtc, completedAtUtc);
-            _logger.LogInformation("Image frame archive migrations completed successfully.");
+            _logger.LogInformation("Image frame archive migrations completed successfully (WAL mode enabled).");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

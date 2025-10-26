@@ -37,7 +37,15 @@ public sealed class DatabaseBackedConfigurationOptionsConfigurator :
     IConfigureOptions<FrameExportOptions>,
     IConfigurationSnapshotInvalidator
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.General);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.General);
+        // Allow enum values to be represented as strings (e.g., "ArchiveOnly", "Fits", etc.)
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        return options;
+    }
 
     private readonly IDbContextFactory<SkyMonitorConfigurationContext> _contextFactory;
     private readonly IConfiguration _configuration;

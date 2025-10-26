@@ -26,6 +26,41 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     _siteOptions = siteOptions?.Value ?? throw new ArgumentNullException(nameof(siteOptions));
   }
 
+  public ProcessedFrameDelivery EncodeRaw(SKBitmap bitmap, CapturedImage capture, RigSpec rig, FitsEncodingOptions? options)
+  {
+    ArgumentNullException.ThrowIfNull(bitmap);
+    ArgumentNullException.ThrowIfNull(capture);
+    ArgumentNullException.ThrowIfNull(rig);
+
+    try
+    {
+      var compressionPolicy = CreateCompressionPolicy(options);
+
+      var fitsBytes = bitmap.ToFitsU16BytesResult(
+          compressionPolicy: compressionPolicy,
+          stampHeader: fits => StampRawFrameHeaders(fits, capture, rig, options));
+
+      if (fitsBytes.IsFailure)
+      {
+        _logger.LogError(fitsBytes.Error, "Failed to encode raw frame {FrameId} to FITS", capture.FrameId);
+        throw fitsBytes.Error!;
+      }
+
+      _logger.LogDebug("Encoded raw frame {FrameId} to FITS ({Size} bytes)",
+          capture.FrameId, fitsBytes.Value.Length);
+
+      return new ProcessedFrameDelivery(
+          Payload: fitsBytes.Value,
+          ContentType: "application/fits",
+          FileExtension: "fits");
+    }
+    catch (Exception ex) when (ex is not ArgumentNullException)
+    {
+      _logger.LogError(ex, "Error encoding raw frame {FrameId} to FITS", capture.FrameId);
+      throw;
+    }
+  }
+
   public ProcessedFrameDelivery EncodeProcessed(ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
   {
     ArgumentNullException.ThrowIfNull(frame);
@@ -115,6 +150,28 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     {
       builder.SetString("FILTERS", string.Join(", ", frame.AppliedFilters), "Image processing filters applied");
     }
+  }
+
+  private void StampRawFrameHeaders(FitsFile fits, CapturedImage capture, RigSpec rig, FitsEncodingOptions? options)
+  {
+    var builder = new FitsHeaderBuilder(fits);
+
+    // Core image metadata
+    StampImageMetadata(builder, capture.Image.Width, capture.Image.Height, options);
+
+    // Timing
+    StampTimingMetadata(builder, capture.Timestamp);
+
+    // Camera/Instrument
+    StampInstrumentMetadata(builder, rig, capture.Exposure);
+
+    // Observatory site
+    StampSiteMetadata(builder);
+
+    // Raw frame metadata
+    builder.SetString("IMAGETYP", "Light", "Type of image")
+           .SetString("SWCREATE", "HVO SkyMonitor V5", "Software that created this file")
+           .SetString("ORIGIN", "Hualapai Valley Observatory", "Organization responsible for the data");
   }
 
   private void StampImageMetadata(FitsHeaderBuilder builder, int width, int height, FitsEncodingOptions? options)

@@ -23,6 +23,7 @@ public sealed class FrameExportPublisher
 
     private readonly IFrameExportDispatcher _dispatcher;
     private readonly IProcessedFrameEncoder _processedFrameEncoder;
+    private readonly IFitsFrameEncoder _fitsEncoder;
     private readonly ILogger<FrameExportPublisher> _logger;
     private readonly IOptionsMonitor<SkiaPipelineFeatureOptions> _featureOptions;
     private readonly ISkiaPipelineFeatureToggleMonitor _featureMonitor;
@@ -33,6 +34,7 @@ public sealed class FrameExportPublisher
     public FrameExportPublisher(
         IFrameExportDispatcher dispatcher,
         IProcessedFrameEncoder processedFrameEncoder,
+        IFitsFrameEncoder fitsEncoder,
         ILogger<FrameExportPublisher> logger,
         IOptionsMonitor<SkiaPipelineFeatureOptions> featureOptions,
         ISkiaPipelineFeatureToggleMonitor featureMonitor,
@@ -42,6 +44,7 @@ public sealed class FrameExportPublisher
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
+        _fitsEncoder = fitsEncoder ?? throw new ArgumentNullException(nameof(fitsEncoder));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _featureOptions = featureOptions ?? throw new ArgumentNullException(nameof(featureOptions));
         _featureMonitor = featureMonitor ?? throw new ArgumentNullException(nameof(featureMonitor));
@@ -71,6 +74,53 @@ public sealed class FrameExportPublisher
                     frameNumber,
                     capture.FrameId);
                 return;
+            }
+
+            // Check configured encoding format for raw frames
+            var exportOptions = _exportOptions.CurrentValue;
+            var rawOptions = exportOptions.Raw ?? new FrameExportStageOptions();
+            var archiveEncoding = rawOptions.ArchiveEncoding;
+
+            // If FITS is configured, use FITS encoder
+            if (archiveEncoding.Format == ImageEncodingFormat.Fits)
+            {
+                try
+                {
+                    using var bitmap = SKBitmap.FromImage(imageForExport);
+                    var fitsBytes = _fitsEncoder.EncodeRaw(bitmap, capture, rig, archiveEncoding.FitsOptions);
+
+                    var metadata = FrameExportMetadataBuilder.FromRaw(
+                        capture,
+                        rig,
+                        stageTimestampUtc,
+                        queueLatencyMilliseconds: captureMilliseconds,
+                        processingMilliseconds: null,
+                        rawImageDescriptor: null,
+                        payloadContentType: fitsBytes.ContentType,
+                        payloadExtension: fitsBytes.FileExtension);
+
+                    var envelope = new FrameExportEnvelope(
+                        capture.FrameId,
+                        FrameExportStage.Raw,
+                        metadata,
+                        fitsBytes.Payload,
+                        fitsBytes.ContentType,
+                        fitsBytes.FileExtension);
+
+                    if (!_dispatcher.TryEnqueue(envelope))
+                    {
+                        _logger.LogDebug(
+                            "Frame export dispatcher rejected raw FITS payload for frame #{FrameNumber} ({FrameId}).",
+                            frameNumber,
+                            capture.FrameId);
+                    }
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "FITS encoding for raw frame #{FrameNumber} ({FrameId}) failed; falling back to Skia raw or PNG.", frameNumber, capture.FrameId);
+                    // Fall through to legacy encoding
+                }
             }
 
             var features = _featureOptions.CurrentValue;

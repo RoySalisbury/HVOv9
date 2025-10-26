@@ -1,8 +1,10 @@
 # HVO custom data directories
 /artifacts/
+/archive/
 /datastores/
 /workspaces/HVOv9/datastores/
 /workspaces/HVOv9/artifacts
+/workspaces/HVOv9/archive
 benchmarks/**/datastore/
 benchmarks/**/*.{db,db-shm,db-wal,tar.gz}
 /.DS_Store

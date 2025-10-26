@@ -12,6 +12,7 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Services.RemoteDispatch;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Minio;
 using Minio.DataModel.Args;
 using Minio.Exceptions;
@@ -34,21 +35,28 @@ public sealed class S3FrameExportSink : IFrameExportSink
     private readonly IOptionsMonitor<FrameExportOptions> _optionsMonitor;
     private readonly IMinioClientProvider _clientProvider;
     private readonly IFrameExportResiliencePolicyProvider _resiliencePolicyProvider;
+    private readonly HealthCheckService _healthChecks;
     private readonly ILogger<S3FrameExportSink> _logger;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _bucketLocks = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, bool> _initializedBuckets = new(StringComparer.Ordinal);
+    private readonly object _healthGateLock = new();
+    private DateTimeOffset _lastHealthCheckUtc = DateTimeOffset.MinValue;
+    private HealthStatus _lastHealthStatus = HealthStatus.Healthy;
+    private static readonly TimeSpan HealthCheckThrottle = TimeSpan.FromSeconds(5);
 
     public S3FrameExportSink(
         FrameExportStage stage,
         IOptionsMonitor<FrameExportOptions> optionsMonitor,
         IMinioClientProvider clientProvider,
         IFrameExportResiliencePolicyProvider resiliencePolicyProvider,
+        HealthCheckService healthChecks,
         ILogger<S3FrameExportSink> logger)
     {
         _stage = stage;
         _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
         _clientProvider = clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
         _resiliencePolicyProvider = resiliencePolicyProvider ?? throw new ArgumentNullException(nameof(resiliencePolicyProvider));
+        _healthChecks = healthChecks ?? throw new ArgumentNullException(nameof(healthChecks));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -70,6 +78,53 @@ public sealed class S3FrameExportSink : IFrameExportSink
         if (envelope is null)
         {
             throw new ArgumentNullException(nameof(envelope));
+        }
+
+        // Gate on readiness: if the S3 health check status isn't Healthy, skip exporting to S3.
+        // Throttle health checks to avoid excessive MinIO calls.
+        var nowUtc = DateTimeOffset.UtcNow;
+        var status = _lastHealthStatus;
+        var needsCheck = false;
+        lock (_healthGateLock)
+        {
+            if (nowUtc - _lastHealthCheckUtc >= HealthCheckThrottle)
+            {
+                needsCheck = true;
+            }
+        }
+
+        if (needsCheck)
+        {
+            try
+            {
+                var report = await _healthChecks.CheckHealthAsync(r => string.Equals(r.Name, "s3_export", StringComparison.Ordinal), cancellationToken).ConfigureAwait(false);
+                status = report.Status;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // If the health check fails unexpectedly, treat as Unhealthy to be safe.
+                status = HealthStatus.Unhealthy;
+                _logger.LogWarning(ex, "S3 readiness probe failed; exports will be skipped until healthy.");
+            }
+
+            lock (_healthGateLock)
+            {
+                _lastHealthStatus = status;
+                _lastHealthCheckUtc = nowUtc;
+            }
+        }
+
+        if (status != HealthStatus.Healthy)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Skipping S3 export for frame {FrameId} ({Stage}) due to readiness status {Status}.", envelope.FrameId, envelope.Stage, status);
+            }
+            return Result<bool>.Success(false);
         }
 
         var options = StageOptions;

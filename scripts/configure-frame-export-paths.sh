@@ -2,12 +2,29 @@
 set -euo pipefail
 
 # Configure frame export filesystem paths in SkyMonitor configuration database
-# This script sets up the archive export paths to point to workspace directories
+# This script sets up the export paths for archive and delivery payloads
+#
+# PATH STRUCTURE:
+# ---------------
+# Configuration provides:
+#   - RootPath: Base directory (e.g., /workspaces/HVOv9/artifacts/skymonitor)
+#   - Prefix: Stage identifier (e.g., "raw" or "processed")
+#
+# Code automatically appends:
+#   - Role directory: "archive" or "delivery" (based on PayloadScope)
+#   - Date hierarchy: YYYY/MM/DD
+#   - Filename: YYYYMMDD-HHMMSS-{frameId}.{ext}
+#
+# Final path example:
+#   /workspaces/HVOv9/artifacts/skymonitor/raw/archive/2025/10/26/20251026-143022-{guid}.fits
+#
+# DO NOT include role directories (archive/delivery) in RootPath or Prefix!
+# The code will add them automatically based on the export role.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DB="${REPO_ROOT}/datastores/configuration/sm-config.db"
-ARCHIVE_ROOT="${REPO_ROOT}/archive/exports/skymonitor"
+EXPORT_ROOT="${REPO_ROOT}/artifacts/skymonitor"
 
 # Optional S3/MinIO configuration from environment
 MINIO_ENDPOINT="${HVO_MINIO_ENDPOINT:-}"
@@ -29,7 +46,7 @@ fi
 
 echo "Configuring frame export paths..."
 echo "  Database: $CONFIG_DB"
-echo "  Archive root: $ARCHIVE_ROOT"
+echo "  Export root: $EXPORT_ROOT"
 if [[ -n "$MINIO_ENDPOINT" ]]; then
   echo "  S3 (MinIO) endpoint: $MINIO_ENDPOINT"
 else
@@ -42,7 +59,7 @@ if [[ -n "$MINIO_ENDPOINT" && -n "$MINIO_ACCESS_KEY" && -n "$MINIO_SECRET_KEY" ]
       {
         "Enabled": true,
         "Bucket": "hvo-skymonitor",
-        "Prefix": null,
+        "Prefix": "raw",
         "Endpoint": "${MINIO_ENDPOINT}",
         "AccessKey": "${MINIO_ACCESS_KEY}",
         "SecretKey": "${MINIO_SECRET_KEY}",
@@ -53,13 +70,27 @@ if [[ -n "$MINIO_ENDPOINT" && -n "$MINIO_ACCESS_KEY" && -n "$MINIO_SECRET_KEY" ]
       }
 EOS3
   )
-  PROC_S3_JSON="$RAW_S3_JSON"
+  PROC_S3_JSON=$(cat <<EOS3
+      {
+        "Enabled": true,
+        "Bucket": "hvo-skymonitor",
+        "Prefix": "processed",
+        "Endpoint": "${MINIO_ENDPOINT}",
+        "AccessKey": "${MINIO_ACCESS_KEY}",
+        "SecretKey": "${MINIO_SECRET_KEY}",
+        "Region": "${MINIO_REGION}",
+        "UseSsl": ${MINIO_USE_SSL},
+        "EmitMetadataHeaders": true,
+        "EmitJsonManifest": true
+      }
+EOS3
+  )
 else
   RAW_S3_JSON=$(cat <<EOS3
       {
         "Enabled": false,
         "Bucket": null,
-        "Prefix": null,
+        "Prefix": "raw",
         "Endpoint": null,
         "AccessKey": null,
         "SecretKey": null,
@@ -70,7 +101,21 @@ else
       }
 EOS3
   )
-  PROC_S3_JSON="$RAW_S3_JSON"
+  PROC_S3_JSON=$(cat <<EOS3
+      {
+        "Enabled": false,
+        "Bucket": null,
+        "Prefix": "processed",
+        "Endpoint": null,
+        "AccessKey": null,
+        "SecretKey": null,
+        "Region": "${MINIO_REGION}",
+        "UseSsl": false,
+        "EmitMetadataHeaders": true,
+        "EmitJsonManifest": true
+      }
+EOS3
+  )
 fi
 
 FRAME_EXPORT_JSON=$(cat <<EOF
@@ -93,8 +138,8 @@ FRAME_EXPORT_JSON=$(cat <<EOF
     "Filesystem": [
       {
         "Enabled": true,
-        "RootPath": "${ARCHIVE_ROOT}/raw/archive",
-        "Prefix": null,
+        "RootPath": "${EXPORT_ROOT}",
+        "Prefix": "raw",
         "IncludeMetadataManifest": true
       }
     ],
@@ -114,8 +159,8 @@ ${RAW_S3_JSON}
     "Filesystem": [
       {
         "Enabled": true,
-        "RootPath": "${ARCHIVE_ROOT}/processed/archive",
-        "Prefix": null,
+        "RootPath": "${EXPORT_ROOT}",
+        "Prefix": "processed",
         "IncludeMetadataManifest": true
       }
     ],
@@ -142,8 +187,13 @@ SQL
 
 echo "✓ Frame export configuration updated successfully"
 echo ""
-echo "Archive directories:"
-echo "  Raw:       ${ARCHIVE_ROOT}/raw/archive"
-echo "  Processed: ${ARCHIVE_ROOT}/processed/archive"
+echo "Export directory structure:"
+echo "  Root:      ${EXPORT_ROOT}"
+echo "  Raw:       ${EXPORT_ROOT}/raw/{archive|delivery}/YYYY/MM/DD/"
+echo "  Processed: ${EXPORT_ROOT}/processed/{archive|delivery}/YYYY/MM/DD/"
+echo ""
+echo "Example paths:"
+echo "  Raw archive:       ${EXPORT_ROOT}/raw/archive/2025/10/26/20251026-143022-{guid}.fits"
+echo "  Processed archive: ${EXPORT_ROOT}/processed/archive/2025/10/26/20251026-143022-{guid}.jpg"
 echo ""
 echo "Note: Restart SkyMonitor for changes to take effect."

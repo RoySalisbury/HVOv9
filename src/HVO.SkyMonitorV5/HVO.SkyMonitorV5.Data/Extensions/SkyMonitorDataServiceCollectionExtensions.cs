@@ -79,15 +79,20 @@ public static class SkyMonitorDataServiceCollectionExtensions
             var connectionString = new SqliteConnectionStringBuilder
             {
                 DataSource = databasePath,
-                Mode = openMode
+                Mode = openMode,
+                Cache = SqliteCacheMode.Shared  // Enable shared cache for better concurrency
             }.ToString();
 
-            builder.UseSqlite(connectionString, sqliteOptions =>
+            // Add PRAGMA statements for better concurrent access
+            var connection = new SqliteConnection(connectionString);
+
+            builder.UseSqlite(connection, sqliteOptions =>
             {
                 if (enableMigrations)
                 {
                     sqliteOptions.MigrationsAssembly(typeof(TContext).Assembly.FullName);
                 }
+                sqliteOptions.CommandTimeout(30); // 30 second command timeout
                 configureSqlite?.Invoke(sqliteOptions);
             });
 
@@ -117,15 +122,20 @@ public static class SkyMonitorDataServiceCollectionExtensions
             var connectionString = new SqliteConnectionStringBuilder
             {
                 DataSource = databasePath,
-                Mode = openMode
+                Mode = openMode,
+                Cache = SqliteCacheMode.Shared  // Enable shared cache for better concurrency
             }.ToString();
 
-            builder.UseSqlite(connectionString, sqliteOptions =>
+            // Add PRAGMA statements for better concurrent access
+            var connection = new SqliteConnection(connectionString);
+
+            builder.UseSqlite(connection, sqliteOptions =>
             {
                 if (enableMigrations)
                 {
                     sqliteOptions.MigrationsAssembly(typeof(TContext).Assembly.FullName);
                 }
+                sqliteOptions.CommandTimeout(30); // 30 second command timeout
                 configureSqlite?.Invoke(sqliteOptions);
             });
 
@@ -220,17 +230,36 @@ public static class SkyMonitorDataServiceCollectionExtensions
         Action<DbContextOptionsBuilder>? configureOptions = null,
         SqliteOpenMode openMode = SqliteOpenMode.ReadWriteCreate)
     {
+        // For the scoped context (used by bootstrapper), enable WAL mode
         services.AddSkyMonitorSqliteDbContext<ImageFrameArchiveContext>(
             relativePath,
-            configureSqlite,
-            configureOptions,
+            sqlite =>
+            {
+                sqlite.CommandTimeout(30);
+                configureSqlite?.Invoke(sqlite);
+            },
+            options =>
+            {
+                // Enable connection pooling and configure warnings
+                options.EnableSensitiveDataLogging(false);
+                configureOptions?.Invoke(options);
+            },
             openMode,
             enableMigrations: true);
 
+        // For the factory (used by services), also enable WAL mode
         services.AddSkyMonitorSqliteDbContextFactory<ImageFrameArchiveContext>(
             relativePath,
-            configureSqlite,
-            configureOptions,
+            sqlite =>
+            {
+                sqlite.CommandTimeout(30);
+                configureSqlite?.Invoke(sqlite);
+            },
+            options =>
+            {
+                options.EnableSensitiveDataLogging(false);
+                configureOptions?.Invoke(options);
+            },
             openMode,
             enableMigrations: true);
 

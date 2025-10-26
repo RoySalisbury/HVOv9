@@ -37,6 +37,7 @@ using HVO.SkyMonitorV5.RPi.Infrastructure.NativeMemory;
 using HVO.SkyMonitorV5.RPi.Infrastructure.Resilience;
 using HVO.SkyMonitorV5.RPi.Telemetry;
 using HVO.SkyMonitorV5.RPi.Infrastructure.Logging;
+using HVO.SkyMonitorV5.RPi.Infrastructure.HealthChecks;
 using HVO.SkyMonitorV5.Data.Options;
 using HVO.SkyMonitorV5.RPi.Exports;
 using HVO.SkyMonitorV5.RPi.Exports.Sinks;
@@ -108,7 +109,19 @@ public static class Program
         services.AddHostedService<ConfigurationStoreBootstrapper>();
 
         services.AddSkyMonitorTelemetryStore(relativePath: "telemetry/sm-telemetry.db");
-        services.AddSkyMonitorImageFrameArchive(relativePath: "telemetry/image_frame_archive.sqlite");
+        // Image Frame Archive - requires WAL mode and busy timeout for concurrent access
+        services.AddSkyMonitorImageFrameArchive(
+            relativePath: "telemetry/image_frame_archive.sqlite",
+            configureSqlite: sqlite =>
+            {
+                // Enable WAL mode for better concurrent access
+                sqlite.CommandTimeout(30);
+            },
+            configureOptions: options =>
+            {
+                // Add connection string modifications for WAL mode and busy timeout
+                options.ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.AmbientTransactionWarning));
+            });
         services.AddHostedService<ImageFrameArchiveBootstrapper>();
         services.AddHostedService<TelemetryStoreBootstrapper>();
 
@@ -240,7 +253,8 @@ public static class Program
         });
 
         services.AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy("SkyMonitor v5 is running"));
+            .AddCheck("self", () => HealthCheckResult.Healthy("SkyMonitor v5 is running"))
+            .AddCheck<S3FrameExportHealthCheck>("s3_export", tags: new[] { "s3", "readiness" });
 
         services.AddOpenApi("v1", options =>
         {
@@ -396,6 +410,7 @@ public static class Program
                 sp.GetRequiredService<IOptionsMonitor<FrameExportOptions>>(),
                 sp.GetRequiredService<IMinioClientProvider>(),
                 sp.GetRequiredService<IFrameExportResiliencePolicyProvider>(),
+                sp.GetRequiredService<HealthCheckService>(),
                 sp.GetRequiredService<ILogger<S3FrameExportSink>>()));
 
         services.AddSingleton<IFrameExportSink>(sp =>
@@ -404,6 +419,7 @@ public static class Program
                 sp.GetRequiredService<IOptionsMonitor<FrameExportOptions>>(),
                 sp.GetRequiredService<IMinioClientProvider>(),
                 sp.GetRequiredService<IFrameExportResiliencePolicyProvider>(),
+                sp.GetRequiredService<HealthCheckService>(),
                 sp.GetRequiredService<ILogger<S3FrameExportSink>>()));
 
         services.AddOptions<FrameExportDispatcherOptions>()
@@ -823,7 +839,7 @@ public static class Program
 
         app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
-            Predicate = check => check.Tags.Contains("database")
+            Predicate = check => check.Tags.Contains("readiness")
         });
     }
 }
