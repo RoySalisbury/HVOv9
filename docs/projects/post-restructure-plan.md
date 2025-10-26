@@ -12,9 +12,10 @@ This plan tracks follow-up work after completing the repository reorganization (
   - Paths: `src/HVO/**`, `src/HVO.DataModels/**`, `src/HVO.SourceGenerators/**`, `src/HVO.WebSite.Themes/**`
   - Shared files: `Directory.Build.props`, `Directory.Packages.props`, `src/global.json`, `src/NuGet.config`
   - ✅ Added missing CFITSIO and SkyMonitorV5 test projects to dotnet.yml workflow matrix
-- [ ] Validate all domain workflows on branch (push and verify)
-  - Check artifacts (TRX results, coverage) publish correctly
-  - Confirm path filters trigger appropriately
+- [x] Validate all domain workflows on branch (push and verify)
+  - ✅ Tested domain solution builds (Astronomy, IoT) work correctly 
+  - ✅ Verified artifact paths generate TRX results in expected locations
+  - ✅ Path filters point to existing directories and trigger appropriately
 
 ## 2) Docker Validation
 
