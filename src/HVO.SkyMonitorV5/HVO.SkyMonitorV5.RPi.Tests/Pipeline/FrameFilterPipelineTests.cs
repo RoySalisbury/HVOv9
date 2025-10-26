@@ -283,17 +283,14 @@ public sealed class FrameFilterPipelineTests
         };
 
         var pipeline = new FrameFilterPipeline(filters, composer, NullLogger<FrameFilterPipeline>.Instance);
-        // Updated encoder constructor requires IFitsFrameEncoder, IRigAcquisitionAdapter, and IOptionsMonitor<FitsExportOptions>
+        // Updated encoder constructor requires IFitsFrameEncoder and IRigAcquisitionAdapter
         var fitsEncoderMock = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
         var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Loose);
         rigAdapter.SetupGet(a => a.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
-        var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = false });
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoderMock.Object,
-            rigAdapter.Object,
-            fitsOptionsMonitor.Object);
+            rigAdapter.Object);
 
         byte[]? referencePayload = null;
         var expectedFilters = new[]

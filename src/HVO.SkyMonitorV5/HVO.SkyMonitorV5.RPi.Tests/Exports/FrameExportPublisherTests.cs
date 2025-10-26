@@ -30,8 +30,6 @@ namespace HVO.SkyMonitorV5.RPi.Tests.Exports
                 .Returns(true);
 
             var fitsOptions = new FitsExportOptions { EnableForProcessed = true };
-            var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-            fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(fitsOptions);
 
             var expectedFitsBytes = new byte[] { 70, 73, 84, 83 }; // 'FITS' header bytes for test
             var fitsEncoderMock = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
@@ -148,8 +146,6 @@ public sealed class FrameExportPublisherTests
             .Returns(true);
 
         var fitsOptions = new FitsExportOptions { EnableForProcessed = true };
-        var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(fitsOptions);
 
         var expectedFitsBytes = new byte[] { 70, 73, 84, 83 }; // 'FITS' header bytes for test
         var fitsEncoderMock = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
@@ -268,8 +264,6 @@ namespace HVO.SkyMonitorV5.RPi.Tests.Exports
                 .Returns(true);
 
             var fitsOptions = new FitsExportOptions { EnableForProcessed = true };
-            var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-            fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(fitsOptions);
 
             var expectedFitsBytes = new byte[] { 70, 73, 84, 83 }; // 'FITS' header bytes for test
             var fitsEncoderMock = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
@@ -402,8 +396,6 @@ public sealed class FrameExportPublisherTests
                 .Returns(true);
 
             var fitsOptions = new FitsExportOptions { EnableForProcessed = true };
-            var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-            fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(fitsOptions);
 
             var expectedFitsBytes = new byte[] { 70, 73, 84, 83 }; // 'FITS' header bytes for test
             var fitsEncoderMock = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
@@ -627,8 +619,6 @@ private static FrameExportPublisher CreatePublisher(
 
     var queue = archiveQueue ?? Mock.Of<IImageFrameArchiveIngestionQueue>(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>()) == true);
 
-    var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-    fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(new FitsExportOptions
     {
         EnableForRaw = false,
         EnableForProcessed = false

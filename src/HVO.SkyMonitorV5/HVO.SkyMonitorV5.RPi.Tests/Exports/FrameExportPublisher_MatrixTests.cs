@@ -69,11 +69,6 @@ public sealed class FrameExportPublisher_MatrixTests
     var imageHistoryMonitor = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
     imageHistoryMonitor.SetupGet(m => m.CurrentValue).Returns(imageHistoryOptions ?? new ImageHistoryOptions());
 
-#pragma warning disable CS0618 // Type or member is obsolete
-    var fitsOptionsMonitor = new Mock<IOptionsMonitor<FitsExportOptions>>();
-    fitsOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(new FitsExportOptions());
-#pragma warning restore CS0618 // Type or member is obsolete
-
     var exportOptionsMonitor = new Mock<IOptionsMonitor<FrameExportOptions>>();
     exportOptionsMonitor.SetupGet(m => m.CurrentValue).Returns(exportOptions);
 
@@ -88,7 +83,6 @@ public sealed class FrameExportPublisher_MatrixTests
         featureToggle.Object,
         archiveQueue,
         imageHistoryMonitor.Object,
-        fitsOptionsMonitor.Object,
         exportOptionsMonitor.Object);
   }
 

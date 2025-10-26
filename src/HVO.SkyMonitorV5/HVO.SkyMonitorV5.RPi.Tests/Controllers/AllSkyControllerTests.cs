@@ -17,8 +17,6 @@ using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Tests.Controllers;
 
-#pragma warning disable CS0618 // Suppress obsolete warnings for legacy FitsExportOptions usage in tests
-
 [TestClass]
 public sealed class AllSkyControllerTests
 {
@@ -78,7 +76,7 @@ public sealed class AllSkyControllerTests
         var fitsBytes = new byte[] { 0x01, 0x02, 0x03 };
         var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
         fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()))
+            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
             .Returns(new ProcessedFrameDelivery(fitsBytes, "application/fits", "fits"));
 
         var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
@@ -96,7 +94,7 @@ public sealed class AllSkyControllerTests
 
         var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
         fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()))
+            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
             .Throws(new InvalidOperationException("encode failure"));
 
         var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
@@ -107,7 +105,7 @@ public sealed class AllSkyControllerTests
         Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
 
         // Encoder called once, then fallback path
-        fitsEncoder.Verify(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Once);
+        fitsEncoder.Verify(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Once);
     }
 
     [TestMethod]
@@ -118,7 +116,7 @@ public sealed class AllSkyControllerTests
         var fitsBytes = new byte[] { 0x0A, 0x0B, 0x0C };
         var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
         fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()))
+            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
             .Returns(new ProcessedFrameDelivery(fitsBytes, "application/fits", "fits"));
 
         var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
@@ -138,7 +136,7 @@ public sealed class AllSkyControllerTests
 
         var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
         fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()))
+            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
             .Throws(new InvalidOperationException("encode failure"));
 
         var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
@@ -148,7 +146,7 @@ public sealed class AllSkyControllerTests
         Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Fallback should return raw skimg content type.");
         Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
 
-        fitsEncoder.Verify(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Once);
+        fitsEncoder.Verify(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Once);
     }
 
     [TestMethod]
@@ -189,8 +187,6 @@ public sealed class AllSkyControllerTests
 
         var encoder = new Mock<IProcessedFrameEncoder>();
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = enableFits, EnableForProcessed = false });
         var rigAdapter = new Mock<HVO.SkyMonitorV5.RPi.Cameras.Acquisition.IRigAcquisitionAdapter>();
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(HVO.SkyMonitorV5.RPi.Cameras.Projection.RigPresets.MockAsi174_Fujinon);
 
@@ -200,7 +196,6 @@ public sealed class AllSkyControllerTests
             encoder.Object,
             fitsEncoder ?? Mock.Of<IFitsFrameEncoder>(),
             rigAdapter.Object,
-            fitsOptions.Object,
             NullLogger<AllSkyController>.Instance)
         {
             ControllerContext = new ControllerContext
@@ -257,9 +252,6 @@ public sealed class AllSkyControllerTests
         var optionsMonitor = new Mock<IOptionsMonitor<CameraPipelineOptions>>();
         optionsMonitor.SetupGet(options => options.CurrentValue).Returns(new CameraPipelineOptions());
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = false, EnableForProcessed = false });
-
         var rigAdapter = new Mock<HVO.SkyMonitorV5.RPi.Cameras.Acquisition.IRigAcquisitionAdapter>();
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(HVO.SkyMonitorV5.RPi.Cameras.Projection.RigPresets.MockAsi174_Fujinon);
 
@@ -269,7 +261,6 @@ public sealed class AllSkyControllerTests
             processedEncoder,
             Mock.Of<IFitsFrameEncoder>(),
             rigAdapter.Object,
-            fitsOptions.Object,
             NullLogger<AllSkyController>.Instance)
         {
             ControllerContext = new ControllerContext

@@ -12,8 +12,6 @@ using HVO.SkyMonitorV5.RPi.Options;
 using HVO.SkyMonitorV5.RPi.Cameras.Acquisition;
 using HVO.SkyMonitorV5.RPi.Cameras.Projection;
 
-#pragma warning disable CS0618 // Suppress obsolete warnings for FitsExportOptions usage in legacy-path tests
-
 namespace HVO.SkyMonitorV5.RPi.Tests.Services;
 
 [TestClass]
@@ -40,8 +38,6 @@ public sealed class ProcessedFrameEncoderTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = false, EnableForRaw = false });
         var rigAdapter = new Mock<IRigAcquisitionAdapter>();
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
         var fitsEncoder = new Mock<IFitsFrameEncoder>();
@@ -49,8 +45,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter.Object,
-            fitsOptions.Object);
+            rigAdapter.Object);
 
         var delivery = encoder.Encode(frame);
 
@@ -93,8 +88,6 @@ public sealed class ProcessedFrameEncoderTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = false, EnableForRaw = false });
         var rigAdapter = new Mock<IRigAcquisitionAdapter>();
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
         var fitsEncoder = new Mock<IFitsFrameEncoder>();
@@ -102,8 +95,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter.Object,
-            fitsOptions.Object);
+            rigAdapter.Object);
 
         var delivery = encoder.Encode(frame);
 
@@ -137,22 +129,19 @@ public sealed class ProcessedFrameEncoderTests
 
         var fitsPayload = new byte[] { 0x46, 0x49, 0x54, 0x53 }; // 'FITS' marker-like bytes for test
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = true, EnableForRaw = false });
 
         var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Strict);
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
 
         var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
         fitsEncoder
-            .Setup(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()))
+            .Setup(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
             .Returns(new ProcessedFrameDelivery(fitsPayload, "application/fits", "fits"));
 
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter.Object,
-            fitsOptions.Object);
+            rigAdapter.Object);
 
         var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.Export);
 
@@ -160,7 +149,7 @@ public sealed class ProcessedFrameEncoderTests
         Assert.AreEqual("fits", delivery.FileExtension, "FITS-enabled delivery should use fits file extension.");
         Assert.IsGreaterThan(0, delivery.Payload.Length, "FITS-enabled encoder should emit non-empty payload.");
 
-        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Once);
+        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Once);
     }
 
     [TestMethod]
@@ -184,8 +173,6 @@ public sealed class ProcessedFrameEncoderTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = true, EnableForRaw = false });
 
         var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Strict);
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
@@ -196,8 +183,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter.Object,
-            fitsOptions.Object);
+            rigAdapter.Object);
 
         var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.UserInterface);
 
@@ -206,7 +192,7 @@ public sealed class ProcessedFrameEncoderTests
         Assert.IsGreaterThan(0, delivery.Payload.Length, "UI encoder should emit non-empty payload.");
 
         // FITS encoder should not have been called for UI context
-        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Never);
+        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Never);
     }
 
     [TestMethod]
@@ -230,8 +216,6 @@ public sealed class ProcessedFrameEncoderTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = true, EnableForRaw = false });
 
         var rigAdapter = new Mock<IRigAcquisitionAdapter>(MockBehavior.Strict);
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
@@ -242,8 +226,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter.Object,
-            fitsOptions.Object);
+            rigAdapter.Object);
 
         var delivery = encoder.Encode(frame); // Default context should be UserInterface
 
@@ -252,7 +235,7 @@ public sealed class ProcessedFrameEncoderTests
         Assert.IsGreaterThan(0, delivery.Payload.Length, "Default encoder should emit non-empty payload.");
 
         // FITS encoder should not have been called for default (UI) context
-        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Never);
+        fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Never);
     }
 
     [TestMethod]
@@ -277,8 +260,6 @@ public sealed class ProcessedFrameEncoderTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = false, EnableForRaw = false });
         var rigAdapter = new Mock<IRigAcquisitionAdapter>();
         rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
         var fitsEncoder = new Mock<IFitsFrameEncoder>();
@@ -286,8 +267,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter.Object,
-            fitsOptions.Object);
+            rigAdapter.Object);
 
         // Act: Encode with custom JPEG @ 80% instead of frame's PNG @ 100%
         var customEncoding = new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 80);
@@ -320,7 +300,6 @@ public sealed class ProcessedFrameEncoderTests
             ProcessingMilliseconds: 0,
             ImmutableImage: image);
 
-        var fitsOptionsMonitor = Mock.Of<IOptionsMonitor<FitsExportOptions>>(m => m.CurrentValue == new FitsExportOptions());
         var rigAdapter = Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon);
 
         var expected = new byte[] { 0x01, 0x02, 0x03 };
@@ -332,8 +311,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             fitsEncoder.Object,
-            rigAdapter,
-            fitsOptionsMonitor);
+            rigAdapter);
 
         var custom = new ImageEncodingSettings(ImageEncodingFormat.Fits, 100)
         {
@@ -380,8 +358,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             Mock.Of<IFitsFrameEncoder>(),
-            Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon),
-            Mock.Of<IOptionsMonitor<FitsExportOptions>>(m => m.CurrentValue == new FitsExportOptions()));
+            Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon));
 
         try
         {
@@ -418,8 +395,7 @@ public sealed class ProcessedFrameEncoderTests
         var encoder = new ProcessedFrameEncoder(
             NullLogger<ProcessedFrameEncoder>.Instance,
             Mock.Of<IFitsFrameEncoder>(),
-            Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon),
-            Mock.Of<IOptionsMonitor<FitsExportOptions>>(m => m.CurrentValue == new FitsExportOptions()));
+            Mock.Of<IRigAcquisitionAdapter>(a => a.ActiveRig == RigPresets.MockAsi174_Fujinon));
 
         try
         {

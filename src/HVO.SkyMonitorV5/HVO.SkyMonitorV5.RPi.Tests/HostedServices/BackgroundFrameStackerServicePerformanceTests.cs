@@ -370,8 +370,6 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
         archiveQueue.Setup(q => q.TryEnqueue(It.IsAny<ImageFrameArchiveIngestionRequest>())).Returns(true);
         var imageHistoryOptions = new Mock<IOptionsMonitor<ImageHistoryOptions>>();
         imageHistoryOptions.SetupGet(o => o.CurrentValue).Returns(new ImageHistoryOptions());
-        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
-        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = false, EnableForProcessed = false });
         var exportOptions = new Mock<IOptionsMonitor<FrameExportOptions>>();
         exportOptions.SetupGet(o => o.CurrentValue).Returns(new FrameExportOptions());
 
@@ -384,7 +382,6 @@ public sealed class BackgroundFrameStackerServicePerformanceTests
             featureMonitor.Object,
             archiveQueue.Object,
             imageHistoryOptions.Object,
-            fitsOptions.Object,
             exportOptions.Object);
     }
 }
