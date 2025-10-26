@@ -93,11 +93,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 ARG BUILD_VERSION=dev
 WORKDIR /app
 
-# Install native dependencies required by camera adapters, telemetry, and SkiaSharp
+# Install native dependencies required by camera adapters, telemetry, SkiaSharp, and CFITSIO
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        libcurl3-gnutls \
         fontconfig \
         fonts-dejavu-core \
         fonts-liberation2 \

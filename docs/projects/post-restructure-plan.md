@@ -28,7 +28,7 @@ This plan tracks follow-up work after completing the repository reorganization (
   - ✅ **Full Stack**: docker-compose orchestration working with proper service dependencies
   - ✅ **Documentation**: Comprehensive validation results in `docs/validation/docker-validation-results.md`
   - 🔧 **Fixed**: WebSite Playground Dockerfile missing HVO.NinaClient dependency
-  - ⚠️ **Known Issue**: CFITSIO native libraries cause graceful fallback in SkyMonitor (container remains healthy)
+  - ✅ **Resolved**: CFITSIO native libraries now properly configured with libcurl-gnutls dependency
 
 ## ✅ Progress Status
 
