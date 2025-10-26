@@ -252,4 +252,48 @@ public sealed class ProcessedFrameEncoderTests
         // FITS encoder should not have been called for default (UI) context
         fitsEncoder.Verify(e => e.EncodeProcessed(It.IsAny<ProcessedFrame>(), It.IsAny<RigSpec>(), It.IsAny<FitsExportOptions>()), Times.Never);
     }
+
+    [TestMethod]
+    public void Encode_WithCustomEncoding_OverridesFrameSettings()
+    {
+        // Arrange: Frame has PNG @ 100% but custom encoding specifies JPEG @ 80%
+        using var bitmap = new SKBitmap(width: 16, height: 16);
+        using var image = SKImage.FromBitmap(bitmap);
+        var exposure = new ExposureSettings(ExposureMilliseconds: 1000, Gain: 200, AutoExposure: false, AutoGain: false);
+        var frameEncoding = new ImageEncodingSettings(ImageEncodingFormat.Png, 100);
+
+        var frame = new ProcessedFrame(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            exposure,
+            frameEncoding,
+            ImageEncodingUtilities.ToContentType(frameEncoding.Format),
+            ImageEncodingUtilities.ToFileExtension(frameEncoding.Format),
+            FramesStacked: 1,
+            IntegrationMilliseconds: exposure.ExposureMilliseconds,
+            AppliedFilters: Array.Empty<string>(),
+            ProcessingMilliseconds: 0,
+            ImmutableImage: image);
+
+        var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
+        fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForProcessed = false, EnableForRaw = false });
+        var rigAdapter = new Mock<IRigAcquisitionAdapter>();
+        rigAdapter.SetupGet(r => r.ActiveRig).Returns(RigPresets.MockAsi174_Fujinon);
+        var fitsEncoder = new Mock<IFitsFrameEncoder>();
+
+        var encoder = new ProcessedFrameEncoder(
+            NullLogger<ProcessedFrameEncoder>.Instance,
+            fitsEncoder.Object,
+            rigAdapter.Object,
+            fitsOptions.Object);
+
+        // Act: Encode with custom JPEG @ 80% instead of frame's PNG @ 100%
+        var customEncoding = new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 80);
+        var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.UserInterface, customEncoding);
+
+        // Assert: Should use custom encoding (JPEG) not frame encoding (PNG)
+        Assert.AreEqual("image/jpeg", delivery.ContentType, "Custom encoding should override frame encoding for content type.");
+        Assert.AreEqual("jpg", delivery.FileExtension, "Custom encoding should override frame encoding for file extension.");
+        Assert.IsGreaterThan(0, delivery.Payload.Length, "Encoder should emit non-empty payload with custom encoding.");
+    }
 }

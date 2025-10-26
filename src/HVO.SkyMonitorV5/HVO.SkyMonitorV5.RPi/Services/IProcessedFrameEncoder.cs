@@ -1,5 +1,6 @@
 using System;
 using HVO.SkyMonitorV5.RPi.Models;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
 
@@ -24,8 +25,12 @@ public interface IProcessedFrameEncoder
     /// </summary>
     /// <param name="frame">The processed frame to encode.</param>
     /// <param name="context">The encoding context (UI vs Export) to determine format behavior.</param>
+    /// <param name="customEncoding">Optional custom encoding settings to override frame defaults.</param>
     /// <returns>The encoded payload, including content type metadata.</returns>
-    ProcessedFrameDelivery Encode(ProcessedFrame frame, ProcessedFrameEncodingContext context = ProcessedFrameEncodingContext.UserInterface);
+    ProcessedFrameDelivery Encode(
+        ProcessedFrame frame,
+        ProcessedFrameEncodingContext context = ProcessedFrameEncodingContext.UserInterface,
+        ImageEncodingSettings? customEncoding = null);
 }
 
 /// <summary>

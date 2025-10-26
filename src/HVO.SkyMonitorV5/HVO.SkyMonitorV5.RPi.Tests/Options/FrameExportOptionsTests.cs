@@ -18,7 +18,7 @@ public sealed class FrameExportOptionsTests
         options.Normalize();
 
         Assert.AreEqual(FrameExportPayloadScope.ArchiveOnly, options.Raw.PayloadScope);
-        Assert.AreEqual(FrameExportPayloadScope.DeliveryOnly, options.Processed.PayloadScope);
+        Assert.AreEqual(FrameExportPayloadScope.ArchiveOnly, options.Processed.PayloadScope, "Processed exports now default to ArchiveOnly instead of DeliveryOnly");
     }
 
     [TestMethod]

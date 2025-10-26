@@ -99,7 +99,8 @@ public sealed class FrameExportPublisherFitsTests
             featureMonitor.Object,
             archiveQueue.Object,
             imageHistoryMonitor.Object,
-            fitsOptionsMonitor.Object
+            fitsOptionsMonitor.Object,
+            Mock.Of<IOptionsMonitor<FrameExportOptions>>(o => o.CurrentValue == new FrameExportOptions())
         );
 
         // Act
@@ -116,8 +117,8 @@ public sealed class FrameExportPublisherFitsTests
         // Assert
         dispatcher.Verify(d => d.TryEnqueue(It.IsAny<FrameExportEnvelope>()), Times.Once);
         Assert.IsNotNull(capturedEnvelope);
-        Assert.AreEqual("image/png", capturedEnvelope!.ContentType, "Processed exports should use PNG/JPG, not FITS");
-        Assert.AreEqual("png", capturedEnvelope.FileExtension);
+        Assert.AreEqual("image/jpeg", capturedEnvelope!.ContentType, "Processed exports use ArchiveEncoding (default JPEG @ 95%), not FITS");
+        Assert.AreEqual("jpg", capturedEnvelope.FileExtension);
         Assert.IsGreaterThan(0, capturedEnvelope.Payload.Length);
         // FITS encoder should not have been used for processed exports
     }

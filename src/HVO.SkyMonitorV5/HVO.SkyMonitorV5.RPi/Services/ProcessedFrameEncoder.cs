@@ -31,7 +31,10 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
         _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
     }
 
-    public ProcessedFrameDelivery Encode(ProcessedFrame frame, ProcessedFrameEncodingContext context = ProcessedFrameEncodingContext.UserInterface)
+    public ProcessedFrameDelivery Encode(
+        ProcessedFrame frame,
+        ProcessedFrameEncodingContext context = ProcessedFrameEncodingContext.UserInterface,
+        ImageEncodingSettings? customEncoding = null)
     {
         if (frame is null)
         {
@@ -61,7 +64,10 @@ public sealed class ProcessedFrameEncoder : IProcessedFrameEncoder
             }
         }
 
-        var encoding = ImageEncodingUtilities.Normalize(frame.Encoding);
+        // Use custom encoding if provided, otherwise fall back to frame's encoding settings
+        var encoding = customEncoding is not null
+            ? ImageEncodingUtilities.Normalize(customEncoding)
+            : ImageEncodingUtilities.Normalize(frame.Encoding);
         var format = ImageEncodingUtilities.ToSkiaFormat(encoding.Format);
 
         using var data = frame.ImmutableImage.Encode(format, encoding.Quality);

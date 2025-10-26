@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
 using HVO.SkyMonitorV5.RPi.Exports;
+using HVO.SkyMonitorV5.RPi.Pipeline;
 
 namespace HVO.SkyMonitorV5.RPi.Options;
 
@@ -48,6 +49,29 @@ public sealed class FrameExportStageOptions
 
     public FrameExportPayloadScope PayloadScope { get; set; } = FrameExportPayloadScope.Unspecified;
 
+    /// <summary>
+    /// Encoding settings for archive role exports. Defaults to JPG @ 95% quality.
+    /// For processed frames, this encoding is used for all exports (both archive and delivery roles).
+    /// </summary>
+    /// <remarks>
+    /// Currently, the export pipeline creates a single payload per frame using ArchiveEncoding.
+    /// This payload is written to all configured export targets (archive and/or delivery).
+    /// Future enhancement: Support per-role encoding by creating separate payloads when
+    /// ArchiveEncoding and DeliveryEncoding differ.
+    /// </remarks>
+    public ImageEncodingSettings ArchiveEncoding { get; set; } = new(ImageEncodingFormat.Jpeg, 95);
+
+    /// <summary>
+    /// Encoding settings for delivery role exports. Defaults to null (uses ArchiveEncoding).
+    /// </summary>
+    /// <remarks>
+    /// Reserved for future enhancement. Currently, all exports use ArchiveEncoding.
+    /// When set, this value is available in configuration but not yet applied to delivery exports.
+    /// Planned: When ArchiveAndDelivery scope is used with different encodings, create separate
+    /// payloads per role with their respective encoding settings.
+    /// </remarks>
+    public ImageEncodingSettings? DeliveryEncoding { get; set; }
+
     internal void Normalize(FrameExportStage stage)
     {
         foreach (var filesystem in Filesystem)
@@ -64,8 +88,11 @@ public sealed class FrameExportStageOptions
         {
             PayloadScope = stage == FrameExportStage.Raw
                 ? FrameExportPayloadScope.ArchiveOnly
-                : FrameExportPayloadScope.DeliveryOnly;
+                : FrameExportPayloadScope.ArchiveOnly; // Changed default to ArchiveOnly for processed
         }
+
+        // Ensure archive encoding has defaults
+        ArchiveEncoding ??= new ImageEncodingSettings(ImageEncodingFormat.Jpeg, 95);
     }
 
     internal bool HasActiveFilesystemSink() => Enabled && Filesystem.Any(static option => option is { Enabled: true, RootPathLength: > 0 });
@@ -111,7 +138,7 @@ public sealed class FilesystemFrameExportSinkOptions
     public string? Prefix
     {
         get => _prefix;
-    set => _prefix = string.IsNullOrWhiteSpace(value) ? null : value.Trim().Trim('/', '\\');
+        set => _prefix = string.IsNullOrWhiteSpace(value) ? null : value.Trim().Trim('/', '\\');
     }
 
     public bool IncludeMetadataManifest { get; set; } = true;
@@ -129,7 +156,7 @@ public sealed class FilesystemFrameExportSinkOptions
             yield break;
         }
 
-    var segments = _prefix.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var segments = _prefix.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var segment in segments)
         {
             yield return segment;

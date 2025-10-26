@@ -30,6 +30,7 @@ public sealed class FrameExportPublisher
     private readonly IImageFrameArchiveIngestionQueue _archiveQueue;
     private readonly IOptionsMonitor<ImageHistoryOptions> _imageHistoryOptions;
     private readonly IOptionsMonitor<FitsExportOptions> _fitsOptions;
+    private readonly IOptionsMonitor<FrameExportOptions> _exportOptions;
 
     public FrameExportPublisher(
         IFrameExportDispatcher dispatcher,
@@ -40,7 +41,8 @@ public sealed class FrameExportPublisher
         ISkiaPipelineFeatureToggleMonitor featureMonitor,
         IImageFrameArchiveIngestionQueue archiveQueue,
         IOptionsMonitor<ImageHistoryOptions> imageHistoryOptions,
-        IOptionsMonitor<FitsExportOptions> fitsOptions)
+        IOptionsMonitor<FitsExportOptions> fitsOptions,
+        IOptionsMonitor<FrameExportOptions> exportOptions)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _processedFrameEncoder = processedFrameEncoder ?? throw new ArgumentNullException(nameof(processedFrameEncoder));
@@ -51,6 +53,7 @@ public sealed class FrameExportPublisher
         _archiveQueue = archiveQueue ?? throw new ArgumentNullException(nameof(archiveQueue));
         _imageHistoryOptions = imageHistoryOptions ?? throw new ArgumentNullException(nameof(imageHistoryOptions));
         _fitsOptions = fitsOptions ?? throw new ArgumentNullException(nameof(fitsOptions));
+        _exportOptions = exportOptions ?? throw new ArgumentNullException(nameof(exportOptions));
     }
 
     public void PublishRawFrame(
@@ -240,7 +243,15 @@ public sealed class FrameExportPublisher
             {
                 // Processed frames are NOT RAW; always deliver JPG/PNG per encoding settings.
                 // Use UserInterface context so we never force FITS for processed outputs.
-                var delivery = _processedFrameEncoder.Encode(processedFrame, Services.ProcessedFrameEncodingContext.UserInterface);
+                // Apply ArchiveEncoding from export options for consistent quality/format across all exports.
+                var exportOptions = _exportOptions.CurrentValue;
+                var processedOptions = exportOptions.Processed;
+                var archiveEncoding = processedOptions.ArchiveEncoding;
+
+                var delivery = _processedFrameEncoder.Encode(
+                    processedFrame,
+                    Services.ProcessedFrameEncodingContext.UserInterface,
+                    archiveEncoding);
                 var contentType = delivery.ContentType;
                 var fileExtension = delivery.FileExtension ?? processedFrame.FileExtension ?? TryGetFileExtension(contentType);
 

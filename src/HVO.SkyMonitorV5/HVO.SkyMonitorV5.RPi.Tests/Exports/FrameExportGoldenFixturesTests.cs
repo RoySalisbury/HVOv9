@@ -283,9 +283,11 @@ public sealed class FrameExportGoldenFixturesTests
             imageHistoryOptions.SetupGet(o => o.CurrentValue).Returns(new ImageHistoryOptions());
             var fitsOptions = new Mock<IOptionsMonitor<FitsExportOptions>>();
             fitsOptions.SetupGet(o => o.CurrentValue).Returns(new FitsExportOptions { EnableForRaw = false, EnableForProcessed = false });
+            var exportOptions = new Mock<IOptionsMonitor<FrameExportOptions>>();
+            exportOptions.SetupGet(o => o.CurrentValue).Returns(new FrameExportOptions());
 
             var encoder = new Mock<IProcessedFrameEncoder>(MockBehavior.Strict);
-            encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>(), It.IsAny<ProcessedFrameEncodingContext>())).Returns(expectedDelivery);
+            encoder.Setup(e => e.Encode(It.IsAny<ProcessedFrame>(), It.IsAny<ProcessedFrameEncodingContext>(), It.IsAny<ImageEncodingSettings>())).Returns(expectedDelivery);
 
             var publisher = new FrameExportPublisher(
                 dispatcher,
@@ -296,7 +298,8 @@ public sealed class FrameExportGoldenFixturesTests
                 featureMonitor.Object,
                 archiveQueue.Object,
                 imageHistoryOptions.Object,
-                fitsOptions.Object);
+                fitsOptions.Object,
+                exportOptions.Object);
 
             publisher.PublishRawFrame(
                 frameNumber: 1,
