@@ -2,7 +2,7 @@ name: .NET Build & Test
 
 on:
   push:
-    branches: [ main, feature/reorganize-project-structure ]
+    branches: [ main ]
     paths:
       - 'src/HVO/**'
       - 'src/HVO.DataModels/**'
