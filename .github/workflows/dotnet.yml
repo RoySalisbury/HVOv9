@@ -208,3 +208,140 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Job to generate coverage badge from test results
+  # Prerequisites for this job to work:
+  # 1. Create a GitHub Gist with filename 'coverage-badge.json' (can be empty or have placeholder JSON)
+  # 2. Create a GitHub Personal Access Token with 'gist' scope
+  # 3. Add the token as a repository secret named 'GIST_TOKEN'
+  # 4. Update GIST_ID environment variable below with your Gist ID
+  # See docs/guides/coverage-badge-setup.md for detailed setup instructions
+  coverage-badge:
+    needs: [test-unit]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 10
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+    
+    steps:
+      - name: Download all unit test coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-unit-*
+          path: coverage-reports
+          merge-multiple: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage report and calculate percentage
+        id: coverage
+        run: |
+          # Find all Cobertura coverage files
+          COVERAGE_FILES=$(find coverage-reports -name "coverage.cobertura.xml" -type f)
+          
+          if [ -z "$COVERAGE_FILES" ]; then
+            echo "No coverage files found"
+            echo "percentage=0" >> $GITHUB_OUTPUT
+            echo "color=red" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Generate summary from all Cobertura files
+          reportgenerator \
+            -reports:"coverage-reports/**/coverage.cobertura.xml" \
+            -targetdir:coverage-summary \
+            -reporttypes:"Badges;TextSummary"
+          
+          # Extract coverage percentage from the text summary
+          if [ -f coverage-summary/Summary.txt ]; then
+            COVERAGE=$(grep "Line coverage:" coverage-summary/Summary.txt | grep -oP '\d+\.?\d*(?=%)')
+            echo "Coverage percentage: $COVERAGE%"
+          else
+            # Fallback: try to extract from badge SVG
+            COVERAGE=$(grep -oP 'coverage-\K[0-9.]+' coverage-summary/badge_linecoverage.svg 2>/dev/null | head -1)
+          fi
+          
+          # Default to 0 if extraction failed
+          COVERAGE=${COVERAGE:-0}
+          echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+          
+          # Determine badge color based on coverage percentage
+          if (( $(echo "$COVERAGE >= 80" | bc -l) )); then
+            COLOR="brightgreen"
+          elif (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+            COLOR="yellow"
+          elif (( $(echo "$COVERAGE >= 40" | bc -l) )); then
+            COLOR="orange"
+          else
+            COLOR="red"
+          fi
+          echo "color=$COLOR" >> $GITHUB_OUTPUT
+          
+          # Display summary
+          cat coverage-summary/Summary.txt || echo "Summary not available"
+
+      - name: Update Gist with coverage badge
+        if: env.GIST_TOKEN != '' && env.GIST_ID != ''
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          # TODO: Replace with actual Gist ID once created
+          # Get your Gist ID from https://gist.github.com after creating a gist with filename 'coverage-badge.json'
+          GIST_ID: ${{ vars.COVERAGE_GIST_ID || 'PLACEHOLDER_GIST_ID' }}
+        run: |
+          # Create the badge JSON following Shields.io endpoint schema
+          cat > coverage-badge.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "${{ steps.coverage.outputs.percentage }}%",
+            "color": "${{ steps.coverage.outputs.color }}"
+          }
+          EOF
+          
+          echo "Coverage badge JSON:"
+          cat coverage-badge.json
+          
+          # Only update the Gist if we have a valid Gist ID (not the placeholder)
+          if [ "$GIST_ID" != "PLACEHOLDER_GIST_ID" ]; then
+            echo "Updating Gist $GIST_ID..."
+            
+            # Escape JSON content for API call
+            BADGE_CONTENT=$(cat coverage-badge.json | jq -c .)
+            
+            # Update the Gist via GitHub API
+            curl -X PATCH \
+              -H "Authorization: token $GIST_TOKEN" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"files\":{\"coverage-badge.json\":{\"content\":$BADGE_CONTENT}}}" \
+              "https://api.github.com/gists/$GIST_ID"
+          else
+            echo "⚠️  Skipping Gist update - GIST_ID is set to placeholder value"
+            echo "📝 To enable coverage badge updates:"
+            echo "   1. Create a Gist at https://gist.github.com with filename 'coverage-badge.json'"
+            echo "   2. Set repository variable COVERAGE_GIST_ID to your Gist ID"
+            echo "   3. Create a Personal Access Token with 'gist' scope"
+            echo "   4. Add it as repository secret GIST_TOKEN"
+            echo "   See docs/guides/coverage-badge-setup.md for details"
+          fi
+
+      - name: Upload coverage summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: |
+            coverage-summary/Summary.txt
+            coverage-summary/badge_*.svg
+            coverage-badge.json
+          if-no-files-found: ignore
+          retention-days: 7
+
