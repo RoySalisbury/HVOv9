@@ -5,7 +5,7 @@ Welcome to the HVOv9 documentation! This index provides quick navigation to all 
 ## 📚 Quick Start
 
 - **[Main README](../README.md)** - Project overview, tech stack, and getting started
-- **[Coding Standards](.github/copilot-instructions.md)** - Workspace-wide development guidelines
+- **[Coding Standards](../.github/copilot-instructions.md)** - Workspace-wide development guidelines
 - **[Dev Container Setup](guides/devcontainer-environment-setup.md)** - Setting up your development environment
 
 ## 🎯 Domain Documentation
