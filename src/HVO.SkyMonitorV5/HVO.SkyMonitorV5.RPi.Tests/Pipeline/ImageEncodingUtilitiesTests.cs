@@ -41,7 +41,7 @@ public class ImageEncodingUtilitiesTests
     catch (NotSupportedException ex)
     {
       // Assert
-      Assert.IsTrue(ex.Message.Contains("FITS"));
+      Assert.Contains("FITS", ex.Message);
     }
   }
 
@@ -57,7 +57,7 @@ public class ImageEncodingUtilitiesTests
     catch (NotSupportedException ex)
     {
       // Assert
-      Assert.IsTrue(ex.Message.Contains("TIFF"));
+      Assert.Contains("TIFF", ex.Message);
     }
   }
 
@@ -73,7 +73,7 @@ public class ImageEncodingUtilitiesTests
     catch (NotSupportedException ex)
     {
       // Assert
-      Assert.IsTrue(ex.Message.Contains("XISF"));
+      Assert.Contains("XISF", ex.Message);
     }
   }
 

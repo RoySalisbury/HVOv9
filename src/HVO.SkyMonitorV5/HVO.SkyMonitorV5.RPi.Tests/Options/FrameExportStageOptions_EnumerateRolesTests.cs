@@ -20,7 +20,7 @@ public sealed class FrameExportStageOptions_EnumerateRolesTests
 
     var roles = stageOptions.EnumerateRoles().ToArray();
 
-    Assert.AreEqual(1, roles.Length, "ArchiveOnly should yield exactly one role.");
+    Assert.HasCount(1, roles, "ArchiveOnly should yield exactly one role.");
     Assert.AreEqual(FrameExportPayloadRole.Archive, roles[0], "Role should be Archive.");
   }
 
@@ -36,7 +36,7 @@ public sealed class FrameExportStageOptions_EnumerateRolesTests
 
     var roles = stageOptions.EnumerateRoles().ToArray();
 
-    Assert.AreEqual(1, roles.Length, "DeliveryOnly should yield exactly one role.");
+    Assert.HasCount(1, roles, "DeliveryOnly should yield exactly one role.");
     Assert.AreEqual(FrameExportPayloadRole.Delivery, roles[0], "Role should be Delivery.");
   }
 
@@ -52,7 +52,7 @@ public sealed class FrameExportStageOptions_EnumerateRolesTests
 
     var roles = stageOptions.EnumerateRoles().ToArray();
 
-    Assert.AreEqual(2, roles.Length, "ArchiveAndDelivery should yield both roles.");
+    Assert.HasCount(2, roles, "ArchiveAndDelivery should yield both roles.");
     CollectionAssert.Contains(roles, FrameExportPayloadRole.Archive, "Roles should include Archive.");
     CollectionAssert.Contains(roles, FrameExportPayloadRole.Delivery, "Roles should include Delivery.");
   }
@@ -68,7 +68,7 @@ public sealed class FrameExportStageOptions_EnumerateRolesTests
 
     var roles = stageOptions.EnumerateRoles().ToArray();
 
-    Assert.AreEqual(0, roles.Length, "Unspecified scope should yield no roles.");
+    Assert.IsEmpty(roles, "Unspecified scope should yield no roles.");
   }
 
   [TestMethod]
@@ -79,7 +79,7 @@ public sealed class FrameExportStageOptions_EnumerateRolesTests
 
     var roles = options.Raw.EnumerateRoles().ToArray();
 
-    Assert.AreEqual(1, roles.Length, "Raw stage default should be ArchiveOnly.");
+    Assert.HasCount(1, roles, "Raw stage default should be ArchiveOnly.");
     Assert.AreEqual(FrameExportPayloadRole.Archive, roles[0], "Default role should be Archive.");
   }
 
@@ -91,7 +91,7 @@ public sealed class FrameExportStageOptions_EnumerateRolesTests
 
     var roles = options.Processed.EnumerateRoles().ToArray();
 
-    Assert.AreEqual(1, roles.Length, "Processed stage default should be ArchiveOnly.");
+    Assert.HasCount(1, roles, "Processed stage default should be ArchiveOnly.");
     Assert.AreEqual(FrameExportPayloadRole.Archive, roles[0], "Default role should be Archive.");
   }
 }

@@ -143,7 +143,21 @@ public sealed class ProcessedFrameEncoderTests
             fitsEncoder.Object,
             rigAdapter.Object);
 
-        var delivery = encoder.Encode(frame, ProcessedFrameEncodingContext.Export);
+        // Request explicit FITS encoding via customEncoding to exercise unified FITS path
+        var delivery = encoder.Encode(
+            frame,
+            ProcessedFrameEncodingContext.Export,
+            new ImageEncodingSettings(ImageEncodingFormat.Fits, 100)
+            {
+                FitsOptions = new FitsEncodingOptions
+                {
+                    BitDepth = FitsBitDepth.U16,
+                    Compression = FitsCompression.None,
+                    ImageFormat = image.ColorType == SKColorType.Gray8 ? FitsImageFormat.Mono : FitsImageFormat.RGB,
+                    UnsignedU16 = true,
+                    WriteChecksum = true
+                }
+            });
 
         Assert.AreEqual("application/fits", delivery.ContentType, "FITS-enabled encoding should advertise application/fits content type.");
         Assert.AreEqual("fits", delivery.FileExtension, "FITS-enabled delivery should use fits file extension.");

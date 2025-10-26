@@ -40,7 +40,7 @@ public sealed class AllSkyControllerTests
     }
 
     [TestMethod]
-    public void GetLatestFrame_DefaultRawFormat_ReturnsRawPayload()
+    public void GetLatestFrame_DefaultRawFormat_ReturnsRawPayload_Auto()
     {
         using var context = new RawFrameTestContext();
         var controller = CreateController(context.Frame);
@@ -69,85 +69,20 @@ public sealed class AllSkyControllerTests
     }
 
     [TestMethod]
-    public void GetLatestFrame_WithFitsFormat_ReturnsFitsWhenEnabled()
+    public void GetLatestFrame_WithFitsFormat_ReturnsRawPayload()
     {
         using var context = new RawFrameTestContext();
-
-        var fitsBytes = new byte[] { 0x01, 0x02, 0x03 };
-        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
-        fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
-            .Returns(new ProcessedFrameDelivery(fitsBytes, "application/fits", "fits"));
-
-        var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
+        var controller = CreateController(context.Frame);
         var result = controller.GetLatestFrame(raw: true, rawFormat: "fits") as FileContentResult;
 
-        Assert.IsNotNull(result, "Controller should return a file for FITS request.");
-        Assert.AreEqual("application/fits", result.ContentType, "FITS content type should be returned when requested and enabled.");
-        Assert.HasCount(fitsBytes.Length, result.FileContents, "FITS payload should match encoder output.");
-    }
-
-    [TestMethod]
-    public void GetLatestFrame_WithFitsFormat_EncoderFailure_FallsBackToRawPayload()
-    {
-        using var context = new RawFrameTestContext();
-
-        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
-        fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
-            .Throws(new InvalidOperationException("encode failure"));
-
-        var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
-        var result = controller.GetLatestFrame(raw: true, rawFormat: "fits") as FileContentResult;
-
-        Assert.IsNotNull(result, "Controller should return a file result on FITS failure fallback.");
-        Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Fallback should return raw skimg content type.");
+        Assert.IsNotNull(result, "Controller should return a file for raw request.");
+        Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Raw content type should be returned for raw FITS preference.");
         Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
-
-        // Encoder called once, then fallback path
-        fitsEncoder.Verify(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Once);
     }
 
-    [TestMethod]
-    public void GetLatestFrame_DefaultRawFormat_ReturnsFitsWhenEnabled()
-    {
-        using var context = new RawFrameTestContext();
+    // Removed: FITS encoder is no longer used for raw path; controller returns raw or PNG fallback
 
-        var fitsBytes = new byte[] { 0x0A, 0x0B, 0x0C };
-        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
-        fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
-            .Returns(new ProcessedFrameDelivery(fitsBytes, "application/fits", "fits"));
 
-        var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
-        var result = controller.GetLatestFrame(raw: true) as FileContentResult;
-
-        Assert.IsNotNull(result, "Controller should return a file for auto FITS when enabled.");
-        Assert.AreEqual("application/fits", result.ContentType, "Auto format should choose FITS when enabled.");
-        Assert.HasCount(fitsBytes.Length, result.FileContents, "FITS payload should match encoder output.");
-
-        fitsEncoder.VerifyAll();
-    }
-
-    [TestMethod]
-    public void GetLatestFrame_DefaultRawFormat_FitsEncoderFailure_FallsBackToRawPayload()
-    {
-        using var context = new RawFrameTestContext();
-
-        var fitsEncoder = new Mock<IFitsFrameEncoder>(MockBehavior.Strict);
-        fitsEncoder
-            .Setup(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()))
-            .Throws(new InvalidOperationException("encode failure"));
-
-        var controller = CreateController(context.Frame, enableFits: true, fitsEncoder: fitsEncoder.Object);
-        var result = controller.GetLatestFrame(raw: true) as FileContentResult;
-
-        Assert.IsNotNull(result, "Controller should return a file result on auto FITS failure fallback.");
-        Assert.AreEqual(SkiaRawFrameHelper.RawContentType, result.ContentType, "Fallback should return raw skimg content type.");
-        Assert.HasCount(context.ExpectedRawPayloadLength, result.FileContents, "Raw payload length should match descriptor dimensions.");
-
-        fitsEncoder.Verify(e => e.EncodeRaw(It.IsAny<SKImage>(), It.IsAny<RawFrameSnapshot>(), It.IsAny<HVO.SkyMonitorV5.RPi.Cameras.Projection.RigSpec>(), It.IsAny<FitsEncodingOptions?>()), Times.Once);
-    }
 
     [TestMethod]
     public void GetLatestFrame_Processed_ReturnsEncoderPayload()

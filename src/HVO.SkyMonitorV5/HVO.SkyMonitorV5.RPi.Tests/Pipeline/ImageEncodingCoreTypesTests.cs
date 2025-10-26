@@ -13,7 +13,7 @@ public class ImageEncodingFormatTests
     var formats = Enum.GetValues<ImageEncodingFormat>();
 
     // Assert
-    Assert.AreEqual(5, formats.Length, "Expected 5 format values");
+    Assert.HasCount(5, formats, "Expected 5 format values");
     CollectionAssert.Contains(formats, ImageEncodingFormat.Png);
     CollectionAssert.Contains(formats, ImageEncodingFormat.Jpeg);
     CollectionAssert.Contains(formats, ImageEncodingFormat.Fits);
@@ -24,12 +24,14 @@ public class ImageEncodingFormatTests
   [TestMethod]
   public void ImageEncodingFormat_ValuesHaveCorrectNumericValues()
   {
+#pragma warning disable MSTEST0032 // Intentionally testing enum numeric values to ensure stability
     // Assert enum values maintain expected numbering
     Assert.AreEqual(0, (int)ImageEncodingFormat.Png);
     Assert.AreEqual(1, (int)ImageEncodingFormat.Jpeg);
     Assert.AreEqual(2, (int)ImageEncodingFormat.Fits);
     Assert.AreEqual(3, (int)ImageEncodingFormat.Tiff);
     Assert.AreEqual(4, (int)ImageEncodingFormat.Xisf);
+#pragma warning restore MSTEST0032
   }
 }
 
@@ -43,7 +45,7 @@ public class FitsBitDepthTests
     var depths = Enum.GetValues<FitsBitDepth>();
 
     // Assert
-    Assert.AreEqual(6, depths.Length, "Expected 6 bit depth values");
+    Assert.HasCount(6, depths, "Expected 6 bit depth values");
     CollectionAssert.Contains(depths, FitsBitDepth.U8);
     CollectionAssert.Contains(depths, FitsBitDepth.U16);
     CollectionAssert.Contains(depths, FitsBitDepth.I16);
@@ -55,6 +57,7 @@ public class FitsBitDepthTests
   [TestMethod]
   public void FitsBitDepth_ValuesHaveCorrectNumericValues()
   {
+#pragma warning disable MSTEST0032 // Intentionally testing enum numeric values to ensure stability
     // Assert enum values maintain expected numbering
     Assert.AreEqual(0, (int)FitsBitDepth.U8);
     Assert.AreEqual(1, (int)FitsBitDepth.U16);
@@ -62,6 +65,7 @@ public class FitsBitDepthTests
     Assert.AreEqual(3, (int)FitsBitDepth.I32);
     Assert.AreEqual(4, (int)FitsBitDepth.F32);
     Assert.AreEqual(5, (int)FitsBitDepth.F64);
+#pragma warning restore MSTEST0032
   }
 }
 
@@ -75,7 +79,7 @@ public class FitsImageFormatTests
     var formats = Enum.GetValues<FitsImageFormat>();
 
     // Assert
-    Assert.AreEqual(4, formats.Length, "Expected 4 image format values");
+    Assert.HasCount(4, formats, "Expected 4 image format values");
     CollectionAssert.Contains(formats, FitsImageFormat.Mono);
     CollectionAssert.Contains(formats, FitsImageFormat.RGB);
     CollectionAssert.Contains(formats, FitsImageFormat.RGBA);
@@ -85,11 +89,13 @@ public class FitsImageFormatTests
   [TestMethod]
   public void FitsImageFormat_ValuesHaveCorrectNumericValues()
   {
+#pragma warning disable MSTEST0032 // Intentionally testing enum numeric values to ensure stability
     // Assert enum values maintain expected numbering
     Assert.AreEqual(0, (int)FitsImageFormat.Mono);
     Assert.AreEqual(1, (int)FitsImageFormat.RGB);
     Assert.AreEqual(2, (int)FitsImageFormat.RGBA);
     Assert.AreEqual(3, (int)FitsImageFormat.BayerMosaic);
+#pragma warning restore MSTEST0032
   }
 }
 
@@ -103,7 +109,7 @@ public class FitsCompressionTests
     var compressions = Enum.GetValues<FitsCompression>();
 
     // Assert
-    Assert.AreEqual(6, compressions.Length, "Expected 6 compression values");
+    Assert.HasCount(6, compressions, "Expected 6 compression values");
     CollectionAssert.Contains(compressions, FitsCompression.None);
     CollectionAssert.Contains(compressions, FitsCompression.Rice);
     CollectionAssert.Contains(compressions, FitsCompression.Gzip1);
@@ -115,6 +121,7 @@ public class FitsCompressionTests
   [TestMethod]
   public void FitsCompression_ValuesHaveCorrectNumericValues()
   {
+#pragma warning disable MSTEST0032 // Intentionally testing enum numeric values to ensure stability
     // Assert enum values maintain expected numbering
     Assert.AreEqual(0, (int)FitsCompression.None);
     Assert.AreEqual(1, (int)FitsCompression.Rice);
@@ -122,6 +129,7 @@ public class FitsCompressionTests
     Assert.AreEqual(3, (int)FitsCompression.Gzip2);
     Assert.AreEqual(4, (int)FitsCompression.HCompress);
     Assert.AreEqual(5, (int)FitsCompression.PLio);
+#pragma warning restore MSTEST0032
   }
 }
 
