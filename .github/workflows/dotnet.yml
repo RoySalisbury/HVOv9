@@ -134,7 +134,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-unit-${{ matrix.test-project }}-${{ github.run_id }}
+          name: test-results-unit-${{ github.run_id }}-${{ strategy.job-index }}
           path: src/TestResults/${{ matrix.test-project }}/**
           if-no-files-found: warn
           retention-days: 7
@@ -199,7 +199,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-integration-${{ matrix.test-project }}-${{ github.run_id }}
+          name: test-results-integration-${{ github.run_id }}-${{ strategy.job-index }}
           path: src/TestResults/${{ matrix.test-project }}/**
           if-no-files-found: warn
           retention-days: 7
