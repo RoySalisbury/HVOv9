@@ -69,9 +69,14 @@ This plan tracks follow-up work after completing the repository reorganization (
 
 ## 6) SkyMonitor V5 Follow-Ups
 
-- [ ] Test Docker build for SkyMonitor V5
-- [ ] Run benchmarks to confirm no regression
+- [x] Test Docker build for SkyMonitor V5
+- [x] Run benchmarks to confirm no regression
   - Store results under `benchmarks/` or `artifacts/benchmarks`
+  - ✅ **Complete**: All 19 benchmark scenarios executed successfully with no performance regression
+  - ✅ **Docker Build**: Validated in Docker validation phase (569MB image, healthy container)
+  - ✅ **Benchmark Results**: Stored in `benchmarks/local-20251026-post-restructure/` with comprehensive analysis
+  - ✅ **Performance Analysis**: Frame processing, stacking, filtering, and overlay composition all performing within expected ranges
+  - ✅ **Documentation**: Complete validation results in `docs/validation/skymonitor-v5-benchmark-validation-results.md`
 
 ## 7) PR & Release (Execution Checklist)
 

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>HVO.SkyMonitorV5.RPi.Benchmarks.Benchmarks.SingleFilterBenchmarks-20251026-025649</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.4, Linux Debian GNU/Linux 12 (bookworm) (container)
+-
+.NET SDK 9.0.304
+  [Host]           : .NET 9.0.8 (9.0.8, 9.0.825.36511), Arm64 RyuJIT armv8.0-a
+  EnvConfiguredJob : .NET 9.0.8 (9.0.8, 9.0.825.36511), Arm64 RyuJIT armv8.0-a
+</code></pre>
+<pre><code>Job=EnvConfiguredJob  IterationCount=10  WarmupCount=1  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                    </th><th>FrameWidth</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>&#39;Apply synthetic overlay filter&#39;</td><td>512</td><td>915.2 &mu;s</td><td>23.89 &mu;s</td><td>15.80 &mu;s</td><td>832 B</td>
+</tr><tr><td>&#39;Apply synthetic overlay filter&#39;</td><td>1024</td><td>2,324.6 &mu;s</td><td>40.57 &mu;s</td><td>24.14 &mu;s</td><td>832 B</td>
+</tr></tbody></table>
+</body>
+</html>
