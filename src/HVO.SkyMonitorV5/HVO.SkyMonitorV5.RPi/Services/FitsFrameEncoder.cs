@@ -85,7 +85,7 @@ public sealed class FitsFrameEncoder : IFitsFrameEncoder
     };
   }
 
-  
+
 
   private void StampProcessedFrameHeaders(FitsFile fits, ProcessedFrame frame, RigSpec rig, FitsEncodingOptions? options)
   {
