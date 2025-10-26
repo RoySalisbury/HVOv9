@@ -24,12 +24,22 @@ This plan tracks follow-up work after completing the repository reorganization (
 - [ ] Validate full stack via `src/docker-compose.yml`
 - [ ] Document any service wiring adjustments if needed
 
-## 3) Dev Container Validation
+## ✅ Progress Status
 
-- [x] Rebuild the dev container with new paths
-- [x] Verify `post-create.sh` completes successfully
-- [x] Verify solutions open correctly in VS Code
-- [x] Verify tasks and launch configurations work
+- [x] **#3: Dev Container Validation** ✅ *Complete* - Dev container rebuilt and working (user confirmed)
+- [x] **#1: CI/CD and Workflows** ✅ *Complete* - Fixed missing test projects and documentation links
+  - Added `HVO.Astronomy/HVO.Astronomy.CFITSIO.Tests` and `HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests` to both unit and integration test matrices
+  - Validated all workflows now passing via GitHub CLI
+  - All domain solutions (astronomy.yml, iot.yml, etc.) building successfully
+  - Artifact paths generating TRX results correctly
+  - **Documentation Links Fixed**: Addressed all 6 issues identified in PR #110 Copilot review:
+    - Created missing hardware-simulation-improvements.md guide
+    - Added nina-client project documentation directory
+    - Created observatory-automation.md architecture document  
+    - Added sky-monitor-v5 project documentation
+    - Added iot-devices development guide
+    - Fixed docs/README.md copilot-instructions path
+    - Updated main README coverage badge placeholder
 
 ## 4) Deployment Scripts
 
