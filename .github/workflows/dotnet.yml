@@ -116,7 +116,7 @@ jobs:
             NuGet.config
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-artifacts-non-maui
           path: src
@@ -183,7 +183,7 @@ jobs:
             NuGet.config
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-artifacts-non-maui
           path: src
@@ -232,7 +232,7 @@ jobs:
     
     steps:
       - name: Download all unit test coverage artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: test-results-unit-*
           path: coverage-reports
