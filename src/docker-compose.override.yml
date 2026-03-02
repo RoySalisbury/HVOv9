@@ -1,4 +1,0 @@
-# Local development overrides (bind mounts, env file overrides, etc.).
-# Add service-specific overrides below as needed.
-
-services: {}
