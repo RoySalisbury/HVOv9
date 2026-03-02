@@ -3,7 +3,7 @@ using Microsoft.JSInterop;
 using Microsoft.Extensions.Options;
 using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;
-using HVO;
+using HVO.Core.Results;
 using System.Timers;
 
 namespace HVO.RoofControllerV4.RPi.Components.Pages;

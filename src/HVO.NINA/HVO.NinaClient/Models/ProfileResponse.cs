@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using HVO.Core.OneOf;
 
 namespace HVO.NinaClient.Models;
 

@@ -387,3 +387,10 @@ FodyWeavers.xsd
 .certs/
 
 .venv/
+docs/.DS_Store
+src/.DS_Store
+src/HVO.Iot/.DS_Store
+src/HVO.Iot/HVO.Iot.Devices/.DS_Store
+src/HVO.SkyMonitorV5/.DS_Store
+src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.Data/.DS_Store
+src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.Data/Catalogs/.DS_Store

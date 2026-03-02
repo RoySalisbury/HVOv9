@@ -1,4 +1,5 @@
 using System;
+using HVO.Core.Results;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
@@ -93,7 +94,7 @@ public sealed class SystemConfigurationController : ControllerBase
         return await ExecuteAsync(() => _configurationService.ExecuteRigRuntimeActionAsync(request, cancellationToken)).ConfigureAwait(false);
     }
 
-    private async Task<ActionResult<TResponse>> ExecuteAsync<TResponse>(Func<Task<HVO.Result<TResponse>>> operation)
+    private async Task<ActionResult<TResponse>> ExecuteAsync<TResponse>(Func<Task<HVO.Core.Results.Result<TResponse>>> operation)
     {
         var result = await operation().ConfigureAwait(false);
         if (result.IsSuccessful)

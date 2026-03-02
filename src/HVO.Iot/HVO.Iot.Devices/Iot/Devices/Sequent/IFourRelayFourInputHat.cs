@@ -1,5 +1,5 @@
 using System;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 

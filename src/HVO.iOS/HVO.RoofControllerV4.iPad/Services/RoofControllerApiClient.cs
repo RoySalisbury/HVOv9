@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HVO.RoofControllerV4.iPad.Configuration;
 using HVO.RoofControllerV4.Common.Models;
-using HVO;
+using HVO.Core.Results;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

@@ -1,5 +1,5 @@
 using System;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.SkyMonitorV5.RPi.Services;
 

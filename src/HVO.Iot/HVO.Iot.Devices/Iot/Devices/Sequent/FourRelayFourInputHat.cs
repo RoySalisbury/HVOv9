@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using HVO.Iot.Devices.Abstractions;
 using HVO.Iot.Devices.Iot.Devices.Common;
 using HVO.Iot.Devices.Implementation;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.Iot.Devices.Iot.Devices.Sequent;
 

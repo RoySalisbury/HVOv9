@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.RPi.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

@@ -1,4 +1,4 @@
-using HVO;
+using HVO.Core.Results;
 using HVO.RoofControllerV4.iPad.Configuration;
 
 namespace HVO.RoofControllerV4.iPad.Services;

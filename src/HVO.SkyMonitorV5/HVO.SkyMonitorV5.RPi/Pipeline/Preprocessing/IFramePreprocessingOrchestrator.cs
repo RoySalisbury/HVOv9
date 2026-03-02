@@ -2,7 +2,7 @@
 
 using System.Threading;
 using System.Threading.Tasks;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.RPi.Cameras;
 
 namespace HVO.SkyMonitorV5.RPi.Pipeline.Preprocessing;

@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.Data.Telemetry;
 using HVO.SkyMonitorV5.Data.Telemetry.Entities;
 using HVO.SkyMonitorV5.RPi.Infrastructure;

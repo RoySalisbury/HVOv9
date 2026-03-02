@@ -1,4 +1,4 @@
-using HVO;
+using HVO.Core.Results;
 using Microsoft.Extensions.Logging;
 
 namespace HVO.NinaClient.Resilience;

@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using FluentAssertions;
-using HVO;
+using HVO.Core.Results;
 using HVO.RoofControllerV4.RPi.HostedServices;
 using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;

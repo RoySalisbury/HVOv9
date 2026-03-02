@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.Data.Archive;
 using HVO.SkyMonitorV5.Data.Archive.Entities;
 using HVO.SkyMonitorV5.RPi.Infrastructure;

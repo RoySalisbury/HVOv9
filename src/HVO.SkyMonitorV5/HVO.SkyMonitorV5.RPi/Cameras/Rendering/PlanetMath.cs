@@ -2,7 +2,7 @@
 
 using System;
 using System.Collections.Generic;
-using HVO.Astronomy;
+using HVO.Core.Astronomy;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 

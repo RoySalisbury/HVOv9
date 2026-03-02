@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;
 using HVO.RoofControllerV4.RPi.Services;
-using HVO;
+using HVO.Core.Results;
 using System.Collections.Generic;
 using System.Timers;
 using System.Linq;

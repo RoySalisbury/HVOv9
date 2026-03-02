@@ -1,5 +1,5 @@
 using FluentAssertions;
-using HVO;
+using HVO.Core.Results;
 using HVO.RoofControllerV4.RPi.HealthChecks;
 using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;

@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../HVO/HVO.csproj" />
+    <PackageReference Include="HVO.Core" />
   <ProjectReference Include="../HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
   </ItemGroup>
 

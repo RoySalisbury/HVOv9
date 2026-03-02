@@ -1,6 +1,6 @@
 using System;
 using System.Text.Json;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 using Microsoft.Extensions.Logging;
 

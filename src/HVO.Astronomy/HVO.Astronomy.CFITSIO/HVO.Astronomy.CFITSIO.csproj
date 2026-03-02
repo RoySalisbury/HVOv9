@@ -55,8 +55,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Use HVO at compile time but do not add a NuGet dependency when packing -->
-    <ProjectReference Include="../../HVO/HVO.csproj" PrivateAssets="All" />
+    <!-- Use HVO.Core at compile time but do not add a NuGet dependency when packing -->
+    <PackageReference Include="HVO.Core" PrivateAssets="All" />
   </ItemGroup>
 
   <!-- Pack documentation files into the nupkg -->

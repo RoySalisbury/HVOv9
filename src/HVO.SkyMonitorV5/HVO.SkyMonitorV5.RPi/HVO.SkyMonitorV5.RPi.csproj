@@ -39,8 +39,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../HVO/HVO.csproj" />
-  <ProjectReference Include="../../HVO.Astronomy/HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj" />
+    <PackageReference Include="HVO.Core" />
+    <ProjectReference Include="../../HVO.Astronomy/HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj" />
     <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
     <ProjectReference Include="../../HVO.ZWOOptical/HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
     <ProjectReference Include="../../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />

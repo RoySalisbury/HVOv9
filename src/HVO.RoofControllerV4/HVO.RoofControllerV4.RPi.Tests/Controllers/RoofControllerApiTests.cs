@@ -12,7 +12,7 @@ using Moq;
 using HVO.RoofControllerV4.RPi;
 using HVO.RoofControllerV4.RPi.Logic;
 using HVO.RoofControllerV4.Common.Models;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.RoofControllerV4.RPi.Tests.Controllers;
 

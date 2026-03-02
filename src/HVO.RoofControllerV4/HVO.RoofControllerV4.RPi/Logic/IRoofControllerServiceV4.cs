@@ -1,4 +1,5 @@
 using System;
+using HVO.Core.Results;
 using HVO.RoofControllerV4.Common.Models;
 
 namespace HVO.RoofControllerV4.RPi.Logic;

@@ -1,7 +1,7 @@
 #nullable enable
 
 using Asp.Versioning;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyCamera;
 using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyImageSave;
 using HVO.SkyMonitorV4.RPi.HostedServices.AllSkyTimelapse;

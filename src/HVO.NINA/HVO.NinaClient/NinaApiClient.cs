@@ -1,5 +1,6 @@
 ﻿using HVO;
 using HVO.NinaClient.Models;
+using HVO.Core.Results;
 using HVO.NinaClient.Resilience;
 using HVO.NinaClient.Infrastructure;
 using HVO.NinaClient.Exceptions;

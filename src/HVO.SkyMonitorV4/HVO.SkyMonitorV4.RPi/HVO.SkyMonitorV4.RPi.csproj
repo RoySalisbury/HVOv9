@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../HVO/HVO.csproj" />
+    <PackageReference Include="HVO.Core" />
   </ItemGroup>
 
 </Project>

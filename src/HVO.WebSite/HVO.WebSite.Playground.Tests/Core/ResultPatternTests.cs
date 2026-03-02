@@ -1,5 +1,5 @@
 using FluentAssertions;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.WebSite.Playground.Tests.Core;
 

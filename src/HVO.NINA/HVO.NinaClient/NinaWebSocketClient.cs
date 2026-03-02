@@ -1,5 +1,5 @@
 ﻿using HVO.NinaClient.Models;
-using HVO;
+using HVO.Core.Results;
 using HVO.NinaClient.Infrastructure;
 using HVO.NinaClient.Resilience;
 using Microsoft.Extensions.Logging;

@@ -1,6 +1,6 @@
 #nullable enable
 using System;
-using HVO;
+using HVO.Core.Results;
 using HVO.Astronomy.CFITSIO.Interop;
 
 namespace HVO.Astronomy.CFITSIO;

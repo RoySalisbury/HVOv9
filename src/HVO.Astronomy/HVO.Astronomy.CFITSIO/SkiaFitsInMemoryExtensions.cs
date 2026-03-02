@@ -1,5 +1,6 @@
 #if HAS_SKIA
 using System;
+using HVO.Core.Results;
 using System.IO;
 using HVO; // Result<T>
 using HVO.Astronomy.CFITSIO;

@@ -1,4 +1,5 @@
-using HVO;
+using HVO.Core.OneOf;
+using HVO.Core.Results;
 
 namespace HVO.NinaClient.Models;
 

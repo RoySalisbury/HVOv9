@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using HVO.Core.Results;
 using System.IO;
 using HVO.Astronomy.CFITSIO.Interop;
 

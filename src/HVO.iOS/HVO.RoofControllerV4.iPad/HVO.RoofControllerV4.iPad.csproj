@@ -40,7 +40,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\HVO\HVO.csproj" />
+		<PackageReference Include="HVO.Core" />
 		<ProjectReference Include="..\..\HVO.RoofControllerV4\HVO.RoofControllerV4.Common\HVO.RoofControllerV4.Common.csproj" />
 	</ItemGroup>
 

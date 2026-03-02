@@ -1,5 +1,5 @@
 using HVO.RoofControllerV4.Common.Models;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.RoofControllerV4.iPad.Services;
 

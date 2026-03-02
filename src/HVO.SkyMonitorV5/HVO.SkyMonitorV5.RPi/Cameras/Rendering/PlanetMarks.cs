@@ -2,7 +2,7 @@
 
 using System;
 using System.Collections.Generic;
-using HVO;
+using HVO.Core.Results;
 using SkiaSharp;
 
 namespace HVO.SkyMonitorV5.RPi.Cameras.Rendering;

@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.NinaClient.Models;
 

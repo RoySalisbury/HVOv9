@@ -1,5 +1,5 @@
 using HVO.NinaClient.Models;
-using HVO;
+using HVO.Core.Results;
 
 namespace HVO.NinaClient;
 

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HVO;
+using HVO.Core.Results;
 using HVO.RoofControllerV4.iPad.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

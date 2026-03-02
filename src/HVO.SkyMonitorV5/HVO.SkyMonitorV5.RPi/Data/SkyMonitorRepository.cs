@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.Data.Catalogs.Constellations;
 using HVO.SkyMonitorV5.Data.Catalogs.DeepSky;
 using HVO.SkyMonitorV5.Data.Catalogs.Hyg;

@@ -1,7 +1,7 @@
 #nullable enable
 
 using System;
-using HVO.Astronomy;
+using HVO.Core.Astronomy;
 using HVO.SkyMonitorV5.RPi.Cameras.Rendering;
 using HVO.SkyMonitorV5.RPi.Cameras.Optics;
 

@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using HVO;
+using HVO.Core.Results;
 using HVO.SkyMonitorV5.Data.Abstractions;
 using HVO.SkyMonitorV5.Data.Archive;
 using HVO.SkyMonitorV5.Data.Configurations;

@@ -19,9 +19,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\HVO.SourceGenerators\HVO.SourceGenerators.csproj" OutputItemType="Analyzer" 
+		<PackageReference Include="HVO.Core" />
+		<PackageReference Include="HVO.Core.SourceGenerators" OutputItemType="Analyzer"
 					ReferenceOutputAssembly="false" />
-		<ProjectReference Include="..\..\HVO\HVO.csproj" />
 	</ItemGroup>
 
 </Project>

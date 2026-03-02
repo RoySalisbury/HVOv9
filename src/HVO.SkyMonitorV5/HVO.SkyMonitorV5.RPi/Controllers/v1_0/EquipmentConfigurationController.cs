@@ -1,4 +1,5 @@
 using System;
+using HVO.Core.Results;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
@@ -167,7 +168,7 @@ public sealed class EquipmentConfigurationController : ControllerBase
         return await ExecuteAsync(() => _equipmentService.UpdateOpticsAsync(opticsId, request, cancellationToken)).ConfigureAwait(false);
     }
 
-    private async Task<ActionResult<EquipmentCatalogResponse>> ExecuteAsync(Func<Task<HVO.Result<EquipmentCatalogResponse>>> operation)
+    private async Task<ActionResult<EquipmentCatalogResponse>> ExecuteAsync(Func<Task<HVO.Core.Results.Result<EquipmentCatalogResponse>>> operation)
     {
         var result = await operation().ConfigureAwait(false);
         if (result.IsSuccessful)
