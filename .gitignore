@@ -223,10 +223,6 @@ PublishScripts/
 *.nuget.props
 *.nuget.targets
 
-# Local NuGet feed packages
-!.LocalPackages/
-!.LocalPackages/**/*.nupkg
-
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
