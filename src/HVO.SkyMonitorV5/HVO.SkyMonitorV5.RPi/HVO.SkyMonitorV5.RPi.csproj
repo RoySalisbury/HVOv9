@@ -35,14 +35,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <!-- Native CFITSIO assets for ProjectReference scenario -->
+    <PackageReference Include="HVO.Astronomy.CFITSIO" />
     <PackageReference Include="HVO.Astronomy.CFITSIO.NativeAssets" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="HVO.Core" />
-    <ProjectReference Include="../../HVO.Astronomy/HVO.Astronomy.CFITSIO/HVO.Astronomy.CFITSIO.csproj" />
+    <PackageReference Include="HVO.ZWOOptical.ASISDK" />
     <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
-    <ProjectReference Include="../../HVO.ZWOOptical/HVO.ZWOOptical.ASISDK/HVO.ZWOOptical.ASISDK.csproj" />
     <ProjectReference Include="../../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
   </ItemGroup>
 
