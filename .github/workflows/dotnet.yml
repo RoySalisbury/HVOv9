@@ -4,8 +4,6 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'src/HVO.DataModels/**'
-      - 'src/HVO.WebSite.Themes/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
@@ -14,8 +12,6 @@ on:
   pull_request:
     branches: [ main, feature/** ]
     paths:
-      - 'src/HVO.DataModels/**'
-      - 'src/HVO.WebSite.Themes/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
@@ -83,7 +79,6 @@ jobs:
     strategy:
       matrix:
         test-project:
-          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
           - HVO.RoofControllerV4/HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
 
@@ -148,7 +143,6 @@ jobs:
     strategy:
       matrix:
         test-project:
-          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
           - HVO.RoofControllerV4/HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
 
