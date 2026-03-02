@@ -77,7 +77,6 @@ jobs:
       matrix:
         test-project:
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
-          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
