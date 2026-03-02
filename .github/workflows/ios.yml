@@ -5,22 +5,22 @@ on:
     branches: [ main ]
     paths:
       - 'src/HVO.iOS/**'
-      - 'src/HVO.RoofControllerV4/HVO.RoofControllerV4.iPad/**'
-      - 'src/HVO/**'
+      - 'src/HVO.RoofControllerV4/HVO.RoofControllerV4.Common/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
+      - '.github/workflows/ios.yml'
   pull_request:
     branches: [ main, feature/** ]
     paths:
       - 'src/HVO.iOS/**'
-      - 'src/HVO.RoofControllerV4/HVO.RoofControllerV4.iPad/**'
-      - 'src/HVO/**'
+      - 'src/HVO.RoofControllerV4/HVO.RoofControllerV4.Common/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
+      - '.github/workflows/ios.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
