@@ -51,18 +51,8 @@ jobs:
           rm -rf /Users/runner/.dotnet/metadata/workloads/10.* 2>/dev/null || true
           echo "Remaining SDKs:"
           dotnet --list-sdks
-      - name: Install .NET MAUI workload (for iOS toolchain)
-        run: dotnet workload install maui --ignore-failed-sources
-      - name: Fix iOS SDK Xcode version conflict
-        run: |
-          # MAUI 9.0.120 installs Microsoft.iOS.Sdk.net9.0_26.0 which requires Xcode 26.
-          # Remove it so the build falls back to Microsoft.iOS.Sdk.net9.0_18.0 (Xcode 16.x compatible)
-          rm -rf /Users/runner/.dotnet/packs/Microsoft.iOS.Sdk.net9.0_26.0 2>/dev/null || true
-          rm -rf /Users/runner/.dotnet/packs/Microsoft.iOS.Ref.net9.0_26.0 2>/dev/null || true
-          rm -rf /Users/runner/.dotnet/packs/Microsoft.iOS.Runtime.iossimulator-arm64.net9.0_26.0 2>/dev/null || true
-          rm -rf /Users/runner/.dotnet/packs/Microsoft.iOS.Runtime.ios-arm64.net9.0_26.0 2>/dev/null || true
-          echo "Remaining iOS SDK packs:"
-          ls /Users/runner/.dotnet/packs/ | grep -i ios || true
+      - name: Install .NET MAUI workload (compatible with Xcode 16)
+        run: dotnet workload install maui --from-rollback-file src/HVO.iOS/workload-rollback.json --ignore-failed-sources
       - name: Restore
         run: dotnet restore src/HVO.iOS/HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj --configfile src/NuGet.config --nologo -v minimal
       - name: Build iOS (Simulator, no codesign) - Debug
