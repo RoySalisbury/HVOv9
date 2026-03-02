@@ -33,7 +33,6 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-      DOTNET_ROLL_FORWARD: Disable
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,13 +41,16 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
-      - name: Remove .NET 10 SDK packs (avoid Xcode 26 requirement)
+      - name: Remove .NET 10 to avoid iOS SDK 26 conflict
         run: |
-          echo "Installed SDKs before cleanup:"
-          dotnet --list-sdks
-          # Remove any .NET 10 workload manifests that conflict
+          # .NET 10 pre-installed on runner pulls iOS SDK 26.0 requiring Xcode 26
+          # Remove .NET 10 SDK so workload install only targets .NET 9
+          rm -rf /Users/runner/.dotnet/sdk/10.* 2>/dev/null || true
           rm -rf /Users/runner/.dotnet/sdk-manifests/10.* 2>/dev/null || true
+          rm -rf /Users/runner/.dotnet/packs/Microsoft.iOS.Sdk.net9.0_26.* 2>/dev/null || true
           rm -rf /Users/runner/.dotnet/metadata/workloads/10.* 2>/dev/null || true
+          echo "Remaining SDKs:"
+          dotnet --list-sdks
       - name: Install .NET MAUI workload (for iOS toolchain)
         run: dotnet workload install maui --ignore-failed-sources
       - name: Restore
