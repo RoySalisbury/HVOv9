@@ -43,7 +43,6 @@
     <PackageReference Include="HVO.Core" />
     <PackageReference Include="HVO.ZWOOptical.ASISDK" />
     <ProjectReference Include="../HVO.SkyMonitorV5.Data/HVO.SkyMonitorV5.Data.csproj" />
-    <ProjectReference Include="../../HVO.WebSite.Themes/HVO.WebSite.Themes.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,11 +54,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../../HVO.WebSite.Themes/wwwroot/fonts/OpenSans-Semibold.ttf" Link="Resources/Fonts/OpenSans-Semibold.ttf">
+    <Content Include="Resources/Fonts/OpenSans-Semibold.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../../HVO.WebSite.Themes/wwwroot/fonts/OpenSans-Regular.ttf" Link="Resources/Fonts/OpenSans-Regular.ttf">
+    <Content Include="Resources/Fonts/OpenSans-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
