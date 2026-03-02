@@ -40,11 +40,11 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          global-json-file: src/global.json
+          dotnet-version: '9.0.x'
       - name: Install .NET MAUI workload (for iOS toolchain)
         run: dotnet workload install maui --ignore-failed-sources
       - name: Restore
-        run: dotnet restore src/HVO.iOS/HVO.iOS.sln --configfile src/NuGet.config --nologo -v minimal
+        run: dotnet restore src/HVO.iOS/HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj --configfile src/NuGet.config --nologo -v minimal
       - name: Build iOS (Simulator, no codesign) - Debug
         run: >
           dotnet build src/HVO.iOS/HVO.RoofControllerV4.iPad/HVO.RoofControllerV4.iPad.csproj
