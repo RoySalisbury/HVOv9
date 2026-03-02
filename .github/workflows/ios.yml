@@ -28,19 +28,27 @@ concurrency:
 
 jobs:
   build-ios-simulator:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 20
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      DOTNET_ROLL_FORWARD: Disable
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Setup .NET
+      - name: Setup .NET 9.0 only
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
+      - name: Remove .NET 10 SDK packs (avoid Xcode 26 requirement)
+        run: |
+          echo "Installed SDKs before cleanup:"
+          dotnet --list-sdks
+          # Remove any .NET 10 workload manifests that conflict
+          rm -rf /Users/runner/.dotnet/sdk-manifests/10.* 2>/dev/null || true
+          rm -rf /Users/runner/.dotnet/metadata/workloads/10.* 2>/dev/null || true
       - name: Install .NET MAUI workload (for iOS toolchain)
         run: dotnet workload install maui --ignore-failed-sources
       - name: Restore
