@@ -74,6 +74,7 @@
     <PackageVersion Include="HVO.ZWOOptical.ASISDK" Version="0.0.3" />
     <PackageVersion Include="HVO.Core" Version="1.1.0" />
     <PackageVersion Include="HVO.Core.SourceGenerators" Version="1.1.0" />
+    <PackageVersion Include="HVO.Iot.Devices" Version="1.0.0" />
     <PackageVersion Include="HVO.Astronomy.CFITSIO" Version="1.0.3" />
     <PackageVersion Include="HVO.Astronomy.CFITSIO.NativeAssets" Version="1.0.3" />
     <PackageVersion Include="System.Drawing.Common" Version="8.0.7" />

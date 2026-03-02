@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'src/HVO.ZWOOptical/**'
-      - 'src/HVO/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
@@ -14,7 +13,6 @@ on:
     branches: [ main, feature/** ]
     paths:
       - 'src/HVO.ZWOOptical/**'
-      - 'src/HVO/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'

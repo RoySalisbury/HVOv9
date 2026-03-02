@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'src/HVO/**'
       - 'src/HVO.DataModels/**'
       - 'src/HVO.SourceGenerators/**'
       - 'src/HVO.WebSite.Themes/**'
@@ -16,7 +15,6 @@ on:
   pull_request:
     branches: [ main, feature/** ]
     paths:
-      - 'src/HVO/**'
       - 'src/HVO.DataModels/**'
       - 'src/HVO.SourceGenerators/**'
       - 'src/HVO.WebSite.Themes/**'

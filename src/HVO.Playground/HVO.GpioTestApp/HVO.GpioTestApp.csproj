@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <PackageReference Include="HVO.Core" />
-    <ProjectReference Include="../../HVO.Iot/HVO.Iot.Devices/HVO.Iot.Devices.csproj" />
+    <PackageReference Include="HVO.Iot.Devices" />
   </ItemGroup>
 
 </Project>

@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HVO.RoofControllerV4.RPi\HVO.RoofControllerV4.RPi.csproj" />
-    <ProjectReference Include="..\..\HVO.Iot\HVO.Iot.Devices\HVO.Iot.Devices.csproj" />
+    <PackageReference Include="HVO.Iot.Devices" />
   </ItemGroup>
 
 </Project>

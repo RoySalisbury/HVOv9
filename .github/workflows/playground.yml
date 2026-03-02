@@ -6,7 +6,6 @@ on:
     paths:
       - 'src/HVO.Playground/**'
       - 'src/HVO.WebSite.Playground/**'
-      - 'src/HVO/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
@@ -16,7 +15,6 @@ on:
     paths:
       - 'src/HVO.Playground/**'
       - 'src/HVO.WebSite.Playground/**'
-      - 'src/HVO/**'
       - 'src/NuGet.config'
       - 'src/global.json'
       - 'Directory.Build.props'
