@@ -79,7 +79,6 @@ jobs:
     strategy:
       matrix:
         test-project:
-          - HVO.RoofControllerV4/HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
 
     env:
@@ -143,7 +142,6 @@ jobs:
     strategy:
       matrix:
         test-project:
-          - HVO.RoofControllerV4/HVO.RoofControllerV4.RPi.Tests/HVO.RoofControllerV4.RPi.Tests.csproj
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
 
     env:
