@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'src/NuGet.config'
-      - 'src/global.json'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - '.github/workflows/dotnet.yml'
@@ -13,7 +12,6 @@ on:
     branches: [ main, feature/** ]
     paths:
       - 'src/NuGet.config'
-      - 'src/global.json'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - '.github/workflows/dotnet.yml'
@@ -43,13 +41,12 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
           cache: true
           cache-dependency-path: |
             **/packages.lock.json
             **/*.csproj
             **/*.sln*
-            global.json
             NuGet.config
 
       - name: Restore dependencies
@@ -67,8 +64,8 @@ jobs:
           path: |
             src/**/bin/Debug/**
             !src/**/bin/Debug/**/ref/**
-            src/**/obj/Debug/net9.0/compressed/**
-            src/**/obj/Debug/net9.0/scopedcss/**
+            src/**/obj/Debug/net10.0/compressed/**
+            src/**/obj/Debug/net10.0/scopedcss/**
           retention-days: 1
 
   test-unit:
@@ -80,7 +77,6 @@ jobs:
       matrix:
         test-project:
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
-          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -95,13 +91,12 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
           cache: true
           cache-dependency-path: |
             **/packages.lock.json
             **/*.csproj
             **/*.sln*
-            global.json
             NuGet.config
 
       - name: Download build artifacts
@@ -144,7 +139,6 @@ jobs:
       matrix:
         test-project:
           - HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Tests/HVO.SkyMonitorV5.RPi.Tests.csproj
-          - HVO.WebSite/HVO.WebSite.Playground.Tests/HVO.WebSite.Playground.Tests.csproj
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -159,13 +153,12 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
           cache: true
           cache-dependency-path: |
             **/packages.lock.json
             **/*.csproj
             **/*.sln*
-            global.json
             NuGet.config
 
       - name: Download build artifacts
@@ -227,7 +220,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Install ReportGenerator
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
