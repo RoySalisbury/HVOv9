@@ -3,7 +3,7 @@
 <!-- Workspace-level custom instructions for GitHub Copilot -->
 
 ## Project Overview
-HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a comprehensive IoT and web application platform for observatory automation and control systems.
+HVOv9 is the ninth version of the Hualapai Valley Observatory software suite. This repo contains SkyMonitorV5 (production all-sky camera), Playground (web experiments), NinaClient, DataModels, and legacy reference code (SkyMonitorV4). Most active projects (RoofController, WebSite, SDK/IoT/CFITSIO, iOS) have been extracted to dedicated repos.
 
 ## Core Technologies
 - .NET 9.0 (STS; SDK pinned via global.json)
@@ -17,7 +17,7 @@ HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a 
 - Bootstrap 5.3 (via CDN) and Font Awesome/Bootstrap Icons for UI primitives
 
 ## Design System & UI Preferences
-- Default to the **HVO Dark theme** shipped in `HVO.WebSite.Themes` (`_content/HVO.WebSite.Themes/css/themes/hvo-dark.css`); all new pages should load this stylesheet and ensure the `<html>` and `<body>` elements include `data-theme="hvo-dark"`.
+- Default to the **HVO Dark theme**; all new pages should load the theme stylesheet and ensure the `<html>` and `<body>` elements include `data-theme="hvo-dark"`.
 - Reuse the CSS custom properties declared in the theme (e.g., `--hvo-body-bg`, `--hvo-accent`) instead of hard-coding colors. Add new tokens at the top of the theme file when additional palette values are needed.
 - Use the existing scoped CSS placeholders sparingly—centralize styling in the theme whenever styles apply across multiple components.
 - Prefer our **HistoryLineChart** component in `Components/Shared/HistoryLineChart` for telemetry visualizations; avoid reintroducing Radzen or other heavy UI libraries unless absolutely necessary.
@@ -28,7 +28,7 @@ HVOv9 is the ninth version of the Hualapai Valley Observatory software suite, a 
 ### 1. Project Structure
 - Use explicit namespaces matching folder structure
 - Organize code into logical layers: Controllers, Services, Models, etc.
-- Place shared code in the main HVO project
+- Shared types come from the HVO.Core NuGet package
 - Use separate test projects with `.Tests` suffix
 
 ### 2. C# Language Features
@@ -71,7 +71,7 @@ namespace HVO.ProjectName
 - **Structured Data**: Use named parameters in log messages for better searchability and monitoring
 - **Hardware Device Logging**: All GPIO and IoT device classes must support ILogger<T> with fallback creation when not provided
 - Implement proper exception handling with specific exception types
-- **Use `Result<T>` pattern for operations that can fail** - Located in `HVO/Result.cs`
+- **Use `Result<T>` pattern for operations that can fail** — provided by HVO.Core NuGet
 - **Ensure API request DTOs encapsulate validation** using data annotations or `IValidatableObject` so controllers rely on automatic model validation
 - **Use `InvalidOperationException` for true "not found" scenarios only** - Controllers should handle these explicitly
 - **Service state issues should use `InvalidOperationException` but return 500 via controller handling**
@@ -248,10 +248,6 @@ namespace HVO.ProjectName
 ## File Organization
 ```
 /src
-  /HVO                           # Core library
-    /Result.cs                  # Result<T> pattern implementation
-    /ComponentModel/            # Component model extensions
-    /Iot/Devices/               # IoT device abstractions and implementations
   /HVO.DataModels/              # Entity Framework models and context
     /Data/                      # Database context and configurations
     /Models/                    # Entity models
