@@ -51,7 +51,7 @@ jobs:
         run: dotnet test src/HVO.SkyMonitorV4/HVO.SkyMonitorV4.sln --no-build -c Debug --nologo -v minimal --filter "TestCategory=Integration" --logger "trx;LogFileName=tests-integration.trx" --collect:"XPlat Code Coverage" -- ResultsDirectory src/TestResults/SkyMonitorV4
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skymonitor-v4-test-results-${{ github.run_id }}
           path: |

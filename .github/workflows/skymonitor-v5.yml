@@ -58,7 +58,7 @@ jobs:
           dotnet run --project HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi.Benchmarks/HVO.SkyMonitorV5.RPi.Benchmarks.csproj -c Debug --no-build -- --filter '*EndToEndPipeline*'
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skymonitor-v5-test-results-${{ github.run_id }}
           path: |

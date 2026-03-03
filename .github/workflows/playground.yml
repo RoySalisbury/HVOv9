@@ -51,7 +51,7 @@ jobs:
         run: dotnet test src/HVO.Playground/HVO.Playground.sln --no-build -c Debug --nologo -v minimal --filter "TestCategory=Integration" --logger "trx;LogFileName=tests-integration.trx" --collect:"XPlat Code Coverage" -- ResultsDirectory src/TestResults/Playground
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playground-test-results-${{ github.run_id }}
           path: |

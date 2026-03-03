@@ -58,7 +58,7 @@ jobs:
         run: cd src && dotnet build HVOv9.sln --no-restore -c Debug -v minimal --nologo -maxcpucount /p:ContinuousIntegrationBuild=true
 
       - name: Upload build artifacts (Debug)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-artifacts-non-maui
           path: |
@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload Unit Test Results and Coverage
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-unit-${{ github.run_id }}-${{ strategy.job-index }}
           path: src/TestResults/${{ matrix.test-project }}/**
@@ -180,7 +180,7 @@ jobs:
 
       - name: Upload Integration Test Results and Coverage
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-integration-${{ github.run_id }}-${{ strategy.job-index }}
           path: src/TestResults/${{ matrix.test-project }}/**
@@ -319,7 +319,7 @@ jobs:
 
       - name: Upload coverage summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-summary
           path: |
