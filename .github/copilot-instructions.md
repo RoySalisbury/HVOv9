@@ -3,10 +3,10 @@
 <!-- Workspace-level custom instructions for GitHub Copilot -->
 
 ## Project Overview
-HVOv9 is the ninth version of the Hualapai Valley Observatory software suite. This repo contains SkyMonitorV5 (production all-sky camera), Playground (web experiments), NinaClient, DataModels, and legacy reference code (SkyMonitorV4). Most active projects (RoofController, WebSite, SDK/IoT/CFITSIO, iOS) have been extracted to dedicated repos.
+HVOv9 is the ninth version of the Hualapai Valley Observatory software suite. This repo contains SkyMonitorV5 (production all-sky camera), NinaClient, Playground CLI tools, and legacy reference code (SkyMonitorV4). Most active projects (RoofController, WebSite, SDK/IoT/CFITSIO, iOS) have been extracted to dedicated repos.
 
 ## Core Technologies
-- .NET 9.0 (STS; SDK pinned via global.json)
+- .NET 10.0 (LTS; SDK pinned via global.json)
 - ASP.NET Core for web applications
 - Blazor Server for interactive web UI
 - Entity Framework Core for data access
@@ -142,7 +142,7 @@ namespace HVO.ProjectName
 - **VS Code Dev Container**: Use the provided Dev Container; ports 5136 (HTTP) and 7151 (HTTPS) are forwarded by default
 - **VS Code Launch**: Use the provided launch configs (.NET Debug/.NET Release). They build first and auto-open the browser
 - **HTTP/HTTPS**: Development disables HTTPS redirection by default; an HTTP-only profile is available to avoid cert prompts
-- **Configuration Loading**: Launch configurations run from the output directory (`bin/<Config>/net9.0`) to ensure config files are loaded consistently
+- **Configuration Loading**: Launch configurations run from the output directory (`bin/<Config>/net10.0`) to ensure config files are loaded consistently
 - **Process Management**: Use the `kill:playground` task to free ports 5136/7151 before relaunch
 - **Build Before Run**: Build prior to run is handled by VS Code tasks
 - **Threading in Blazor**:

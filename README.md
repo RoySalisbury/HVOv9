@@ -1,7 +1,7 @@
 # HVOv9 - Hualapai Valley Observatory v9
 
 [![.NET Build & Test](https://github.com/RoySalisbury/HVOv9/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/RoySalisbury/HVOv9/actions/workflows/dotnet.yml)
-![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4)
+![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![License](https://img.shields.io/badge/license-proprietary-red)
 
 The ninth version of the Hualapai Valley Observatory software suite. This repo contains **SkyMonitorV5** (production all-sky camera), **Playground** (web experiments), and legacy reference code. Most active projects have been extracted to dedicated repositories.
@@ -10,11 +10,9 @@ The ninth version of the Hualapai Valley Observatory software suite. This repo c
 
 HVOv9 is a focused repository containing:
 - **SkyMonitorV5** (Production) — High-performance all-sky camera with real-time star detection and cloud coverage analysis
-- **Playground** — Web-based experiments, API testing, and prototyping
-- **NinaClient** — N.I.N.A. API client for imaging session coordination
-- **DataModels** — Shared EF Core data models
-- **SkyMonitorV4** (Deprecated) — Legacy all-sky camera, EOL December 2026
+- **NinaClient** — N.I.N.A. API client for imaging session coordination (also published as NuGet from HVO.SDK)
 - **Playground CLI / GpioTestApp** — Development utilities and hardware testing
+- **SkyMonitorV4** (Deprecated) — Legacy all-sky camera, EOL December 2026
 
 ## 📦 Extracted Projects
 
@@ -35,7 +33,7 @@ Many projects have been extracted from this monorepo into dedicated repositories
 
 ## 🛠️ Tech Stack
 
-- **.NET 9.0** — C# 13, SDK pinned via `src/global.json`
+- **.NET 10.0** — C# 14, SDK pinned via `global.json`
 - **ASP.NET Core + Blazor Server** — Interactive web UI with real-time updates
 - **Entity Framework Core** — Data access with SQLite
 - **SkiaSharp** — High-performance image processing for star detection
@@ -46,7 +44,6 @@ Many projects have been extracted from this monorepo into dedicated repositories
 
 ```
 src/
-├── HVO.DataModels/                   # EF Core DbContext, entities, repositories
 ├── HVO.NINA/
 │   └── HVO.NinaClient/              # NINA API integration
 ├── HVO.Playground/
@@ -55,15 +52,12 @@ src/
 ├── HVO.SkyMonitorV4/                 # Legacy all-sky camera (deprecated)
 │   ├── HVO.SkyMonitorV4.CLI/
 │   └── HVO.SkyMonitorV4.RPi/
-├── HVO.SkyMonitorV5/                 # Production all-sky camera
-│   ├── HVO.SkyMonitorV5.Data/
-│   ├── HVO.SkyMonitorV5.RPi/        # Blazor dashboard + image processing
-│   ├── HVO.SkyMonitorV5.RPi.Tests/
-│   ├── HVO.SkyMonitorV5.RPi.Benchmarks/
-│   └── HVO.SkyMonitorV5.RPi.Stress/
-└── HVO.WebSite/
-    ├── HVO.WebSite.Playground/       # Web experiments and API testing
-    └── HVO.WebSite.Playground.Tests/
+└── HVO.SkyMonitorV5/                 # Production all-sky camera
+    ├── HVO.SkyMonitorV5.Data/       # EF Core DbContext, entities
+    ├── HVO.SkyMonitorV5.RPi/        # Blazor dashboard + image processing
+    ├── HVO.SkyMonitorV5.RPi.Tests/
+    ├── HVO.SkyMonitorV5.RPi.Benchmarks/
+    └── HVO.SkyMonitorV5.RPi.Stress/
 ```
 
 ## Hardware driver abstraction pattern (I²C devices)
@@ -80,14 +74,14 @@ HVOv9 standardizes I²C hardware access around a layered pattern that keeps devi
 ## Dev environment (VS Code + Dev Container)
 
 This repo is configured for VS Code Dev Containers / GitHub Codespaces:
-- Dev container installs .NET 9 SDK and helper tooling (Docker CLI, GitHub Copilot, etc.)
+- Dev container installs .NET 10 SDK and helper tooling (Docker CLI, GitHub Copilot, etc.)
 - Ports forwarded by default: 5136 (HTTP) and 7151 (HTTPS)
 - VS Code launch profiles auto-build and open the site in your browser
 - Dev certificates are provisioned by the dev container automatically (no manual export or `.certs` files required)
-- Default solution inside the container: `src/HVOv9.DevContainer.slnx`
+- Default solution inside the container: `src/HVOv9.sln`
 
 ### Dev Container details
-- Base image: mcr.microsoft.com/devcontainers/dotnet:9.0 (includes .NET 9 SDK)
+- Base image: mcr.microsoft.com/devcontainers/dotnet:10.0 (includes .NET 10 SDK)
 - VS Code extensions preinstalled:
    - ms-dotnettools.csdevkit (C# Dev Kit)
    - ms-dotnettools.vscode-dotnet-runtime (.NET Runtime)
