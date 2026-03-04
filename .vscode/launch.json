@@ -5,41 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run: HVO Roof Controller iPad Simulator",
+            "name": ".NET Debug: HVO.SkyMonitorV5.RPi",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "run:roofv4ipad:debug",
-            "program": "/usr/local/share/dotnet/dotnet",
-            "args": [
-                "--info"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "internalConsole",
-            "internalConsoleOptions": "neverOpen",
-            "stopAtEntry": false
-        },
-        {
-            "name": "Run: HVO Roof Controller iPad Device",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "run:roofv4:ipad:device:debug",
-            "program": "/usr/local/share/dotnet/dotnet",
-            "args": [
-                "--info"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "internalConsole",
-            "internalConsoleOptions": "neverOpen",
-            "stopAtEntry": false
-        },
-        {
-            "name": ".NET Debug: HVO.WebSite.v9",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:v9:debug",
-            "program": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/bin/Debug/net9.0/HVO.WebSite.v9.dll",
+            "preLaunchTask": "prepare:skymonitorv5:debug",
+            "program": "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/bin/Debug/net10.0/HVO.SkyMonitorV5.RPi.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/bin/Debug/net9.0",
+            "cwd": "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/bin/Debug/net10.0",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
                 "DOTNET_ENVIRONMENT": "Development",
@@ -54,13 +26,13 @@
             }
         },
         {
-            "name": ".NET Debug (HTTP only): HVO.WebSite.v9",
+            "name": ".NET Debug (HTTP only): HVO.SkyMonitorV5.RPi",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "prepare:v9:debug",
-            "program": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/bin/Debug/net9.0/HVO.WebSite.v9.dll",
+            "preLaunchTask": "prepare:skymonitorv5:debug",
+            "program": "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/bin/Debug/net10.0/HVO.SkyMonitorV5.RPi.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/bin/Debug/net9.0",
+            "cwd": "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/bin/Debug/net10.0",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
                 "DOTNET_ENVIRONMENT": "Development",
@@ -75,145 +47,13 @@
             }
         },
         {
-            "name": ".NET Release: HVO.WebSite.v9",
+            "name": ".NET Release: HVO.SkyMonitorV5.RPi",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "prepare:v9:release",
-            "program": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/bin/Release/net9.0/HVO.WebSite.v9.dll",
+            "preLaunchTask": "prepare:skymonitorv5:release",
+            "program": "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/bin/Release/net10.0/HVO.SkyMonitorV5.RPi.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/bin/Release/net9.0",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Production",
-                "DOTNET_ENVIRONMENT": "Production",
-                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136"
-            },
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
-                "uriFormat": "https://localhost:%s"
-            }
-        },
-        
-        {
-            "name": ".NET Debug (HTTP only): HVO.RoofControllerV4.RPi",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:roofv4:debug",
-            "program": "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/bin/Debug/net9.0/HVO.RoofControllerV4.RPi.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/bin/Debug/net9.0",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development",
-                "DOTNET_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "http://0.0.0.0:5136"
-            },
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "Now listening on\\s+http://\\S+:(\\d+)",
-                "uriFormat": "http://localhost:%s"
-            }
-        },
-        {
-            "name": ".NET Debug: HVO.RoofControllerV4.RPi",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:roofv4:debug",
-            "program": "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/bin/Debug/net9.0/HVO.RoofControllerV4.RPi.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/bin/Debug/net9.0",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development",
-                "DOTNET_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136"
-            },
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
-                "uriFormat": "https://localhost:%s"
-            }
-        },
-        {
-            "name": ".NET Release: HVO.RoofControllerV4.RPi",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:roofv4:release",
-            "program": "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/bin/Release/net9.0/HVO.RoofControllerV4.RPi.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/bin/Release/net9.0",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Production",
-                "DOTNET_ENVIRONMENT": "Production",
-                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136"
-            },
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
-                "uriFormat": "https://localhost:%s"
-            }
-        },
-        
-
-
-
-
-        {
-            "name": ".NET Debug: HVO.WebSite.Playground",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:playground:debug",
-            "program": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/bin/Debug/net9.0/HVO.WebSite.Playground.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/bin/Debug/net9.0",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development",
-                "DOTNET_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "https://0.0.0.0:7151;http://0.0.0.0:5136"
-            },
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "Now listening on\\s+https://\\S+:(\\d+)",
-                "uriFormat": "https://localhost:%s"
-            }
-        },
-        {
-            "name": ".NET Debug (HTTP only): HVO.WebSite.Playground",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:playground:debug",
-            "program": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/bin/Debug/net9.0/HVO.WebSite.Playground.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/bin/Debug/net9.0",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development",
-                "DOTNET_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "http://0.0.0.0:5136"
-            },
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "Now listening on\\s+http://\\S+:(\\d+)",
-                "uriFormat": "http://localhost:%s"
-            }
-        },
-        {
-            "name": ".NET Release: HVO.WebSite.Playground",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "prepare:playground:release",
-            "program": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/bin/Release/net9.0/HVO.WebSite.Playground.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/bin/Release/net9.0",
+            "cwd": "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/bin/Release/net10.0",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Production",
                 "DOTNET_ENVIRONMENT": "Production",

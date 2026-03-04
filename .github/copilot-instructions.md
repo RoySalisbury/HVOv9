@@ -143,7 +143,7 @@ namespace HVO.ProjectName
 - **VS Code Launch**: Use the provided launch configs (.NET Debug/.NET Release). They build first and auto-open the browser
 - **HTTP/HTTPS**: Development disables HTTPS redirection by default; an HTTP-only profile is available to avoid cert prompts
 - **Configuration Loading**: Launch configurations run from the output directory (`bin/<Config>/net10.0`) to ensure config files are loaded consistently
-- **Process Management**: Use the `kill:playground` task to free ports 5136/7151 before relaunch
+- **Process Management**: Use the `kill:skymonitorv5` task to free ports 5136/7151 before relaunch
 - **Build Before Run**: Build prior to run is handled by VS Code tasks
 - **Threading in Blazor**:
   - All `StateHasChanged()` calls from background threads must use `InvokeAsync()`

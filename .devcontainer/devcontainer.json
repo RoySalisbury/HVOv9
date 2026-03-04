@@ -81,7 +81,7 @@
         "ms-dotnettools.blazorwasm-companion", // Blazor WebAssembly debugging
         // Database and Entity Framework
         "ms-mssql.mssql", // SQL Server support for EF development
-  // Container and Development Tools
+        // Container and Development Tools
         "ms-vscode.powershell", // PowerShell support for scripts
         // Git and Collaboration
         "GitHub.vscode-pull-request-github", // GitHub PR integration

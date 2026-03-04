@@ -4,7 +4,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![License](https://img.shields.io/badge/license-proprietary-red)
 
-The ninth version of the Hualapai Valley Observatory software suite. This repo contains **SkyMonitorV5** (production all-sky camera), **Playground** (web experiments), and legacy reference code. Most active projects have been extracted to dedicated repositories.
+The ninth version of the Hualapai Valley Observatory software suite. This repo contains **SkyMonitorV5** (production all-sky camera), **Playground CLI tools**, and legacy reference code. Most active projects have been extracted to dedicated repositories.
 
 ## 🎯 Overview
 
@@ -112,7 +112,7 @@ This repo is configured for VS Code Dev Containers / GitHub Codespaces:
 ### Quick start
 
 1) Open in VS Code (Dev Containers) or GitHub Codespaces.
-2) Press F5 and pick “.NET Debug: HVO.WebSite.Playground”.
+2) Press F5 and pick ".NET Debug: HVO.SkyMonitorV5.RPi".
     - HTTPS: https://localhost:7151
     - HTTP:  http://localhost:5136
     - There’s also “.NET Debug (HTTP only)” to avoid HTTPS entirely.
@@ -147,10 +147,10 @@ Notes
    ```
    Then reload the VS Code window.
 - Free ports 5136/7151 if the app can’t bind:
-   - VS Code task: “kill:playground”
+   - VS Code task: "kill:skymonitorv5"
    - Or run:
       ```bash
-      bash .vscode/kill-playground.sh
+      bash .vscode/kill-skymonitorv5.sh
       ```
 - Reset build state if restores/builds start failing:
    ```bash
@@ -225,7 +225,7 @@ curl "http://localhost:5136/api/v1.0/weather/highs-lows?startDate=2025-07-01&end
 
 App settings are in `appsettings.json` with environment overrides, e.g. `appsettings.Development.json`.
 
-Key flags in HVO.WebSite.Playground:
+Key flags in HVO.SkyMonitorV5.RPi:
 - `EnableHttpsRedirect` (bool)
    - Default: true (non-Development), false (Development)
    - Controls UseHttpsRedirection()
