@@ -2,26 +2,11 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "kill:playground",
+      "label": "kill:skymonitorv5",
       "type": "shell",
       "command": "bash",
       "args": [
-        "${workspaceFolder}/.vscode/kill-playground.sh"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
-      }
-    },
-
-  // ================= RoofControllerV4 (RPi) Tasks =================
-    {
-      "label": "kill:roofv4",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "${workspaceFolder}/.vscode/kill-roofv4.sh"
+        "${workspaceFolder}/.vscode/kill-skymonitorv5.sh"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -30,28 +15,28 @@
       }
     },
     {
-      "label": "prepare:roofv4:debug",
+      "label": "prepare:skymonitorv5:debug",
       "dependsOn": [
-        "kill:roofv4",
-        "build:roofv4:debug"
+        "kill:skymonitorv5",
+        "build:skymonitorv5:debug"
       ],
       "problemMatcher": []
     },
     {
-      "label": "prepare:roofv4:release",
+      "label": "prepare:skymonitorv5:release",
       "dependsOn": [
-        "kill:roofv4",
-        "build:roofv4:release"
+        "kill:skymonitorv5",
+        "build:skymonitorv5:release"
       ],
       "problemMatcher": []
     },
     {
-      "label": "build:roofv4:debug",
+      "label": "build:skymonitorv5:debug",
       "type": "shell",
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
+        "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj",
         "-c",
         "Debug"
       ],
@@ -65,214 +50,12 @@
       }
     },
     {
-      "label": "build:roofv4:release",
+      "label": "build:skymonitorv5:release",
       "type": "shell",
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/HVO.RoofControllerV4/HVO.RoofControllerV4.RPi/HVO.RoofControllerV4.RPi.csproj",
-        "-c",
-        "Release"
-      ],
-      "group": "build",
-      "problemMatcher": [
-        "$msCompile"
-      ],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "run:roofv4ipad:debug",
-      "type": "shell",
-  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-sim.sh",
-      "args": [
-        "--configuration",
-        "Debug",
-        "--no-console"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "run:roofv4ipad:release",
-      "type": "shell",
-  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-sim.sh",
-      "args": [
-        "--configuration",
-        "Release",
-        "--no-console"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "run:roofv4:ipad:device:debug",
-      "type": "shell",
-  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-device.sh",
-      "args": [
-        "--configuration",
-        "Debug"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "HVO_ROOF_IPAD_DEVICE_UDID": "${env:HVO_ROOF_IPAD_DEVICE_UDID}"
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "run:roofv4:ipad:device:release",
-      "type": "shell",
-  "command": "${workspaceFolder}/src/HVO.iOS/scripts/run-roofcontroller-ipad-device.sh",
-      "args": [
-        "--configuration",
-        "Release"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "HVO_ROOF_IPAD_DEVICE_UDID": "${env:HVO_ROOF_IPAD_DEVICE_UDID}"
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "prepare:playground:debug",
-      "dependsOn": [
-        "kill:playground",
-        "build:playground:debug"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "prepare:playground:release",
-      "dependsOn": [
-        "kill:playground",
-        "build:playground:release"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "build:playground:debug",
-      "type": "shell",
-      "command": "dotnet",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
-        "-c",
-        "Debug"
-      ],
-      "group": "build",
-      "problemMatcher": [
-        "$msCompile"
-      ],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "build:playground:release",
-      "type": "shell",
-      "command": "dotnet",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.Playground/HVO.WebSite.Playground.csproj",
-        "-c",
-        "Release"
-      ],
-      "group": "build",
-      "problemMatcher": [
-        "$msCompile"
-      ],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
-      }
-    },
-
-
-
-
-
-    {
-      "label": "kill:v9",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "${workspaceFolder}/.vscode/kill-v9.sh"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "prepare:v9:debug",
-      "dependsOn": [
-        "kill:v9",
-        "build:v9:debug"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "prepare:v9:release",
-      "dependsOn": [
-        "kill:v9",
-        "build:v9:release"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "build:v9:debug",
-      "type": "shell",
-      "command": "dotnet",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
-        "-c",
-        "Debug"
-      ],
-      "group": "build",
-      "problemMatcher": [
-        "$msCompile"
-      ],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "build:v9:release",
-      "type": "shell",
-      "command": "dotnet",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/HVO.WebSite/HVO.WebSite.v9/HVO.WebSite.v9.csproj",
+        "${workspaceFolder}/src/HVO.SkyMonitorV5/HVO.SkyMonitorV5.RPi/HVO.SkyMonitorV5.RPi.csproj",
         "-c",
         "Release"
       ],
@@ -285,6 +68,5 @@
         "panel": "shared"
       }
     }
-
   ]
 }

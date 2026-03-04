@@ -1,6 +1,6 @@
 {
   "name": "HVOv9",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:9.0",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
   "runArgs": [
     "--device=/dev/net/tun"
   ],
@@ -8,11 +8,7 @@
   "features": {
     "ghcr.io/tailscale/codespace/tailscale": {},
     "ghcr.io/devcontainers/features/docker-from-docker:1": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/python:1": {
-      "installTools": true,
-      "version": "3.11"
-    }
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "containerEnv": {
     // Database connections (fallback to simple localhost values if not provided)
@@ -37,7 +33,7 @@
     "vscode": {
       "settings": {
         // .NET Project Configuration
-        "dotnet.defaultSolution": "src/HVOv9.DevContainer.slnx",
+        "dotnet.defaultSolution": "src/HVOv9.sln",
         "dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true,
         "dotnet.unitTests.runSettingsPath": "src/coverage.runsettings",
         // C# Development Settings
@@ -74,9 +70,7 @@
         },
         // Git Configuration
         "git.enableSmartCommit": true,
-        "git.confirmSync": false,
-        // Python for Analysis Scripts
-        "python.defaultInterpreterPath": "/usr/bin/python3"
+        "git.confirmSync": false
       },
       "extensions": [
         // .NET Development Extensions (essential for container-based development)
@@ -87,7 +81,7 @@
         "ms-dotnettools.blazorwasm-companion", // Blazor WebAssembly debugging
         // Database and Entity Framework
         "ms-mssql.mssql", // SQL Server support for EF development
-  // Container and Development Tools
+        // Container and Development Tools
         "ms-vscode.powershell", // PowerShell support for scripts
         // Git and Collaboration
         "GitHub.vscode-pull-request-github", // GitHub PR integration
@@ -99,8 +93,7 @@
         // IoT and Hardware Development (HVO-specific)
         "ms-vscode.cpptools", // C/C++ for hardware interface development
         // Productivity Extensions
-        "redhat.vscode-xml", // XML support for project files
-        "ms-python.python" // Python support for analysis scripts
+        "redhat.vscode-xml" // XML support for project files
       ]
     }
   },
